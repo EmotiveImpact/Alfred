@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "researched_on": "2026-09-25",
+  "purpose": "Inert source research, not runtime integration or blanket commercial clearance",
+  "sources": [
+    {"repository":"eadmin2/jarvis_ai","commit":"88998de8369e9d36f6d434b5e01feb93fcf1c33f","licence":"MIT","licence_path":"LICENSE","licence_blob_sha1":"e5bd4107222e21aa659e691ea08399137d2b5821"},
+    {"repository":"HKUDS/nanobot","commit":"9756468a8cb475dbf685f64837c0e0ecdac9ad10","licence":"MIT","licence_path":"LICENSE","licence_blob_sha1":"e06eb24cf4abdc5b46d354fc7d1c9531b2f52dfa"},
+    {"repository":"microsoft/JARVIS","commit":"7624cf388b47334ff8a0868e7d862dde18cfda86","licence":"MIT","licence_path":"LICENSE","licence_blob_sha1":"9e841e7a26e4eb057b24511e7b92d42b257a80e5"},
+    {"repository":"NousResearch/hermes-agent","commit":"8fe53200c7fcb65ef0650d6ede59b28d5cd761e9","licence":"MIT","licence_path":"LICENSE","licence_blob_sha1":"75410e73319c72cd3e991a501c5455eb78f38375"},
+    {"repository":"openclaw/openclaw","commit":"8133be64d156a7a7f625ab69469b642930e29aec","licence":"MIT","licence_path":"LICENSE","licence_blob_sha1":"ebaebf7c416761a32f932ad70ebe5d1d2e214f68","required_notices":["THIRD_PARTY_NOTICES.md"]}
+  ]
+}
