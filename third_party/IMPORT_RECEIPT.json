@@ -10197,6 +10197,16 @@
   "failures": [
     {
       "repository": "NousResearch/hermes-agent",
+      "error": "HTTP Error 429: Too Many Requests"
+    },
+    {
+      "repository": "openclaw/openclaw",
+      "error": "'utf-8' codec can't decode byte 0x89 in position 0: invalid start byte"
+    }
+  ],
+  "previous_import_failures": [
+    {
+      "repository": "NousResearch/hermes-agent",
       "error": "Download cap exceeded"
     },
     {
