@@ -1,11 +1,14 @@
 """Complete oversized imports with pinned, bounded, inert source selections."""
 from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
 import tempfile
+import time
 from urllib.parse import quote
+import urllib.error
 import urllib.request
 from import_sources import ROOT, MAX_FILE, blob_sha, safe_path, select, verify
 
@@ -13,18 +16,36 @@ PREFIXES = {
     'NousResearch/hermes-agent': ('agent/', 'gateway/', 'tools/', 'cron/'),
     'openclaw/openclaw': ('src/security/', 'src/gateway/', 'src/agents/'),
 }
-LIMIT = 240
+LIMIT = 80
+BINARY_SUFFIXES = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.pdf', '.woff', '.woff2', '.ttf', '.mp3', '.mp4'}
 
 
 def get(url: str, cap: int) -> bytes:
-    request = urllib.request.Request(url, headers={'User-Agent': 'ALFRED-research/0.1'})
-    with urllib.request.urlopen(request, timeout=60) as response:
-        if response.url.split('/')[2] not in {'api.github.com', 'raw.githubusercontent.com'}:
-            raise ValueError('Unexpected host')
-        data = response.read(cap + 1)
-    if len(data) > cap:
-        raise ValueError('Response size cap')
-    return data
+    for attempt in range(4):
+        time.sleep(0.3)
+        request = urllib.request.Request(url, headers={'User-Agent': 'ALFRED-research/0.1'})
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                if response.url.split('/')[2] not in {'api.github.com', 'raw.githubusercontent.com'}:
+                    raise ValueError('Unexpected host')
+                data = response.read(cap + 1)
+            if len(data) > cap:
+                raise ValueError('Response size cap')
+            return data
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {429, 502, 503, 504} or attempt == 3:
+                raise
+            retry = exc.headers.get('Retry-After', '')
+            delay = 5 * (2 ** attempt)
+            if retry:
+                try:
+                    delay = max(delay, int(retry))
+                except ValueError:
+                    delay = max(delay, parsedate_to_datetime(retry).timestamp() - time.time())
+            if delay > 120:
+                raise ValueError('Server requests a longer retry delay; import remains incomplete') from exc
+            time.sleep(delay)
+    raise RuntimeError('Unreachable retry state')
 
 
 def legal(path: str) -> bool:
@@ -42,12 +63,11 @@ def snapshot(source: dict, dest: Path) -> dict:
         p = safe_path('root/' + entry['path'])
         if entry['mode'] not in {'100644', '100755'} or entry.get('size', MAX_FILE + 1) > MAX_FILE:
             continue
-        if not select(p):
+        if p.suffix.lower() in BINARY_SUFFIXES or not select(p):
             continue
         if legal(str(p)) or str(p) in {'README.md', 'SECURITY.md', 'pyproject.toml', 'package.json'}:
             eligible.append((0, entry))
         elif str(p).startswith(PREFIXES[repo]):
-            # Security/authority paths first; retain related tests as source evidence.
             priority = 1 if any(x in str(p).lower() for x in ('approval', 'policy', 'security', 'permission', 'auth', 'memory', 'session')) else 2
             eligible.append((priority, entry))
     eligible.sort(key=lambda item: (item[0], item[1]['path']))
@@ -56,7 +76,6 @@ def snapshot(source: dict, dest: Path) -> dict:
     chosen = mandatory + optional
     if sum(e.get('size', 0) for e in chosen) > 24 * 1024 * 1024:
         raise ValueError('Selected text budget exceeded')
-    records = []
 
     def copy(entry: dict) -> dict:
         path = entry['path']
@@ -72,7 +91,7 @@ def snapshot(source: dict, dest: Path) -> dict:
         target.chmod(0o644)
         return {'path': path, 'bytes': len(raw), 'git_blob_sha1': entry['sha'], 'sha256': hashlib.sha256(raw).hexdigest()}
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         records = list(pool.map(copy, chosen))
     if blob_sha((dest / source['licence_path']).read_bytes()) != source['licence_blob_sha1']:
         raise ValueError('Licence pin mismatch')
@@ -82,7 +101,7 @@ def snapshot(source: dict, dest: Path) -> dict:
     selected = {e['path'] for e in chosen}
     return {'repository': repo, 'commit': commit, 'licence': source['licence'],
             'scope': 'focused source selection, NOT a complete repository or runnable package',
-            'selection': {'prefixes': PREFIXES[repo], 'optional_file_limit': LIMIT, 'all_eligible_legal_notices': True},
+            'selection': {'prefixes': PREFIXES[repo], 'optional_file_limit': LIMIT, 'eligible_text_legal_notices': True},
             'runtime_enabled': False, 'file_count': len(records), 'bytes': sum(r['bytes'] for r in records),
             'files': records, 'excluded': [{'path': e['path'], 'reason': 'outside bounded source selection or filtered path/type/size'} for e in entries if e['path'] not in selected]}
 
