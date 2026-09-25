@@ -9,8 +9,11 @@ import re
 import secrets
 from urllib.parse import urlsplit, parse_qs
 from .local import Fault, exact, parse_json
+from .knowledge_http import knowledge_get
 
-ASSETS = {'/': ('index.html', 'text/html; charset=utf-8'),
+ASSETS = {'/assets/knowledge.js': ('knowledge.js', 'text/javascript; charset=utf-8'),
+          '/assets/knowledge.css': ('knowledge.css', 'text/css; charset=utf-8'),
+          '/': ('index.html', 'text/html; charset=utf-8'),
           '/assets/app.js': ('app.js', 'text/javascript; charset=utf-8'),
           '/assets/app.css': ('app.css', 'text/css; charset=utf-8')}
 
@@ -77,7 +80,7 @@ class DeskHTTPServer(HTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'ALFRED-Desk/0.3'
+    server_version = 'ALFRED-Desk/0.4'
     sys_version = ''
     def log_message(self, *_):
         pass
@@ -163,7 +166,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_payload(200, b'', content_type='image/x-icon')
                 return
             if not mutation and url.path == '/health' and not url.query:
-                self.send_payload(200, {'version': '0.3.0-dev', 'local_only': True, 'live_ai': False})
+                self.send_payload(200, {'version': '0.4.0-dev', 'local_only': True, 'live_ai': False})
                 return
             if mutation and url.query:
                 raise Fault('query_not_allowed')
@@ -192,6 +195,8 @@ class Handler(BaseHTTPRequestHandler):
                 before = int(query['before'][0]) if 'before' in query else None
                 result = store.desk_state(bearer, before=before)
                 result['supervisor'] = self.server.supervisor.view(result['scope'])
+            elif not mutation and url.path.startswith('/desk/knowledge'):
+                result = knowledge_get(store, bearer, url)
             elif not mutation and re.fullmatch(r'/desk/evidence/[0-9]+', url.path) and not url.query:
                 result = store.evidence(bearer, int(url.path.rsplit('/', 1)[1]))
             elif mutation and url.path == '/desk/logout':
