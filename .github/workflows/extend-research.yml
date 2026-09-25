@@ -1,0 +1,33 @@
+name: Extend reviewed source archive
+on:
+  push:
+    branches: [feat/alfred-local-core-2026-09-25]
+    paths: [third_party/extension.lock.json, tools/extend_sources.py, .github/workflows/extend-research.yml]
+permissions:
+  contents: write
+concurrency:
+  group: alfred-extension-import
+  cancel-in-progress: false
+jobs:
+  preserve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+      - name: Copy pinned sources as data only
+        run: python3 tools/extend_sources.py
+      - name: Preserve source bytes and honest receipt without force-push
+        run: |
+          git config user.name 'ALFRED source importer'
+          git config user.email 'alfred-importer@users.noreply.github.com'
+          git add -f third_party/extensions third_party/EXTENSION_RECEIPT.json
+          if ! git diff --cached --quiet; then
+            git commit --quiet -m 'research: preserve Jev SDK QwenPaw and OpenSandbox source selections'
+            git push origin HEAD:refs/heads/feat/alfred-local-core-2026-09-25
+          fi
+      - name: Verify both archives
+        run: |
+          python3 tools/import_sources.py --verify
+          python3 tools/extend_sources.py --verify
