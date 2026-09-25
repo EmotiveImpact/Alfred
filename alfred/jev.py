@@ -1,8 +1,8 @@
-"""Jev wire-contract experiment. No HTTP transport, API key or execution authority.
+"""Jev wire-contract experiment. No HTTP transport, key or execution authority.
 
-Accepts only an explicitly minimised state supplied by a trusted caller. Outputs
-are advisory. Provider confidence is not a calibrated ALFRED probability of truth.
-Official protocol reference: https://docs.typesafe.ai/introduction/quickstart
+Only deliberately minimised state supplied by a trusted caller is accepted.
+Provider confidence is not ALFRED's measured probability of factual correctness.
+Protocol reference: https://docs.typesafe.ai/api
 """
 from __future__ import annotations
 import math
@@ -33,14 +33,17 @@ def parse_advice(response: dict) -> dict:
         raise Fault('unexpected_model')
     answers=exact(response.get('answers'),{'attention'})
     answer=exact(answers['attention'],{'type','choice','probabilities','confidence'})
-    if answer['type']!='choice' or answer['choice'] not in OPTIONS:
+    choice=answer['choice']
+    if answer['type']!='choice' or type(choice) is not str or choice not in OPTIONS:
         raise Fault('invalid_choice')
     distribution=exact(answer['probabilities'],OPTIONS)
     for value in distribution.values():
         probability(value)
     if abs(sum(distribution.values())-1)>0.00001:
         raise Fault('invalid_distribution')
+    if distribution[choice] < max(distribution.values()):
+        raise Fault('choice_distribution_mismatch')
     probability(answer['confidence'])
-    return {'advisory_only':True,'suggested_route':answer['choice'],
+    return {'advisory_only':True,'suggested_route':choice,
             'provider_confidence':answer['confidence'],'probabilities':dict(distribution),
             'model':MODEL,'permission_granted':False,'actions_executed':0}

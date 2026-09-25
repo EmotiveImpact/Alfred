@@ -28,6 +28,12 @@ class JevTests(unittest.TestCase):
     def test_unknown_choice_rejected(self):
         self.response['answers']['attention']['choice']='execute'
         with self.assertRaises(Fault): parse_advice(self.response)
+    def test_non_string_choice_rejected(self):
+        self.response['answers']['attention']['choice']=[]
+        with self.assertRaises(Fault): parse_advice(self.response)
+    def test_inconsistent_choice_rejected(self):
+        self.response['answers']['attention']['choice']='ignore'
+        with self.assertRaises(Fault): parse_advice(self.response)
     def test_invalid_probabilities_rejected(self):
         for bad in (float('nan'),float('inf'),True,-1,2):
             response=copy.deepcopy(self.response); response['answers']['attention']['probabilities']['review']=bad
