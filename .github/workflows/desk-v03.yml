@@ -1,0 +1,67 @@
+name: ALFRED desk acceptance
+on:
+  push:
+    branches: [feat/alfred-desk-2026-09-25]
+    paths: [alfred/**, web/**, tests/**, tools/check_desk_browser.py, .github/workflows/desk-v03.yml]
+permissions:
+  contents: write
+concurrency:
+  group: alfred-desk-acceptance
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: github.repository == 'EmotiveImpact/Alfred'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test original core, real HTTP, files and restart behaviour
+        run: |
+          set -euo pipefail
+          mkdir -p docs/evidence/desk-v03
+          python3 --version
+          python3 -m unittest discover -s tests -v 2>&1 | tee docs/evidence/desk-v03/tests.txt
+          python3 -m alfred.demo
+          python3 -m alfred.run demo
+          python3 tools/import_sources.py --verify
+          python3 tools/extend_sources.py --verify
+      - name: Prepare test-only browser tooling, never install upstream agents
+        run: |
+          python3 -m venv /tmp/alfred-browser-venv
+          /tmp/alfred-browser-venv/bin/pip install 'playwright==1.57.0'
+          if command -v google-chrome >/dev/null; then
+            echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            /tmp/alfred-browser-venv/bin/python -m playwright install --with-deps chromium
+            /tmp/alfred-browser-venv/bin/python -c 'from playwright.sync_api import sync_playwright; p=sync_playwright().start(); print("CHROMIUM_PATH="+p.chromium.executable_path); p.stop()' >> "$GITHUB_ENV"
+          fi
+      - name: Exercise the actual browser to local server workflow
+        env:
+          ALFRED_BROWSER_OUTPUT: docs/evidence/desk-v03
+        run: /tmp/alfred-browser-venv/bin/python tools/check_desk_browser.py
+      - name: Record tested source identity
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          paths = ['alfred/desk.py','alfred/desk_http.py','alfred/desk_runtime.py','alfred/desk_store.py','web/index.html','web/app.css','web/app.js','tests/test_desk.py','tests/test_desk_http.py','tools/check_desk_browser.py','alfred/local.py']
+          files = {}
+          for name in paths:
+              data = pathlib.Path(name).read_bytes()
+              files[name] = {'sha256': hashlib.sha256(data).hexdigest(), 'git_blob': hashlib.sha1(b'blob '+str(len(data)).encode()+b'\0'+data).hexdigest()}
+          report = {'tested_commit': subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(), 'workflow_run': os.environ['GITHUB_RUN_ID'], 'data': 'synthetic only', 'files':files}
+          pathlib.Path('docs/evidence/desk-v03/source-receipt.json').write_text(json.dumps(report,indent=2)+'\n')
+          PY
+      - name: Preserve successful synthetic screenshots and test receipts on this branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'ALFRED verification'
+          git config user.email 'alfred-verification@users.noreply.github.com'
+          git add docs/evidence/desk-v03
+          if ! git diff --cached --quiet; then
+            git commit --quiet -m 'test: preserve real browser acceptance and synthetic visual evidence'
+            AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/feat/alfred-desk-2026-09-25
+          fi

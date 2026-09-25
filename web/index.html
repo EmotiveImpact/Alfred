@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>ALFRED | Your world, in focus</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<section id="sign-in" class="sign-in">
+  <div class="login-brand"><span class="mark" aria-hidden="true">A</span><span>ALFRED</span></div>
+  <p class="eyebrow">YOUR PERSONAL INTELLIGENCE / LOCAL ALPHA</p>
+  <h1>Your world.<br><span>In focus.</span></h1>
+  <p class="intro">A clear view of what changed. The evidence behind it.<br>And your authority over what happens next.</p>
+  <form id="login-form" class="login-card">
+    <label for="access-key">Local access key</label>
+    <input id="access-key" type="password" autocomplete="off" spellcheck="false" required placeholder="Paste your private access key">
+    <p class="hint">Get the key from your private terminal with <code>python3 -m alfred.desk access</code>. It is not saved in browser storage.</p>
+    <button class="primary" type="submit">Open your workspace <span aria-hidden="true">↗</span></button>
+    <p id="login-error" class="error" role="alert"></p>
+  </form>
+  <div class="login-foot"><span class="dot"></span> LOCAL DATA ONLY <span>NO LIVE AI</span><span>MICROPHONE OFF</span></div>
+</section>
+<div id="workspace" class="workspace" hidden>
+  <aside class="sidebar">
+    <a class="brand" href="#overview"><span class="mark" aria-hidden="true">A</span><span>ALFRED<small>PERSONAL INTELLIGENCE</small></span></a>
+    <div class="workspace-label">WORKSPACE</div><div class="scope-box"><span class="scope-icon" aria-hidden="true">▣</span><div><strong id="scope-name">Production</strong><small id="role-name">Local workspace</small></div></div>
+    <nav aria-label="Workspace navigation">
+      <button data-view="overview" aria-current="page"><span aria-hidden="true">◫</span>Overview</button>
+      <button data-view="evidence"><span aria-hidden="true">▤</span>Evidence</button>
+      <button data-view="approvals"><span aria-hidden="true">◇</span>Approvals<span id="nav-count" class="nav-count">0</span></button>
+      <button data-view="activity"><span aria-hidden="true">≋</span>Activity</button>
+      <button data-view="sources"><span aria-hidden="true">⌘</span>Sources</button>
+      <button data-view="settings"><span aria-hidden="true">⊙</span>Controls</button>
+    </nav>
+    <div class="sidebar-bottom"><div class="local-indicator"><span class="dot"></span>Local development alpha</div><p>Synthetic workspace.<br>No live AI or external actions.</p><button id="switch" class="quiet">Switch workspace / sign out <span aria-hidden="true">↗</span></button></div>
+  </aside>
+  <div class="main-shell">
+    <header class="topbar"><div><span class="dot" id="connection-dot"></span><span id="connection-status" role="status">Connecting</span></div><div class="topbar-right"><span class="tag">MIC OFF</span><span class="tag">SAMPLE DATA</span><button id="refresh" class="quiet">Refresh</button><button id="pause" class="outline">Pause processing</button></div></header>
+    <main id="main" tabindex="-1">
+      <div id="offline" class="warning" role="alert" hidden>Connection lost. Displayed information is a cached view. Approvals are unavailable until reconnected.</div>
+      <div id="paused-banner" class="warning" role="status" hidden>Processing is paused. No project scans or new draft execution. Completed work is not undone.</div>
+      <div class="heading"><div><p class="eyebrow" id="section-eyebrow">YOUR BRIEFING</p><h1 id="page-title">Everything that matters.<br><span>Nothing you don't need.</span></h1><p id="page-description">A sourced view of your sample production. You remain in control.</p></div><div class="date-block"><span id="current-date"></span><small id="last-sync">Not yet synchronised</small></div></div>
+      <div id="view-content"></div>
+      <footer class="main-footer"><span>ALFRED / DESK 0.3</span><span>RULE-BASED BRIEFING · LOCAL DRAFTS ONLY · NOT A LIVE AI ASSISTANT</span></footer>
+    </main>
+  </div>
+</div>
+<dialog id="detail" aria-labelledby="detail-title"><div class="dialog-top"><p class="eyebrow" id="detail-eyebrow">EVIDENCE</p><button id="close-detail" class="icon-button" aria-label="Close details">×</button></div><div id="detail-body"></div></dialog>
+<div id="toast" role="status" class="toast" hidden></div>
+</body>
+</html>
