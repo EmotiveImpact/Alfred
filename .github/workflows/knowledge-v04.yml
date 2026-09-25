@@ -1,0 +1,73 @@
+name: ALFRED knowledge desk acceptance
+on:
+  push:
+    branches: [feat/alfred-knowledge-desk-2026-09-26]
+    paths: [alfred/**, web/**, tests/**, tools/**, .github/workflows/knowledge-v04.yml]
+permissions:
+  contents: write
+concurrency:
+  group: alfred-knowledge-v04
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: github.repository == 'EmotiveImpact/Alfred'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Apply reviewed additive integration and test all original code
+        run: |
+          set -euo pipefail
+          python3 tools/finalise_knowledge.py
+          mkdir -p docs/evidence/knowledge-v04
+          python3 --version
+          python3 -m unittest discover -s tests -v 2>&1 | tee docs/evidence/knowledge-v04/tests.txt
+          python3 tools/import_sources.py --verify
+          python3 tools/extend_sources.py --verify
+      - name: Prepare isolated test-only browser tooling
+        run: |
+          python3 -m venv /tmp/alfred-knowledge-browser
+          /tmp/alfred-knowledge-browser/bin/pip install 'playwright==1.57.0'
+          if command -v google-chrome >/dev/null; then
+            echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            /tmp/alfred-knowledge-browser/bin/python -m playwright install --with-deps chromium
+          fi
+      - name: Test the previous Desk flow and the new Knowledge flow
+        run: |
+          ALFRED_BROWSER_OUTPUT=docs/evidence/knowledge-v04/regression /tmp/alfred-knowledge-browser/bin/python tools/check_desk_browser.py
+          /tmp/alfred-knowledge-browser/bin/python tools/check_knowledge_browser.py
+          python3 tools/build_knowledge_preview.py
+      - name: Record exact tested source hashes
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          files={}
+          for folder in ('alfred','web','tests','tools'):
+              for p in pathlib.Path(folder).glob('*'):
+                  if p.is_file() and p.suffix in ('.py','.js','.css','.html'):
+                      raw=p.read_bytes();files[str(p)]={'sha256':hashlib.sha256(raw).hexdigest(),'git_blob':hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()}
+          pathlib.Path('docs/evidence/knowledge-v04/source-receipt.json').write_text(json.dumps({'base_input_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'workflow_run':os.environ['GITHUB_RUN_ID'],'integration_patch_applied_before_tests':True,'files':files},indent=2)+'\n')
+          PY
+      - name: Commit tested integration, screenshots and offline preview without force push
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'ALFRED verification'
+          git config user.email 'alfred-verification@users.noreply.github.com'
+          git add alfred web docs/evidence/knowledge-v04 docs/previews
+          if ! git diff --cached --quiet; then
+            git commit --quiet -m 'feat: verify Knowledge Desk integration and preserve actual visual evidence'
+            AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/feat/alfred-knowledge-desk-2026-09-26
+          fi
+      - name: Retain synthetic acceptance evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-knowledge-v04-evidence
+          path: docs/evidence/knowledge-v04
+          retention-days: 7
+          if-no-files-found: warn
