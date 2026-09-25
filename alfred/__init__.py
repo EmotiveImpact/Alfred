@@ -1,2 +1,2 @@
-"""ALFRED original offline contract prototype; not a deployed assistant."""
-__version__ = "0.1.0"
+"""ALFRED local development core, not a deployed personal assistant."""
+__version__ = "0.2.0.dev0"

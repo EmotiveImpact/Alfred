@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "researched_on": "2026-09-25",
+  "scope": "Inert focused source selections; not models, complete forks or runtime installations",
+  "sources": [
+    {"repository":"typesafe-ai/typesafe-sdk-python","commit":"0ffd094c72ed9445223060b24ffd7a56aa781fb4","licence":"MIT","licence_path":"LICENSE","licence_blob_sha1":"8aa26455d23acf904be3ed9dfb3a3efe3e49245a","prefixes":["src/","typesafe_sdk/"],"note":"SDK only, not Jev weights. Upstream copyright placeholder retained verbatim; resolve before product redistribution."},
+    {"repository":"agentscope-ai/QwenPaw","previous_name":"agentscope-ai/CoPaw","commit":"3822ec7173d17cf37c8a02f51d3ed5628079e86e","licence":"Apache-2.0","licence_path":"LICENSE","licence_blob_sha1":"bb587daba1617c37cb8b783bc5e096bbf438543c","prefixes":["src/qwenpaw/"],"note":"CoPaw redirects to QwenPaw at research time; review current source, not an obsolete fork."},
+    {"repository":"opensandbox-group/OpenSandbox","previous_name":"alibaba/OpenSandbox","commit":"f3950db2499e8d572694bf9939e4bf985a2eab8a","licence":"Apache-2.0","licence_path":"LICENSE","licence_blob_sha1":"b09cd7856d58590578ee1a4f3ad45d1310a97f87","prefixes":["server/","specs/"],"note":"Isolation infrastructure reference, not an enabled or proven ALFRED sandbox."}
+  ]
+}
