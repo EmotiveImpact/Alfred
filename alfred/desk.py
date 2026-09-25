@@ -6,10 +6,11 @@ import os
 from pathlib import Path
 import stat
 import time
-from .desk_store import DeskStore
-from .desk_runtime import Supervisor
+from .knowledge import KnowledgeStore as DeskStore
+from .knowledge import KnowledgeSupervisor as Supervisor
 from .desk_http import DeskHTTPServer
 from .local import Fault
+from .knowledge_demo import seed_vault
 
 
 def private_home(path):
@@ -48,6 +49,7 @@ def init_demo(path):
         value = {'document_id': identity, 'title': title, 'revision': 1,
                  'observed_at': now - 30 - i, 'expires_at': now + 3600, 'summary': summary}
         (source / (identity + '.json')).write_text(json.dumps(value, indent=2) + '\n')
+    seed_vault(path / 'vault')
     return credentials
 
 
@@ -66,7 +68,7 @@ def load_keys(path):
         os.close(fd)
 
 
-def serve(path, port):
+def serve(path, port, vault=None):
     # POSIX development target. A lock prevents accidental duplicate supervisors.
     import fcntl
     fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -78,7 +80,7 @@ def serve(path, port):
             raise Fault('desk_already_running', 409) from None
         keys = load_keys(path)
         store = DeskStore(path / 'desk.sqlite')
-        supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project')
+        supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None))
         server = DeskHTTPServer(store, supervisor, port=port)
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
@@ -99,6 +101,7 @@ def main():
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--credential-id')
+    parser.add_argument('--vault', help='Explicit read-only Markdown folder; no Obsidian plugins are loaded')
     parser.add_argument('--role', choices=('owner', 'reader'), default='owner')
     args = parser.parse_args()
     os.umask(0o077)
@@ -119,7 +122,7 @@ def main():
         else:
             if not 1024 <= args.port <= 65535:
                 raise Fault('invalid_port')
-            serve(path, args.port)
+            serve(path, args.port, args.vault)
     except KeyboardInterrupt:
         print('ALFRED desk stopped. Stored events and drafts remain on disk.')
     except (Fault, OSError, ValueError) as exc:

@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS knowledge_refs(
 def safe_text(value, limit=160):
     if not isinstance(value, str) or len(value) > limit or any(ord(c) < 32 or 127 <= ord(c) < 160 for c in value):
         raise Fault('invalid_note_metadata')
-    value.encode('utf-8')
+    try: value.encode('utf-8')
+    except UnicodeError: raise Fault('invalid_note_unicode') from None
     return value
 
 
@@ -80,7 +81,7 @@ def parse_note(path, raw):
             raise Fault('unclosed_or_oversized_frontmatter')
         active = None
         for line in lines[1:end]:
-            item = re.fullmatch(r'\s+-\s+(.+)', line)
+            item = re.fullmatch(r'\s*-\s+(.+)', line)
             if item and active in {'tags', 'aliases'}:
                 meta[active].extend(list_value(item[1]))
                 if len(meta[active]) > 24:
@@ -151,7 +152,8 @@ def resolve_target(origin, target, syntax, notes):
     target = unquote(target)
     if any(ord(c) < 32 for c in target) or '\\' in target or target.startswith('/'):
         return None, 'blocked_path'
-    parsed = urlsplit(target)
+    try: parsed = urlsplit(target)
+    except ValueError: return None, 'malformed_link'
     if parsed.scheme or parsed.netloc:
         return None, 'external' if parsed.scheme in {'http', 'https', 'mailto'} else 'blocked_scheme'
     path = target.split('#', 1)[0]
@@ -195,6 +197,8 @@ class KnowledgeStore(DeskStore):
         snapshot = hashlib.sha256(json.dumps([(n['path'], n['sha256']) for n in notes], sort_keys=True).encode()).hexdigest()
         with self.transaction() as db:
             p = self.authenticate(db, bearer, {'source'}); scope, source = p['scope'], p['id']
+            if db.execute('SELECT count(*) FROM knowledge_notes WHERE scope=?', (scope,)).fetchone()[0] + len(notes) > 10000:
+                raise Fault('knowledge_history_capacity')
             old = db.execute('SELECT snapshot FROM knowledge_sources WHERE scope=? AND source=?', (scope, source)).fetchone()
             db.execute('UPDATE knowledge_notes SET status=\'missing\',body=\'\',tags=\'[]\',aliases=\'[]\' WHERE scope=? AND source=?', (scope, source))
             db.execute('DELETE FROM knowledge_refs WHERE scope=? AND source=?', (scope, source))
@@ -220,14 +224,18 @@ class KnowledgeStore(DeskStore):
     def knowledge(self, bearer, query='', kind=''):
         safe_text(query, 160)
         if kind and kind not in KINDS: raise Fault('invalid_note_kind')
-        with self.connection() as db:
+        with self.transaction() as db:
             p = self.authenticate(db,bearer,{'owner','reader'}); scope = p['scope']
             sources = [dict(r) for r in db.execute('SELECT s.* FROM knowledge_sources s JOIN credentials c ON c.id=s.source AND c.scope=s.scope WHERE s.scope=? AND c.revoked=0 AND c.expires>?', (scope,self.now()))]
             permitted = {s['source'] for s in sources if s['status'] in {'ready','attention'}}
             notes = [dict(r) for r in db.execute('SELECT * FROM knowledge_notes WHERE scope=? AND status=\'ready\' ORDER BY path COLLATE NOCASE,id', (scope,)) if r['source'] in permitted]
+            if len(notes)>MAX_NOTES:
+                raise Fault('knowledge_view_capacity',409)
             for n in notes:
                 n['tags'], n['aliases'] = json.loads(n['tags']), json.loads(n['aliases'])
             refs = [dict(r) for r in db.execute('SELECT * FROM knowledge_refs WHERE scope=? ORDER BY source,origin,line,target', (scope,)) if r['source'] in permitted]
+            if len(refs)>MAX_LINKS:
+                raise Fault('knowledge_link_view_capacity',409)
             links, issues = [], []
             groups = {s: [n for n in notes if n['source'] == s] for s in permitted}
             by_id = {n['id']: n for n in notes}
@@ -364,8 +372,8 @@ class KnowledgeSupervisor(Supervisor):
             if self.vault and not self.store.paused(self.scope):
                 try:
                     self.store.principal(self.owner,{'owner'});self.vault.scan()
-                except Fault:
-                    pass
+                except Exception:
+                    self.vault.health={'configured':True,'status':'unavailable','last_scan':self.store.now(),'errors':[{'code':'knowledge_scan_failed'}]}
             super().cycle()
 
     def view(self,scope):

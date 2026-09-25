@@ -29,7 +29,17 @@
     select.addEventListener('change',()=>{state.kind=select.value;load(true);});
     const views=node('div','knowledge-toggles');
     for(const [mode,title] of [['graph','Map'],['list','Notes']]){const b=button(title,'outline',()=>{state.mode=mode;renderData();});b.dataset.mode=mode;views.append(b);}
-    bar.append(search,select,views);
+    const packet=button('Source packet','outline',()=>act(async()=>{
+      if(!state.query.trim()){showToast('Enter search keywords to prepare a source packet.');return;}
+      const gen=ui.generation;const result=await api('/desk/knowledge/context?q='+encodeURIComponent(state.query));
+      if(gen!==ui.generation||ui.view!=='knowledge')return;
+      setDialog('KNOWLEDGE / RETRIEVAL PACKET');const root=$('detail-body');root.replaceChildren();
+      const title=node('h2','','Your source packet');title.id='detail-title';root.append(title,node('p','accessible-note','Exact note excerpts, not an AI-generated answer. Nothing was sent to a model.'));
+      result.evidence.forEach(e=>{root.append(node('h3','',e.title),node('p','knowledge-path',e.path+' · lines '+e.start_line+' to '+e.end_line),node('pre','knowledge-source',e.excerpt),node('p','mono','SHA-256 '+e.sha256));});
+      if(!result.evidence.length)root.append(node('p','','No matching source excerpts. Try more specific keywords.'));
+      if(!$('detail').open)$('detail').showModal();
+    }));
+    bar.append(search,select,views,packet);
     const status=node('p','status-line');status.id='knowledge-status';status.setAttribute('role','status');
     const metrics=node('div','knowledge-metrics');metrics.id='knowledge-metrics';
     const grid=node('div','knowledge-grid'),main=node('section','knowledge-main'),canvas=node('div','knowledge-canvas'),inspector=node('aside','knowledge-inspector');
@@ -49,7 +59,11 @@
     try{
       const data=await api('/desk/knowledge?q='+encodeURIComponent(state.query)+'&kind='+encodeURIComponent(state.kind));
       if(!valid(epoch,generation))return;
+      const oldNote=state.data?.nodes.find(n=>n.id===state.selected);
+      const nextNote=data.nodes.find(n=>n.id===state.selected);
+      const changed=oldNote&&(!nextNote||nextNote.sha256!==oldNote.sha256);
       state.data=data;state.last=Date.now();
+      if(changed){$('knowledge-inspector').replaceChildren();if($('detail-eyebrow').textContent.startsWith('KNOWLEDGE')){$('detail').close();$('detail-body').replaceChildren();}if(nextNote)inspect(nextNote.id);}
       if(state.selected&&!data.nodes.some(n=>n.id===state.selected)){state.selected=null;$('knowledge-inspector').replaceChildren();}
       renderData();
     }catch(e){if(valid(epoch,generation)){$('knowledge-status').textContent=errorText(e);state.last=Date.now();}}
@@ -80,17 +94,17 @@
   function drawGraph(root,data){
     const visible=data.results.slice(0,96),ids=new Set(visible.map(n=>n.id));
     const el=svg('svg',{viewBox:'0 0 860 530',class:'knowledge-svg',role:'group','aria-label':'Linked Markdown notes. Select a node to inspect its source.'});
-    const centres={map:[410,265],project:[650,150],person:[635,390],decision:[235,380],procedure:[195,135],note:[440,465]};
+    const centres={map:[410,265],project:[650,150],person:[635,390],decision:[235,380],procedure:[195,135],note:[440,420]};
     const positions={};
-    kinds.forEach(k=>{const group=visible.filter(n=>n.kind===k),centre=centres[k];group.forEach((n,i)=>{const angle=2*Math.PI*i/Math.max(group.length,1)-Math.PI/2;const radius=group.length===1?0:Math.min(80,38+group.length*6);positions[n.id]=[centre[0]+Math.cos(angle)*radius,centre[1]+Math.sin(angle)*radius];});});
+    kinds.forEach(k=>{const group=visible.filter(n=>n.kind===k),centre=centres[k];group.forEach((n,i)=>{const angle=2*Math.PI*i/Math.max(group.length,1)-Math.PI/2;const radius=group.length===1?0:Math.min(80,38+group.length*6);positions[n.id]=[Math.max(80,Math.min(780,centre[0]+Math.cos(angle)*radius)),Math.max(55,Math.min(470,centre[1]+Math.sin(angle)*radius))];});});
     const related=new Set([state.selected]);data.links.filter(l=>l.source===state.selected||l.target===state.selected).forEach(l=>{related.add(l.source);related.add(l.target);});
     for(const l of data.links){if(!ids.has(l.source)||!ids.has(l.target)||l.source===l.target)continue;const [x1,y1]=positions[l.source],[x2,y2]=positions[l.target];const active=state.selected&&(l.source===state.selected||l.target===state.selected);const line=svg('line',{x1,y1,x2,y2,class:'knowledge-edge'+(active?' active':'')});line.append(svg('title',{},l.relation+' · source line '+l.line));el.append(line);}
     for(const n of visible){const [x,y]=positions[n.id];const count=data.links.filter(l=>l.source===n.id||l.target===n.id).length;const g=svg('g',{class:'knowledge-node kind-'+n.kind+(n.id===state.selected?' selected':'')+(state.selected&&!related.has(n.id)?' muted':''),transform:'translate('+x+','+y+')',role:'button',tabindex:0,'aria-label':'Open note '+n.title});
-      g.append(svg('circle',{r:Math.min(14,6+count)}),svg('text',{y:27,'text-anchor':'middle'},n.title.length>24?n.title.slice(0,22)+'…':n.title),svg('title',{},n.path));g.addEventListener('click',()=>inspect(n.id));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(n.id);}});el.append(g);
+      g.append(svg('rect',{x:-60,y:-18,width:120,height:52,fill:'transparent','pointer-events':'all'}),svg('circle',{r:Math.min(14,6+count)}),svg('text',{y:27,'text-anchor':'middle'},n.title.length>24?n.title.slice(0,22)+'…':n.title),svg('title',{},n.path));g.addEventListener('click',()=>inspect(n.id));g.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();inspect(n.id);}});el.append(g);
     }
     root.append(el);if(data.results.length>96)root.append(node('p','status-line','Showing the first 96 matching notes in the map. Use search or Notes to inspect the rest.'));
   }
-  function inspectIntro(){const panel=$('knowledge-inspector');panel.replaceChildren();panel.append(node('div','knowledge-orbit','⌬'),node('p','eyebrow','FOLLOW THE CONNECTION'),node('h3','','Not just stored. Understood in context.'),node('p','','Select any note to see what it links to, what links back, and the exact text behind the connection.'),node('div','knowledge-small-card','Files are the source. The graph is a rebuildable view. No inferred relationships are added.'));
+  function inspectIntro(){const panel=$('knowledge-inspector');panel.replaceChildren();panel.append(node('div','knowledge-orbit','⌬'),node('p','eyebrow','FOLLOW THE CONNECTION'),node('h3','','Every connection. In context.'),node('p','','Select any note to see what it links to, what links back, and the exact text behind the connection.'),node('div','knowledge-small-card','Files are the source. The graph is a rebuildable view. No inferred relationships are added.'));
   }
   async function inspect(id){
     state.selected=id;const generation=ui.generation;const selected=id;

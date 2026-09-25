@@ -2,11 +2,16 @@
 import re
 from urllib.parse import parse_qs
 from .local import Fault
+from .knowledge_context import build_packet
 
 
 def knowledge_get(store,bearer,url):
     if not hasattr(store,'knowledge'): raise Fault('knowledge_not_configured',404)
     if len(url.query)>1200: raise Fault('query_too_large')
+    if url.path=='/desk/knowledge/context':
+        query=parse_qs(url.query,keep_blank_values=True,strict_parsing=True)
+        if set(query)!={'q'} or len(query['q'])!=1: raise Fault('invalid_query')
+        return build_packet(store,bearer,query['q'][0])
     if url.path=='/desk/knowledge':
         query=parse_qs(url.query,keep_blank_values=True,strict_parsing=True)
         if set(query)-{'q','kind'} or any(len(v)!=1 for v in query.values()): raise Fault('invalid_query')
