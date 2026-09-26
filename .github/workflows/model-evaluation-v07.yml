@@ -2,7 +2,7 @@ name: ALFRED bounded real-model experiment
 on:
   push:
     branches: [feat/alfred-conversation-2026-09-26]
-    paths: [tools/evaluate_real_model.py, .github/workflows/model-evaluation-v07.yml]
+    paths: [tools/evaluate_real_model.py, alfred/local_model.py, .github/workflows/model-evaluation-v07.yml]
 permissions:
   contents: read
 jobs:
