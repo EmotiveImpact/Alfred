@@ -1,8 +1,8 @@
 {
   "file": "ALFRED-Desk-v05-Developer-Package.zip",
-  "bytes": 2600838,
-  "sha256": "7fa64218d9bffd4e20543c8e980c9299f3750070063fddfbbe9452a1196cd221",
-  "original_files": 89,
+  "bytes": 2600423,
+  "sha256": "ed725a174c93baa9bdcc28ce911d60a6a99517d12b3898a1def5fb5ee034ff65",
+  "original_files": 90,
   "upstream_archives_included": false,
   "runtime_credentials_included": false
 }

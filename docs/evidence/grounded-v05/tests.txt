@@ -175,6 +175,9 @@ test_real_question_endpoint (test_grounded.HTTPTests.test_real_question_endpoint
 test_minimised_tool_free_request (test_grounded.LocalModelTests.test_minimised_tool_free_request) ... ok
 test_model_configuration_validation (test_grounded.LocalModelTests.test_model_configuration_validation) ... ok
 test_real_loopback_adapter_round_trip (test_grounded.LocalModelTests.test_real_loopback_adapter_round_trip) ... ok
+test_question_and_title_do_not_create_active_markup (test_grounded_export.ExportTests.test_question_and_title_do_not_create_active_markup) ... ok
+test_source_fence_cannot_close_generated_fence (test_grounded_export.ExportTests.test_source_fence_cannot_close_generated_fence) ... ok
+test_source_html_is_inside_literal_fence (test_grounded_export.ExportTests.test_source_html_is_inside_literal_fence) ... ok
 test_authenticated_state (test_httpd.HTTPTests.test_authenticated_state) ... ok
 test_browser_origin_not_enabled (test_httpd.HTTPTests.test_browser_origin_not_enabled) ... ok
 test_duplicate_keys_denied (test_httpd.HTTPTests.test_duplicate_keys_denied) ... ok
@@ -352,6 +355,6 @@ test_worker_repeated_does_not_duplicate (test_local.LocalTests.test_worker_repea
 test_wrong_owner_cannot_approve (test_local.LocalTests.test_wrong_owner_cannot_approve) ... ok
 
 ----------------------------------------------------------------------
-Ran 352 tests in 19.238s
+Ran 355 tests in 13.209s
 
 OK

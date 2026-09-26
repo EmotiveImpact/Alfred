@@ -1,6 +1,6 @@
 {
-  "input_commit": "6dcf8e16cc8838d96941833228b6a33dbb348754",
-  "workflow_run": "36210601913",
+  "input_commit": "a135de714fe372cb1fbd258ff3908764bf667d07",
+  "workflow_run": "36211018297",
   "integration_applied_before_tests": true,
   "model_inference_tested": false,
   "files": {
@@ -21,8 +21,8 @@
       "git_blob": "e7eedefe6c49295e1bf9d53861c80e2b09cad652"
     },
     "alfred/grounded.py": {
-      "sha256": "aa58bfe08d22504d6b60a3e44fe781491c90cb4c110aeecba5ca71c6a24495bc",
-      "git_blob": "659970467f1c3c742b8f1a2e83e3f7f4b4b29cb0"
+      "sha256": "dfd00d98d2eadc05ebec2287feb95a79bb8cb8ceb81e0895558046b0d128cb10",
+      "git_blob": "d3c68d9db21421ca737d72fc94ee1f9cb00b82fb"
     },
     "alfred/desk_http.py": {
       "sha256": "1abc2f6c50237f8827c2ab78e483eefcbed3c44bf6eab7d58e68ea99310ab535",
@@ -120,6 +120,10 @@
       "sha256": "a7bdb3f244749529e9ab9520e9df0b8e211034cb81c57fe8fb1f46ba31861469",
       "git_blob": "afc64b123ec1a30c68ba067628df5cede34e93cc"
     },
+    "tests/test_grounded_export.py": {
+      "sha256": "e3ce4075cb1745228e939933bedc3da997e45f3c4ec5ec6d63a49a9bd548afbc",
+      "git_blob": "ab2c292a6e27327df6426923cc9aff82ba13bfd1"
+    },
     "tests/test_jev.py": {
       "sha256": "5ee2d07919ad0021d42b76a0831b785967fc0d97a704947bf8d1b0e3cbcdd16c",
       "git_blob": "732f36dc8f34e9b25b08b971365c79c97d0bb1a8"
@@ -177,8 +181,8 @@
       "git_blob": "0f6d3f93946487e98980274f21e47c922249009a"
     },
     "tools/build_grounded_preview.py": {
-      "sha256": "aeca96f020b80ee9b3856800fcff5937744576058ebc533eabe670443bf80b98",
-      "git_blob": "997456c2d2fb946b80e50b8764b9ace63fb0cf30"
+      "sha256": "4e9ab20ca79272f375f06d16f00f307d99b724509785428d6a8eaa3d8c049f1e",
+      "git_blob": "1daa8142f3e5197805e5176590ca9ca0f3b14f2b"
     },
     "tools/extend_sources.py": {
       "sha256": "e0dfb08b04e5ef672c053560a097cab4b4cd70a6d68b7eca8e2d45a6b76eabcc",
