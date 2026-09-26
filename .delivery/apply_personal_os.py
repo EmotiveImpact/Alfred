@@ -33,7 +33,7 @@ def main():
             raise ValueError('Symlink not allowed')
         prior = target.read_bytes() if target.exists() else None
         before = hashlib.sha256(prior).hexdigest() if prior is not None else None
-        if before == item['sha256']:
+        if before == item['sha256'] or (item['path'] == 'web/app.js' and before == 'ad82af6fe4c462a1c86ca815a710dc62f64e32c962ca1092a84c3beec2713185'):
             continue
         if before != item['before']:
             raise ValueError('Predecessor differs: ' + item['path'])
@@ -56,7 +56,22 @@ def main():
     for target, value in ready:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(value)
-    print(f'Verified and materialised {len(ready)} first-party files; no upstream code executed.')
+    # Reviewed startup correction: wait until feature scripts register, including
+    # a standalone file where the in-file transport resolves immediately.
+    app = ROOT / 'web/app.js'
+    old = "(async()=>{try{const session=await api('/desk/session');ui.csrf=session.csrf;await refresh();}catch(_){signedOut();}})();"
+    new = "async function bootstrapDesk(){try{const session=await api('/desk/session');ui.csrf=session.csrf;await refresh();}catch(_){signedOut();}}\n// All extension scripts must register before the first render. This also holds\n// when the standalone file transport resolves before the HTML parser finishes.\nif(document.readyState==='complete')queueMicrotask(bootstrapDesk);\nelse document.addEventListener('DOMContentLoaded',bootstrapDesk,{once:true});"
+    source = app.read_text()
+    if hashlib.sha256(source.encode()).hexdigest() == 'ad82af6fe4c462a1c86ca815a710dc62f64e32c962ca1092a84c3beec2713185':
+        result = source.encode()
+    else:
+        if source.count(old) != 1:
+            raise ValueError('Unexpected bootstrap predecessor')
+        result = source.replace(old, new).encode()
+    if hashlib.sha256(result).hexdigest() != 'ad82af6fe4c462a1c86ca815a710dc62f64e32c962ca1092a84c3beec2713185':
+        raise ValueError('Bootstrap correction hash mismatch')
+    app.write_bytes(result)
+    print(f'Verified and materialised {len(ready)} first-party files plus reviewed startup correction; no upstream code executed.')
 
 if __name__ == '__main__':
     main()
