@@ -2,7 +2,7 @@ name: ALFRED bounded real-model experiment
 on:
   push:
     branches: [feat/alfred-conversation-2026-09-26]
-    paths: [tools/evaluate_real_model.py, alfred/local_model.py, .github/workflows/model-evaluation-v07.yml]
+    paths: [tools/evaluate_real_model.py, tools/evaluate_conversation_model.py, alfred/local_model.py, .github/workflows/model-evaluation-v07.yml]
 permissions:
   contents: read
 jobs:
@@ -20,6 +20,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Materialise reviewed first-party code when this is a staged delivery
+        run: |
+          if test -f .delivery/apply_conversation.py; then python3 .delivery/apply_conversation.py; fi
       - name: Download and verify fixed runtime and model bytes, no installation script
         run: |
           set -euo pipefail
@@ -31,7 +34,7 @@ jobs:
           echo '6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e  /tmp/alfred-eval-qwen.gguf' | sha256sum -c -
           curl --fail --location --max-time 30 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/raw/62a8d092b0a1047016f3edbd0fde387598727aa5/LICENSE' -o docs/evidence/conversation-v07/model/QWEN-LICENSE.txt
           curl --fail --location --max-time 30 'https://raw.githubusercontent.com/ollama/ollama/v0.34.4/LICENSE' -o docs/evidence/conversation-v07/model/OLLAMA-LICENSE.txt
-      - name: Run tool-free local inference on fictional notes only
+      - name: Run tool-free local inference and an actual two-turn conversation
         run: |
           set -euo pipefail
           /tmp/alfred-eval-runtime/bin/ollama serve > /tmp/alfred-ollama.log 2>&1 &
@@ -41,6 +44,7 @@ jobs:
           printf 'FROM /tmp/alfred-eval-qwen.gguf\nPARAMETER num_ctx 4096\nPARAMETER temperature 0\n' > /tmp/Modelfile
           /tmp/alfred-eval-runtime/bin/ollama create alfred-eval -f /tmp/Modelfile
           python3 tools/evaluate_real_model.py
+          python3 tools/evaluate_conversation_model.py
           /tmp/alfred-eval-runtime/bin/ollama ps > docs/evidence/conversation-v07/model/loaded-model.txt
       - name: Preserve actual results, including failed cases
         if: always()
