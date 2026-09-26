@@ -352,6 +352,6 @@ test_worker_repeated_does_not_duplicate (test_local.LocalTests.test_worker_repea
 test_wrong_owner_cannot_approve (test_local.LocalTests.test_wrong_owner_cannot_approve) ... ok
 
 ----------------------------------------------------------------------
-Ran 352 tests in 14.217s
+Ran 352 tests in 19.238s
 
 OK
