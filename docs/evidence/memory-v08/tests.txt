@@ -523,6 +523,7 @@ test_future_claim_not_usable (test_reviewed_memory.MemoryTests.test_future_claim
 test_html_remains_literal (test_reviewed_memory.MemoryTests.test_html_remains_literal) ... ok
 test_invalid_line (test_reviewed_memory.MemoryTests.test_invalid_line) ... ok
 test_invalid_metadata_version (test_reviewed_memory.MemoryTests.test_invalid_metadata_version) ... ok
+test_later_review_preserves_supersession_lineage (test_reviewed_memory.MemoryTests.test_later_review_preserves_supersession_lineage) ... ok
 test_missing_entity_target (test_reviewed_memory.MemoryTests.test_missing_entity_target) ... ok
 test_no_automatic_revival (test_reviewed_memory.MemoryTests.test_no_automatic_revival) ... ok
 test_no_names_only_merging (test_reviewed_memory.MemoryTests.test_no_names_only_merging) ... ok
@@ -542,7 +543,9 @@ test_review_is_version_bound (test_reviewed_memory.MemoryTests.test_review_is_ve
 test_revision_change_clears_statement (test_reviewed_memory.MemoryTests.test_revision_change_clears_statement) ... ok
 test_revoked_owner_cannot_read (test_reviewed_memory.MemoryTests.test_revoked_owner_cannot_read) ... ok
 test_revoked_source_invalidates (test_reviewed_memory.MemoryTests.test_revoked_source_invalidates) ... ok
+test_second_supersession_cannot_overwrite_lineage (test_reviewed_memory.MemoryTests.test_second_supersession_cannot_overwrite_lineage) ... ok
 test_source_cannot_read (test_reviewed_memory.MemoryTests.test_source_cannot_read) ... ok
+test_source_invalidation_keeps_supersession_lineage (test_reviewed_memory.MemoryTests.test_source_invalidation_keeps_supersession_lineage) ... ok
 test_supersession_does_not_cross_subject (test_reviewed_memory.MemoryTests.test_supersession_does_not_cross_subject) ... ok
 test_supersession_stale_version (test_reviewed_memory.MemoryTests.test_supersession_stale_version) ... ok
 test_text_not_entity (test_reviewed_memory.MemoryTests.test_text_not_entity) ... ok
@@ -551,6 +554,6 @@ test_unknown_predicate (test_reviewed_memory.MemoryTests.test_unknown_predicate)
 test_withdraw_closes_review (test_reviewed_memory.MemoryTests.test_withdraw_closes_review) ... ok
 
 ----------------------------------------------------------------------
-Ran 551 tests in 19.914s
+Ran 554 tests in 18.824s
 
 OK

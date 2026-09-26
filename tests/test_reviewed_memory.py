@@ -96,6 +96,23 @@ class MemoryTests(unittest.TestCase):
         a=self.propose();self.review(a);b=self.propose(object_id='sam')
         self.review(b,'supersede',replaces_id=a,replaces_version=self.get(a)['version'])
         self.assertEqual(self.get(a)['state'],'superseded');self.assertTrue(self.get(b)['usable'])
+    def test_later_review_preserves_supersession_lineage(self):
+        a=self.propose();self.review(a);b=self.propose(object_id='sam')
+        self.review(b,'supersede',replaces_id=a,replaces_version=self.get(a)['version'])
+        for decision in ('dispute','accept','withdraw'):
+            self.review(b,decision)
+            self.assertEqual(self.get(b)['replaces_id'],a)
+    def test_second_supersession_cannot_overwrite_lineage(self):
+        a=self.propose();self.review(a);b=self.propose(object_id='sam')
+        self.review(b,'supersede',replaces_id=a,replaces_version=self.get(a)['version'])
+        c=self.propose();self.review(c)
+        self.assertFault('memory_replacement_already_recorded',lambda:self.review(b,'supersede',replaces_id=c,replaces_version=self.get(c)['version']))
+        self.assertEqual(self.get(b)['replaces_id'],a);self.assertEqual(self.get(c)['state'],'accepted')
+    def test_source_invalidation_keeps_supersession_lineage(self):
+        a=self.propose();self.review(a);b=self.propose(object_id='sam')
+        self.review(b,'supersede',replaces_id=a,replaces_version=self.get(a)['version'])
+        self.file.write_text('# Atlas\nThe source has changed.\n');self.scan.scan()
+        self.assertEqual(self.get(b)['state'],'invalidated');self.assertEqual(self.get(b)['replaces_id'],a)
     def test_supersession_does_not_cross_subject(self):
         a=self.propose();self.review(a);b=self.propose(subject_id='sam')
         self.assertFault('memory_replacement_mismatch',lambda:self.review(b,'supersede',replaces_id=a,replaces_version=self.get(a)['version']))

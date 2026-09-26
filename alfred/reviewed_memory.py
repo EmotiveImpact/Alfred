@@ -192,8 +192,9 @@ class ReviewedMemory:
             if c['version']!=body['version']:raise Fault('memory_review_changed',409)
             if c['state'] not in ('proposed','accepted','disputed'):raise Fault('memory_review_closed',409)
             self._source(db,p['scope'],self._ref(c))
-            replacement=None
+            replacement=c['replaces_id']
             if body['decision']=='supersede':
+                if c['replaces_id'] is not None:raise Fault('memory_replacement_already_recorded',409)
                 if type(body['replaces_version']) is not int:raise Fault('invalid_memory_replacement')
                 prior=self._claim(db,p,body['replaces_id'])
                 if prior['id']==c['id'] or prior['state'] not in ('accepted','disputed','invalidated') or prior['version']!=body['replaces_version']:

@@ -40,7 +40,7 @@
         const actions=node('div','memory-actions');
         for(const [op,label] of [['accept','Accept statement'],['dispute','Dispute'],['withdraw','Withdraw']]){const b=button(label,'outline',()=>act(()=>reviewDialog(c,op)));b.dataset.review=op;b.disabled=!ui.connected||Boolean(window.ALFRED_PREVIEW);actions.append(b);}
         const alternatives=data.claims.filter(x=>x.id!==c.id&&x.subject_id===c.subject_id&&x.predicate===c.predicate&&['accepted','disputed','invalidated'].includes(x.state));
-        if(alternatives.length){const b=button('Replace an earlier statement','text-button',()=>reviewDialog(c,'supersede',alternatives));b.dataset.review='supersede';b.disabled=!ui.connected||Boolean(window.ALFRED_PREVIEW);actions.append(b);}row.append(actions);
+        if(alternatives.length&&!c.replaces_id){const b=button('Replace an earlier statement','text-button',()=>reviewDialog(c,'supersede',alternatives));b.dataset.review='supersede';b.disabled=!ui.connected||Boolean(window.ALFRED_PREVIEW);actions.append(b);}row.append(actions);
       }root.append(row);
     }
     const graph=node('details','memory-graph');graph.append(node('summary','','Reviewed connections ('+data.graph.edges.length+')'));
