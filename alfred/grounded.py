@@ -6,6 +6,7 @@ proves reference integrity, NOT semantic entailment or real-world truth.
 """
 from __future__ import annotations
 import re
+import html
 from urllib.parse import quote
 from .local import Fault, exact
 from .knowledge import safe_text
@@ -166,19 +167,23 @@ def validate_interpretation(value, packet):
 
 
 def export_markdown(result):
-    # Source excerpts are quoted, not executable instructions or a saved memory update.
+    # Render source bodies as literal fenced text: a note cannot inject an active
+    # HTML element or an image/link into a conventional Markdown preview.
+    def label(value):
+        escaped = html.escape(value, quote=False)
+        return re.sub(r"([\\`*_{}\[\]()#+.!|>-])", r"\\\1", escaped)
     out = ['# ALFRED evidence packet', '', '> Indexed source excerpts. This export does not change a vault or grant authority.', '',
-           '**Question:** ' + result['packet']['question'], '', '**Mode:** ' + result['mode'], '',
-           '**Status:** ' + result['status'], '']
+           '**Question:** ' + label(result['packet']['question']), '', '**Mode:** ' + label(result['mode']), '',
+           '**Status:** ' + label(result['status']), '']
     for source in result['packet']['evidence']:
         path = quote(source['path'], safe='/')
-        out += ['## ' + source['source_id'] + ': ' + source['title'], '',
+        out += ['## ' + label(source['source_id'] + ': ' + source['title']), '',
                 '[' + source['source_id'] + ' source note](' + path + ')', '',
                 'Lines ' + str(source['start_line']) + ' to ' + str(source['end_line']) + '; revision ' + str(source['revision']) + '.', '',
                 'SHA-256: `' + source['sha256'] + '`', '']
-        out += ['> ' + line for line in source['excerpt'].split('\n')]
-        out.append('')
-    # Do not silently promote a generated interpretation into the canonical notes.
+        runs = re.findall(r'`+', source['excerpt'])
+        fence = '`' * max(3, 1 + max((len(run) for run in runs), default=0))
+        out += [fence + 'text', source['excerpt'], fence, '']
     out += ['---', 'This is a portable evidence packet, not a verified answer. Relative links need the original vault context.',
             'Model interpretations are intentionally not included in this source export.', '']
     return '\n'.join(out)

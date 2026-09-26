@@ -39,8 +39,6 @@ def main():
     app=app.replace("$('role-name').textContent=pretty(s.role)+' · synthetic';","$('role-name').textContent='READ-ONLY PREVIEW';")
     css='\n'.join((ROOT/'web'/n).read_text() for n in ('app.css','knowledge.css','ask.css'))
     scripts=[app,(ROOT/'web/knowledge.js').read_text(),(ROOT/'web/ask.js').read_text()]
-    import re
-    html=re.sub(r'\s*<(?:link rel="stylesheet" href="/assets/[^"]+"|script src="/assets/[^"]+" defer)</?(?:script)?>', '',html) if False else html
     for name in ('app','knowledge','ask'):
         html=html.replace('  <link rel="stylesheet" href="/assets/'+name+'.css">','').replace('  <script src="/assets/'+name+'.js" defer></script>','')
     html=html.replace('</head>','<style>'+css+'\n#switch{display:none}.preview-notice{padding:12px 22px;background:#243029;color:#d8ebdf;font:12px/1.6 sans-serif;text-align:center}</style></head>')
