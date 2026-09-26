@@ -1,60 +1,73 @@
-# ALFRED v0.7: conversation continuity
+# ALFRED
 
-The personal OS visual direction remains provisional. This increment adds saved,
-credential-private conversations, bounded follow-ups, a responsive background question
-worker and source-bound local draft proposals. Existing Home, Memory, Work, Pulse and
-Controls remain. Read [Conversation guide](docs/CONVERSATIONS.md),
-[actual model findings](research/MODEL_TRIAL_V07.md) and [roadmap](docs/ROADMAP.md).
+Personal and operational intelligence, under your authority.
 
-Working branch: `feat/alfred-conversation-2026-09-26`. Based on the verified v0.6
-checkpoint `f5a3be2f093ae38a669de6f07ff1c9609c175ba2`, not main. No merge or deployment.
-Source mode is the default. Real small-model inference has now been exercised on six
-fictional cases; an important abstention failure remains. This is not a final-model
-selection or a claim that the whole personal intelligence is ready.
+## Current increment: conversation continuity v0.7
 
-## Retained v0.6 foundation (historical implementation summary)
+Working branch: `feat/alfred-conversation-2026-09-26`, extending the v0.6 personal OS
+checkpoint `f5a3be2f093ae38a669de6f07ff1c9609c175ba2`. Main is not the application
+until the pull-request stack is actually reviewed and merged. No deployment is implied.
+The current appearance is provisional, not a locked or approved final visual identity.
 
+This is a runnable local development application, not the complete personal intelligence
+or a native operating system. Preserve the broader personal, work and authorised
+operational vision as the capabilities mature.
 
-Personal intelligence. Your context, your attention, your authority.
+## What works
 
-## Personal OS v0.6: local development build
+The existing local service supplies authenticated workspaces, current project reports,
+source inspection, acknowledgements, exact action approvals, verified local drafts,
+read-only Markdown indexing, explicit note-reference graphs, source questions, and two
+bounded opt-in Pulse report routines. The black personal shell, dock, launcher and focus
+presentation are retained rather than rebuilt in this increment.
 
-The default interface is now a full-screen personal workspace, not the v0.5 administrative
-dashboard. Home, Ask, Memory, Work, Pulse and Controls share a persistent dock and a
-keyboard launcher. The existing core, evidence, approvals and source retrieval are retained.
+Conversation mode adds private saved threads, explicit follow-up context, bounded queued
+processing, fresh-source retrieval, source invalidation and an editable draft-proposal
+path into the existing approval system. Model work does not block the local HTTP loop.
+An answer is not authority to execute. The only draft effect is a local database write;
+**nothing is sent externally**.
 
-![Actual ALFRED personal OS, fictional local workspace](docs/evidence/personal-os-v06/ALFRED-OS-Home.png)
+Source mode works without models or API keys and returns source passages, not invented
+AI replies. Optional local Ollama inference requires deliberate operator configuration.
+Real Qwen2.5-1.5B Q4_K_M inference has been exercised on a small disclosed synthetic set,
+with a material relevance/abstention failure recorded. That model is a development test
+fixture for the integration, not a selected production brain or a validated safety system.
+See [the actual trial record](research/MODEL_TRIAL_V07.md).
 
-**Working branch:** `feat/alfred-personal-os-2026-09-26`.
-Built on grounded Desk `af10f961665962a42d2d78f00864edb9c267db26`. The pull-request stack is
-not automatically merged and main is not the application. Nothing is hosted by this work.
+## Run locally
 
-[Run guide](docs/PERSONAL_OS.md) · [Roadmap](docs/ROADMAP.md) ·
-[Continuation](SESSION_HANDOFF.md) · [Memory architecture](docs/MEMORY_ARCHITECTURE.md)
-
-### What works
-
-A local authenticated workspace with source-first questions, read-only Markdown and JSON
-connectors, an explicit note-reference graph, source inspection and invalidation, evidence
-export, exact draft approvals and local result verification. The supervisor scans while
-the launched process is alive. New Pulse routines perform bounded memory-health and
-briefing-count reports, with opt-in schedules and durable run records. Both start off.
-
-Ctrl/Cmd+K navigates or searches sources. Focus changes presentation, not permissions.
-The only action effect remains a draft inside ALFRED's database. Nothing is sent externally.
-
-### Start locally
+Python 3.10+ on a POSIX development machine. CI uses Linux Python 3.12.3; runtime code
+has no third-party Python package requirement. Browser testing has separate test tooling.
 
 ```sh
-python3 -m alfred.desk init --data-dir ~/.local/share/alfred/os-v06-demo
-python3 -m alfred.desk access --data-dir ~/.local/share/alfred/os-v06-demo
-python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/os-v06-demo
+python3 -m alfred.desk init --data-dir ~/.local/share/alfred/os-v07-demo
+python3 -m alfred.desk access --data-dir ~/.local/share/alfred/os-v07-demo
+python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/os-v07-demo
 ```
 
-Open the local address printed by the command. Keep the access key private. Use synthetic
-files while developing. The service binds to 127.0.0.1; it is not a public hosting server.
+Open the printed `http://127.0.0.1:8765` address on that machine. The access command
+reveals a private local key in your terminal. Do not share, log or commit it. Keep runtime
+data outside the public source repository. Init never overwrites existing data.
 
-### Inspect and test
+Open **Ask**, then **Conversation**. Source passages are the default. To use an already
+installed, deliberately managed local model, consult [the conversation guide](docs/CONVERSATIONS.md).
+ALFRED does not download model weights or configure a private vault automatically.
+
+## Inspect the delivery
+
+- [Conversation behaviour and limitations](docs/CONVERSATIONS.md).
+- [Actual code, browser and model evidence](docs/evidence/conversation-v07/).
+- [Standalone read-only preview](docs/previews/conversation-v07/ALFRED-OS-v07.html).
+- [Runnable first-party developer package](docs/previews/conversation-v07/ALFRED-OS-v07-Developer-Package.zip).
+- [Current roadmap](docs/ROADMAP.md), [memory architecture](docs/MEMORY_ARCHITECTURE.md)
+  and [continuation record](SESSION_HANDOFF.md).
+
+The standalone preview uses the actual frontend with fictional in-file data and selected
+precomputed source-retrieval examples. It cannot run inference, save conversations,
+approve work or connect accounts. It is not a hosted backend or a fake live AI demo.
+The developer package excludes quarantined third-party archives and private runtime data.
+
+## Verification
 
 ```sh
 python3 -m unittest discover -s tests -v
@@ -62,25 +75,28 @@ python3 tools/import_sources.py --verify
 python3 tools/extend_sources.py --verify
 ```
 
-The two source verifiers need the full GitHub branch; the developer ZIP excludes upstream
-archives. All 2,073 retained third-party files remain inert and unchanged. See the source
-locks, licences and copy receipts, not just a count. No upstream agent has been executed.
+The last two commands require the full GitHub branch's retained upstream source, not the
+smaller developer package. The 2,073 retained files across eight pins remain unchanged,
+inert references, not eight combined or installed runtimes. Preserve copyright/licence
+notices; root licences are not blanket dependency/model/asset clearance.
 
-The acceptance workflow records code tests, old browser regressions, new OS/Pulse browser
-checks, standalone-preview checks and exact source hashes under
-`docs/evidence/personal-os-v06/`. A workflow file is not a test result.
+Read actual test output and source receipts in the evidence directory. A workflow file,
+queued run or model response with syntactically valid citations is not proof of success
+or semantic correctness. Browser responsiveness testing uses an explicitly labelled
+delayed model double; real inference has separate unedited trial receipts.
 
-The [offline preview](docs/previews/personal-os-v06/ALFRED-OS-v06.html) is fictional,
-read-only and not connected to a server or model. Run the actual local app for actions.
+## Development boundaries
 
-### Boundaries
+Local HTTP only; do not expose the stdlib service publicly. No microphone, cloud model,
+external account/device control, ENDSTATE or Noir connection. The host must remain running
+for scanning, conversation jobs and opted-in Pulse routines. No operating-system daemon,
+remote agent or cross-device synchronisation is installed.
 
-This is a browser-based personal OS shell over local intelligence infrastructure, not a
-native operating system. No real model inference has been validated, no microphone or
-external account/device is connected and ENDSTATE/Noir remain separate. Optional local
-Ollama is off by default; selecting valid citations does not establish factual entailment.
+Conversations are private to the creating access key and expire after 24 hours. Forget
+removes active conversation rows and invalidates unexecuted linked proposals, but does
+not undo completed drafts/audit history or securely erase SQLite/WAL/backups. This is not
+application-encrypted storage or a mature device identity/retention system. Synthetic
+notes only until the privacy and deployment gates are met.
 
-No mature device pairing, application encryption, general capability grants or complete
-retention/deletion service. Pulse stops starting work at its 512-run history bound until
-retention is implemented. No cloud daemon or continued ChatGPT background work is installed.
-No operational safety, autonomous use of force or unlimited security-system control.
+No autonomous use-of-force authority or unrestricted security control. Never commit
+private client data, credentials, recordings or operational material to this public repo.
