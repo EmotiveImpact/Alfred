@@ -2,6 +2,71 @@
 
 Personal and operational intelligence, under your authority.
 
+## Current increment: reviewed memory v0.8
+
+Working branch: `feat/alfred-reviewed-memory-2026-09-26`, extending the verified v0.7
+conversation build. Main is not merged and no hosted deployment is implied. The noir OS
+shell remains provisional; this increment develops capability rather than replacing it.
+
+**New:** separate reviewed entities/statements with exact note provenance, acceptance,
+dispute, withdrawal and supersession; explicit conflicting values; source invalidation;
+Memory UI and export; limited evidence checks in model reply paths; owner-confirmed
+Pulse report pruning that retains compact retry receipts and recent rate counters.
+
+[Reviewed memory and run guide](docs/REVIEWED_MEMORY.md) ·
+[Evidence-check limitations](docs/EVIDENCE_REVIEW.md) · [Roadmap](docs/ROADMAP.md) ·
+[Continuation](SESSION_HANDOFF.md)
+
+```sh
+python3 -m alfred.desk init --data-dir ~/.local/share/alfred/os-v08-demo
+python3 -m alfred.desk access --data-dir ~/.local/share/alfred/os-v08-demo
+python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/os-v08-demo
+```
+
+Keep the printed local access key private. Use a data directory outside the repository.
+The service is loopback-only and must not be exposed to the internet. Open Memory >
+Reviewed memory after signing in. Existing notes remain canonical and read-only.
+
+After acceptance, the current read-only preview and developer ZIP are under
+`docs/previews/memory-v08/`. The preview uses the actual frontend with fictional in-file
+data; it cannot create claims, run a model, execute drafts or change routines.
+
+### Boundaries
+
+Review is human judgement, not verified truth or permission. The new graph is inspectable
+and exportable but not automatically used as model evidence. Evidence checks only reject
+specific literal problems; they do not establish entailment or general reliability.
+A new live-model comparison was blocked before execution. No new model benchmark is
+claimed. The earlier v0.7 actual inference and failures remain historical evidence.
+
+No real accounts, voice, devices, ENDSTATE or Noir are connected. A launched local host
+is needed for scans, approved drafts, reports and queued conversations. No service was
+installed on the user's machine. SQLite remains unencrypted at application level and
+credential identity/retention need further work. Synthetic data only at this stage.
+
+The 2,073 pinned upstream files remain unchanged, inert research material. A root licence
+does not clear every dependency, voice, model or asset. No source files in that archive
+are executed or installed by this increment. The first-party package omits that archive.
+
+### Verification
+
+```sh
+python3 -m unittest discover -s tests -v
+python3 tools/import_sources.py --verify
+python3 tools/extend_sources.py --verify
+```
+
+The source verifiers require the full GitHub branch. Inspect the actual acceptance run
+and `docs/evidence/memory-v08/` for results, not the mere presence of a workflow file.
+
+---
+
+## Previous release notes (historical v0.7)
+
+# ALFRED
+
+Personal and operational intelligence, under your authority.
+
 ## Current increment: conversation continuity v0.7
 
 Working branch: `feat/alfred-conversation-2026-09-26`, extending the v0.6 personal OS

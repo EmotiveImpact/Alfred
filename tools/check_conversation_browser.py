@@ -9,7 +9,7 @@ from playwright.sync_api import sync_playwright,expect
 from alfred.desk import init_demo
 from alfred.knowledge import KnowledgeStore,KnowledgeSupervisor
 from alfred.desk_http import DeskHTTPServer
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'docs/evidence/conversation-v07';OUT.mkdir(parents=True,exist_ok=True)
+ROOT=Path(__file__).resolve().parents[1];OUT=Path(os.environ.get('ALFRED_CONVERSATION_OUTPUT',str(ROOT/'docs/evidence/conversation-v07')));OUT.mkdir(parents=True,exist_ok=True)
 
 class DelayedFixture:
     model='test-fixture-not-an-llm'

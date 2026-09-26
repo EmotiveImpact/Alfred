@@ -15,7 +15,7 @@
   descriptions.knowledge='Notes, people and projects. Follow a connection back to its source.';
   descriptions.overview='The current changes in your connected project. Nothing is sent without you.';
   const previousRender=render, previousContent=renderContent, previousOut=signedOut, previousView=selectView;
-  const sections={presence:'HOME',conversation:'ASK',ask:'ASK',knowledge:'MEMORY',overview:'WORK',evidence:'WORK',approvals:'WORK',activity:'WORK',sources:'CONTROLS',settings:'CONTROLS',pulse:'PULSE'};
+  const sections={presence:'HOME',conversation:'ASK',ask:'ASK',knowledge:'MEMORY','reviewed-memory':'MEMORY',overview:'WORK',evidence:'WORK',approvals:'WORK',activity:'WORK',sources:'CONTROLS',settings:'CONTROLS',pulse:'PULSE'};
   const viewOrder=['presence','ask','knowledge','overview','pulse','settings'];
   function reset(){os.epoch++;os.home=null;os.knowledge=null;os.pulse=null;os.scope=null;os.loading=false;os.last=0;os.pulseLoading=false;os.pulseAt=0;os.focus=false;document.body.classList.remove('os-focus');$('focus-toggle').setAttribute('aria-pressed','false');$('focus-toggle').setAttribute('aria-label','Enter focus mode');$('command-palette').close();$('command-query').value='';$('command-results').replaceChildren();}
   signedOut=function(){reset();previousOut();};
@@ -24,7 +24,7 @@
     $('scope-name').textContent=ui.state.scope==='demo-production'?'Production workspace':pretty(ui.state.scope);
     for(const b of document.querySelectorAll('.os-dock [data-view]')){const active=sections[b.dataset.view]===sections[ui.view];if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}
     $('os-time').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-    const tabs=$('space-tabs');const key=sections[ui.view];if(tabs.dataset.group!==key){tabs.replaceChildren();tabs.dataset.group=key;const items=key==='ASK'?[['conversation','Conversation'],['ask','Source search']]:key==='WORK'?[['overview','Briefing'],['evidence','Evidence'],['approvals','Decisions'],['activity','History']]:key==='CONTROLS'?[['settings','Controls'],['sources','Sources']]:[];for(const [v,label]of items){const b=button(label,'space-tab',()=>selectView(v));if(['overview','settings'].includes(v))b.dataset.subview=v;else b.dataset.view=v;tabs.append(b);}}
+    const tabs=$('space-tabs');const key=sections[ui.view];if(tabs.dataset.group!==key){tabs.replaceChildren();tabs.dataset.group=key;const items=key==='ASK'?[['conversation','Conversation'],['ask','Source search']]:key==='MEMORY'?[['knowledge','Source map'],['reviewed-memory','Reviewed memory']]:key==='WORK'?[['overview','Briefing'],['evidence','Evidence'],['approvals','Decisions'],['activity','History']]:key==='CONTROLS'?[['settings','Controls'],['sources','Sources']]:[];for(const [v,label]of items){const b=button(label,'space-tab',()=>selectView(v));if(['overview','settings'].includes(v))b.dataset.subview=v;else b.dataset.view=v;tabs.append(b);}}
     for(const b of tabs.querySelectorAll('button'))b.setAttribute('aria-pressed',String((b.dataset.view||b.dataset.subview)===ui.view));
     $('focus-toggle').disabled=false;
   };

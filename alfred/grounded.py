@@ -9,6 +9,7 @@ import re
 import html
 from urllib.parse import quote
 from .local import Fault, exact
+from .evidence_review import assess_interpretation
 from .knowledge import safe_text
 
 STOP = frozenset('a an and are as at be been but by can could did do does for from give had has have how i in into is it its me my of on or our please should show tell that the their them there these they this to us was we were what when where which who why will with would you your about'.split())
@@ -219,8 +220,11 @@ def ask(store, bearer, body, provider=None, provider_scope=None):
         try:
             value = provider.generate(packet)
             claims = validate_interpretation(value, packet)
+            claims, review = assess_interpretation(claims, packet)
+            result['evidence_review'] = review
             result.update(claims=claims, status='model_interpretation' if claims else 'model_abstained',
                           model_used=True, model=provider.model)
+            if review['status'] == 'withheld_for_review': result['status'] = 'model_needs_review'
         except Exception:
             # Never expose unvalidated response text or provider exceptions/secrets.
             result['status'] = 'model_unavailable_or_invalid'

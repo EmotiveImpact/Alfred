@@ -27,8 +27,8 @@ Branch from the actual remote head, preserving concurrent work. No force-push, a
 merge or deployment. Report exact commit/branch/PR, actual tests and limitations. A local
 file, Git tree object or queued CI run is not a successful published delivery.
 
-The current branch is feat/alfred-conversation-2026-09-26, extending the personal OS
-f5a3be2f093ae38a669de6f07ff1c9609c175ba2. Refresh its actual remote head. Use the stacked PR chain rather than assuming main contains the application.
+The current branch is feat/alfred-reviewed-memory-2026-09-26, extending conversation
+e0a0ef973d20d3f60606423ab2035d9f9df9e68f. Refresh its actual remote head. Use the stacked PR chain rather than assuming main contains the application.
 Independent work packages are issues #2 core, #3 runtime and #4 voice, not running agents.
 
 ## Implemented boundary
@@ -86,3 +86,16 @@ and a queue; generated replies never confer authority. Keep current-source valid
 and the existing separate exact-approval step. No prompt is an executable routine.
 A model's syntactically valid citations do not prove that it answered the question.
 Retain failed experiment outputs and avoid invented reliability or benchmark claims.
+
+## Reviewed memory and evidence checks
+
+Read docs/REVIEWED_MEMORY.md and docs/EVIDENCE_REVIEW.md. Human review does not establish
+truth or grant any device/tool authority. Preserve source-bound versions, explicit conflicts,
+credential privacy and invalidation. Do not merge entities on display names. New memory
+is not automatically model context. Evidence rejection rules are limited heuristics,
+not semantic verification. Pulse pruning preserves idempotency receipts and recent rate
+counters; do not replace it with DELETE-all. No secure-erasure claim.
+
+A v0.8 live-model-comparison tool operation was blocked. It was not committed or run.
+Do not reroute that blocked operation or claim a stronger-model benchmark was completed.
+Continue separately authorised first-party code and tests, preserving real failure records.
