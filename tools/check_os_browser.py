@@ -7,7 +7,7 @@ from alfred.desk import init_demo
 from alfred.knowledge import KnowledgeStore,KnowledgeSupervisor
 from alfred.desk_http import DeskHTTPServer
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'docs/evidence/personal-os-v06';OUT.mkdir(parents=True,exist_ok=True)
+OUT=Path(os.environ.get('ALFRED_OS_OUTPUT',str(ROOT/'docs/evidence/personal-os-v06')));OUT.mkdir(parents=True,exist_ok=True)
 
 def main():
     checks=[];errors=[]

@@ -1,3 +1,37 @@
+# ALFRED current roadmap: v0.7 conversation increment
+
+The visual direction remains provisional. Do not restart the interface or represent it
+as a final approved design. Build on the source of truth branch:
+`feat/alfred-conversation-2026-09-26`.
+
+## Newly implemented
+
+Private local conversation sessions, explicit context continuation/reset, fresh evidence
+retrieval, bounded queued model processing, turn recovery/expiry/forget, and note-bound
+local draft proposals through the existing exact-approval/outbox/result mechanism.
+A real small-model trial has been run, with its missing-answer failure retained.
+See CONVERSATIONS.md and ../research/MODEL_TRIAL_V07.md for scope and evidence.
+
+## Next acceptance gates
+
+1. Reasoning quality: compare stronger models on held-out source questions, contradictions,
+   missing facts and multi-turn context. Current reference validation is not entailment.
+2. Memory: reviewed typed entity/claim proposals with evidence lineage, conflict and
+   supersession, keeping authored note links separate. No names-only identity merging.
+3. Authority/lifecycle: device pairing/key rotation, finer source and capability grants,
+   encryption decisions, retention/export and derived-data deletion accounting.
+4. One real official read-only account connector, then one harmless test-account write
+   with approval and capability-specific result reconciliation. No broad credential grants.
+5. Voice: visible push-to-talk with measured turn/playback/reconnect behaviour. Preserve
+   separate generated, played and acknowledged states. No hidden ambient recording.
+6. Reviewed service installation/cross-device and specialist ENDSTATE/Noir adapters only
+   against their actual source and interfaces. No operational-safety readiness claim.
+
+The following v0.6 roadmap remains a historical baseline, not a reason to rebuild already
+completed conversation or routine work. Current status above takes precedence.
+
+---
+
 # ALFRED roadmap: Personal OS v0.6
 
 26 September 2026. Current working branch: feat/alfred-personal-os-2026-09-26.

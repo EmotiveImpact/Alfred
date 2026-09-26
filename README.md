@@ -1,4 +1,19 @@
-# ALFRED
+# ALFRED v0.7: conversation continuity
+
+The personal OS visual direction remains provisional. This increment adds saved,
+credential-private conversations, bounded follow-ups, a responsive background question
+worker and source-bound local draft proposals. Existing Home, Memory, Work, Pulse and
+Controls remain. Read [Conversation guide](docs/CONVERSATIONS.md),
+[actual model findings](research/MODEL_TRIAL_V07.md) and [roadmap](docs/ROADMAP.md).
+
+Working branch: `feat/alfred-conversation-2026-09-26`. Based on the verified v0.6
+checkpoint `f5a3be2f093ae38a669de6f07ff1c9609c175ba2`, not main. No merge or deployment.
+Source mode is the default. Real small-model inference has now been exercised on six
+fictional cases; an important abstention failure remains. This is not a final-model
+selection or a claim that the whole personal intelligence is ready.
+
+## Retained v0.6 foundation (historical implementation summary)
+
 
 Personal intelligence. Your context, your attention, your authority.
 
