@@ -1,0 +1,13 @@
+{
+  "file": "ALFRED-Desk-v05.html",
+  "sha256": "f4034d73d20fe43b9be238791e8e00f3cae8be396378662e6a39ea24ed7ece8f",
+  "bytes": 138395,
+  "mode": "read-only fictional preview",
+  "questions": [
+    "Opening treatment",
+    "ALFRED permissions",
+    "Production decisions"
+  ],
+  "live_model": false,
+  "credentials_included": false
+}
