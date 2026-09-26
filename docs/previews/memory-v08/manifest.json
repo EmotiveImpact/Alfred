@@ -1,0 +1,14 @@
+{
+  "file": "ALFRED-OS-v08.html",
+  "bytes": 225705,
+  "sha256": "91e9e5d90ef8d5fbb90822a7d40376b6231177f5bc69f430b283eb7b206468c4",
+  "mode": "actual frontend / fictional read-only transport",
+  "example_questions": [
+    "Opening treatment",
+    "ALFRED permissions",
+    "Production decisions"
+  ],
+  "model_inference": false,
+  "conversation_mode": "precomputed actual source retrieval, read-only",
+  "credentials_included": false
+}

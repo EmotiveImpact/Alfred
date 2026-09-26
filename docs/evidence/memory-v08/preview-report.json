@@ -1,0 +1,24 @@
+{
+  "count": 14,
+  "checks": [
+    "existing personal OS home opens without credentials",
+    "preview explicitly labelled",
+    "existing note graph is retained",
+    "reviewed statements are separate from source-note graph",
+    "offline preview cannot mutate memory",
+    "fictional accepted and pending states distinguished",
+    "actual reviewed projection is inspectable",
+    "source inspection includes exact hash",
+    "mobile reviewed memory has no horizontal overflow",
+    "existing source lookup remains usable",
+    "example conversation retained without fake live replies",
+    "preview cannot prune or schedule routines",
+    "no HTTP requests",
+    "no uncaught browser errors"
+  ],
+  "errors": [],
+  "network": [],
+  "transport": "fictional in-file preview",
+  "real_backend": false,
+  "model_inference": false
+}
