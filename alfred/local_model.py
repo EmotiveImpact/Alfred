@@ -56,7 +56,9 @@ class LocalOllama:
             if response.status != 200 or response.getheader('Content-Type', '').split(';')[0].strip() != 'application/json':
                 raise Fault('local_model_unavailable', 502)
             raw = bytearray()
-            while len(raw) <= 16384:
+            # read1 can finish an HTTP/1.0 body and close its last socket reference.
+            # Stop at that boundary rather than configuring an already closed fd.
+            while not response.isclosed() and len(raw) <= 16384:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise Fault('local_model_timeout', 504)
