@@ -375,6 +375,11 @@ class KnowledgeSupervisor(Supervisor):
                 except Exception:
                     self.vault.health={'configured':True,'status':'unavailable','last_scan':self.store.now(),'errors':[{'code':'knowledge_scan_failed'}]}
             super().cycle()
+            if getattr(self, 'pulse', None) is not None and not self.store.paused(self.scope):
+                try:
+                    self.pulse.cycle()
+                except Fault as exc:
+                    self.error = exc.code
 
     def view(self,scope):
         result=super().view(scope)

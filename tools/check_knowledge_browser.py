@@ -13,7 +13,7 @@ from alfred.knowledge import KnowledgeStore,KnowledgeSupervisor
 from alfred.desk_http import DeskHTTPServer
 
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'docs/evidence/knowledge-v04';OUT.mkdir(parents=True,exist_ok=True)
+OUT=Path(os.environ.get('ALFRED_KNOWLEDGE_OUTPUT',str(ROOT/'docs/evidence/knowledge-v04')));OUT.mkdir(parents=True,exist_ok=True)
 checks=[]
 
 def record(name,condition=True):

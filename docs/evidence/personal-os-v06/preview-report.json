@@ -1,0 +1,25 @@
+{
+  "count": 15,
+  "checks": [
+    "actual frontend opens without credentials",
+    "preview explicitly labelled",
+    "command palette navigates",
+    "graph target hitboxes remain transparent",
+    "focus is a real presentation state",
+    "real retrieval example: Opening treatment",
+    "real retrieval example: ALFRED permissions",
+    "real retrieval example: Production decisions",
+    "unsupported preview question is not invented",
+    "preview never enables execution or schedules",
+    "no invented routine history",
+    "mobile has no horizontal overflow",
+    "short desktop dock remains visible",
+    "no HTTP requests",
+    "no browser errors"
+  ],
+  "errors": [],
+  "network": [],
+  "transport": "fictional in-file preview",
+  "real_backend": false,
+  "model_inference": false
+}
