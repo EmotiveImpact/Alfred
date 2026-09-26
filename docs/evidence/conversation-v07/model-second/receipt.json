@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "input_commit": "97406ee25c3bc8cfc0c1a135abf43db4884e467f",
+  "workflow_run": "36220144429",
+  "python": "3.12.3",
+  "machine": "x86_64",
+  "cpu_count": 4,
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "model": "Qwen2.5-1.5B-Instruct Q4_K_M",
+  "weights_sha256": "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e",
+  "ollama_version": "0.34.4",
+  "real_model_inference": true,
+  "cases": 6,
+  "model_requests": 5,
+  "accepted_interpretations": 5,
+  "abstentions": 0,
+  "rejected_or_unavailable": 0,
+  "automated_semantic_accuracy_score": null,
+  "limits": "Six disclosed synthetic cases. Manually inspect outputs. Not a blinded, broad or comparative evaluation."
+}

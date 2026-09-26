@@ -12,8 +12,10 @@ from .local import Fault, exact, parse_json
 from .knowledge_http import knowledge_get
 from .grounded import ask, check_sources
 from .pulse import Pulse
+from .conversation import ConversationService
 
-ASSETS = {'/assets/os.js': ('os.js', 'text/javascript; charset=utf-8'),
+ASSETS = {'/assets/conversation.js': ('conversation.js', 'text/javascript; charset=utf-8'),
+          '/assets/conversation.css': ('conversation.css', 'text/css; charset=utf-8'),'/assets/os.js': ('os.js', 'text/javascript; charset=utf-8'),
           '/assets/os.css': ('os.css', 'text/css; charset=utf-8'),'/assets/ask.js': ('ask.js', 'text/javascript; charset=utf-8'),
           '/assets/ask.css': ('ask.css', 'text/css; charset=utf-8'),'/assets/knowledge.js': ('knowledge.js', 'text/javascript; charset=utf-8'),
           '/assets/knowledge.css': ('knowledge.css', 'text/css; charset=utf-8'),
@@ -70,6 +72,7 @@ class DeskHTTPServer(HTTPServer):
     def __init__(self, store, supervisor, port=8765, assets=None, local_model=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
         self.local_model = local_model
+        self.conversations = ConversationService(store, local_model, supervisor.scope) if hasattr(store, 'knowledge') else None
         self.pulse = Pulse(store, supervisor) if hasattr(store, 'knowledge') and hasattr(supervisor, 'owner') else None
         if self.pulse is not None: supervisor.pulse = self.pulse
         self.assets = Path(assets) if assets else Path(__file__).resolve().parents[1] / 'web'
@@ -80,6 +83,12 @@ class DeskHTTPServer(HTTPServer):
         # collision. This remains unsuitable against a compromised local host.
         self.cookie_name = f'alfred_desk_{self.server_port}'
 
+    def serve_forever(self, poll_interval=.1):
+        if self.conversations: self.conversations.start()
+        try: super().serve_forever(poll_interval)
+        finally:
+            if self.conversations: self.conversations.stop()
+
     def get_request(self):
         sock, addr = super().get_request()
         sock.settimeout(3)
@@ -87,7 +96,7 @@ class DeskHTTPServer(HTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'ALFRED-OS/0.6'
+    server_version = 'ALFRED-OS/0.7'
     sys_version = ''
     def log_message(self, *_):
         pass
@@ -173,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_payload(200, b'', content_type='image/x-icon')
                 return
             if not mutation and url.path == '/health' and not url.query:
-                self.send_payload(200, {'version': '0.6.0-dev', 'local_only': True, 'live_ai': False, 'model_configured': self.server.local_model is not None})
+                self.send_payload(200, {'version': '0.7.0-dev', 'local_only': True, 'live_ai': False, 'model_configured': self.server.local_model is not None})
                 return
             if mutation and url.query:
                 raise Fault('query_not_allowed')
@@ -202,6 +211,20 @@ class Handler(BaseHTTPRequestHandler):
                 before = int(query['before'][0]) if 'before' in query else None
                 result = store.desk_state(bearer, before=before)
                 result['supervisor'] = self.server.supervisor.view(result['scope'])
+            elif (url.path == '/desk/conversations' or url.path.startswith('/desk/conversations/')) and not url.query:
+                service = self.server.conversations
+                if service is None: raise Fault('conversation_not_configured',409)
+                parts = url.path.split('/')[3:]
+                if parts == []:
+                    result = service.create(bearer,body) if mutation else service.listing(bearer)
+                elif len(parts)==1 and not mutation:
+                    result = service.view(bearer,parts[0])
+                elif len(parts)==2 and mutation and parts[1] in {'turns','forget','draft'}:
+                    if parts[1]=='turns': result=service.submit(bearer,parts[0],body)
+                    elif parts[1]=='draft': result=service.propose_draft(bearer,parts[0],body)
+                    else:
+                        exact(body,set());result=service.forget(bearer,parts[0])
+                else: raise Fault('not_found',404)
             elif not mutation and url.path == '/desk/pulse' and not url.query:
                 if self.server.pulse is None: raise Fault('pulse_not_configured', 409)
                 result = self.server.pulse.view(bearer)
@@ -216,6 +239,8 @@ class Handler(BaseHTTPRequestHandler):
                           'model_allowed': p['role'] == 'owner' and p['scope'] == self.server.supervisor.scope,
                           'default_mode': 'sources', 'tools_enabled': False}
             elif mutation and url.path == '/desk/ask':
+                if body.get('mode') == 'local_model' and getattr(self.server.local_model,'timeout',6)>6:
+                    raise Fault('use_conversation_for_model',409)
                 result = ask(store, bearer, body, self.server.local_model, self.server.supervisor.scope)
             elif mutation and url.path == '/desk/ask/check':
                 exact(body, {'references'})
