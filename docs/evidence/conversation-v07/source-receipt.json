@@ -1,6 +1,6 @@
 {
-  "input_commit": "7f67feab24c58c6b954ad3a362a58d89e40f75d3",
-  "workflow_run": "36221052471",
+  "input_commit": "0127f029d78f5bc00dac3a8f7295bf374dd4f872",
+  "workflow_run": "36221287760",
   "materialised_before_tests": true,
   "browser_model": "delayed fixture, real inference has separate receipts",
   "files": {
@@ -13,8 +13,8 @@
       "git_blob": "e93443ae42bbb6355c467ea03f5383c728067f79"
     },
     "alfred/local_model.py": {
-      "sha256": "5a125c87033cb152a266b33b26492a4d55ec040d7a5dd8ee9ea8b099786c4a50",
-      "git_blob": "3beed0ad94573a3adade5da03d9aee3f7bc2db38"
+      "sha256": "17274f37f61eb6cfbaf5bc73bba53e3f6ee1b5d6e3b1bed8da672be459e0e5cc",
+      "git_blob": "80cdda4d63f4cdd6f6246f247252795ccc0bbd33"
     },
     "alfred/desk.py": {
       "sha256": "0f7179c588f613cc303264221fc488c5277672f2f545f48b2391e5efaa125ec5",
@@ -163,6 +163,10 @@
     "tests/test_conversation.py": {
       "sha256": "c120396d951a9d393f9e8c05b7e7eb3ac246fd9369f2ba9aa59472f6972c2ed1",
       "git_blob": "6eeff49c3be29069b239b6d8474b78af3b949b33"
+    },
+    "tests/test_local_model_lines.py": {
+      "sha256": "b5de1c949de5af6a9601dc2ee8c0a9d1e941c28d748b2fee53cb62f3f2097700",
+      "git_blob": "f7af1fbf1ab11802e73a18a14c2ef884dd136246"
     },
     "tests/test_desk.py": {
       "sha256": "512b41a8a0bbb84ad920252fbb1a68edea7e915c137751376923f8a14ec4b875",

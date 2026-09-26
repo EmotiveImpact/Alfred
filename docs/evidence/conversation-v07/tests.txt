@@ -398,6 +398,12 @@ test_tampered_result_not_verified (test_local.LocalTests.test_tampered_result_no
 test_text_controls_and_surrogates (test_local.LocalTests.test_text_controls_and_surrogates) ... ok
 test_worker_repeated_does_not_duplicate (test_local.LocalTests.test_worker_repeated_does_not_duplicate) ... ok
 test_wrong_owner_cannot_approve (test_local.LocalTests.test_wrong_owner_cannot_approve) ... ok
+test_absolute_offsets_not_excerpt_indices (test_local_model_lines.ModelLineTests.test_absolute_offsets_not_excerpt_indices) ... ok
+test_boolean_or_zero_start_rejected (test_local_model_lines.ModelLineTests.test_boolean_or_zero_start_rejected) ... ok
+test_empty_final_line_retained (test_local_model_lines.ModelLineTests.test_empty_final_line_retained) ... ok
+test_inconsistent_range_rejected (test_local_model_lines.ModelLineTests.test_inconsistent_range_rejected) ... ok
+test_literal_source_does_not_change_numbering (test_local_model_lines.ModelLineTests.test_literal_source_does_not_change_numbering) ... ok
+test_no_paths_in_wire (test_local_model_lines.ModelLineTests.test_no_paths_in_wire) ... ok
 test_authenticated_view (test_pulse.PulseHTTPTests.test_authenticated_view) ... ok
 test_configuration_round_trip (test_pulse.PulseHTTPTests.test_configuration_round_trip) ... ok
 test_no_auth_no_pulse (test_pulse.PulseHTTPTests.test_no_auth_no_pulse) ... ok
@@ -445,6 +451,6 @@ test_unknown_metadata_version_rejected (test_pulse.PulseTests.test_unknown_metad
 test_unknown_routine_rejected (test_pulse.PulseTests.test_unknown_routine_rejected) ... ok
 
 ----------------------------------------------------------------------
-Ran 445 tests in 14.141s
+Ran 451 tests in 16.428s
 
 OK
