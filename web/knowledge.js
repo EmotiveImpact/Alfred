@@ -97,6 +97,16 @@
     const centres={map:[410,265],project:[650,150],person:[635,390],decision:[235,380],procedure:[195,135],note:[440,420]};
     const positions={};
     kinds.forEach(k=>{const group=visible.filter(n=>n.kind===k),centre=centres[k];group.forEach((n,i)=>{const angle=2*Math.PI*i/Math.max(group.length,1)-Math.PI/2;const radius=group.length===1?0:Math.min(80,38+group.length*6);positions[n.id]=[Math.max(80,Math.min(780,centre[0]+Math.cos(angle)*radius)),Math.max(55,Math.min(470,centre[1]+Math.sin(angle)*radius))];});});
+    // Separate the labelled hit areas deterministically. These are authored links,
+    // not inferred spatial or semantic coordinates. Bounds match the SVG viewport.
+    for(let pass=0;pass<64;pass++){
+      for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
+        const a=positions[visible[i].id],b=positions[visible[j].id],dx=b[0]-a[0],dy=b[1]-a[1];
+        const ox=136-Math.abs(dx),oy=66-Math.abs(dy);
+        if(ox>0&&oy>0){if(ox<oy){const step=(ox+.2)/2*(dx>=0?1:-1);a[0]-=step;b[0]+=step;}else{const step=(oy+.2)/2*(dy>=0?1:-1);a[1]-=step;b[1]+=step;}}
+      }
+      for(const p of Object.values(positions)){p[0]=Math.max(72,Math.min(788,p[0]));p[1]=Math.max(42,Math.min(476,p[1]));}
+    }
     const related=new Set([state.selected]);data.links.filter(l=>l.source===state.selected||l.target===state.selected).forEach(l=>{related.add(l.source);related.add(l.target);});
     for(const l of data.links){if(!ids.has(l.source)||!ids.has(l.target)||l.source===l.target)continue;const [x1,y1]=positions[l.source],[x2,y2]=positions[l.target];const active=state.selected&&(l.source===state.selected||l.target===state.selected);const line=svg('line',{x1,y1,x2,y2,class:'knowledge-edge'+(active?' active':'')});line.append(svg('title',{},l.relation+' · source line '+l.line));el.append(line);}
     for(const n of visible){const [x,y]=positions[n.id];const count=data.links.filter(l=>l.source===n.id||l.target===n.id).length;const g=svg('g',{class:'knowledge-node kind-'+n.kind+(n.id===state.selected?' selected':'')+(state.selected&&!related.has(n.id)?' muted':''),transform:'translate('+x+','+y+')',role:'button',tabindex:0,'aria-label':'Open note '+n.title});

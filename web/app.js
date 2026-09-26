@@ -1,7 +1,7 @@
 'use strict';
 // No model calls, microphone access, third-party scripts or browser storage.
 const $ = (id) => document.getElementById(id);
-const ui = {csrf: null, state: null, view: 'overview', filter: 'all', connected: false, busy: false, generation: 0, before: null};
+const ui = {csrf: null, state: null, view: 'presence', filter: 'all', connected: false, busy: false, generation: 0, before: null};
 let toastTimer;
 const names = {overview:'Your briefing', evidence:'The evidence, in view.', approvals:'You decide what happens.', activity:'Every step, accounted for.', sources:'Know where it comes from.', settings:'Always under your control.'};
 const descriptions = {overview:'A sourced view of your sample production. You remain in control.', evidence:'Source-linked updates with revision, freshness and acknowledgement.', approvals:'Exact proposals. Explicit approval. Local drafts only, never sent.', activity:'The latest 100 recorded events in this workspace. No hidden actions.', sources:'A read-only connection to the configured local sample-project folder.', settings:'Pause processing, inspect the current boundary or switch workspace.'};
@@ -165,9 +165,13 @@ function openApproval(a) {
 }
 async function togglePause() {await act(async()=>{await api('/desk/pause',{paused:!ui.state.paused});await refresh();showToast(ui.state.paused?'Processing paused. Stored work is unchanged.':'Processing resumed.');});}
 async function logout() {await act(async()=>{await api('/desk/logout',{});signedOut();});}
-$('login-form').addEventListener('submit',async(event)=>{event.preventDefault();$('login-error').textContent='';const key=$('access-key').value.trim();$('access-key').value='';try{const result=await api('/desk/login',{key});ui.csrf=result.csrf;ui.generation++;ui.view='overview';await refresh();}catch(error){$('login-error').textContent=errorText(error);}});
+$('login-form').addEventListener('submit',async(event)=>{event.preventDefault();$('login-error').textContent='';const key=$('access-key').value.trim();$('access-key').value='';try{const result=await api('/desk/login',{key});ui.csrf=result.csrf;ui.generation++;ui.view='presence';await refresh();}catch(error){$('login-error').textContent=errorText(error);}});
 document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>selectView(b.dataset.view)));
 $('refresh').addEventListener('click',refresh);$('pause').addEventListener('click',togglePause);$('switch').addEventListener('click',logout);$('close-detail').addEventListener('click',()=>$('detail').close());
-document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();selectView('overview');});
-(async()=>{try{const session=await api('/desk/session');ui.csrf=session.csrf;await refresh();}catch(_){signedOut();}})();
+document.querySelector('.brand').addEventListener('click',event=>{event.preventDefault();selectView('presence');});
+async function bootstrapDesk(){try{const session=await api('/desk/session');ui.csrf=session.csrf;await refresh();}catch(_){signedOut();}}
+// All extension scripts must register before the first render. This also holds
+// when the standalone file transport resolves before the HTML parser finishes.
+if(document.readyState==='complete')queueMicrotask(bootstrapDesk);
+else document.addEventListener('DOMContentLoaded',bootstrapDesk,{once:true});
 setInterval(refresh,3000);
