@@ -17,12 +17,16 @@ jobs:
       - name: Install pinned frontend dependencies
         working-directory: console
         run: |
+          set -euo pipefail
+          npm install -g npm@11
+          npm --version > npm-version.txt
           if test -f package-lock.json; then npm ci; else npm install; fi
           npm ls --depth=0 > dependency-versions.txt
           npm audit --json > dependency-audit.json || true
       - name: Typecheck, production build and domain regression
         working-directory: console
         run: |
+          set -euo pipefail
           mkdir -p evidence
           npm run build 2>&1 | tee evidence/build.txt
           npm test 2>&1 | tee evidence/unit-tests.txt
@@ -40,7 +44,7 @@ jobs:
           tar --exclude=node_modules --exclude=dist --exclude=test-results --exclude=evidence --exclude=ALFRED-Console.html -czf delivery/console-source.tar.gz console
           cp console/ALFRED-Console.html delivery/ 2>/dev/null || true
           cp -r console/evidence delivery/ 2>/dev/null || true
-          cp console/dependency-versions.txt console/dependency-audit.json console/package-lock.json delivery/ 2>/dev/null || true
+          cp console/dependency-versions.txt console/dependency-audit.json console/package-lock.json console/npm-version.txt delivery/ 2>/dev/null || true
           git rev-parse HEAD > delivery/TESTED_COMMIT.txt
           if test -d console/node_modules; then tar -czf delivery/console-toolchain.tar.gz -C console node_modules package-lock.json; fi
       - uses: actions/upload-artifact@v4
