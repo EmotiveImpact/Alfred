@@ -9,13 +9,13 @@
   function icon(name){const el=shape('svg',{viewBox:'0 0 24 24',width:21,height:21,fill:'none',stroke:'currentColor','stroke-width':1.3,'stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'});el.append(shape('path',{d:paths[name]||paths.presence}));return el;}
   for(const b of document.querySelectorAll('.os-dock [data-view]')){const text=b.dataset.view==='ask'?'Ask':b.textContent.trim().replace(/^[^A-Za-z]+/,'');b.replaceChildren(icon(b.dataset.view),node('span','dock-label',text));b.setAttribute('aria-label',text);}
   $('focus-toggle').append(icon('focus'));
-  names.presence='Home';names.pulse='Quietly, in the background.';names.ask='A place to think.';names.knowledge='Your memory, connected.';names.overview='What needs your attention.';
+  names.conversation='Let’s keep the thread.';descriptions.conversation='Your context, carried forward. Your sources, always in view.';names.presence='Home';names.pulse='Quietly, in the background.';names.ask='A place to think.';names.knowledge='Your memory, connected.';names.overview='What needs your attention.';
   descriptions.presence='';descriptions.pulse='Small, deliberate routines. You choose what runs.';
   descriptions.ask='Start with your own knowledge. Sources first; a model only when you choose.';
   descriptions.knowledge='Notes, people and projects. Follow a connection back to its source.';
   descriptions.overview='The current changes in your connected project. Nothing is sent without you.';
   const previousRender=render, previousContent=renderContent, previousOut=signedOut, previousView=selectView;
-  const sections={presence:'HOME',ask:'ASK',knowledge:'MEMORY',overview:'WORK',evidence:'WORK',approvals:'WORK',activity:'WORK',sources:'CONTROLS',settings:'CONTROLS',pulse:'PULSE'};
+  const sections={presence:'HOME',conversation:'ASK',ask:'ASK',knowledge:'MEMORY',overview:'WORK',evidence:'WORK',approvals:'WORK',activity:'WORK',sources:'CONTROLS',settings:'CONTROLS',pulse:'PULSE'};
   const viewOrder=['presence','ask','knowledge','overview','pulse','settings'];
   function reset(){os.epoch++;os.home=null;os.knowledge=null;os.pulse=null;os.scope=null;os.loading=false;os.last=0;os.pulseLoading=false;os.pulseAt=0;os.focus=false;document.body.classList.remove('os-focus');$('focus-toggle').setAttribute('aria-pressed','false');$('focus-toggle').setAttribute('aria-label','Enter focus mode');$('command-palette').close();$('command-query').value='';$('command-results').replaceChildren();}
   signedOut=function(){reset();previousOut();};
@@ -24,7 +24,7 @@
     $('scope-name').textContent=ui.state.scope==='demo-production'?'Production workspace':pretty(ui.state.scope);
     for(const b of document.querySelectorAll('.os-dock [data-view]')){const active=sections[b.dataset.view]===sections[ui.view];if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');}
     $('os-time').textContent=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-    const tabs=$('space-tabs');const key=sections[ui.view];if(tabs.dataset.group!==key){tabs.replaceChildren();tabs.dataset.group=key;const items=key==='WORK'?[['overview','Briefing'],['evidence','Evidence'],['approvals','Decisions'],['activity','History']]:key==='CONTROLS'?[['settings','Controls'],['sources','Sources']]:[];for(const [v,label]of items){const b=button(label,'space-tab',()=>selectView(v));if(['overview','settings'].includes(v))b.dataset.subview=v;else b.dataset.view=v;tabs.append(b);}}
+    const tabs=$('space-tabs');const key=sections[ui.view];if(tabs.dataset.group!==key){tabs.replaceChildren();tabs.dataset.group=key;const items=key==='ASK'?[['conversation','Conversation'],['ask','Source search']]:key==='WORK'?[['overview','Briefing'],['evidence','Evidence'],['approvals','Decisions'],['activity','History']]:key==='CONTROLS'?[['settings','Controls'],['sources','Sources']]:[];for(const [v,label]of items){const b=button(label,'space-tab',()=>selectView(v));if(['overview','settings'].includes(v))b.dataset.subview=v;else b.dataset.view=v;tabs.append(b);}}
     for(const b of tabs.querySelectorAll('button'))b.setAttribute('aria-pressed',String((b.dataset.view||b.dataset.subview)===ui.view));
     $('focus-toggle').disabled=false;
   };

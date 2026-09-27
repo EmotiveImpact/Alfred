@@ -69,7 +69,7 @@ def load_keys(path):
         os.close(fd)
 
 
-def serve(path, port, vault=None, model=None, model_port=11434):
+def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60):
     # POSIX development target. A lock prevents accidental duplicate supervisors.
     import fcntl
     fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
@@ -82,7 +82,7 @@ def serve(path, port, vault=None, model=None, model_port=11434):
         keys = load_keys(path)
         store = DeskStore(path / 'desk.sqlite')
         supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None))
-        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port) if model else None)
+        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None)
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
         print('Local development data. Microphone OFF. No external messages are sent.', flush=True)
@@ -106,6 +106,7 @@ def main():
     parser.add_argument('--vault', help='Explicit read-only Markdown folder; no Obsidian plugins are loaded')
     parser.add_argument('--local-model', help='Opt-in tool-free model on an operator-managed local Ollama server; no model is downloaded')
     parser.add_argument('--model-port', type=int, default=11434)
+    parser.add_argument('--model-timeout', type=int, default=60, help='Bounded conversation model deadline, 1 to 90 seconds')
     parser.add_argument('--role', choices=('owner', 'reader'), default='owner')
     args = parser.parse_args()
     os.umask(0o077)
@@ -126,7 +127,7 @@ def main():
         else:
             if not 1024 <= args.port <= 65535:
                 raise Fault('invalid_port')
-            serve(path, args.port, args.vault, args.local_model, args.model_port)
+            serve(path, args.port, args.vault, args.local_model, args.model_port, args.model_timeout)
     except KeyboardInterrupt:
         print('ALFRED desk stopped. Stored events and drafts remain on disk.')
     except (Fault, OSError, ValueError) as exc:

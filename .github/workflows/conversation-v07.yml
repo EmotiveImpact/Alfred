@@ -1,0 +1,87 @@
+name: ALFRED conversation acceptance
+on:
+  push:
+    branches: [feat/alfred-conversation-2026-09-26]
+    paths: [.delivery/**, alfred/**, web/**, tests/**, tools/**, .github/workflows/conversation-v07.yml]
+permissions:
+  contents: write
+concurrency:
+  group: alfred-conversation-v07
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: github.repository == 'EmotiveImpact/Alfred'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Materialise reviewed source and test all first-party code
+        run: |
+          set -euo pipefail
+          if test -f .delivery/apply_conversation.py; then python3 .delivery/apply_conversation.py; fi
+          mkdir -p docs/evidence/conversation-v07
+          python3 --version
+          python3 -m unittest discover -s tests -v 2>&1 | tee docs/evidence/conversation-v07/tests.txt
+          python3 tools/import_sources.py --verify
+          python3 tools/extend_sources.py --verify
+      - name: Prepare isolated test-only browser tooling
+        run: |
+          python3 -m venv /tmp/alfred-conversation-browser
+          /tmp/alfred-conversation-browser/bin/pip install 'playwright==1.57.0' 'Pillow==11.3.0'
+          if command -v google-chrome >/dev/null; then
+            echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            /tmp/alfred-conversation-browser/bin/python -m playwright install --with-deps chromium
+          fi
+      - name: Verify retained and conversation flows against the real backend
+        run: |
+          set -euo pipefail
+          ALFRED_BROWSER_OUTPUT=docs/evidence/conversation-v07/regression/desk /tmp/alfred-conversation-browser/bin/python tools/check_desk_browser.py
+          ALFRED_KNOWLEDGE_OUTPUT=docs/evidence/conversation-v07/regression/knowledge /tmp/alfred-conversation-browser/bin/python tools/check_knowledge_browser.py
+          ALFRED_GROUNDED_OUTPUT=docs/evidence/conversation-v07/regression/ask /tmp/alfred-conversation-browser/bin/python tools/check_grounded_browser.py
+          ALFRED_OS_OUTPUT=docs/evidence/conversation-v07/regression/os /tmp/alfred-conversation-browser/bin/python tools/check_os_browser.py
+          /tmp/alfred-conversation-browser/bin/python tools/check_conversation_browser.py
+          python3 tools/build_conversation_preview.py
+          /tmp/alfred-conversation-browser/bin/python tools/check_conversation_preview.py
+      - name: Record exact tested source and package the first-party application
+        run: |
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,subprocess
+          files={}
+          for folder in ('alfred','web','tests','tools'):
+              for p in pathlib.Path(folder).glob('*'):
+                  if p.is_file() and p.suffix in ('.py','.js','.css','.html'):
+                      raw=p.read_bytes();files[str(p)]={'sha256':hashlib.sha256(raw).hexdigest(),'git_blob':hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()}
+          pathlib.Path('docs/evidence/conversation-v07/source-receipt.json').write_text(json.dumps({'input_commit':subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip(),'workflow_run':os.environ['GITHUB_RUN_ID'],'materialised_before_tests':True,'browser_model':'delayed fixture, real inference has separate receipts','files':files},indent=2)+'\n')
+          PY
+          python3 tools/package_conversation.py
+      - name: Preserve normal source and acceptance evidence on this branch only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          for name in ['apply_conversation.py']+[f'conversation-v07.{n:02}' for n in range(1,4)]:
+              Path('.delivery',name).unlink(missing_ok=True)
+          PY
+          git config user.name 'ALFRED verification'
+          git config user.email 'alfred-verification@users.noreply.github.com'
+          git add alfred web tests tools docs research README.md AGENTS.md SESSION_HANDOFF.md
+          if git ls-files --error-unmatch .delivery/apply_conversation.py >/dev/null 2>&1; then git add -u .delivery; fi
+          if ! git diff --cached --quiet; then
+            git commit --quiet -m 'feat: deliver verified conversation continuity and source-bound draft proposals'
+            AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/feat/alfred-conversation-2026-09-26
+          fi
+      - name: Retain acceptance evidence and deliverables even on failure
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-conversation-v07-delivery
+          path: |
+            docs/evidence/conversation-v07
+            docs/previews/conversation-v07
+          retention-days: 7
+          if-no-files-found: warn

@@ -191,6 +191,12 @@ class KnowledgeStore(DeskStore):
             if [r[0] for r in db.execute('SELECT version FROM knowledge_meta')] != [1]:
                 raise Fault('unsupported_knowledge_version')
 
+    def evidence_valid(self, db, row):
+        if super().evidence_valid(db, row):
+            return True
+        from .conversation import knowledge_action_current
+        return knowledge_action_current(self, db, row)
+
     def replace_notes(self, bearer, label, notes, errors):
         if len(notes) > MAX_NOTES or sum(len(n['refs']) for n in notes) > MAX_LINKS:
             raise Fault('knowledge_capacity')

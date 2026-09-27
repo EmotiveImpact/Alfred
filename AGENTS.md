@@ -27,8 +27,8 @@ Branch from the actual remote head, preserving concurrent work. No force-push, a
 merge or deployment. Report exact commit/branch/PR, actual tests and limitations. A local
 file, Git tree object or queued CI run is not a successful published delivery.
 
-The current branch is feat/alfred-personal-os-2026-09-26, extending grounded Desk
-af10f961665962a42d2d78f00864edb9c267db26. Refresh its actual remote head. Use the stacked PR chain rather than assuming main contains the application.
+The current branch is feat/alfred-conversation-2026-09-26, extending the personal OS
+f5a3be2f093ae38a669de6f07ff1c9609c175ba2. Refresh its actual remote head. Use the stacked PR chain rather than assuming main contains the application.
 Independent work packages are issues #2 core, #3 runtime and #4 voice, not running agents.
 
 ## Implemented boundary
@@ -45,7 +45,7 @@ Actions require exact approval, authority rechecks and result evidence. Unknown 
 outcomes are reconciled, not automatically retried. The current idempotency guarantee is
 specific to local SQLite drafts, not all future external services. Jev output is advisory
 and provider confidence is not verified truth. An optional tool-free local Ollama adapter
-is implemented, off by default. No real-model inference was validated in this release.
+is implemented, off by default. A small actual inference experiment and its relevance/abstention failure are recorded in research/MODEL_TRIAL_V07.md. This does not validate general model quality.
 Source mode returns exact excerpts, not a fabricated answer. Citation integrity does not
 prove entailment. Markdown files and their graph never grant permissions. Never reapply
 older patchers to overwrite the current Desk, knowledge or question interfaces.
@@ -77,3 +77,12 @@ the dock, keyboard launcher and restrained true-black shell. Do not restore the 
 rail as the default experience. Pulse has two fixed, opt-in read-only reports; never
 turn its routine IDs into arbitrary shell/prompt execution. Limits and actual host
 lifecycle stay visible. Focus changes presentation only. Read docs/PERSONAL_OS.md.
+
+## Conversation continuity
+
+The visual direction is provisional, not approved final. Preserve it during intelligence
+work. Read docs/CONVERSATIONS.md. ConversationService owns bounded actor-private sessions
+and a queue; generated replies never confer authority. Keep current-source validation
+and the existing separate exact-approval step. No prompt is an executable routine.
+A model's syntactically valid citations do not prove that it answered the question.
+Retain failed experiment outputs and avoid invented reliability or benchmark claims.

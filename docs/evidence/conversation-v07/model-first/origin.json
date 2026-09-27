@@ -1,0 +1,12 @@
+{
+  "workflow_run": 36219850026,
+  "input_commit": "1d52964bccee189dce486ca16822b2a4f990a076",
+  "archive_sha256": "91903c259c84cec12748b07b29a1a40c7f68e727ac9d47d0807fd40acfcf8663",
+  "copied_without_modification": [
+    "OLLAMA-LICENSE.txt",
+    "QWEN-LICENSE.txt",
+    "receipt.json",
+    "results.json",
+    "runtime.json"
+  ]
+}
