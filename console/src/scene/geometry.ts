@@ -5,7 +5,10 @@ export function fibonacciPoint(i:number,total:number,radius=1):Point3{const y=1-
 export function makePointField(count:number,seed=814):{positions:Float32Array;strengths:Float32Array;phases:Float32Array;warmth:Float32Array}{
  const rng=randomSeed(seed),p:number[]=[],s:number[]=[],ph:number[]=[],w:number[]=[];
  for(let i=0;i<count;i++){
-  const v=fibonacciPoint(i,count),[x,y,z]=v;
+  const v=fibonacciPoint(i,count);
+  const jitter=Math.sqrt(4*Math.PI/count)*.85;
+  let x=v[0]+(rng()-.5)*jitter,y=v[1]+(rng()-.5)*jitter,z=v[2]+(rng()-.5)*jitter;
+  const length=Math.hypot(x,y,z);x/=length;y/=length;z/=length;
   const broad=Math.sin(x*3.7+y*1.8+Math.sin(z*3.2))*.65+Math.cos(y*4.6-z*2.6+x*1.2)*.45;
   const detail=Math.sin(x*17+z*6)*Math.cos(y*21-z*13)*.18+Math.sin(y*31+x*11)*.08;
   const cluster=broad+detail>.24;

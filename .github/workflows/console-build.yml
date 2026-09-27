@@ -2,7 +2,7 @@ name: Obsidian console build
 on:
   push:
     branches: [feat/alfred-obsidian-console-2026-09-27]
-    paths: ['console/**', '.github/workflows/console-build.yml']
+    paths: ['console/**', '!console/docs/**', '!console/README.md', '.github/workflows/console-build.yml']
 permissions:
   contents: read
 jobs:
@@ -14,13 +14,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install pinned frontend dependencies
+      - name: Install locked frontend dependencies
         working-directory: console
         run: |
           set -euo pipefail
-          npm install -g npm@11
+          npm install -g npm@11.20.0
           npm --version > npm-version.txt
-          if test -f package-lock.json; then npm ci; else npm install; fi
+          npm ci
           npm ls --depth=0 > dependency-versions.txt
           npm audit --json > dependency-audit.json || true
       - name: Typecheck, production build and domain regression
