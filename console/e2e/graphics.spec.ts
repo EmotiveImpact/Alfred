@@ -27,9 +27,9 @@ test('animated frames have no large exposure or black-frame jumps in this captur
   test.setTimeout(180000);
   await page.goto('/');await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-render-frame')),{timeout:30000}).toBeGreaterThan(8);await page.mouse.move(1150,40);
   await page.getByRole('button',{name:'Search workspace',exact:true}).focus();
-  writeFileSync('evidence/temporal-start-state.json',JSON.stringify(await page.evaluate(()=>({activeElement:document.activeElement?.outerHTML,railClass:document.querySelector('.navigation-rail')?.className,railHovered:document.querySelector('.navigation-rail')?.matches(':hover'),viewport:{width:innerWidth,height:innerHeight}})),null,2));
+  writeFileSync('evidence/temporal-start-state.json',JSON.stringify(await page.evaluate(()=>({activeElement:document.activeElement?.outerHTML,railClass:document.querySelector('.navigation-rail')?.className,railHovered:document.querySelector('.navigation-rail')?.matches(':hover'),railWidth:getComputedStyle(document.querySelector('.rail-surface')!).width,viewport:{width:innerWidth,height:innerHeight}})),null,2));
   await expect(page.locator('.navigation-rail')).not.toHaveClass(/is-expanded/);
-  await expect.poll(async()=>Math.round((await page.locator('.rail-surface').boundingBox())!.width)).toBe(78);
+  await expect(page.locator('.rail-surface')).toHaveCSS('width','78px',{timeout:30000});
   const box=await page.locator('canvas').boundingBox();if(!box)throw new Error('No canvas');
   const samples:number[]=[];for(let i=0;i<12;i++){samples.push(luminance(await page.screenshot({clip:box})));await page.waitForTimeout(90);}
   const max=Math.max(...samples),min=Math.min(...samples),ratios=samples.slice(1).map((x,i)=>Math.abs(x-samples[i])/Math.max(samples[i],.01));

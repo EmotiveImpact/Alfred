@@ -18,7 +18,7 @@ Use normal sans-serif letterforms. Headings may use restrained tracking, while b
 
 ## Rail interaction
 
-The collapsed rail is useful, not merely a decorative strip. Each icon has an accessible name and a visible focus state. The expanded rail reveals labels without changing the grid column, camera, canvas dimensions or source state. Use a short open delay and a slightly longer close delay to avoid accidental flicker when moving between icons. Preserve keyboard focus within the overlay. Escape dismisses the expansion. Pinning holds it open until explicitly unpinned. Touch users must have a click path.
+The collapsed rail is useful, not merely a decorative strip. Each icon has an accessible name and a visible focus state. The expanded rail reveals labels without changing the grid column, camera, canvas dimensions or source state. Keep the rail hit area synchronised with its open state. Use a small label-reveal delay and restrained opacity/translation, not a width tween that leaves an invisible or stale overlay beside the GPU view. Preserve keyboard focus within the overlay. Escape dismisses the expansion. Pinning holds it open until explicitly unpinned. Touch users must have a click path.
 
 Home is a quiet circular target rather than a large house badge. Search, Knowledge, Tasks, Research, Systems, Security and Settings remain visually consistent. Keep all items reachable on shorter displays.
 

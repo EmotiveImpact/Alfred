@@ -1,6 +1,7 @@
 /* Final portrait framing correction. Keep the canvas inside the actual workspace. */
 @media(max-width:700px){.sphere-stage{inset:40px 0 30px}}
-/* Visual delays only: no competing delayed state updates in navigation. */
-.rail-surface{transition-delay:160ms}
-.is-expanded .rail-surface{transition-delay:100ms}
-@media(prefers-reduced-motion:reduce){.rail-surface{transition-delay:0ms}}
+/* Keep hit area and state synchronous beside the GPU viewport. The existing
+   label opacity/translation supplies the reveal; do not interpolate layout width. */
+.rail-surface{transition:box-shadow .18s ease-out;transition-delay:0ms}
+.is-expanded .rail-label{transition-delay:80ms}
+@media(prefers-reduced-motion:reduce){.rail-label{transition-delay:0ms}}
