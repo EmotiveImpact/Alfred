@@ -1,0 +1,392 @@
+export interface DataWriteOptions {
+  /**
+   * Time of creation, represented as a unix timestamp, in milliseconds.
+   * Omit this if you want to keep the default behaviour.
+   * @public
+   * */
+  ctime?: number;
+  /**
+   * Time of last modification, represented as a unix timestamp, in milliseconds.
+   * Omit this if you want to keep the default behaviour.
+   * @public
+   */
+  mtime?: number;
+}
+class Stat {
+  type: "file" | "folder" = "file";
+}
+
+class DataAdapter {
+  _exists = true;
+  _read = "";
+  _readBinary = new ArrayBuffer(0);
+  _write: [string, string];
+  _writeBinary: [string, ArrayBuffer];
+  _remove: [string];
+  _stat = new Stat();
+  /** When set, stat() returns _stat only for this exact path and null for all others. */
+  _statForPath?: string;
+
+  async exists(path: string): Promise<boolean> {
+    return this._exists;
+  }
+
+  async stat(path: string): Promise<Stat | null> {
+    if (!this._exists) return null;
+    if (this._statForPath !== undefined && path !== this._statForPath) return null;
+    return this._stat;
+  }
+
+  async read(path: string): Promise<string> {
+    return this._read;
+  }
+
+  async readBinary(path: string): Promise<ArrayBuffer> {
+    return this._readBinary;
+  }
+
+  async write(
+    path: string,
+    content: string,
+    option?: DataWriteOptions,
+  ): Promise<void> {
+    this._write = [path, content];
+  }
+
+  async writeBinary(
+    path: string,
+    content: ArrayBuffer,
+    option?: DataWriteOptions,
+  ): Promise<void> {
+    this._writeBinary = [path, content];
+  }
+
+  async remove(path: string): Promise<void> {
+    this._remove = [path];
+  }
+}
+
+export class Vault {
+  _getAbstractFileByPath: TFile | null = new TFile();
+  _read = "";
+  _cachedRead = "";
+  _files: TFile[] = [new TFile()];
+  _markdownFiles: TFile[] = [];
+  _create: [string, string] | undefined;
+  _createdFolders: string[] = [];
+
+  adapter = new DataAdapter();
+
+  async read(file: TFile): Promise<string> {
+    return this._read;
+  }
+
+  async cachedRead(file: TFile): Promise<string> {
+    return this._cachedRead;
+  }
+
+  _modify: [string, string] | undefined;
+
+  async modify(file: TFile, content: string): Promise<void> {
+    this._modify = [file.path, content];
+    // Mirror the adapter-level record too, so assertions written against either
+    // spelling of "what got written" keep working.
+    this.adapter._write = [file.path, content];
+  }
+
+  async createFolder(path: string): Promise<void> {
+    this._createdFolders.push(path);
+  }
+
+  getFiles(): TFile[] {
+    return this._files;
+  }
+
+  getMarkdownFiles(): TFile[] {
+    return this._markdownFiles;
+  }
+
+  getAbstractFileByPath(path: string): TFile {
+    return this._getAbstractFileByPath;
+  }
+
+  async create(path: string, content: string): Promise<TFile> {
+    this._create = [path, content];
+    const file = new TFile();
+    file.path = path;
+    file.basename = (path.split("/").pop() ?? path).replace(/\.md$/, "");
+    return file;
+  }
+
+  _listeners: Map<string, ((...data: unknown[]) => unknown)[]> = new Map();
+
+  on(event: string, callback: (...data: unknown[]) => unknown): void {
+    if (!this._listeners.has(event)) {
+      this._listeners.set(event, []);
+    }
+    this._listeners.get(event)!.push(callback);
+  }
+
+  off(event: string, callback: (...data: unknown[]) => unknown): void {
+    const listeners = this._listeners.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(callback);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  }
+
+  // Helper method for tests to simulate vault events -- `rename`, `delete` --
+  // with whatever arguments Obsidian would pass.
+  _emit(event: string, ...data: unknown[]): void {
+    const listeners = this._listeners.get(event);
+    if (listeners) {
+      listeners.forEach((cb) => cb(...data));
+    }
+  }
+}
+
+class FileManager {
+  _trashFile: TFile | undefined;
+
+  async trashFile(file: TFile): Promise<void> {
+    this._trashFile = file;
+  }
+}
+
+export class Component {
+  load(): void {}
+  unload(): void {}
+}
+
+export class MarkdownRenderer {
+  static _rendered = "<p>rendered</p>";
+
+  static async render(
+    app: App,
+    markdown: string,
+    el: HTMLElement,
+    sourcePath: string,
+    component: Component,
+  ): Promise<void> {
+    el.innerHTML = MarkdownRenderer._rendered;
+  }
+}
+
+export class Loc {
+  line = -1;
+}
+
+export class Pos {
+  start = new Loc();
+  end = new Loc();
+}
+
+export class HeadingCache {
+  level = 1;
+  heading = "";
+  position = new Pos();
+}
+
+export class CachedMetadata {
+  headings: HeadingCache[] = [];
+  frontmatter: Record<string, unknown> = {};
+  tags: { tag: string }[] = [];
+}
+
+export class MetadataCache {
+  _getFileCache: CachedMetadata | null = new CachedMetadata();
+  _listeners: Map<string, ((...data: unknown[]) => unknown)[]> = new Map();
+  resolvedLinks: Record<string, Record<string, number>> = {};
+  unresolvedLinks: Record<string, Record<string, number>> = {};
+
+  getFileCache(file: TFile): CachedMetadata | null {
+    return this._getFileCache;
+  }
+
+  on(event: string, callback: (...data: unknown[]) => unknown): void {
+    if (!this._listeners.has(event)) {
+      this._listeners.set(event, []);
+    }
+    this._listeners.get(event)!.push(callback);
+  }
+
+  off(event: string, callback: (...data: unknown[]) => unknown): void {
+    const listeners = this._listeners.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(callback);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  }
+
+  // Helper method for tests to simulate cache change events. Obsidian passes the
+  // file's new content as the second argument, which callers use to tell an update
+  // for their own write apart from one for an unrelated revision.
+  _emitChanged(file: TFile, data = ""): void {
+    this._emit("changed", file, data);
+  }
+
+  // Fires any other cache event by name -- `resolve`, `resolved`, `deleted` --
+  // with whatever arguments Obsidian would pass.
+  _emit(event: string, ...data: unknown[]): void {
+    const listeners = this._listeners.get(event);
+    if (listeners) {
+      listeners.forEach((cb) => cb(...data));
+    }
+  }
+}
+
+export class Workspace {
+  async openLinkText(
+    path: string,
+    base: string,
+    newLeaf: boolean,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => resolve());
+  }
+
+  getActiveFile(): TFile {
+    return new TFile();
+  }
+
+  _listeners: Map<string, ((...data: unknown[]) => unknown)[]> = new Map();
+
+  on(event: string, callback: (...data: unknown[]) => unknown): void {
+    if (!this._listeners.has(event)) {
+      this._listeners.set(event, []);
+    }
+    this._listeners.get(event)!.push(callback);
+  }
+
+  off(event: string, callback: (...data: unknown[]) => unknown): void {
+    const listeners = this._listeners.get(event);
+    if (listeners) {
+      const index = listeners.indexOf(callback);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
+    }
+  }
+
+  _emit(event: string, ...data: unknown[]): void {
+    const listeners = this._listeners.get(event);
+    if (listeners) {
+      listeners.forEach((cb) => cb(...data));
+    }
+  }
+}
+
+class PluginManager {
+  plugins: Record<string, { settings?: Record<string, unknown> }> = {};
+
+  getPlugin(id: string): { settings?: Record<string, unknown> } | null {
+    return this.plugins[id] ?? null;
+  }
+}
+
+class InternalPluginManager {
+  plugins: Record<
+    string,
+    {
+      instance?: { description?: string; id?: string; name?: string; options?: Record<string, unknown> };
+      enabled?: boolean;
+    }
+  > = {};
+
+  getPluginById(id: string): { instance?: { options?: Record<string, unknown> } } | null {
+    return this.plugins[id] ?? null;
+  }
+}
+
+export class App {
+  _executeCommandById: [string];
+
+  vault = new Vault();
+  workspace = new Workspace();
+  metadataCache = new MetadataCache();
+  fileManager = new FileManager();
+  plugins = new PluginManager();
+  internalPlugins = new InternalPluginManager();
+  commands = {
+    commands: {} as Record<string, Command>,
+
+    executeCommandById: (id: string) => {
+      this._executeCommandById = [id];
+    },
+  };
+}
+
+export class Command {
+  id = "";
+  name = "";
+}
+
+export class FileStats {
+  ctime = 0;
+  mtime = 0;
+  size = 0;
+}
+
+export class TFile {
+  path = "somefile.md";
+  basename = "somefile";
+  extension = "md";
+  stat: FileStats = new FileStats();
+}
+
+export class TFolder {
+  path = "somefolder";
+}
+
+export class PluginManifest {
+  id = "";
+  name = "";
+  version = "";
+}
+
+export class SettingTab {}
+
+export const apiVersion = "1.0.0";
+
+export class SearchResult {
+  score = -10;
+  matches: [number, number][] = [];
+}
+
+// Mock configuration that tests can control
+// Tests can set this to override the default behavior
+export const _prepareSimpleSearchMock = {
+  behavior: null as
+    | ((query: string) => (text: string) => null | SearchResult)
+    | null,
+};
+
+export function getAllTags(
+  cache: CachedMetadata,
+): string[] | null {
+  const inlineTags = (cache.tags ?? []).map((t) => t.tag);
+  const frontmatterTags = Array.isArray(cache.frontmatter?.tags)
+    ? (cache.frontmatter.tags as string[])
+    : [];
+  const all = [...inlineTags, ...frontmatterTags];
+  return all.length > 0 ? all : null;
+}
+
+export function prepareSimpleSearch(
+  query: string,
+): (value: string) => null | SearchResult {
+  if (_prepareSimpleSearchMock.behavior) {
+    return _prepareSimpleSearchMock.behavior(query);
+  }
+  return () => null;
+}
+
+export function normalizePath(path: string): string {
+  return path
+    .replace(/\\/g, "/")
+    .replace(/\/+/g, "/")
+    .replace(/^\/+|\/+$/g, "");
+}

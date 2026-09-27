@@ -1,0 +1,42 @@
+.item {
+  composes: navbar__item from global;
+  display: flex;
+  align-items: center;
+}
+
+.chatButton {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 0.75rem;
+  background: #f2e9fe;
+  border: 1px solid #d5b8fb;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  color: #6b3fa0;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.chatButton:hover {
+  background: #e7d7fc;
+  border-color: #c39cf7;
+}
+
+[data-theme="dark"] .chatButton {
+  background: #3a2c52;
+  border-color: #5b4384;
+  color: #dcc9fb;
+}
+
+[data-theme="dark"] .chatButton:hover {
+  background: #48366a;
+  border-color: #6f4fa0;
+}
+
+.chatIcon {
+  width: 1rem;
+  height: 1rem;
+}

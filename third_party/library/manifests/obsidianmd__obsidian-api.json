@@ -1,0 +1,56 @@
+{
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 47,
+      "sha256": "2f25c3fa8a8fc108b5c8cf6ad5015b34e514d6a2863c560c1e0ae76980668244",
+      "git_blob_sha1": "4d9214cf1ab2e6fb17232894a6b2838afe937ecb"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "bytes": 11645,
+      "sha256": "d6644226aacd709d8dfbdb975199aec8cf02e17c8e60d8af6e0662f5a21ec2b2",
+      "git_blob_sha1": "8af348779494db7db03ba8b67179ef345552733a"
+    },
+    {
+      "path": "LICENSE.md",
+      "bytes": 1058,
+      "sha256": "c7e9eeb6640ebb1c22d8888f6d2c771b1f058a54e6216d69c7e2224b3cbad394",
+      "git_blob_sha1": "cc7707e1bd8c70417d492946a6cb139470bbe9c1"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3053,
+      "sha256": "89b06377b8bb16019f959237ef64db04f257c11898450853858fbb711d5b3b90",
+      "git_blob_sha1": "d2b6717da89b5208b837cc0550f76732e1735a49"
+    },
+    {
+      "path": "canvas.d.ts",
+      "bytes": 2967,
+      "sha256": "b5f78362dd27ceee81f4a9c0c4fcebcc2da55b7c519083f9bbfbb2364c6d6c5b",
+      "git_blob_sha1": "5e68e81da4a43c245e2d10e0a8b68f1c9e732522"
+    },
+    {
+      "path": "obsidian.d.ts",
+      "bytes": 204109,
+      "sha256": "ed358aa05694582597726321352494a9833b77c117991189e55761ced8326027",
+      "git_blob_sha1": "4fd05b81a95a7f2316f6ca9264abef45fd2c8d58"
+    },
+    {
+      "path": "package.json",
+      "bytes": 611,
+      "sha256": "ea2fa80ee954c6fc6401ad14df8252ca247f138cc2167ee95e1d00f5ecb5f615",
+      "git_blob_sha1": "97487b6ff12bc95fef7635677c7d0342508f7291"
+    },
+    {
+      "path": "publish.d.ts",
+      "bytes": 18866,
+      "sha256": "8cec908daab056364dda12d15a546e823ca935882781f5795799034e64979daa",
+      "git_blob_sha1": "615d412b68e6e6aa3b80ebb7f757e7a100b95269"
+    }
+  ],
+  "excluded": [],
+  "file_count": 8,
+  "bytes": 242356,
+  "archive_members": 9
+}

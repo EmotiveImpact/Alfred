@@ -1,0 +1,70 @@
+"""MCP tools for Basic Memory.
+
+This package provides the complete set of tools for interacting with
+Basic Memory through the MCP protocol. Importing this module registers
+all tools with the MCP server.
+"""
+
+# Import tools to register them with MCP
+from basic_memory.mcp.tools.basic_memory_diagnostics import basic_memory_diagnostics
+from basic_memory.mcp.tools.delete_note import delete_note
+from basic_memory.mcp.tools.read_content import read_content
+from basic_memory.mcp.tools.build_context import build_context
+from basic_memory.mcp.tools.recent_activity import recent_activity
+from basic_memory.mcp.tools.read_note import read_note
+
+# TODO: re-enable once MCP client rendering is working
+# from basic_memory.mcp.tools.ui_sdk import read_note_ui, search_notes_ui
+from basic_memory.mcp.tools.view_note import view_note
+from basic_memory.mcp.tools.write_note import write_note
+from basic_memory.mcp.tools.search import search_notes
+from basic_memory.mcp.tools.list_directory import list_directory
+from basic_memory.mcp.tools.edit_note import edit_note
+from basic_memory.mcp.tools.move_note import move_note
+from basic_memory.mcp.tools.workspaces import list_workspaces
+from basic_memory.mcp.tools.project_management import (
+    list_memory_projects,
+    create_memory_project,
+    delete_project,
+)
+
+# ChatGPT-compatible tools
+from basic_memory.mcp.tools.chatgpt_tools import search, fetch
+
+# POSIX-style read-side tools (enabled by default at server startup, #1476)
+from basic_memory.mcp.tools.posix_tools import cat, find, grep, ls, man, tail
+
+# Schema tools
+from basic_memory.mcp.tools.schema import schema_validate, schema_infer, schema_diff
+
+__all__ = [
+    "basic_memory_diagnostics",
+    "build_context",
+    "cat",
+    "create_memory_project",
+    "delete_note",
+    "delete_project",
+    "edit_note",
+    "fetch",
+    "find",
+    "grep",
+    "list_directory",
+    "list_memory_projects",
+    "list_workspaces",
+    "ls",
+    "man",
+    "move_note",
+    "read_content",
+    "read_note",
+    # "read_note_ui",
+    "recent_activity",
+    "schema_diff",
+    "schema_infer",
+    "schema_validate",
+    "search",
+    "search_notes",
+    # "search_notes_ui",
+    "tail",
+    "view_note",
+    "write_note",
+]

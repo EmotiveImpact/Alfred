@@ -1,0 +1,170 @@
+{
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 286,
+      "sha256": "7dc416519055a0814baf0cf77166e9a2eab37160664fe0e82273e7a8dda2f342",
+      "git_blob_sha1": "f92c204468a2864a4d86d8528f8200ab2fc45708"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1071,
+      "sha256": "91df6514e34006d8b4d637ddd16156d9df8d06676b05c2041ac08a797b67f391",
+      "git_blob_sha1": "e5bd4107222e21aa659e691ea08399137d2b5821"
+    },
+    {
+      "path": "README.md",
+      "bytes": 7873,
+      "sha256": "a755dfabc1f1924f1ccbc78689c2976b2b004453e8e046d668d48ace914131a7",
+      "git_blob_sha1": "c7adc217417913ae15b1d1033b1542213bacc79a"
+    },
+    {
+      "path": "client/client.py",
+      "bytes": 14182,
+      "sha256": "77261131cc0356750c08e660fc6e4a81fc75b611bbf12760ad86fb05a5994ba8",
+      "git_blob_sha1": "b71235d35a7fa037ad8315726c64463cd21a2d9e"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "bytes": 6089,
+      "sha256": "b38dd464f668a2d7be7655cc10e7c207ca92977b2eb20773dafc100c9ea9957a",
+      "git_blob_sha1": "9e9283a8e48052e5aa7d18819498062fa0e190b9"
+    },
+    {
+      "path": "docs/SETUP.md",
+      "bytes": 6129,
+      "sha256": "55e576c0cc24d0fa822fa53a7229f355bb5de876f380d7a27ed985282cbff213",
+      "git_blob_sha1": "f809bb7159a509de4d09a3b3f0363b1b3199391c"
+    },
+    {
+      "path": "docs/TROUBLESHOOTING.md",
+      "bytes": 4186,
+      "sha256": "163dab16aee21f24b4cc4b97635af7fcb5e87c565aa63f0e200d675be01e8263",
+      "git_blob_sha1": "3a732d270ddaedc4dfccb0829e7e2758e6191339"
+    },
+    {
+      "path": "hermes-plugin/hud_display/__init__.py",
+      "bytes": 366,
+      "sha256": "267185882d7bfb30dc9a07b6f50298cc0226d1f98bc9b79ee06269fc091fc3ef",
+      "git_blob_sha1": "079cfc597169f869666b2be7374e8db0d1b0b7ae"
+    },
+    {
+      "path": "hermes-plugin/hud_display/plugin.yaml",
+      "bytes": 148,
+      "sha256": "dee51f78f1f9960bd503c40b6ac5c7b1f162526b20f3d9e762887abd68cf8fc1",
+      "git_blob_sha1": "51b741e934b21d6e1cd753814a5502540ce6622c"
+    },
+    {
+      "path": "hermes-plugin/hud_display/schemas.py",
+      "bytes": 2147,
+      "sha256": "54fcf930815fa55761f0ef60f07c47d03888bc107cd7fcddc30f648ba1ce9be5",
+      "git_blob_sha1": "b99ac2ee44551d35d218605f4045c8c7be8dae62"
+    },
+    {
+      "path": "hermes-plugin/hud_display/tools.py",
+      "bytes": 1574,
+      "sha256": "e67203a16b7723e02cb46e0411163522bd1f89faf076b6382470c675d71e3853",
+      "git_blob_sha1": "05dad2dcb35333b722a77b61fd6e45c539757172"
+    },
+    {
+      "path": "launchd/com.jarvis.dashboard.plist",
+      "bytes": 1072,
+      "sha256": "4a40aaed5f38c671496b63621d28c8b2fde0a250cec5ff448277b05558e52ebc",
+      "git_blob_sha1": "cc74b331ca7611819baef8c876ee9e9e5b520fb3"
+    },
+    {
+      "path": "launchd/com.jarvis.voice.plist",
+      "bytes": 1927,
+      "sha256": "33636f18767f1a76888c310e835194319c9d74052040f6cc168c6fa98f15c74a",
+      "git_blob_sha1": "b22d63d42d933793b6bda8782084c85f68d616a4"
+    },
+    {
+      "path": "server/config/server.example.yaml",
+      "bytes": 3208,
+      "sha256": "65814ee4783f54cc01860f6c2b438e7ee1849355962ba867eedc553cb976cedf",
+      "git_blob_sha1": "fddb2f4694b4886ef94aef8c489cd098e494585d"
+    },
+    {
+      "path": "server/hud/index.html",
+      "bytes": 45802,
+      "sha256": "8cceecbe2293c0bb8b869a95331b68e111d4ffd6341781e2ed53733cb86e36c3",
+      "git_blob_sha1": "cee450925db18c8ef68162792bb11c4dffa884ef"
+    },
+    {
+      "path": "server/scripts/jarvis-health.sh",
+      "bytes": 687,
+      "sha256": "a6fb6e8f24994a30985041eff154091282acf2b8b869ce7238d8bbe2c8d75c73",
+      "git_blob_sha1": "48fc96522ac21949f20fb0304e34fdf1a39c914e"
+    },
+    {
+      "path": "server/scripts/jarvis-restart.sh",
+      "bytes": 89,
+      "sha256": "5e3697c9f852b2ae7d5975cbdd66564fe47b77c554ef22fadd7bc26ec78a642a",
+      "git_blob_sha1": "b1a3241e3d184f5aa3d81a72b7c483209c1c23b4"
+    },
+    {
+      "path": "server/scripts/jarvis-smoke.sh",
+      "bytes": 209,
+      "sha256": "a7348e3871570d95f72285b2b1c96a69bb85c58004349d5d1363b46487109d4d",
+      "git_blob_sha1": "3b5a67d45dae03aeda266df36d99e9f26058f5a4"
+    },
+    {
+      "path": "server/scripts/jarvis-start.sh",
+      "bytes": 240,
+      "sha256": "f452a59fea012b28e9d296db07ed59e5b9d90b9b946addea8ed1eba6773c3917",
+      "git_blob_sha1": "dab9251cb25971a03b0535240b2855503ef527dd"
+    },
+    {
+      "path": "server/scripts/jarvis-stop.sh",
+      "bytes": 427,
+      "sha256": "d9035aa9e14d8c658cb7770f2ec3ede156e32ff45e52be9e5903b33c86337557",
+      "git_blob_sha1": "9490fe77e4b5af900a40cb9231606c45fee6fa7a"
+    },
+    {
+      "path": "server/scripts/make-boot-audio.sh",
+      "bytes": 743,
+      "sha256": "045eb72516669803d1e3e1807395f5823d5da008c1bb0e4c0e3f170d2d221f69",
+      "git_blob_sha1": "70511229bd05c59f31e18caf1e18eb2ff2459b3f"
+    },
+    {
+      "path": "server/scripts/make-certs.sh",
+      "bytes": 552,
+      "sha256": "d870f9b25fb9a389fbd9ee78e4b7445e7607dc25275014db5cca4e00f4318a39",
+      "git_blob_sha1": "e1718e2310cc5c62b778ea1d26fc1de377ba7828"
+    },
+    {
+      "path": "server/scripts/ws_e2e_test.py",
+      "bytes": 2977,
+      "sha256": "a7ca2787a553884609d2192e92eeb735666367b1f88ff2ad2dfe9100d260e654",
+      "git_blob_sha1": "0dfb9a188f5cd8b9e479e2b5884f1642df93d381"
+    },
+    {
+      "path": "server/server.py",
+      "bytes": 50849,
+      "sha256": "fe8a8ab61fbcd4a3fb31e5199198c78175c34bc52ec459718dc82f39e33f3f5a",
+      "git_blob_sha1": "f9526d98ee20b87d6670df8f2cdb1a1ca4738e64"
+    },
+    {
+      "path": "worker/run-stt.example.bat",
+      "bytes": 390,
+      "sha256": "91d627eedc175d6205a1879b1327ec0dc29f3c03cb43170851a5da0bcf459109",
+      "git_blob_sha1": "28ac109241e3e832ea0d6e46a21257a3fd9e188a"
+    },
+    {
+      "path": "worker/stt_server.py",
+      "bytes": 2860,
+      "sha256": "7e58e692d6f7336a967cb2027e98820e3cc1f93adff4060401e7f74c89ef6ffe",
+      "git_blob_sha1": "2dfdf937868b1bc576dc5d923a88a9345d394a6d"
+    },
+    {
+      "path": "worker/worker_stats.py",
+      "bytes": 2056,
+      "sha256": "845bf76ff7a492951ed43fc81cd36595b7471c0da0be05372f50cdc1fea7ed08",
+      "git_blob_sha1": "e7681cce6b57f76872bbb21e75a491c6581c0c22"
+    }
+  ],
+  "excluded": [],
+  "file_count": 27,
+  "bytes": 158139,
+  "archive_members": 38
+}

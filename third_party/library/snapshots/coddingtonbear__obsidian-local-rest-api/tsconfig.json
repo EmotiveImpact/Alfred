@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "inlineSourceMap": true,
+    "inlineSources": true,
+    "module": "ESNext",
+    "target": "ES2024",
+    "allowJs": true,
+    "noImplicitAny": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "importHelpers": true,
+    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "lib": ["DOM", "ES2024"]
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["**/*.test.ts", "node_modules", "mocks", "publicApi.d.ts"]
+}

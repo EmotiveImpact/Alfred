@@ -1,0 +1,202 @@
+# Agent Instructions
+
+## Commit Process
+
+### Commit cadence
+
+Commit frequently in small, self-contained increments. Each commit on `main` must leave the repository in a working state — no broken builds, no failing unit tests. A commit that fixes a bug, a commit that adds a test, and a commit that updates documentation are all valid atomic units. Do not batch unrelated changes into a single commit.
+
+When working on fixing a bug while on a branch off of `main`, follow a Test-Driven Development approach and start by creating (and committing) failing tests that will later be fixed by fixes your subsequent commits.
+
+### Push Automatically
+
+After making any particular commit, you can feel free to push that branch to the remote.
+
+### Running tests before committing
+
+Run the unit test suite before every commit:
+
+```
+npm test
+```
+
+Integration tests require a live Obsidian instance with the plugin's insecure HTTP server enabled and `OBSIDIAN_API_KEY` set. Run them when Obsidian is available, and always run them before pushing changes that touch endpoint behavior:
+
+```
+npm run test:integration
+```
+
+Two groups of integration tests are skipped by default and opt in via environment
+variable, because each needs something of the person running them:
+
+- `OBSIDIAN_ACTIVE_FILE=<vault-relative path>` — enables the `active_file_*` tests, which
+  need that file open in Obsidian.
+- `OBSIDIAN_TEST_OPEN_FILE=1` — enables the `open_file` test. It is off by default
+  because opening a file pulls Obsidian to the foreground and takes keyboard focus
+  mid-run, so keystrokes meant for another window can land in the opened note.
+
+One group runs by default and opts *out* instead, because the feature it needs is on by
+default:
+
+- `OBSIDIAN_SIGNED_URLS=0` — skips the signed-URL upload/download round trip. Without it,
+  that test *fails* (naming the setting) when the running plugin has "Enable signed URLs"
+  turned off, rather than passing with nothing exercised.
+
+### Commit message format
+
+Use a plain imperative subject line (no `type:` prefix). Always include a `Co-Authored-By` trailer crediting the AI assistant that helped author the commit.
+
+```
+Short imperative description
+
+Longer description of what this work is, why these changes were made, and any decisions, trade-offs, and known limitations that may be useful to future readers.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+```
+
+## Keeping REST, MCP, and Documentation in Sync
+
+This project has several parallel representations of each API capability that must be kept consistent. When any one changes, the others must be updated in the same commit.
+
+| Layer | Files |
+|---|---|
+| REST API implementation | `src/requestHandler.ts` |
+| MCP tool definitions | `src/mcpHandler.ts` |
+| Project Readme | `README.md` |
+| OpenAPI docs (source) | `docs/src/openapi.jsonnet`, `docs/src/lib/descriptions/*.md` |
+| OpenAPI docs (compiled) | `docs/openapi.yaml` |
+| Unit tests | `src/requestHandler.test.ts`, `src/mcpHandler.test.ts` |
+| Integration tests | `src/integration/*.test.ts` |
+| Extension API (source) | `src/publicApi.ts` |
+| Extension API (compiled) | `publicApi.d.ts`, `publicApi.js` |
+
+After making any changes to REST API endpoints or MCP tools, be sure to update the matching OpenAPI docs and Project Readme entries regarding that feature.
+
+### When changing a REST endpoint
+
+Any of the following changes requires updates across multiple layers:
+
+- **New parameter** — add it to the route handler in `src/requestHandler.ts`, add the corresponding Zod field to the matching `mcpServer.tool()` call in `src/mcpHandler.ts`, document it in the relevant Jsonnet source under `docs/src/`, and add test coverage in both the relevant unit test file and the relevant `src/integration/*.test.ts` file.
+- **Removed or renamed parameter** — mirror the removal/rename across all layers.
+- **Changed behavior or response format** — update the OpenAPI description in `docs/src/lib/descriptions/` and the MCP tool description string in `src/mcpHandler.ts` so both REST and MCP clients receive accurate documentation.
+- **New endpoint entirely** — all layers need additions: route handler, MCP tool, Jsonnet operation block, regenerated `docs/openapi.yaml`, and test coverage in both the unit and integration test files.
+
+### Regenerating the compiled OpenAPI spec
+
+`docs/openapi.yaml` is generated from the Jsonnet source and must be regenerated after any change to `docs/src/`:
+
+```
+npm run build-docs
+```
+
+Stage the resulting `docs/openapi.yaml` alongside any Jsonnet changes. `src/mcpHandler.ts` imports this file directly, so a stale compiled spec means MCP clients receive outdated API documentation.
+
+### Regenerating the Readme table of contents
+
+`README.md` carries a `markdown-toc`-generated table of contents between the `<!-- toc -->` and `<!-- tocstop -->` markers. After adding, removing, or renaming any Readme heading, regenerate it and stage the result:
+
+```
+npm run build-toc
+```
+
+### Changing the extension API
+
+`src/publicApi.ts` is the single source of truth for what other plugins may depend on: the `LocalRestApiPublicApi` interface, `getAPI`, and their supporting types. `publicApi.d.ts` and `publicApi.js` at the repository root are generated from it and committed, and package.json's `types` and `main` fields point at them, so extension authors install a small standalone module rather than the plugin bundle.
+
+Two constraints hold this together:
+
+- **`src/publicApi.ts` may not import plugin internals.** Only `import type` from `obsidian`, `express`, and `zod`. Anything else leaks a relative import into the generated declaration and breaks for consumers.
+- **The implementation is checked against it in both directions.** `LocalRestApiPublicApiImpl` in `src/api.ts` declares `implements LocalRestApiPublicApi`, which catches a member the class dropped, and the `PublicSurfaceIsComplete` type at the bottom of that file catches a public member the class grew that the interface never learned about. Adding a public method to the class without documenting it in `src/publicApi.ts` fails `npm run typecheck`.
+
+After any change to `src/publicApi.ts`, regenerate and stage the compiled output:
+
+```
+npm run build-types
+```
+
+`npm run build` runs this too, and CI fails if the committed output does not match a fresh build. Bumping the extension API's capabilities means bumping `apiVersion` in `src/api.ts`, since `getAPI`'s optional version argument is what extension authors use to detect an older host.
+
+The generated module is also what ships to npm as the `obsidian-local-rest-api` package that extension authors install for typings. npm publication happens manually, by the user, as part of cutting a release whenever the extension API changed — see step 8 of the Release Process below.
+
+### Checklist
+
+Before marking any endpoint-related change complete:
+
+- [ ] `src/requestHandler.ts` implements the behavior
+- [ ] `src/mcpHandler.ts` exposes matching parameters and an accurate description
+- [ ] `docs/src/` Jsonnet/Markdown reflects the change
+- [ ] `docs/openapi.yaml` has been regenerated (`npm run build-docs`)
+- [ ] `README.md`'s table of contents has been regenerated if headings changed (`npm run build-toc`)
+- [ ] `publicApi.d.ts`/`publicApi.js` have been regenerated if `src/publicApi.ts` changed (`npm run build-types`)
+- [ ] Unit tests in `src/requestHandler.test.ts` and/or `src/mcpHandler.test.ts` cover the changed behavior
+- [ ] Integration tests in `src/integration/` cover the changed behavior
+
+
+## Release Process
+
+Releases are performed on the `main` branch after all feature branches have been merged.
+
+### Steps
+
+1. Ensure you are on `main` with all intended changes merged.
+
+   Before proceeding, read the current version from `package.json`. Ask the user whether this is a **major**, **minor**, or **patch** bump and calculate the new version number from their answer — do not ask them to supply the version number directly.
+
+2. Delete `package-lock.json` and regenerate it:
+   ```
+   rm package-lock.json
+   npm i
+   ```
+
+3. Edit the `version` field in `package.json` to the new version number.
+
+4. Run the version script to update `manifest.json` and `versions.json` (this also stages those two files automatically):
+   ```
+   npm run version
+   ```
+
+5. Stage the remaining changed files (`package.json` and `package-lock.json`):
+   ```
+   git add package.json package-lock.json
+   ```
+
+6. Create a commit named:
+   ```
+   Release X.Y.Z
+   ```
+
+7. Before creating the tag, draft the full tag message and present it to the user for review. Incorporate any requested changes before proceeding. Then create the annotated tag named exactly after the new version number (e.g. `3.4.7`):
+   ```
+   git tag -a 3.4.7
+   ```
+
+   **Tag message format:**
+
+   ```
+   Release X.Y.Z
+
+   - Adds/Fixes/Updates/Removes [description of change]. (#issue if applicable; Thanks @contributor if applicable.)
+   - Adds/Fixes/Updates/Removes [description of change].
+   ```
+
+   - Subject line is `Release X.Y.Z`, optionally followed by ` -- Short description` for especially notable releases.
+   - Body is one or more bullet points summarizing user-visible changes.
+   - Each bullet starts with a verb (`Adds`, `Fixes`, `Updates`, `Removes`).
+   - Reference GitHub issues and PR numbers where relevant (e.g. `(#140)`).
+   - Credit external contributors where relevant (e.g. `Thanks @username!`). GitHub handles are not present in commit messages — look them up via `gh pr view <number>` for any PR-sourced changes.
+   - Sub-bullets may be used for multi-part changes.
+   - For re-releases (e.g. fixing a botched release), add a short prose paragraph before or after the bullets explaining what changed from the prior release attempt and that the underlying content is otherwise identical.
+
+8. After pushing the tag, check whether the extension API changed since the previous release:
+
+   ```
+   git diff <previous-tag> HEAD -- src/publicApi.ts publicApi.d.ts publicApi.js package.json
+   ```
+
+   If it did, **remind the user to publish the types package to npm** — the same `obsidian-local-rest-api` package extension authors install for `publicApi.d.ts` typings. Publishing is a manual step the user must perform themselves; their npm authentication setup means it cannot run in CI and cannot be performed by an assistant. Suggest they run:
+
+   ```
+   npm publish
+   ```
+
+   (`npm publish --dry-run` first shows exactly what will ship; package.json's `files` whitelist limits it to the generated `publicApi.js`/`publicApi.d.ts` plus manifest, Readme, and license.)

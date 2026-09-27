@@ -1,0 +1,258 @@
+"""Tests for accepted-note search repository operations."""
+
+import json
+from datetime import UTC, datetime
+from typing import Any, cast
+
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from basic_memory import db
+from basic_memory.indexing.accepted_note_search import build_accepted_note_search_row
+from basic_memory.repository.accepted_note_search_repository import (
+    AcceptedNoteSearchRepository,
+)
+from basic_memory.repository.script_ngrams import build_script_ngrams
+from basic_memory.repository.postgres_search_repository import PostgresSearchRepository
+
+
+class _Dialect:
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+
+class _Bind:
+    def __init__(self, dialect_name: str) -> None:
+        self.dialect = _Dialect(dialect_name)
+
+
+class _RecordingSession:
+    def __init__(self, *, dialect_name: str = "postgresql") -> None:
+        self.executed: list[tuple[str, dict[str, Any]]] = []
+        self._bind = _Bind(dialect_name)
+
+    def get_bind(self) -> _Bind:
+        return self._bind
+
+    async def execute(self, statement: Any, params: dict[str, Any]) -> None:
+        self.executed.append((str(statement), params))
+
+
+@pytest.mark.asyncio
+async def test_refresh_entity_replaces_project_scoped_hot_search_row() -> None:
+    repository = AcceptedNoteSearchRepository(project_id=7)
+    session = _RecordingSession()
+    created_at = datetime(2026, 6, 18, 12, 0, tzinfo=UTC)
+    updated_at = datetime(2026, 6, 18, 13, 0, tzinfo=UTC)
+    row = build_accepted_note_search_row(
+        entity_id=42,
+        title="Project Plan",
+        note_type="decision",
+        entity_metadata={"tags": ["strategy"]},
+        permalink="main/project-plan",
+        file_path="notes/project-plan.md",
+        search_content="Main body 适者生存",
+        created_at=created_at,
+        updated_at=updated_at,
+        project_id=7,
+    )
+
+    await repository.refresh_entity(cast(AsyncSession, session), row)
+
+    assert len(session.executed) == 4
+    delete_sql, delete_params = session.executed[0]
+    insert_sql, insert_params = session.executed[1]
+    assert "DELETE FROM search_index" in delete_sql
+    assert delete_params == {"entity_id": 42, "project_id": 7}
+    assert "CAST(:metadata AS jsonb)" in insert_sql
+    assert "ON CONFLICT (permalink, type, project_id)" in insert_sql
+    assert "script_ngrams = EXCLUDED.script_ngrams" in insert_sql
+    assert insert_params == {
+        "id": 42,
+        "title": "Project Plan",
+        "content_stems": row.content_stems,
+        "content_snippet": "Main body 适者生存",
+        "script_ngrams": build_script_ngrams(row.title, row.content_stems),
+        "permalink": "main/project-plan",
+        "file_path": "notes/project-plan.md",
+        "type": "entity",
+        "metadata": '{"note_type": "decision"}',
+        "entity_id": 42,
+        "created_at": created_at,
+        "updated_at": updated_at,
+        "project_id": 7,
+    }
+    chunk_delete_sql, chunk_delete_params = session.executed[2]
+    assert "DELETE FROM search_index_fts_chunks" in chunk_delete_sql
+    assert chunk_delete_params == {
+        "project_id": 7,
+        "search_index_id": 42,
+        "search_index_type": "entity",
+    }
+    chunk_sql, chunk_params = session.executed[3]
+    assert "INSERT INTO search_index_fts_chunks" in chunk_sql
+    assert chunk_params["project_id"] == 7
+    assert json.loads(chunk_params["chunks"]) == [
+        {
+            "search_index_id": 42,
+            "search_index_type": "entity",
+            "chunk_index": 0,
+            "chunk_text": "Main body 适者生存",
+            "script_ngrams": build_script_ngrams("Main body 适者生存"),
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_refresh_entity_uses_plain_insert_for_sqlite_virtual_table() -> None:
+    repository = AcceptedNoteSearchRepository(project_id=7)
+    session = _RecordingSession(dialect_name="sqlite")
+    now = datetime(2026, 6, 18, 12, 0, tzinfo=UTC)
+    row = build_accepted_note_search_row(
+        entity_id=42,
+        title="Project Plan",
+        note_type="decision",
+        entity_metadata=None,
+        permalink="main/project-plan",
+        file_path="notes/project-plan.md",
+        search_content="Main body",
+        created_at=now,
+        updated_at=now,
+        project_id=7,
+    )
+
+    await repository.refresh_entity(cast(AsyncSession, session), row)
+
+    insert_sql, _ = session.executed[1]
+    assert "ON CONFLICT" not in insert_sql
+    assert "CAST(:metadata AS jsonb)" not in insert_sql
+    assert ":metadata" in insert_sql
+    assert ":script_ngrams" in insert_sql
+
+
+@pytest.mark.asyncio
+async def test_refresh_entity_rejects_cross_project_rows() -> None:
+    repository = AcceptedNoteSearchRepository(project_id=7)
+    session = _RecordingSession()
+    now = datetime(2026, 6, 18, 12, 0, tzinfo=UTC)
+    row = build_accepted_note_search_row(
+        entity_id=42,
+        title="Project Plan",
+        note_type="decision",
+        entity_metadata=None,
+        permalink="main/project-plan",
+        file_path="notes/project-plan.md",
+        search_content="Main body",
+        created_at=now,
+        updated_at=now,
+        project_id=8,
+    )
+
+    with pytest.raises(ValueError, match="does not match repository project_id"):
+        await repository.refresh_entity(cast(AsyncSession, session), row)
+
+    assert session.executed == []
+
+
+@pytest.mark.asyncio
+async def test_refresh_entity_is_immediately_searchable_by_script_substring(
+    search_repository,
+    session_maker,
+) -> None:
+    repository = AcceptedNoteSearchRepository(project_id=search_repository.project_id)
+    now = datetime(2026, 6, 18, 12, 0, tzinfo=UTC)
+    row = build_accepted_note_search_row(
+        entity_id=42,
+        title="Evolution",
+        note_type="note",
+        entity_metadata=None,
+        permalink="main/evolution",
+        file_path="notes/evolution.md",
+        search_content="即适者生存的讨论",
+        created_at=now,
+        updated_at=now,
+        project_id=search_repository.project_id,
+    )
+
+    async with db.scoped_session(session_maker) as session:
+        await repository.refresh_entity(session, row)
+
+    results = await search_repository.search("适者生存")
+
+    assert [result.id for result in results] == [42]
+
+
+@pytest.mark.asyncio
+async def test_postgres_refresh_entity_chunks_large_script_content(
+    search_repository,
+    session_maker,
+) -> None:
+    if not isinstance(search_repository, PostgresSearchRepository):
+        pytest.skip("PostgreSQL stores full note bodies in bounded FTS chunks")
+
+    repository = AcceptedNoteSearchRepository(project_id=search_repository.project_id)
+    now = datetime(2026, 6, 18, 12, 0, tzinfo=UTC)
+    row = build_accepted_note_search_row(
+        entity_id=43,
+        title="Long evolution note",
+        note_type="note",
+        entity_metadata=None,
+        permalink="main/long-evolution",
+        file_path="notes/long-evolution.md",
+        search_content=f"{'進化' * 5_000}适者生存",
+        created_at=now,
+        updated_at=now,
+        project_id=search_repository.project_id,
+    )
+
+    async with db.scoped_session(session_maker) as session:
+        await repository.refresh_entity(session, row)
+
+    results = await search_repository.search("适者生存")
+
+    assert [result.id for result in results] == [43]
+
+
+@pytest.mark.asyncio
+async def test_postgres_refresh_entity_replaces_cascaded_permalink_chunks(
+    search_repository,
+    session_maker,
+) -> None:
+    if not isinstance(search_repository, PostgresSearchRepository):
+        pytest.skip("PostgreSQL cascades chunk parent keys during permalink upserts")
+
+    repository = AcceptedNoteSearchRepository(project_id=search_repository.project_id)
+    now = datetime(2026, 6, 18, 12, 0, tzinfo=UTC)
+    old_row = build_accepted_note_search_row(
+        entity_id=44,
+        title="Old owner",
+        note_type="note",
+        entity_metadata=None,
+        permalink="main/reassigned",
+        file_path="notes/old-owner.md",
+        search_content="旧所有者内容",
+        created_at=now,
+        updated_at=now,
+        project_id=search_repository.project_id,
+    )
+    new_row = build_accepted_note_search_row(
+        entity_id=45,
+        title="New owner",
+        note_type="note",
+        entity_metadata=None,
+        permalink="main/reassigned",
+        file_path="notes/new-owner.md",
+        search_content="新所有者适者生存",
+        created_at=now,
+        updated_at=now,
+        project_id=search_repository.project_id,
+    )
+
+    async with db.scoped_session(session_maker) as session:
+        await repository.refresh_entity(session, old_row)
+    async with db.scoped_session(session_maker) as session:
+        await repository.refresh_entity(session, new_row)
+
+    results = await search_repository.search("适者生存")
+
+    assert [result.id for result in results] == [45]

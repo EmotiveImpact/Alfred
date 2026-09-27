@@ -1,0 +1,454 @@
+"""Targeted coverage tests for postgres_search_repository.py vector paths.
+
+Exercises the uncovered code paths in PostgresSearchRepository:
+- _ensure_vector_tables (lines 258-352): pgvector extension, table creation,
+  dimension mismatch detection
+- SemanticSearch._run_vector_query: vector similarity query with cosine distance
+- _write_embeddings (lines 431-458): embedding upsert into pgvector table
+- Metadata filters in FTS search (lines 682-745): JSONB filter operators
+  (eq, in, contains, gt/gte/lt/lte, between)
+
+Uses postgres-fastembed combo (no OpenAI dependency) with the pgvector container.
+"""
+
+from __future__ import annotations
+
+from typing import Any, cast
+
+import pytest
+
+from basic_memory import db
+from basic_memory.config import DatabaseBackend
+from basic_memory.repository.search_reader import HydratedChunk, SemanticSearch
+from basic_memory.schemas.search import SearchItemType, SearchQuery, SearchRetrievalMode
+
+from semantic.conftest import (
+    SearchCombo,
+    create_search_service,
+    skip_if_needed,
+    _create_fastembed_provider,
+)
+from semantic.corpus import (
+    TOPIC_TERMS,
+    build_benchmark_content,
+    seed_benchmark_notes,
+)
+
+
+# Combo used for all coverage tests: Postgres + FastEmbed (no OpenAI needed)
+PG_FASTEMBED = SearchCombo("postgres-fastembed", DatabaseBackend.POSTGRES, "fastembed", 384)
+
+
+class _RecordingReranker:
+    """Deterministic reranker that records whether hybrid applies the stage once."""
+
+    model_name = "recording-reranker"
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def rerank(self, query: str, documents: list[str]) -> list[float]:
+        self.calls += 1
+        document_count = len(documents)
+        return [(document_count - index) / document_count for index in range(document_count)]
+
+    def runtime_log_attrs(self) -> dict[str, object]:
+        return {}
+
+
+@pytest.mark.asyncio
+@pytest.mark.semantic
+@pytest.mark.benchmark
+async def test_postgres_vector_table_setup_and_query(postgres_engine_factory, tmp_path):
+    """Exercise _ensure_vector_tables, sync_entity_vectors, and _run_vector_query.
+
+    This covers:
+    - CREATE EXTENSION vector
+    - search_vector_chunks table creation
+    - search_vector_embeddings table creation with HNSW index
+    - Dimension detection via pg_attribute
+    - Embedding write via _write_embeddings
+    - Vector similarity query via _run_vector_query
+    """
+    skip_if_needed(PG_FASTEMBED)
+    if postgres_engine_factory is None:
+        pytest.skip("Postgres engine not available")
+
+    provider = _create_fastembed_provider()
+    search_service = await create_search_service(
+        postgres_engine_factory, PG_FASTEMBED, tmp_path, embedding_provider=provider
+    )
+
+    # Seed a small corpus — enough to exercise the vector pipeline
+    entities = await seed_benchmark_notes(search_service, note_count=20)
+    assert len(entities) == 20
+
+    # Vector-only search — exercises _run_vector_query
+    results = await search_service.search(
+        SearchQuery(
+            text="authentication token session",
+            retrieval_mode=SearchRetrievalMode.VECTOR,
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=5,
+    )
+    assert results, "Vector search should return results after indexing"
+
+    # Verify the top results are from the auth topic
+    auth_found = any((r.permalink or "").startswith("bench/auth-") for r in results[:5])
+    assert auth_found, "Vector search should rank auth notes highly for auth query"
+
+
+@pytest.mark.asyncio
+@pytest.mark.semantic
+@pytest.mark.benchmark
+async def test_postgres_hybrid_search(postgres_engine_factory, tmp_path):
+    """Exercise the hybrid (score-based fusion) code path on Postgres.
+
+    This covers the full SemanticSearch.hybrid path including both FTS and vector
+    retrieval with score-based fusion.
+    """
+    skip_if_needed(PG_FASTEMBED)
+    if postgres_engine_factory is None:
+        pytest.skip("Postgres engine not available")
+
+    provider = _create_fastembed_provider()
+    search_service = await create_search_service(
+        postgres_engine_factory, PG_FASTEMBED, tmp_path, embedding_provider=provider
+    )
+
+    await seed_benchmark_notes(search_service, note_count=20)
+
+    # Hybrid search — exercises SemanticSearch.hybrid score-based fusion
+    results = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=5,
+    )
+    assert results, "Hybrid search should return results"
+    assert any((r.permalink or "").startswith("bench/database-") for r in results[:5]), (
+        "Hybrid search should rank database notes highly"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.semantic
+@pytest.mark.benchmark
+async def test_postgres_hybrid_preserves_candidate_windows(
+    postgres_engine_factory,
+    tmp_path,
+    monkeypatch,
+):
+    """Exercise baseline and reranked hybrid candidate sizing through real Postgres queries."""
+    skip_if_needed(PG_FASTEMBED)
+    if postgres_engine_factory is None:
+        pytest.skip("Postgres engine not available")
+
+    provider = _create_fastembed_provider()
+    search_service = await create_search_service(
+        postgres_engine_factory, PG_FASTEMBED, tmp_path, embedding_provider=provider
+    )
+    await seed_benchmark_notes(search_service, note_count=120)
+
+    repo = cast(Any, search_service.repository)
+    repo._rerank_provider = None
+    repo._semantic_vector_k = 100
+    repo._reranker_candidates = 100
+
+    candidate_limits: list[int] = []
+    run_vector_query = SemanticSearch._run_vector_query
+
+    async def record_vector_query(
+        self: SemanticSearch,
+        session: Any,
+        query_embedding: list[float],
+        candidate_limit: int,
+        *,
+        trace: Any = None,
+    ) -> list[HydratedChunk]:
+        candidate_limits.append(candidate_limit)
+        return await run_vector_query(self, session, query_embedding, candidate_limit, trace=trace)
+
+    monkeypatch.setattr(SemanticSearch, "_run_vector_query", record_vector_query)
+
+    baseline_results = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=10,
+    )
+
+    assert baseline_results
+    assert candidate_limits == [1000]
+
+    candidate_limits.clear()
+    repo._semantic_vector_k = 5
+    repo._reranker_candidates = 20
+    reranker = _RecordingReranker()
+    repo._rerank_provider = reranker
+    reranked_results = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=11,
+    )
+
+    assert reranked_results
+    assert candidate_limits == [80]
+
+    candidate_limits.clear()
+    growing_prefix_results = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=21,
+    )
+
+    assert growing_prefix_results
+    assert reranker.calls == 2
+    assert candidate_limits == [90, 80]
+
+    candidate_limits.clear()
+    large_page_with_probe = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+            min_similarity=0.0,
+        ),
+        limit=101,
+    )
+
+    assert len(large_page_with_probe) == 101
+    assert reranker.calls == 3
+    assert candidate_limits == [890, 80]
+
+    # A larger retrieval window must extend the same sequence rather than
+    # reordering rows already exposed by an earlier deep page.
+    reranker.calls = 0
+    candidate_limits.clear()
+    stable_window = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+            min_similarity=0.0,
+        ),
+        limit=40,
+    )
+
+    assert len(stable_window) == 40
+    assert candidate_limits == [280, 80]
+
+    candidate_limits.clear()
+    third_page = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+            min_similarity=0.0,
+        ),
+        limit=10,
+        offset=20,
+    )
+    assert candidate_limits == [180, 80]
+
+    candidate_limits.clear()
+    fourth_page = await search_service.search(
+        SearchQuery(
+            text="database migration schema",
+            retrieval_mode=SearchRetrievalMode.HYBRID,
+            entity_types=[SearchItemType.ENTITY],
+            min_similarity=0.0,
+        ),
+        limit=10,
+        offset=30,
+    )
+    assert candidate_limits == [280, 80]
+
+    assert [row.permalink for row in third_page] == [row.permalink for row in stable_window[20:30]]
+    assert [row.permalink for row in fourth_page] == [row.permalink for row in stable_window[30:40]]
+    assert reranker.calls == 3
+    assert all(row.score is not None and row.score < 0.05 for row in third_page + fourth_page)
+
+
+@pytest.mark.asyncio
+@pytest.mark.semantic
+@pytest.mark.benchmark
+async def test_postgres_semantic_with_metadata_filters(postgres_engine_factory, tmp_path):
+    """Exercise metadata filter operators in Postgres FTS search.
+
+    This covers the JSONB filter code paths in PostgresSearchRepository.search():
+    - eq: simple equality on metadata field
+    - contains: array containment (tags)
+    - in: $in operator for multiple values
+    """
+    skip_if_needed(PG_FASTEMBED)
+    if postgres_engine_factory is None:
+        pytest.skip("Postgres engine not available")
+
+    provider = _create_fastembed_provider()
+    search_service = await create_search_service(
+        postgres_engine_factory, PG_FASTEMBED, tmp_path, embedding_provider=provider
+    )
+
+    # Seed notes — they have metadata: {"tags": ["benchmark", topic], "status": "active"}
+    await seed_benchmark_notes(search_service, note_count=40)
+
+    # --- eq filter: status = "active" ---
+    results_eq = await search_service.search(
+        SearchQuery(
+            text="authentication",
+            metadata_filters={"status": "active"},
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=10,
+    )
+    assert results_eq, "Metadata eq filter should return results"
+
+    # --- contains filter: tags contain "auth" ---
+    results_contains = await search_service.search(
+        SearchQuery(
+            text="*",
+            tags=["auth"],
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=20,
+    )
+    assert results_contains, "Metadata contains filter should return results"
+    for r in results_contains:
+        assert (r.permalink or "").startswith("bench/auth-"), (
+            "Tag filter should only return auth notes"
+        )
+
+    # --- $in filter: status in ["active", "draft"] ---
+    results_in = await search_service.search(
+        SearchQuery(
+            text="database",
+            metadata_filters={"status": {"$in": ["active", "draft"]}},
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=10,
+    )
+    assert results_in, "Metadata $in filter should return results"
+
+
+@pytest.mark.asyncio
+@pytest.mark.semantic
+@pytest.mark.benchmark
+async def test_postgres_vector_dimension_detection(postgres_engine_factory, tmp_path):
+    """Exercise dimension detection and table initialization paths.
+
+    This test verifies that:
+    1. Vector tables are created correctly on first use
+    2. The dimension detection via pg_attribute works
+    3. Subsequent calls to _ensure_vector_tables are idempotent
+    """
+    skip_if_needed(PG_FASTEMBED)
+    if postgres_engine_factory is None:
+        pytest.skip("Postgres engine not available")
+
+    provider = _create_fastembed_provider()
+    search_service = await create_search_service(
+        postgres_engine_factory, PG_FASTEMBED, tmp_path, embedding_provider=provider
+    )
+
+    repo = cast(Any, search_service.repository)
+
+    # First entity triggers _ensure_vector_tables
+    async with db.scoped_session(search_service.session_maker) as session:
+        entity = await search_service.entity_repository.create(
+            session,
+            {
+                "title": "Dimension Test Note",
+                "note_type": "benchmark",
+                "entity_metadata": {"tags": ["test"]},
+                "content_type": "text/markdown",
+                "permalink": "bench/dim-test",
+                "file_path": "bench/dim-test.md",
+            },
+        )
+    content = build_benchmark_content("auth", TOPIC_TERMS["auth"], 0)
+    await search_service.index_entity_data(entity, content=content)
+    await search_service.sync_entity_vectors(entity.id)
+
+    # Verify tables initialized flag is set
+    assert repo._vector_tables_initialized
+
+    # Calling _ensure_vector_tables again should be a no-op (short-circuit)
+    await repo._ensure_vector_tables()
+    assert repo._vector_tables_initialized
+
+
+@pytest.mark.asyncio
+@pytest.mark.semantic
+@pytest.mark.benchmark
+async def test_postgres_incremental_vector_update(postgres_engine_factory, tmp_path):
+    """Exercise the diff/update path in sync_entity_vectors.
+
+    This covers:
+    - Initial chunk insert + embedding write
+    - Content update → chunk hash changes → re-embed changed chunks
+    - Stale chunk deletion
+    """
+    skip_if_needed(PG_FASTEMBED)
+    if postgres_engine_factory is None:
+        pytest.skip("Postgres engine not available")
+
+    provider = _create_fastembed_provider()
+    search_service = await create_search_service(
+        postgres_engine_factory, PG_FASTEMBED, tmp_path, embedding_provider=provider
+    )
+
+    # Create and index initial entity
+    async with db.scoped_session(search_service.session_maker) as session:
+        entity = await search_service.entity_repository.create(
+            session,
+            {
+                "title": "Update Test Note",
+                "note_type": "benchmark",
+                "entity_metadata": {"tags": ["test"]},
+                "content_type": "text/markdown",
+                "permalink": "bench/update-test",
+                "file_path": "bench/update-test.md",
+            },
+        )
+    initial_content = build_benchmark_content("sync", TOPIC_TERMS["sync"], 0)
+    await search_service.index_entity_data(entity, content=initial_content)
+    await search_service.sync_entity_vectors(entity.id)
+
+    # Verify initial indexing produces results
+    results_before = await search_service.search(
+        SearchQuery(
+            text="filesystem watcher",
+            retrieval_mode=SearchRetrievalMode.VECTOR,
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=5,
+    )
+    assert results_before
+
+    # Update content — should trigger chunk diff and re-embedding
+    updated_content = build_benchmark_content("agent", TOPIC_TERMS["agent"], 0)
+    await search_service.index_entity_data(entity, content=updated_content)
+    await search_service.sync_entity_vectors(entity.id)
+
+    # Verify updated content is findable
+    results_after = await search_service.search(
+        SearchQuery(
+            text="agent memory context",
+            retrieval_mode=SearchRetrievalMode.VECTOR,
+            entity_types=[SearchItemType.ENTITY],
+        ),
+        limit=5,
+    )
+    assert results_after

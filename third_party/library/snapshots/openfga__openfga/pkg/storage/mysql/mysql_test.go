@@ -1,0 +1,1470 @@
+package mysql
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"testing"
+	"time"
+
+	mysqldriver "github.com/go-sql-driver/mysql"
+	"github.com/oklog/ulid/v2"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+
+	openfgav1 "github.com/openfga/api/proto/openfga/v1"
+
+	"github.com/openfga/openfga/pkg/logger"
+	"github.com/openfga/openfga/pkg/storage"
+	"github.com/openfga/openfga/pkg/storage/sqlcommon"
+	"github.com/openfga/openfga/pkg/storage/test"
+	storagefixtures "github.com/openfga/openfga/pkg/testfixtures/storage"
+	"github.com/openfga/openfga/pkg/testutils"
+	tupleUtils "github.com/openfga/openfga/pkg/tuple"
+	"github.com/openfga/openfga/pkg/typesystem"
+)
+
+func TestMySQLDatastore(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	test.RunAllTests(t, ds)
+
+	// Run tests with a custom large max_tuples_per_write value.
+	dsCustom, err := New(uri, sqlcommon.NewConfig(
+		sqlcommon.WithMaxTuplesPerWrite(5000),
+	))
+	require.NoError(t, err)
+	defer dsCustom.Close()
+
+	t.Run("WriteTuplesWithMaxTuplesPerWrite", test.WriteTuplesWithMaxTuplesPerWrite(dsCustom, context.Background()))
+}
+
+func TestMySQLDatastoreAfterCloseIsNotReady(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	ds.Close()
+	status, err := ds.IsReady(context.Background())
+	require.Error(t, err)
+	require.False(t, status.IsReady)
+}
+
+// TestReadEnsureNoOrder asserts that the read response is not ordered by ulid.
+func TestReadEnsureNoOrder(t *testing.T) {
+	tests := []struct {
+		name  string
+		mixed bool
+	}{
+		{
+			name:  "nextOnly",
+			mixed: false,
+		},
+		{
+			name:  "mixed",
+			mixed: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+			uri := testDatastore.GetConnectionURI(true)
+			cfg := sqlcommon.NewConfig()
+			ds, err := New(uri, cfg)
+			require.NoError(t, err)
+			defer ds.Close()
+
+			ctx := context.Background()
+			store := "store"
+			firstTuple := tupleUtils.NewTupleKey("doc:object_id_1", "relation", "user:user_1")
+			secondTuple := tupleUtils.NewTupleKey("doc:object_id_2", "relation", "user:user_2")
+			thirdTuple := tupleUtils.NewTupleKey("doc:object_id_3", "relation", "user:user_3")
+
+			err = sqlcommon.Write(ctx,
+				sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+				ds.primaryDB,
+				store,
+				sqlcommon.WriteData{
+					Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+					Writes:  []*openfgav1.TupleKey{firstTuple},
+					Opts:    storage.NewTupleWriteOptions(),
+					Now:     time.Now(),
+				})
+			require.NoError(t, err)
+
+			// Tweak time so that ULID is smaller.
+			err = sqlcommon.Write(ctx,
+				sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+				ds.primaryDB,
+				store,
+				sqlcommon.WriteData{
+					Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+					Writes:  []*openfgav1.TupleKey{secondTuple},
+					Opts:    storage.NewTupleWriteOptions(),
+					Now:     time.Now().Add(time.Minute * -1),
+				})
+			require.NoError(t, err)
+
+			// Tweak time so that ULID is smaller.
+			err = sqlcommon.Write(ctx,
+				sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+				ds.primaryDB,
+				store,
+				sqlcommon.WriteData{
+					Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+					Writes:  []*openfgav1.TupleKey{thirdTuple},
+					Opts:    storage.NewTupleWriteOptions(),
+					Now:     time.Now().Add(time.Minute * -2),
+				})
+			require.NoError(t, err)
+
+			iter, err := ds.Read(ctx, store, storage.ReadFilter{Object: "doc:", Relation: "relation", User: ""}, storage.ReadOptions{})
+			defer iter.Stop()
+
+			require.NoError(t, err)
+
+			// We expect that objectID1 will return first because it is inserted first.
+			if tt.mixed {
+				curTuple, err := iter.Head(ctx)
+				require.NoError(t, err)
+				require.Equal(t, firstTuple, curTuple.GetKey())
+
+				// calling head should not change the order
+				curTuple, err = iter.Head(ctx)
+				require.NoError(t, err)
+				require.Equal(t, firstTuple, curTuple.GetKey())
+			}
+
+			curTuple, err := iter.Next(ctx)
+			require.NoError(t, err)
+			require.Equal(t, firstTuple, curTuple.GetKey())
+
+			curTuple, err = iter.Next(ctx)
+			require.NoError(t, err)
+			require.Equal(t, secondTuple, curTuple.GetKey())
+
+			if tt.mixed {
+				curTuple, err = iter.Head(ctx)
+				require.NoError(t, err)
+				require.Equal(t, thirdTuple, curTuple.GetKey())
+			}
+
+			curTuple, err = iter.Next(ctx)
+			require.NoError(t, err)
+			require.Equal(t, thirdTuple, curTuple.GetKey())
+
+			if tt.mixed {
+				_, err = iter.Head(ctx)
+				require.ErrorIs(t, err, storage.ErrIteratorDone)
+			}
+
+			_, err = iter.Next(ctx)
+			require.ErrorIs(t, err, storage.ErrIteratorDone)
+		})
+	}
+}
+
+func TestCtxCancel(t *testing.T) {
+	tests := []struct {
+		name  string
+		mixed bool
+	}{
+		{
+			name:  "nextOnly",
+			mixed: false,
+		},
+		{
+			name:  "mixed",
+			mixed: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+			uri := testDatastore.GetConnectionURI(true)
+			cfg := sqlcommon.NewConfig()
+			ds, err := New(uri, cfg)
+			require.NoError(t, err)
+			defer ds.Close()
+
+			ctx, cancel := context.WithCancel(context.Background())
+
+			store := "store"
+			firstTuple := tupleUtils.NewTupleKey("doc:object_id_1", "relation", "user:user_1")
+			secondTuple := tupleUtils.NewTupleKey("doc:object_id_2", "relation", "user:user_2")
+			thirdTuple := tupleUtils.NewTupleKey("doc:object_id_3", "relation", "user:user_3")
+
+			err = sqlcommon.Write(ctx,
+				sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+				ds.primaryDB,
+				store,
+				sqlcommon.WriteData{
+					Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+					Writes:  []*openfgav1.TupleKey{firstTuple},
+					Opts:    storage.NewTupleWriteOptions(),
+					Now:     time.Now(),
+				})
+			require.NoError(t, err)
+
+			// Tweak time so that ULID is smaller.
+			err = sqlcommon.Write(ctx,
+				sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+				ds.primaryDB,
+				store,
+				sqlcommon.WriteData{
+					Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+					Writes:  []*openfgav1.TupleKey{secondTuple},
+					Opts:    storage.NewTupleWriteOptions(),
+					Now:     time.Now().Add(time.Minute * -1),
+				})
+			require.NoError(t, err)
+
+			// Tweak time so that ULID is smaller.
+			err = sqlcommon.Write(ctx,
+				sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+				ds.primaryDB,
+				store,
+				sqlcommon.WriteData{
+					Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+					Writes:  []*openfgav1.TupleKey{thirdTuple},
+					Opts:    storage.NewTupleWriteOptions(),
+					Now:     time.Now().Add(time.Minute * -2),
+				})
+			require.NoError(t, err)
+
+			iter, err := ds.Read(ctx, store, storage.ReadFilter{Object: "doc:", Relation: "relation", User: ""}, storage.ReadOptions{})
+			defer iter.Stop()
+			require.NoError(t, err)
+
+			cancel()
+
+			if tt.mixed {
+				_, err = iter.Head(ctx)
+				require.Error(t, err)
+				require.NotEqual(t, storage.ErrIteratorDone, err)
+			}
+
+			_, err = iter.Next(ctx)
+			require.Error(t, err)
+			require.NotEqual(t, storage.ErrIteratorDone, err)
+		})
+	}
+}
+
+// TestReadPageEnsureOrder asserts that the read page is ordered by ulid.
+func TestReadPageEnsureOrder(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	ctx := context.Background()
+
+	store := "store"
+	firstTuple := tupleUtils.NewTupleKey("doc:object_id_1", "relation", "user:user_1")
+	secondTuple := tupleUtils.NewTupleKey("doc:object_id_2", "relation", "user:user_2")
+
+	err = sqlcommon.Write(ctx,
+		sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+		ds.primaryDB,
+		store,
+		sqlcommon.WriteData{
+			Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+			Writes:  []*openfgav1.TupleKey{firstTuple},
+			Opts:    storage.NewTupleWriteOptions(),
+			Now:     time.Now(),
+		})
+	require.NoError(t, err)
+
+	// Tweak time so that ULID is smaller.
+	err = sqlcommon.Write(ctx,
+		sqlcommon.NewDBInfo(ds.stbl, HandleSQLError, "mysql"),
+		ds.primaryDB,
+		store,
+		sqlcommon.WriteData{
+			Deletes: []*openfgav1.TupleKeyWithoutCondition{},
+			Writes:  []*openfgav1.TupleKey{secondTuple},
+			Opts:    storage.NewTupleWriteOptions(),
+			Now:     time.Now().Add(time.Minute * -1),
+		})
+	require.NoError(t, err)
+
+	opts := storage.ReadPageOptions{
+		Pagination: storage.NewPaginationOptions(storage.DefaultPageSize, ""),
+	}
+	tuples, _, err := ds.ReadPage(ctx,
+		store,
+		storage.ReadFilter{Object: "doc:", Relation: "relation", User: ""}, opts)
+	require.NoError(t, err)
+
+	require.Len(t, tuples, 2)
+	// We expect that objectID2 will return first because it has a smaller ulid.
+	require.Equal(t, secondTuple, tuples[0].GetKey())
+	require.Equal(t, firstTuple, tuples[1].GetKey())
+}
+
+func TestMySQLDatastore_ReadPageWithUserFiltering(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	ctx := context.Background()
+
+	store := ulid.Make().String()
+
+	// Create multiple tuples with same user type for pagination testing
+	var tuples []*openfgav1.TupleKey
+	for i := 0; i < 10; i++ {
+		tuples = append(tuples, &openfgav1.TupleKey{
+			Object:   "doc:group1",
+			Relation: "viewer",
+			User:     fmt.Sprintf("user:user%d", i),
+		})
+		tuples = append(tuples, &openfgav1.TupleKey{
+			Object:   "doc:group1",
+			Relation: "viewer",
+			User:     fmt.Sprintf("group:admin%d", i),
+		})
+	}
+
+	err = ds.Write(ctx, store, nil, tuples)
+	require.NoError(t, err)
+
+	// Test pagination with user type filtering
+	filter := storage.ReadFilter{
+		Object:   "doc:group1",
+		Relation: "viewer",
+		User:     "user:",
+	}
+
+	readPageOptions := storage.ReadPageOptions{
+		Pagination: storage.PaginationOptions{
+			PageSize: 5,
+		},
+	}
+
+	// First page
+	tuples1, token, err := ds.ReadPage(ctx, store, filter, readPageOptions)
+	require.NoError(t, err)
+	require.Len(t, tuples1, 5)
+	require.NotEmpty(t, token)
+
+	// All returned tuples should have user type "user"
+	for _, tuple := range tuples1 {
+		userType, _, _ := tupleUtils.ToUserParts(tuple.GetKey().GetUser())
+		require.Equal(t, "user", userType)
+	}
+
+	// Second page
+	readPageOptions.Pagination.From = token
+	tuples2, token2, err := ds.ReadPage(ctx, store, filter, readPageOptions)
+	require.NoError(t, err)
+	require.Len(t, tuples2, 5)
+	require.Empty(t, token2)
+}
+
+func TestReadAuthorizationModelUnmarshallError(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	defer ds.Close()
+	store := "store"
+	modelID := "foo"
+	schemaVersion := typesystem.SchemaVersion1_0
+
+	bytes, err := proto.Marshal(&openfgav1.TypeDefinition{Type: "document"})
+	require.NoError(t, err)
+	pbdata := []byte{0x01, 0x02, 0x03}
+
+	_, err = ds.primaryDB.ExecContext(ctx, "INSERT INTO authorization_model (store, authorization_model_id, schema_version, type, type_definition, serialized_protobuf) VALUES (?, ?, ?, ?, ?, ?)", store, modelID, schemaVersion, "document", bytes, pbdata)
+	require.NoError(t, err)
+
+	_, err = ds.ReadAuthorizationModel(ctx, store, modelID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cannot parse invalid wire-format data")
+}
+
+func TestReadAuthorizationModelReturnValue(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	defer ds.Close()
+	store := "store"
+	modelID := "foo"
+	schemaVersion := typesystem.SchemaVersion1_0
+
+	bytes, err := proto.Marshal(&openfgav1.TypeDefinition{Type: "document"})
+	require.NoError(t, err)
+
+	_, err = ds.primaryDB.ExecContext(ctx, "INSERT INTO authorization_model (store, authorization_model_id, schema_version, type, type_definition, serialized_protobuf) VALUES (?, ?, ?, ?, ?, ?)", store, modelID, schemaVersion, "document", bytes, nil)
+
+	require.NoError(t, err)
+
+	res, err := ds.ReadAuthorizationModel(ctx, store, modelID)
+	require.NoError(t, err)
+	// AuthorizationModel should return only 1 type which is of type "document"
+	require.Len(t, res.GetTypeDefinitions(), 1)
+	require.Equal(t, "document", res.GetTypeDefinitions()[0].GetType())
+}
+
+func TestFindLatestModel(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	ctx := context.Background()
+	store := ulid.Make().String()
+
+	schemaVersion := typesystem.SchemaVersion1_1
+
+	t.Run("works_when_first_model_is_one_row_and_second_model_is_split", func(t *testing.T) {
+		model := testutils.MustTransformDSLToProtoWithID(`
+			model
+				schema 1.1
+			type user1`)
+		err := ds.WriteAuthorizationModel(ctx, store, model)
+		require.NoError(t, err)
+
+		latestModel, err := ds.FindLatestAuthorizationModel(ctx, store)
+		require.NoError(t, err)
+		require.Len(t, latestModel.GetTypeDefinitions(), 1)
+
+		modelID := ulid.Make().String()
+		// write type "document"
+		bytesDocumentType, err := proto.Marshal(&openfgav1.TypeDefinition{Type: "document"})
+		require.NoError(t, err)
+		_, err = ds.primaryDB.ExecContext(ctx, "INSERT INTO authorization_model (store, authorization_model_id, schema_version, type, type_definition, serialized_protobuf) VALUES (?, ?, ?, ?, ?, ?)",
+			store, modelID, schemaVersion, "document", bytesDocumentType, nil)
+		require.NoError(t, err)
+
+		// write type "user"
+		bytesUserType, err := proto.Marshal(&openfgav1.TypeDefinition{Type: "user"})
+		require.NoError(t, err)
+		_, err = ds.primaryDB.ExecContext(ctx, "INSERT INTO authorization_model (store, authorization_model_id, schema_version, type, type_definition, serialized_protobuf) VALUES (?, ?, ?, ?, ?, ?)",
+			store, modelID, schemaVersion, "user", bytesUserType, nil)
+		require.NoError(t, err)
+
+		latestModel, err = ds.FindLatestAuthorizationModel(ctx, store)
+		require.NoError(t, err)
+		require.Len(t, latestModel.GetTypeDefinitions(), 2)
+	})
+
+	t.Run("works_when_first_model_is_split_and_second_model_is_one_row", func(t *testing.T) {
+		modelID := ulid.Make().String()
+		// write type "document"
+		bytesDocumentType, err := proto.Marshal(&openfgav1.TypeDefinition{Type: "document"})
+		require.NoError(t, err)
+		_, err = ds.primaryDB.ExecContext(ctx, "INSERT INTO authorization_model (store, authorization_model_id, schema_version, type, type_definition, serialized_protobuf) VALUES (?, ?, ?, ?, ?, ?)",
+			store, modelID, schemaVersion, "document", bytesDocumentType, nil)
+		require.NoError(t, err)
+
+		// write type "user"
+		bytesUserType, err := proto.Marshal(&openfgav1.TypeDefinition{Type: "user"})
+		require.NoError(t, err)
+		_, err = ds.primaryDB.ExecContext(ctx, "INSERT INTO authorization_model (store, authorization_model_id, schema_version, type, type_definition, serialized_protobuf) VALUES (?, ?, ?, ?, ?, ?)",
+			store, modelID, schemaVersion, "user", bytesUserType, nil)
+		require.NoError(t, err)
+
+		latestModel, err := ds.FindLatestAuthorizationModel(ctx, store)
+		require.NoError(t, err)
+		require.Len(t, latestModel.GetTypeDefinitions(), 2)
+
+		model := testutils.MustTransformDSLToProtoWithID(`
+			model
+				schema 1.1
+			type user1`)
+		err = ds.WriteAuthorizationModel(ctx, store, model)
+		require.NoError(t, err)
+
+		latestModel, err = ds.FindLatestAuthorizationModel(ctx, store)
+		require.NoError(t, err)
+		require.Len(t, latestModel.GetTypeDefinitions(), 1)
+	})
+}
+
+// TestAllowNullCondition tests that tuple and changelog rows existing before
+// migration 005_add_conditions_to_tuples can be successfully read.
+func TestAllowNullCondition(t *testing.T) {
+	ctx := context.Background()
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	stmt := `
+		INSERT INTO tuple (
+			store, object_type, object_id, relation, _user, user_type, ulid,
+			condition_name, condition_context, inserted_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
+	`
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2021-budget", "owner", "user:anne", "user",
+		ulid.Make().String(), nil, nil,
+	)
+	require.NoError(t, err)
+
+	tk := tupleUtils.NewTupleKey("folder:2021-budget", "owner", "user:anne")
+	filter := storage.ReadFilter{
+		Object:   "folder:2021-budget",
+		Relation: "owner",
+		User:     "user:anne",
+	}
+	iter, err := ds.Read(ctx, "store", filter, storage.ReadOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+
+	curTuple, err := iter.Next(ctx)
+	require.NoError(t, err)
+	require.Equal(t, tk, curTuple.GetKey())
+
+	opts := storage.ReadPageOptions{
+		Pagination: storage.NewPaginationOptions(2, ""),
+	}
+	tuples, _, err := ds.ReadPage(ctx, "store", storage.ReadFilter{}, opts)
+	require.NoError(t, err)
+	require.Len(t, tuples, 1)
+	require.Equal(t, tk, tuples[0].GetKey())
+
+	userTuple, err := ds.ReadUserTuple(ctx, "store", filter, storage.ReadUserTupleOptions{})
+	require.NoError(t, err)
+	require.Equal(t, tk, userTuple.GetKey())
+
+	tk2 := tupleUtils.NewTupleKey("folder:2022-budget", "viewer", "user:anne")
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2022-budget", "viewer", "user:anne", "userset",
+		ulid.Make().String(), nil, nil,
+	)
+
+	require.NoError(t, err)
+	iter, err = ds.ReadUsersetTuples(ctx, "store", storage.ReadUsersetTuplesFilter{Object: "folder:2022-budget"}, storage.ReadUsersetTuplesOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Equal(t, tk2, curTuple.GetKey())
+
+	iter, err = ds.ReadStartingWithUser(ctx, "store", storage.ReadStartingWithUserFilter{
+		ObjectType: "folder",
+		Relation:   "owner",
+		UserFilter: []*openfgav1.ObjectRelation{
+			{Object: "user:anne"},
+		},
+	}, storage.ReadStartingWithUserOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Equal(t, tk, curTuple.GetKey())
+
+	stmt = `
+	INSERT INTO changelog (
+		store, object_type, object_id, relation, _user, ulid,
+		condition_name, condition_context, inserted_at, operation
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?);
+`
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2021-budget", "owner", "user:anne",
+		ulid.Make().String(), nil, nil, openfgav1.TupleOperation_TUPLE_OPERATION_WRITE,
+	)
+	require.NoError(t, err)
+
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2021-budget", "owner", "user:anne",
+		ulid.Make().String(), nil, nil, openfgav1.TupleOperation_TUPLE_OPERATION_DELETE,
+	)
+	require.NoError(t, err)
+
+	readChangesOpts := storage.ReadChangesOptions{
+		Pagination: storage.NewPaginationOptions(storage.DefaultPageSize, ""),
+	}
+	changes, _, err := ds.ReadChanges(ctx, "store", storage.ReadChangesFilter{ObjectType: "folder"}, readChangesOpts)
+	require.NoError(t, err)
+	require.Len(t, changes, 2)
+	require.Equal(t, tk, changes[0].GetTupleKey())
+	require.Equal(t, tk, changes[1].GetTupleKey())
+}
+
+// TestMarshalledAssertions tests that previously persisted marshalled
+// assertions can be read back. In any case where the Assertions proto model
+// needs to change, we'll likely need to introduce a series of data migrations.
+func TestMarshalledAssertions(t *testing.T) {
+	ctx := context.Background()
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	// Note: this represents an assertion written on v1.3.7.
+	stmt := `
+		INSERT INTO assertion (
+			store, authorization_model_id, assertions
+		) VALUES (?, ?, UNHEX('0A2B0A270A12666F6C6465723A323032312D62756467657412056F776E65721A0A757365723A616E6E657A1001'));
+	`
+	_, err = ds.primaryDB.ExecContext(ctx, stmt, "store", "model")
+	require.NoError(t, err)
+
+	assertions, err := ds.ReadAssertions(ctx, "store", "model")
+	require.NoError(t, err)
+
+	expectedAssertions := []*openfgav1.Assertion{
+		{
+			TupleKey: &openfgav1.AssertionTupleKey{
+				Object:   "folder:2021-budget",
+				Relation: "owner",
+				User:     "user:annez",
+			},
+			Expectation: true,
+		},
+	}
+	require.Equal(t, expectedAssertions, assertions)
+}
+
+func TestHandleSQLError(t *testing.T) {
+	t.Run("duplicate_entry_value_error_with_tuple_key_wraps_ErrInvalidWriteInput", func(t *testing.T) {
+		duplicateKeyError := &mysqldriver.MySQLError{
+			Number:  1062,
+			Message: "Duplicate entry '' for key ''",
+		}
+		err := HandleSQLError(duplicateKeyError, &openfgav1.TupleKey{
+			Object:   "object",
+			Relation: "relation",
+			User:     "user",
+		})
+		require.ErrorIs(t, err, storage.ErrInvalidWriteInput)
+	})
+
+	t.Run("duplicate_entry_value_error_without_tuple_key_returns_collision", func(t *testing.T) {
+		duplicateKeyError := &mysqldriver.MySQLError{
+			Number:  1062,
+			Message: "Duplicate entry '' for key ''",
+		}
+		err := HandleSQLError(duplicateKeyError)
+
+		require.ErrorIs(t, err, storage.ErrCollision)
+	})
+
+	t.Run("sql.ErrNoRows_is_converted_to_storage.ErrNotFound_error", func(t *testing.T) {
+		err := HandleSQLError(sql.ErrNoRows)
+		require.ErrorIs(t, err, storage.ErrNotFound)
+	})
+}
+
+func TestReadFilterWithConditions(t *testing.T) {
+	ctx := context.Background()
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	stmt := `
+		INSERT INTO tuple (
+			store, object_type, object_id, relation, _user, user_type, ulid,
+			condition_name, condition_context, inserted_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
+	`
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2021-budget", "owner", "user:anne", "user",
+		ulid.Make().String(), "cond1", nil,
+	)
+	require.NoError(t, err)
+
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2022-budget", "owner", "user:anne", "user",
+		ulid.Make().String(), nil, nil,
+	)
+	require.NoError(t, err)
+
+	// Read: if the tuple has condition and the filter has the same condition the tuple should be returned
+	tk := tupleUtils.NewTupleKeyWithCondition("folder:2021-budget", "owner", "user:anne", "cond1", nil)
+	filter := storage.ReadFilter{Object: "folder:2021-budget", Relation: "owner", User: "user:anne", Conditions: []string{"cond1"}}
+	iter, err := ds.Read(ctx, "store", filter, storage.ReadOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err := iter.Next(ctx)
+	require.NoError(t, err)
+	require.Equal(t, tk, curTuple.GetKey())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// Read: if filter has no condition the tuple cannot be returned
+	filter = storage.ReadFilter{Object: "folder:2021-budget", Relation: "owner", User: "user:anne", Conditions: []string{""}}
+	iter, err = ds.Read(ctx, "store", filter, storage.ReadOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// Read: if filter has a condition but the tuple stored does not have any condition, then the tuple cannot be returned
+	filter = storage.ReadFilter{Object: "folder:2022-budget", Relation: "owner", User: "user:anne", Conditions: []string{"cond1"}}
+	iter, err = ds.Read(ctx, "store", filter, storage.ReadOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// Read: if filter does not have condition and the tuple stored does not have any condition, then the tuple cannot be returned
+	tk = tupleUtils.NewTupleKeyWithCondition("folder:2022-budget", "owner", "user:anne", "", nil)
+	filter = storage.ReadFilter{Object: "folder:2022-budget", Relation: "owner", User: "user:anne", Conditions: []string{""}}
+	iter, err = ds.Read(ctx, "store", filter, storage.ReadOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Equal(t, tk, curTuple.GetKey())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// Read: without condition specification in the filter, backward compatibility should be maintained
+	tk = tupleUtils.NewTupleKeyWithCondition("folder:2021-budget", "owner", "user:anne", "cond1", nil)
+	filter = storage.ReadFilter{Object: "folder:2021-budget", Relation: "owner", User: "user:anne"}
+	iter, err = ds.Read(ctx, "store", filter, storage.ReadOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Equal(t, tk, curTuple.GetKey())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+}
+
+func TestReadUserTupleFilterWithConditions(t *testing.T) {
+	ctx := context.Background()
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	stmt := `
+  INSERT INTO tuple (
+   store, object_type, object_id, relation, _user, user_type, ulid,
+   condition_name, condition_context, inserted_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
+ `
+
+	// Insert tuple with condition
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2021-budget", "owner", "user:anne", "user",
+		ulid.Make().String(), "cond1", nil,
+	)
+	require.NoError(t, err)
+
+	// Insert tuple without condition
+	_, err = ds.primaryDB.ExecContext(
+		ctx, stmt, "store", "folder", "2022-budget", "owner", "user:anne", "user",
+		ulid.Make().String(), nil, nil,
+	)
+	require.NoError(t, err)
+
+	// ReadUserTuple: if the tuple has condition and the filter has the same condition, the tuple should be returned
+	tk := tupleUtils.NewTupleKeyWithCondition("folder:2021-budget", "owner", "user:anne", "cond1", nil)
+	filter := storage.ReadUserTupleFilter{
+		Object:     "folder:2021-budget",
+		Relation:   "owner",
+		User:       "user:anne",
+		Conditions: []string{"cond1"},
+	}
+	tuple, err := ds.ReadUserTuple(ctx, "store", filter, storage.ReadUserTupleOptions{})
+	require.NoError(t, err)
+	require.Equal(t, tk, tuple.GetKey())
+
+	// ReadUserTuple: if filter has no condition, the tuple with condition should not be returned
+	filter = storage.ReadUserTupleFilter{
+		Object:     "folder:2021-budget",
+		Relation:   "owner",
+		User:       "user:anne",
+		Conditions: []string{""},
+	}
+	_, err = ds.ReadUserTuple(ctx, "store", filter, storage.ReadUserTupleOptions{})
+	require.Error(t, err)
+	require.ErrorIs(t, err, storage.ErrNotFound)
+
+	// ReadUserTuple: if filter has a condition but the tuple stored does not have any condition, the tuple should not be returned
+	filter = storage.ReadUserTupleFilter{
+		Object:     "folder:2022-budget",
+		Relation:   "owner",
+		User:       "user:anne",
+		Conditions: []string{"cond1"},
+	}
+	_, err = ds.ReadUserTuple(ctx, "store", filter, storage.ReadUserTupleOptions{})
+	require.Error(t, err)
+	require.ErrorIs(t, err, storage.ErrNotFound)
+
+	// ReadUserTuple: if filter does not have condition and the tuple stored does not have any condition, the tuple should be returned
+	tk = tupleUtils.NewTupleKeyWithCondition("folder:2022-budget", "owner", "user:anne", "", nil)
+	filter = storage.ReadUserTupleFilter{
+		Object:     "folder:2022-budget",
+		Relation:   "owner",
+		User:       "user:anne",
+		Conditions: []string{""},
+	}
+	tuple, err = ds.ReadUserTuple(ctx, "store", filter, storage.ReadUserTupleOptions{})
+	require.NoError(t, err)
+	require.Equal(t, tk, tuple.GetKey())
+
+	// ReadUserTuple: without condition specification in the filter, backward compatibility should be maintained
+	tk = tupleUtils.NewTupleKeyWithCondition("folder:2021-budget", "owner", "user:anne", "cond1", nil)
+	filter = storage.ReadUserTupleFilter{
+		Object:   "folder:2021-budget",
+		Relation: "owner",
+		User:     "user:anne",
+	}
+	tuple, err = ds.ReadUserTuple(ctx, "store", filter, storage.ReadUserTupleOptions{})
+	require.NoError(t, err)
+	require.Equal(t, tk, tuple.GetKey())
+}
+
+func TestReadStartingWithUserFilterWithConditions(t *testing.T) {
+	ctx := context.Background()
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+	store := ulid.Make().String()
+
+	// Setup test data with various combinations
+	tuples := []*openfgav1.TupleKey{
+		{Object: "folder:2021-budget", Relation: "owner", User: "user:anne", Condition: &openfgav1.RelationshipCondition{Name: "cond1"}},
+		{Object: "folder:2023-budget", Relation: "owner", User: "user:anne", Condition: &openfgav1.RelationshipCondition{Name: "cond1"}},
+		{Object: "folder:2022-budget", Relation: "owner", User: "user:anne"},
+		{Object: "folder:2024-budget", Relation: "owner", User: "user:anne"},
+		{Object: "folder:2022-budget", Relation: "owner", User: "user:jack"},
+		{Object: "folder:2024-budget", Relation: "owner", User: "user:jack"},
+	}
+	err = ds.Write(ctx, store, nil, tuples)
+	require.NoError(t, err)
+
+	// ReadStartingWithUser: if the tuple has condition and the filter has the same condition the tuple should be returned
+	filter := storage.ReadStartingWithUserFilter{
+		ObjectType: "folder",
+		Relation:   "owner",
+		UserFilter: []*openfgav1.ObjectRelation{
+			{Object: "user:anne"},
+		},
+		Conditions: []string{"cond1"},
+	}
+	iter, err := ds.ReadStartingWithUser(ctx, store, filter, storage.ReadStartingWithUserOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err := iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2021-budget", "folder:2023-budget"}, curTuple.GetKey().GetObject())
+	require.Equal(t, "cond1", curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2021-budget", "folder:2023-budget"}, curTuple.GetKey().GetObject())
+	require.Equal(t, "cond1", curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// ReadStartingWithUser: if filter has a condition but the tuple stored does not have any condition, then the tuple cannot be returned
+	filter = storage.ReadStartingWithUserFilter{
+		ObjectType: "folder",
+		Relation:   "owner",
+		UserFilter: []*openfgav1.ObjectRelation{
+			{Object: "user:jack"},
+		},
+		Conditions: []string{"cond1"},
+	}
+	iter, err = ds.ReadStartingWithUser(ctx, store, filter, storage.ReadStartingWithUserOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// ReadStartingWithUser: if filter does not have condition and the tuple stored does not have any condition, then the tuple cannot be returned
+	filter = storage.ReadStartingWithUserFilter{
+		ObjectType: "folder",
+		Relation:   "owner",
+		UserFilter: []*openfgav1.ObjectRelation{
+			{Object: "user:anne"},
+		},
+		Conditions: []string{""},
+	}
+	iter, err = ds.ReadStartingWithUser(ctx, store, filter, storage.ReadStartingWithUserOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2022-budget", "folder:2024-budget"}, curTuple.GetKey().GetObject())
+	require.Empty(t, curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2022-budget", "folder:2024-budget"}, curTuple.GetKey().GetObject())
+	require.Empty(t, curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// ReadStartingWithUser: without condition specification in the filter, backward compatibility should be maintained
+	filter = storage.ReadStartingWithUserFilter{
+		ObjectType: "folder",
+		Relation:   "owner",
+		UserFilter: []*openfgav1.ObjectRelation{
+			{Object: "user:anne"},
+		},
+	}
+	iter, err = ds.ReadStartingWithUser(ctx, store, filter, storage.ReadStartingWithUserOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2022-budget", "folder:2024-budget", "folder:2021-budget", "folder:2023-budget"}, curTuple.GetKey().GetObject())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2022-budget", "folder:2024-budget", "folder:2021-budget", "folder:2023-budget"}, curTuple.GetKey().GetObject())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2022-budget", "folder:2024-budget", "folder:2021-budget", "folder:2023-budget"}, curTuple.GetKey().GetObject())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"folder:2022-budget", "folder:2024-budget", "folder:2021-budget", "folder:2023-budget"}, curTuple.GetKey().GetObject())
+	require.Equal(t, "user:anne", curTuple.GetKey().GetUser())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+}
+
+func TestReadUsersetTuplesFilterWithConditions(t *testing.T) {
+	ctx := context.Background()
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+	store := ulid.Make().String()
+
+	// Setup test data with various combinations
+	tuples := []*openfgav1.TupleKey{
+		{Object: "document:2021-budget", Relation: "member", User: "group:g1#member", Condition: &openfgav1.RelationshipCondition{Name: "cond1"}},
+		{Object: "document:2021-budget", Relation: "member", User: "group:g2#member", Condition: &openfgav1.RelationshipCondition{Name: "cond1"}},
+		{Object: "document:2021-budget", Relation: "member", User: "group:g3#member"},
+		{Object: "document:2021-budget", Relation: "member", User: "group:g4#member"},
+		{Object: "document:2022-budget", Relation: "member", User: "group:g2#member"},
+		{Object: "document:2022-budget", Relation: "member", User: "group:g1#member"},
+	}
+	err = ds.Write(ctx, store, nil, tuples)
+	require.NoError(t, err)
+
+	// ReadUsersetTuples: if the tuple has condition and the filter has the same condition the tuple should be returned
+	filter := storage.ReadUsersetTuplesFilter{
+		Object:   "document:2021-budget",
+		Relation: "member",
+		AllowedUserTypeRestrictions: []*openfgav1.RelationReference{
+			{
+				Type:               "group",
+				RelationOrWildcard: &openfgav1.RelationReference_Relation{Relation: "member"},
+			},
+		},
+		Conditions: []string{"cond1"},
+	}
+	iter, err := ds.ReadUsersetTuples(ctx, store, filter, storage.ReadUsersetTuplesOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err := iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g1#member", "group:g2#member"}, curTuple.GetKey().GetUser())
+	require.Equal(t, "cond1", curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g1#member", "group:g2#member"}, curTuple.GetKey().GetUser())
+	require.Equal(t, "cond1", curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// ReadUsersetTuples: if filter has a condition but the tuple stored does not have any condition, then the tuple cannot be returned
+	filter = storage.ReadUsersetTuplesFilter{
+		Object:   "document:2022-budget",
+		Relation: "member",
+		AllowedUserTypeRestrictions: []*openfgav1.RelationReference{
+			{
+				Type:               "group",
+				RelationOrWildcard: &openfgav1.RelationReference_Relation{Relation: "member"},
+			},
+		},
+		Conditions: []string{"cond1"},
+	}
+	iter, err = ds.ReadUsersetTuples(ctx, store, filter, storage.ReadUsersetTuplesOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// ReadUsersetTuples: if filter does not have condition and the tuple stored does not have any condition, then the tuple cannot be returned
+	filter = storage.ReadUsersetTuplesFilter{
+		Object:   "document:2021-budget",
+		Relation: "member",
+		AllowedUserTypeRestrictions: []*openfgav1.RelationReference{
+			{
+				Type:               "group",
+				RelationOrWildcard: &openfgav1.RelationReference_Relation{Relation: "member"},
+			},
+		},
+		Conditions: []string{""},
+	}
+	iter, err = ds.ReadUsersetTuples(ctx, store, filter, storage.ReadUsersetTuplesOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g3#member", "group:g4#member"}, curTuple.GetKey().GetUser())
+	require.Empty(t, curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g3#member", "group:g4#member"}, curTuple.GetKey().GetUser())
+	require.Empty(t, curTuple.GetKey().GetCondition().GetName())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+
+	// ReadUsersetTuples: without condition specification in the filter, backward compatibility should be maintained
+	filter = storage.ReadUsersetTuplesFilter{
+		Object:   "document:2021-budget",
+		Relation: "member",
+		AllowedUserTypeRestrictions: []*openfgav1.RelationReference{
+			{
+				Type:               "group",
+				RelationOrWildcard: &openfgav1.RelationReference_Relation{Relation: "member"},
+			},
+		},
+	}
+	iter, err = ds.ReadUsersetTuples(ctx, store, filter, storage.ReadUsersetTuplesOptions{})
+	require.NoError(t, err)
+	defer iter.Stop()
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g3#member", "group:g4#member", "group:g1#member", "group:g2#member"}, curTuple.GetKey().GetUser())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g3#member", "group:g4#member", "group:g1#member", "group:g2#member"}, curTuple.GetKey().GetUser())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g3#member", "group:g4#member", "group:g1#member", "group:g2#member"}, curTuple.GetKey().GetUser())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	curTuple, err = iter.Next(ctx)
+	require.NoError(t, err)
+	require.Contains(t, []string{"group:g3#member", "group:g4#member", "group:g1#member", "group:g2#member"}, curTuple.GetKey().GetUser())
+	require.Equal(t, "document:2021-budget", curTuple.GetKey().GetObject())
+	_, err = iter.Next(ctx)
+	require.Error(t, err)
+}
+
+func TestNew(t *testing.T) {
+	type args struct {
+		uri string
+		cfg *sqlcommon.Config
+	}
+	tests := []struct {
+		name            string
+		args            args
+		want            *Datastore
+		wantErr         bool
+		wantErrContains []string
+	}{
+		{
+			name: "bad_uri",
+			args: args{
+				uri: "my;uri?bad=true",
+				cfg: &sqlcommon.Config{
+					Logger: logger.NewNoopLogger(),
+				},
+			},
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			// The primary URI is syntactically valid so sql.Open succeeds without a network
+			// connection. The secondary URI is then parsed via mysql.ParseDSN (triggered by
+			// the non-empty SecondaryUsername) and fails immediately — no running container
+			// is required.
+			name: "bad_secondary_uri",
+			args: args{
+				uri: "root@tcp(localhost:3306)/test",
+				cfg: &sqlcommon.Config{
+					SecondaryURI:      "my;uri?bad=true",
+					SecondaryUsername: "unused",
+					Logger:            logger.NewNoopLogger(),
+				},
+			},
+			want:    nil,
+			wantErr: true,
+			wantErrContains: []string{
+				"initialize mysql secondary connection",
+				"missing the slash separating the database name",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := New(tt.args.uri, tt.args.cfg)
+			if got != nil {
+				defer got.Close()
+			}
+			if (err != nil) != tt.wantErr {
+				t.Errorf("New() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			for _, substr := range tt.wantErrContains {
+				require.ErrorContains(t, err, substr)
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestMySQLDatastoreStatusWithSecondaryDB(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+	err := testDatastore.CreateSecondary(t)
+	require.NoError(t, err)
+
+	primaryURI := testDatastore.GetConnectionURI(true)
+
+	cfg := sqlcommon.NewConfig()
+	cfg.SecondaryURI = testDatastore.GetSecondaryConnectionURI(true)
+	cfg.ExportMetrics = true
+
+	ds, err := New(primaryURI, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	status, err := ds.IsReady(context.Background())
+	require.NoError(t, err)
+	require.True(t, status.IsReady)
+	require.Equal(t, "primary: ready, secondary: ready", status.Message)
+}
+
+func TestGetSQLDB(t *testing.T) {
+	primary := &sql.DB{}
+	secondary := &sql.DB{}
+
+	t.Run("higher_consistency_routes_to_primary", func(t *testing.T) {
+		ds := &Datastore{primaryDB: primary, secondaryDB: secondary}
+		require.Equal(t, primary, ds.getSQLDB(openfgav1.ConsistencyPreference_HIGHER_CONSISTENCY))
+	})
+
+	t.Run("minimize_latency_routes_to_secondary_when_configured", func(t *testing.T) {
+		ds := &Datastore{primaryDB: primary, secondaryDB: secondary}
+		require.Equal(t, secondary, ds.getSQLDB(openfgav1.ConsistencyPreference_MINIMIZE_LATENCY))
+	})
+
+	t.Run("minimize_latency_falls_back_to_primary_when_no_secondary", func(t *testing.T) {
+		ds := &Datastore{primaryDB: primary}
+		require.Equal(t, primary, ds.getSQLDB(openfgav1.ConsistencyPreference_MINIMIZE_LATENCY))
+	})
+}
+
+// TestSecondaryRoutingData verifies that Read with default consistency (MINIMIZE_LATENCY)
+// is served from the secondary DB, while HIGHER_CONSISTENCY routes to the primary.
+// A marker tuple is inserted directly into the secondary DB to make the distinction observable.
+func TestSecondaryRoutingData(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+	err := testDatastore.CreateSecondary(t)
+	require.NoError(t, err)
+
+	primaryURI := testDatastore.GetConnectionURI(true)
+	secondaryURI := testDatastore.GetSecondaryConnectionURI(true)
+
+	cfg := sqlcommon.NewConfig()
+	cfg.SecondaryURI = secondaryURI
+
+	ds, err := New(primaryURI, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	ctx := context.Background()
+	store := ulid.Make().String()
+
+	// Insert a marker tuple directly into the secondary DB only.
+	// The primary DB does not have this row, so only reads hitting
+	// the secondary will see it.
+	stmt := `
+		INSERT INTO tuple (
+			store, object_type, object_id, relation, _user, user_type, ulid,
+			condition_name, condition_context, inserted_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
+	`
+	markerULID := ulid.Make().String()
+	_, err = ds.secondaryDB.ExecContext(
+		ctx, stmt, store, "doc", "marker", "viewer", "user:secondary-only", "user",
+		markerULID, nil, nil,
+	)
+	require.NoError(t, err)
+
+	t.Run("default_consistency_reads_from_secondary", func(t *testing.T) {
+		// Default (MINIMIZE_LATENCY) should hit the secondary and see the marker.
+		iter, err := ds.Read(ctx, store,
+			storage.ReadFilter{Object: "doc:marker", Relation: "viewer"},
+			storage.ReadOptions{})
+		require.NoError(t, err)
+		defer iter.Stop()
+
+		tuple, err := iter.Next(ctx)
+		require.NoError(t, err)
+		require.Equal(t, "user:secondary-only", tuple.GetKey().GetUser())
+	})
+
+	t.Run("higher_consistency_reads_from_primary", func(t *testing.T) {
+		// HIGHER_CONSISTENCY must hit the primary, which does NOT have the marker.
+		iter, err := ds.Read(ctx, store,
+			storage.ReadFilter{Object: "doc:marker", Relation: "viewer"},
+			storage.ReadOptions{
+				Consistency: storage.ConsistencyOptions{
+					Preference: openfgav1.ConsistencyPreference_HIGHER_CONSISTENCY,
+				},
+			})
+		require.NoError(t, err)
+		defer iter.Stop()
+
+		_, err = iter.Next(ctx)
+		require.ErrorIs(t, err, storage.ErrIteratorDone)
+	})
+}
+
+// TestSecondaryUsernamePassword verifies that mysql.New correctly applies
+// cfg.SecondaryUsername and cfg.SecondaryPassword when opening the secondary
+// connection, overriding the credentials embedded in the secondary DSN.
+func TestSecondaryUsernamePassword(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+	err := testDatastore.CreateSecondary(t)
+	require.NoError(t, err)
+
+	primaryURI := testDatastore.GetConnectionURI(true)
+	secondaryURI := testDatastore.GetSecondaryConnectionURI(false) // no credentials in URI
+
+	cfg := sqlcommon.NewConfig()
+	cfg.SecondaryURI = secondaryURI
+	cfg.SecondaryUsername = testDatastore.GetUsername()
+	cfg.SecondaryPassword = testDatastore.GetPassword()
+	cfg.PingRetryMaxElapsedTime = 100 * time.Millisecond
+
+	ds, err := New(primaryURI, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	status, err := ds.IsReady(context.Background())
+	require.NoError(t, err)
+	require.True(t, status.IsReady)
+	require.Equal(t, "primary: ready, secondary: ready", status.Message)
+}
+
+// TestConfigureDBMetricsDuplicateRegistration verifies that configureDB returns an
+// "initialize metrics" error when prometheus.Register fails due to a duplicate collector.
+func TestConfigureDBMetricsDuplicateRegistration(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+	cfg.ExportMetrics = true
+	cfg.PingRetryMaxElapsedTime = 100 * time.Millisecond
+
+	db, err := sql.Open("mysql", uri)
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Use t.Name() as part of the collector name so it never collides with collectors
+	// registered by other tests even if tests are later run in parallel.
+	collectorName := "openfga_" + t.Name()
+
+	// First registration succeeds.
+	firstCollector, err := configureDB(db, cfg, collectorName)
+	require.NoError(t, err)
+	require.NotNil(t, firstCollector)
+	defer prometheus.Unregister(firstCollector)
+
+	// Second call with the same dbName and the same db must fail with "initialize metrics".
+	// No need for a second sql.Open — the ping will succeed and the Prometheus conflict is
+	// what we are testing.
+	_, err = configureDB(db, cfg, collectorName)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "initialize metrics")
+}
+
+// TestNewWithDB_SecondaryConfigureFailureUnregistersPrimary verifies that when
+// configureDB fails for the secondary DB, NewWithDB unregisters the primary
+// collector it already registered and returns a "configure secondary db" error.
+func TestNewWithDB_SecondaryConfigureFailureUnregistersPrimary(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+
+	// A single open connection is reused for both primary and secondary slots.
+	// The DB handles are distinct objects pointing at the same server, which is
+	// all that matters here — the failure is caused by a Prometheus name conflict,
+	// not by any DB-level distinction.
+	db, err := sql.Open("mysql", uri)
+	require.NoError(t, err)
+	defer db.Close()
+
+	cfg := sqlcommon.NewConfig()
+	cfg.ExportMetrics = true
+	cfg.PingRetryMaxElapsedTime = 100 * time.Millisecond
+
+	// Pre-register a collector under the secondary name so configureDB will fail
+	// when NewWithDB tries to register the secondary collector.
+	// Use a fixed name that NewWithDB uses internally for the secondary ("openfga_secondary").
+	preCollector := collectors.NewDBStatsCollector(db, "openfga_secondary")
+	require.NoError(t, prometheus.Register(preCollector))
+	defer prometheus.Unregister(preCollector)
+
+	ds, err := NewWithDB(db, db, cfg)
+	require.Nil(t, ds)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "configure secondary db")
+	require.ErrorContains(t, err, "initialize metrics")
+
+	// Assert directly that the primary collector was unregistered by NewWithDB's error
+	// path: prometheus.Unregister returns false when the collector is not registered.
+	// We re-create the collector object that NewWithDB would have registered for "openfga"
+	// and attempt to unregister it — it should already be gone.
+	phantomPrimary := collectors.NewDBStatsCollector(db, "openfga")
+	alreadyUnregistered := !prometheus.Unregister(phantomPrimary)
+	require.True(t, alreadyUnregistered, "primary collector should have been unregistered by NewWithDB on error")
+}
+
+// TestNew_CleanupOnNewWithDBFailure verifies that New closes both the primary and
+// secondary *sql.DB when NewWithDB returns an error, preventing resource leaks.
+// The failure is triggered at the primary configureDB stage (Prometheus duplicate),
+// so no secondary container is needed.
+func TestNew_CleanupOnNewWithDBFailure(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	primaryURI := testDatastore.GetConnectionURI(true)
+
+	cfg := sqlcommon.NewConfig()
+	cfg.ExportMetrics = true
+	cfg.PingRetryMaxElapsedTime = 100 * time.Millisecond
+
+	// Pre-register the "openfga" collector name so configureDB fails immediately
+	// inside NewWithDB, exercising the cleanup branches in New.
+	tmpDB, err := sql.Open("mysql", primaryURI)
+	require.NoError(t, err)
+	defer tmpDB.Close()
+
+	preCollector := collectors.NewDBStatsCollector(tmpDB, "openfga")
+	require.NoError(t, prometheus.Register(preCollector))
+	defer prometheus.Unregister(preCollector)
+
+	// New must fail; it must not panic and must close the opened connections.
+	ds, err := New(primaryURI, cfg)
+	require.Nil(t, ds)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "configure primary db")
+}
+
+// TestIsReady_SecondaryError verifies that when the secondary DB is unhealthy,
+// IsReady returns a combined status with IsReady=false and a descriptive message,
+// rather than returning an error itself.
+func TestIsReady_SecondaryError(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+
+	uri := testDatastore.GetConnectionURI(true)
+	cfg := sqlcommon.NewConfig()
+
+	ds, err := New(uri, cfg)
+	require.NoError(t, err)
+	defer ds.Close()
+
+	// Open a secondary DB and immediately close it so IsReady will fail on it.
+	closedDB, err := sql.Open("mysql", uri)
+	require.NoError(t, err)
+	closedDB.Close() // closed deliberately
+
+	// Inject the broken secondary directly.
+	ds.secondaryDB = closedDB
+
+	status, err := ds.IsReady(context.Background())
+	require.NoError(t, err)
+	require.False(t, status.IsReady)
+	require.Contains(t, status.Message, "primary:")
+	require.Contains(t, status.Message, "secondary:")
+}
+
+// TestClose_WithSecondaryAndCollector verifies that Close correctly unregisters
+// the secondaryDBStatsCollector and closes secondaryDB without panicking.
+func TestClose_WithSecondaryAndCollector(t *testing.T) {
+	testDatastore := storagefixtures.RunDatastoreTestContainer(t, "mysql")
+	err := testDatastore.CreateSecondary(t)
+	require.NoError(t, err)
+
+	primaryURI := testDatastore.GetConnectionURI(true)
+	secondaryURI := testDatastore.GetSecondaryConnectionURI(true)
+
+	cfg := sqlcommon.NewConfig()
+	cfg.SecondaryURI = secondaryURI
+	cfg.ExportMetrics = true
+	cfg.PingRetryMaxElapsedTime = 100 * time.Millisecond
+
+	ds, err := New(primaryURI, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, ds.secondaryDB)
+	require.NotNil(t, ds.secondaryDBStatsCollector)
+
+	// Close must not panic and must cleanly unregister the secondary collector.
+	// Calling prometheus.Unregister after Close should return false (already unregistered).
+	ds.Close()
+	alreadyUnregistered := !prometheus.Unregister(ds.secondaryDBStatsCollector)
+	require.True(t, alreadyUnregistered, "secondary collector should have been unregistered by Close()")
+}

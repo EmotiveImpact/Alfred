@@ -1,0 +1,600 @@
+"""Tool-use model seam for the agent-task eval (basic-memory#1401).
+
+The single-prompt ``LLMRunner`` seam in ``runners.py`` cannot pause at a tool
+call, so the agent under test speaks a richer contract: the model receives a
+neutral transcript plus tool definitions and returns either tool calls or a
+final answer. Two transports:
+
+- ``openai-compat``: any ``/chat/completions`` endpoint that implements the
+  ``tools`` parameter (Ollama, vLLM, LM Studio, OpenAI — and Anthropic models
+  behind a LiteLLM proxy).
+- ``scripted``: a canned JSON script for offline tests and the LLM-free smoke.
+
+``claude:<model>`` is deliberately unsupported here: ``claude -p`` runs its own
+agent loop with ``--max-turns 1`` semantics and never hands a ``tool_use``
+block back to the harness.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import time
+from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import httpx
+
+from basic_memory_benchmarks.llm.runners import LLMRunnerError
+
+# --- Neutral transcript and tool types (transport-agnostic, loop-owned) ---
+
+
+@dataclass(frozen=True)
+class ToolDef:
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    call_id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolReturn:
+    call_id: str
+    name: str
+    text: str
+    is_error: bool
+
+
+@dataclass(frozen=True)
+class UserMessage:
+    text: str
+
+
+@dataclass(frozen=True)
+class AssistantTurn:
+    text: str
+    tool_calls: tuple[ToolCall, ...]
+
+
+type TranscriptItem = UserMessage | AssistantTurn | ToolReturn
+
+
+@dataclass(frozen=True)
+class AgentTurn:
+    """One model response: text and/or tool calls, plus usage accounting."""
+
+    text: str
+    tool_calls: tuple[ToolCall, ...]
+    model: str
+    input_tokens: int
+    output_tokens: int
+    latency_ms: float
+
+
+class ToolAgentModel(ABC):
+    """The model side of the agent loop: transcript in, one turn out."""
+
+    spec: str
+
+    @abstractmethod
+    def propose(self, transcript: Sequence[TranscriptItem], tools: Sequence[ToolDef]) -> AgentTurn:
+        """Return the model's next turn given the transcript so far."""
+
+    def describe(self) -> dict[str, str]:
+        return {"spec": self.spec}
+
+
+# --- OpenAI-compatible transport ---
+
+REDACTION_MARKER = "[redacted]"
+
+# Substituted for the whole body when masking provably failed to remove a
+# secret. Dropping the diagnostic is the intended trade: the operator still
+# gets the HTTP status and URL from the underlying exception, which is what
+# names the rejection, while the credential never reaches an artifact.
+WITHHELD_BODY_MARKER = "[body withheld: a secret survived masking in an unrecognized encoding]"
+
+# A gateway quotes the offending value into its JSON error body once; a proxy
+# that wraps an upstream JSON body in a string field quotes it twice. Nothing
+# an OpenAI-compatible endpoint emits nests deeper than that, and each level is
+# strictly longer than the last, so two is where the form set stops earning its
+# keep.
+_MAX_JSON_ESCAPE_DEPTH = 2
+
+
+def _encoded_forms(secret: str) -> list[str]:
+    """Every spelling ``secret`` can take in an error body.
+
+    HTTP allows any visible ASCII character in a header value, so an operator
+    may pass a ``--model-header`` secret containing ``"`` or ``\\``. Echoed
+    inside a JSON error body such a value arrives *escaped* — ``"`` as ``\\"``,
+    ``\\`` as ``\\\\`` — and a search for the plaintext never matches it, so
+    the credential would ride the body into the artifact intact.
+
+    A value with nothing to escape yields the plaintext at every level, so the
+    common alphanumeric key still costs a single replacement.
+    """
+    forms = [secret]
+    for _ in range(_MAX_JSON_ESCAPE_DEPTH):
+        # json.dumps wraps its result in quotes; [1:-1] drops them to leave the
+        # escaped payload exactly as it appears inside a surrounding JSON
+        # string. Re-applying it models one more level of nesting.
+        forms.append(json.dumps(forms[-1])[1:-1])
+    return forms
+
+
+# JSON lets an encoder spell any character either literally or as a backslash
+# escape, and encoders disagree about which: Go's html-safe default emits
+# \u003c for "<", PHP emits \/ for "/". Enumerating those spellings is
+# unwinnable — any encoder may \u-escape any character — so detection runs
+# against an unescaped view of the text instead of a longer form list.
+_ESCAPE_SEQUENCE = re.compile(r"\\u[0-9a-fA-F]{4}|\\.", re.DOTALL)
+
+_CONTROL_ESCAPES = {"b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t"}
+
+
+def _unescape_once(text: str) -> str:
+    """Resolve one layer of backslash escapes. Parses nothing, raises nothing.
+
+    ``json.loads`` is deliberately not used here: an error body is truncated to
+    300 characters downstream, arrives cut mid-string when the gateway itself
+    truncates, and is often not JSON at all — a parse failure inside a leak
+    backstop would trade a leak for a crash.
+
+    Every alternative the pattern matches is longer than its replacement, so
+    each pass strictly shortens the text. That is what bounds the fixpoint loop
+    in ``redact_secrets``.
+    """
+
+    def resolve(match: re.Match[str]) -> str:
+        sequence = match.group()
+        # ``\uXXXX`` is the only alternative longer than two characters, so
+        # length alone identifies it — no re-inspection of the payload needed.
+        if len(sequence) == 6:
+            return chr(int(sequence[2:], 16))
+        escaped = sequence[1]
+        # ``\"``, ``\\`` and ``\/`` spell themselves. Anything else is invalid
+        # JSON escape syntax, and dropping the backslash is the wider reading:
+        # a detector that over-matches costs a diagnostic, not a credential.
+        return _CONTROL_ESCAPES.get(escaped, escaped)
+
+    return _ESCAPE_SEQUENCE.sub(resolve, text)
+
+
+def redact_secrets(text: str, secrets: Sequence[str]) -> str:
+    """Return text that is safe to persist, masking or withholding secrets.
+
+    Gateways quote the offending request back at you: an OpenAI-compatible 401
+    can echo the rejected key, and proxies name the header they refused. That
+    body then rides an ``LLMRunnerError`` into ``per-task-agent.jsonl`` and
+    ``summary.md``, which ``publish`` copies into the public results bundle —
+    so it is not safe to persist raw. A response body is only the commonest
+    source: ``OpenAICompatToolAgent._error`` runs every foreign string through
+    here, including transport exception text, which quotes a rejected header
+    value without any body being involved.
+
+    Redaction is value-based rather than pattern-based: masking exactly the
+    values we were handed is deterministic and cannot be defeated by an
+    unfamiliar credential format. Each value is masked in every spelling
+    ``_encoded_forms`` derives, because the body that leaks it is usually JSON.
+
+    Masking alone cannot be complete, because any JSON encoder may spell any
+    character as ``\\uXXXX``. So the masked text is checked once more against
+    an unescaped view of itself, and a body that still yields a secret there is
+    dropped whole. The result therefore contains no secret in any spelling
+    reachable by backslash escapes, at any nesting depth.
+    """
+    # Distinguished from "no secret present": with nothing configured there is
+    # nothing to mask and nothing for the safety net to search for, so the body
+    # passes through without paying for either pass.
+    if not secrets:
+        return text
+
+    forms = {form for secret in secrets for form in _encoded_forms(secret)}
+    # Longest first: when one form contains another — a bare key and the same
+    # key inside a longer header value, or a plaintext value inside its own
+    # escaped spelling — masking the short one first would leave the remainder
+    # of the longer value exposed. Ties break on the form itself so that a set
+    # of equal-length secrets still redacts identically on every run.
+    for form in sorted(forms, key=lambda form: (-len(form), form)):
+        text = text.replace(form, REDACTION_MARKER)
+
+    # Safety net for the spellings the form set cannot enumerate. ``forms``
+    # always includes the plaintext and ``replace`` removes every occurrence,
+    # so the masked text provably holds no literal secret; only an *escaped*
+    # one can remain, and unescaping is what exposes it.
+    #
+    # Repeated to a fixpoint because a secret escaped once by an upstream
+    # encoder and again by the proxy that wrapped its body needs two passes to
+    # surface. The check runs after every pass rather than only at the end: a
+    # secret containing a backslash can be revealed by one pass and then
+    # consumed as an escape prefix by the next.
+    view = text
+    while (unescaped := _unescape_once(view)) != view:
+        view = unescaped
+        if any(secret in view for secret in secrets):
+            return WITHHELD_BODY_MARKER
+    return text
+
+
+def _transcript_to_messages(transcript: Sequence[TranscriptItem]) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = []
+    for item in transcript:
+        match item:
+            case UserMessage(text=text):
+                messages.append({"role": "user", "content": text})
+            case AssistantTurn(text=text, tool_calls=tool_calls):
+                message: dict[str, Any] = {"role": "assistant", "content": text or None}
+                if tool_calls:
+                    message["tool_calls"] = [
+                        {
+                            "id": call.call_id,
+                            "type": "function",
+                            "function": {
+                                "name": call.name,
+                                "arguments": json.dumps(call.arguments),
+                            },
+                        }
+                        for call in tool_calls
+                    ]
+                messages.append(message)
+            case ToolReturn(call_id=call_id, text=text):
+                messages.append({"role": "tool", "tool_call_id": call_id, "content": text})
+    return messages
+
+
+def _tools_to_functions(tools: Sequence[ToolDef]) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": tool.name,
+                "description": tool.description,
+                "parameters": tool.input_schema,
+            },
+        }
+        for tool in tools
+    ]
+
+
+class OpenAICompatToolAgent(ToolAgentModel):
+    """Tool-use agent over an OpenAI-compatible chat-completions endpoint."""
+
+    def __init__(
+        self,
+        model: str,
+        base_url: str,
+        *,
+        api_key: str | None = None,
+        extra_headers: dict[str, str] | None = None,
+        temperature: float | None = 0.0,
+        timeout_seconds: float = 300.0,
+        max_retries: int = 2,
+    ) -> None:
+        self.model = model
+        self.base_url = base_url.rstrip("/")
+        self.spec = f"openai-compat:{model}@{self.base_url}"
+        self._api_key = api_key
+        # Some endpoints require headers beyond auth — e.g. Anthropic's
+        # OpenAI-compat layer demands anthropic-workspace-id for
+        # identity-linked API keys. Values may be sensitive, so they are
+        # never recorded in run artifacts.
+        self._extra_headers = dict(extra_headers or {})
+        # The exact values that must never reach a run artifact: the bearer
+        # token and every operator-supplied header value. Every error message
+        # this class raises is scrubbed against this set in _error, which is
+        # the one place it constructs an LLMRunnerError.
+        self._secret_values: tuple[str, ...] = tuple(
+            value for value in (api_key, *self._extra_headers.values()) if value
+        )
+        # temperature=None omits the parameter entirely: Claude 5 models
+        # reject any temperature value ("`temperature` is deprecated for this
+        # model"), while local openai-compat servers (Ollama) default to a
+        # nonzero sampling temperature unless pinned — so the default stays 0
+        # and omission is an explicit operator choice recorded in the config.
+        self._temperature = temperature
+        self._timeout_seconds = timeout_seconds
+        self._max_retries = max_retries
+
+    def _request_headers(self) -> httpx.Headers:
+        """Merge derived auth with operator headers under HTTP's name equality.
+
+        HTTP header names are case-insensitive, so ``authorization`` and
+        ``Authorization`` are the *same* header. A plain dict does not know
+        that: merging operator headers into one kept both spellings and httpx
+        serialized both, leaving the endpoint to pick — and disclosing the
+        ambient ``OPENAI_API_KEY`` to an endpoint the operator never meant to
+        hand it to. ``httpx.Headers.__setitem__`` drops every existing entry
+        with that name, which is exactly the merge HTTP describes.
+
+        Operator headers are applied last and therefore win, rather than being
+        refused as a conflict: ``--model-header`` is a deliberate choice made
+        for this run, while the bearer is derived from whatever the shell
+        happens to export, so the explicit value is the one that should
+        survive. Refusing the pair would strand the common case of a shell that
+        exports ``OPENAI_API_KEY`` for unrelated tools.
+        """
+        headers = httpx.Headers({"Content-Type": "application/json"})
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
+        # Assigned one at a time rather than passed as a mapping: --model-header
+        # is repeatable and its names are compared case-sensitively at parse, so
+        # the operator's own dict can spell one header two ways, and building
+        # Headers from that mapping in one step would keep both entries.
+        for name, value in self._extra_headers.items():
+            headers[name] = value
+        return headers
+
+    def _error(self, summary: str, detail: str | None = None) -> LLMRunnerError:
+        """Build this class's only ``LLMRunnerError``, scrubbing the foreign half.
+
+        The credentials this agent holds can leave the process in exactly one
+        way — inside an error message — and every such message has the same two
+        parts: a ``summary`` the harness wrote, and a ``detail`` that came from
+        outside (a transport exception, a gateway body, a model turn). Scrubbing
+        here rather than at each origin is what makes the guarantee checkable by
+        reading one method. Three earlier fixes each masked one origin — an
+        echoed 401 body, its JSON-escaped spelling, its unicode-escaped spelling
+        — and the next origin arrived unredacted anyway: h11 quotes an illegal
+        header value into ``LocalProtocolError``, whose text is transport-made
+        and never passed through the body scrub at all.
+
+        Only ``detail`` is redacted, because ``redact_secrets`` withholds its
+        whole input when masking provably failed. Keeping the summary outside
+        that blast radius preserves the trade the withhold marker documents: the
+        operator still learns which endpoint failed and how, even when the
+        diagnostic itself has to be dropped.
+        """
+        if detail is None:
+            return LLMRunnerError(summary)
+        return LLMRunnerError(f"{summary}: {redact_secrets(detail, self._secret_values)}")
+
+    def _post(self, body: dict[str, Any]) -> dict[str, Any]:
+        headers = self._request_headers()
+        last_error: Exception | None = None
+        error_body = ""
+        for _ in range(self._max_retries + 1):
+            try:
+                response = httpx.post(
+                    f"{self.base_url}/chat/completions",
+                    json=body,
+                    headers=headers,
+                    timeout=self._timeout_seconds,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if not isinstance(payload, dict):
+                    raise KeyError("response body is not a JSON object")
+                return payload
+            except (httpx.HTTPError, KeyError, json.JSONDecodeError) as exc:
+                last_error = exc
+                # A 4xx/5xx body names the actual rejection (bad model id,
+                # missing header, quota) — without it the operator sees only
+                # a bare status code.
+                # Redact before truncating: a secret straddling the 300-char
+                # cut would survive as an unmatched prefix that the scrub in
+                # _error could no longer recognize either.
+                if isinstance(exc, httpx.HTTPStatusError):
+                    error_body = redact_secrets(exc.response.text, self._secret_values)[:300]
+        body_suffix = f": {error_body}" if error_body else ""
+        raise self._error(
+            f"openai-compat call to {self.base_url} failed after {self._max_retries + 1} attempts",
+            f"{last_error}{body_suffix}",
+        )
+
+    def propose(self, transcript: Sequence[TranscriptItem], tools: Sequence[ToolDef]) -> AgentTurn:
+        body = {
+            "model": self.model,
+            "messages": _transcript_to_messages(transcript),
+            "tools": _tools_to_functions(tools),
+            "tool_choice": "auto",
+        }
+        if self._temperature is not None:
+            body["temperature"] = self._temperature
+        started = time.perf_counter()
+        payload = self._post(body)
+        latency_ms = (time.perf_counter() - started) * 1000.0
+
+        try:
+            message = payload["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise self._error("openai-compat response has no message", str(exc)) from exc
+
+        tool_calls: list[ToolCall] = []
+        for index, raw_call in enumerate(message.get("tool_calls") or []):
+            function = raw_call.get("function") or {}
+            raw_arguments = function.get("arguments") or "{}"
+            try:
+                arguments = json.loads(raw_arguments)
+            except json.JSONDecodeError as exc:
+                # Malformed arguments are an explicit task error, never a
+                # silent skip: the loop propagates this to the driver.
+                # The tool name is endpoint-supplied like the arguments are, so
+                # it rides in the detail half and is scrubbed with them.
+                raise self._error(
+                    "model returned malformed tool arguments",
+                    f"'{function.get('name')}': {raw_arguments[:200]}",
+                ) from exc
+            if not isinstance(arguments, dict):
+                raise self._error(
+                    "model returned non-object tool arguments",
+                    f"'{function.get('name')}': {raw_arguments[:200]}",
+                )
+            tool_calls.append(
+                ToolCall(
+                    call_id=str(raw_call.get("id") or f"call-{index}"),
+                    name=str(function.get("name") or ""),
+                    arguments=arguments,
+                )
+            )
+
+        # Token accounting is the headline metric AND the tokens budget input:
+        # an endpoint that omits usage would silently report 0-token turns and
+        # never trip max_total_tokens, so a missing block is an explicit error.
+        usage = payload.get("usage")
+        if not isinstance(usage, dict):
+            # No detail: the whole message is harness-authored, so there is
+            # nothing from the endpoint here for _error to scrub.
+            raise self._error(
+                f"openai-compat response from {self.base_url} has no 'usage' block; "
+                "token accounting would be silently wrong"
+            )
+        try:
+            input_tokens = int(usage["prompt_tokens"])
+            output_tokens = int(usage["completion_tokens"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise self._error(
+                f"openai-compat usage block from {self.base_url} has missing or "
+                "malformed token counts",
+                repr(usage),
+            ) from exc
+        return AgentTurn(
+            text=str(message.get("content") or "").strip(),
+            tool_calls=tuple(tool_calls),
+            model=self.model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            latency_ms=latency_ms,
+        )
+
+
+# --- Scripted transport (offline tests and the LLM-free smoke) ---
+
+SCRIPTED_FAKE_INPUT_TOKENS = 10
+SCRIPTED_FAKE_OUTPUT_TOKENS = 5
+
+
+def substitute_placeholders(value: Any, substitutions: Mapping[str, str]) -> Any:
+    """Replace ``{name}`` placeholders in string values, recursively.
+
+    Scripted tool calls cannot know per-run values like the project name, so
+    the driver substitutes them just before dispatch.
+    """
+    if isinstance(value, str):
+        for name, replacement in substitutions.items():
+            value = value.replace("{" + name + "}", replacement)
+        return value
+    if isinstance(value, dict):
+        return {key: substitute_placeholders(item, substitutions) for key, item in value.items()}
+    if isinstance(value, list):
+        return [substitute_placeholders(item, substitutions) for item in value]
+    return value
+
+
+@dataclass(frozen=True)
+class ScriptedToolAgent(ToolAgentModel):
+    """Replays canned turns keyed by substring match on the first user message.
+
+    Script shape: ``{"tasks": {"<substring>": [turn, ...]}}`` where each turn
+    is ``{"tool_calls": [{"name": ..., "arguments": {...}}]}`` or
+    ``{"text": "..."}``. The agent is stateless: the number of AssistantTurns
+    already in the transcript selects the next scripted turn, so one instance
+    serves any number of tasks. Test/smoke-only — the script may "know" the
+    answer; it proves harness plumbing, not model quality.
+    """
+
+    script: dict[str, Any]
+    spec: str = field(default="scripted:<inline>")
+
+    @classmethod
+    def from_path(cls, path: Path) -> ScriptedToolAgent:
+        script = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(script, dict) or not isinstance(script.get("tasks"), dict):
+            raise ValueError(f"scripted model file must contain a 'tasks' object: {path}")
+        return cls(script=script, spec=f"scripted:{path}")
+
+    def _turns_for(self, first_user_text: str) -> tuple[str, list[dict[str, Any]]]:
+        tasks = self.script.get("tasks")
+        if not isinstance(tasks, dict):
+            raise LLMRunnerError(f"scripted model has no 'tasks' object ({self.spec})")
+        for needle, turns in tasks.items():
+            if needle in first_user_text:
+                return needle, list(turns)
+        raise LLMRunnerError(
+            f"scripted model has no entry matching prompt: {first_user_text[:120]}"
+        )
+
+    def propose(self, transcript: Sequence[TranscriptItem], tools: Sequence[ToolDef]) -> AgentTurn:
+        first_user = next((item for item in transcript if isinstance(item, UserMessage)), None)
+        if first_user is None:
+            raise LLMRunnerError("scripted model called with no user message in transcript")
+        needle, turns = self._turns_for(first_user.text)
+        emitted = sum(1 for item in transcript if isinstance(item, AssistantTurn))
+        if emitted >= len(turns):
+            raise LLMRunnerError(
+                f"scripted model exhausted after {len(turns)} turns for key '{needle}'"
+            )
+        turn_spec = turns[emitted]
+        tool_calls = tuple(
+            ToolCall(
+                call_id=f"scripted-{emitted}-{index}",
+                name=str(raw["name"]),
+                arguments=dict(raw.get("arguments") or {}),
+            )
+            for index, raw in enumerate(turn_spec.get("tool_calls") or [])
+        )
+        return AgentTurn(
+            text=str(turn_spec.get("text") or ""),
+            tool_calls=tool_calls,
+            model="scripted",
+            input_tokens=SCRIPTED_FAKE_INPUT_TOKENS,
+            output_tokens=SCRIPTED_FAKE_OUTPUT_TOKENS,
+            latency_ms=0.0,
+        )
+
+
+# --- Spec parsing ---
+
+
+def create_tool_agent_model(
+    spec: str,
+    *,
+    api_key: str | None = None,
+    extra_headers: dict[str, str] | None = None,
+    temperature: float | None = 0.0,
+) -> ToolAgentModel:
+    """Build a tool-use agent from a spec string.
+
+    Formats: ``openai-compat:<model>@<base_url>`` or ``scripted:<path.json>``.
+    ``extra_headers`` are sent on every openai-compat request (ignored for
+    scripted) and never recorded in run artifacts. A header naming the same
+    HTTP field as the derived bearer — ``authorization`` in any casing —
+    replaces it, so the ambient ``OPENAI_API_KEY`` is not also sent.
+    """
+    transport, _, remainder = spec.partition(":")
+    if transport == "claude":
+        raise ValueError(
+            "claude -p is single-shot and cannot pause at tool_use; use openai-compat "
+            "(e.g. an Anthropic model behind a LiteLLM proxy) or scripted:<path.json>"
+        )
+    if transport == "openai-compat" and remainder:
+        model, separator, base_url = remainder.partition("@")
+        if not separator or not model or not base_url:
+            raise ValueError(
+                f"openai-compat spec must be 'openai-compat:<model>@<base_url>', got: {spec}"
+            )
+        resolved_api_key = api_key if api_key is not None else os.getenv("OPENAI_API_KEY")
+        return OpenAICompatToolAgent(
+            model=model,
+            base_url=base_url,
+            api_key=resolved_api_key,
+            extra_headers=extra_headers,
+            temperature=temperature,
+        )
+    if transport == "scripted" and remainder:
+        return ScriptedToolAgent.from_path(Path(remainder))
+    raise ValueError(
+        f"Unknown tool-agent spec '{spec}'. Expected 'openai-compat:<model>@<base_url>' "
+        f"or 'scripted:<path.json>'."
+    )

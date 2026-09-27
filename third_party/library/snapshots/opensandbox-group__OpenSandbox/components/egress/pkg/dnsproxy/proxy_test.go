@@ -1,0 +1,447 @@
+// Copyright 2026 The OpenSandbox Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package dnsproxy
+
+import (
+	"context"
+	"errors"
+	"net"
+	"net/netip"
+	"testing"
+	"time"
+
+	"github.com/miekg/dns"
+	"github.com/stretchr/testify/require"
+
+	"github.com/alibaba/opensandbox/egress/pkg/constants"
+	"github.com/alibaba/opensandbox/egress/pkg/nftables"
+	"github.com/alibaba/opensandbox/egress/pkg/policy"
+	"github.com/alibaba/opensandbox/egress/pkg/telemetry"
+)
+
+func TestProxyUpdatePolicy(t *testing.T) {
+	proxy, err := New(nil, "127.0.0.1:15353", nil, nil)
+	require.NoError(t, err, "init proxy")
+
+	require.NotNil(t, proxy.CurrentPolicy(), "expected default deny policy (non-nil)")
+	require.Equal(t, policy.ActionDeny, proxy.CurrentPolicy().Evaluate("example.com."), "expected default deny")
+
+	pol, err := policy.ParsePolicy(`{"defaultAction":"deny","egress":[{"action":"allow","target":"example.com"}]}`)
+	require.NoError(t, err, "parse policy")
+
+	proxy.UpdatePolicy(pol)
+	require.NotNil(t, proxy.CurrentPolicy(), "expected policy after update")
+	require.Equal(t, policy.ActionAllow, proxy.CurrentPolicy().Evaluate("example.com."), "policy evaluation mismatch")
+
+	proxy.UpdatePolicy(nil)
+	require.NotNil(t, proxy.CurrentPolicy(), "expected default deny policy after clearing")
+	require.Equal(t, policy.ActionDeny, proxy.CurrentPolicy().Evaluate("example.com."), "expected default deny after clearing")
+}
+
+func TestProxyAlwaysOverlayPrecedence(t *testing.T) {
+	deny, err := policy.ParseValidatedEgressRule(policy.ActionDeny, "nope.test")
+	require.NoError(t, err)
+	pol, err := policy.ParsePolicy(`{"defaultAction":"deny","egress":[{"action":"allow","target":"nope.test"}]}`)
+	require.NoError(t, err)
+	proxy, err := New(pol, "127.0.0.1:15353", []policy.EgressRule{deny}, nil)
+	require.NoError(t, err)
+	require.Equal(t, policy.ActionAllow, proxy.CurrentPolicy().Evaluate("nope.test."), "user policy without overlay")
+	require.Equal(t, policy.ActionDeny, proxy.effectivePolicy.Evaluate("nope.test."), "effective policy includes always deny")
+}
+
+func TestExtractResolvedIPs(t *testing.T) {
+	msg := new(dns.Msg)
+	msg.Answer = []dns.RR{
+		&dns.A{Hdr: dns.RR_Header{Name: "example.com.", Ttl: 120}, A: net.ParseIP("1.2.3.4")},
+		&dns.AAAA{Hdr: dns.RR_Header{Name: "example.com.", Ttl: 60}, AAAA: net.ParseIP("2001:db8::1")},
+		&dns.A{Hdr: dns.RR_Header{Name: "example.com.", Ttl: 90}, A: net.ParseIP("5.6.7.8")},
+	}
+	ips := extractResolvedIPs(msg)
+	require.Len(t, ips, 3, "expected 3 IPs")
+	// Order follows Answer; check first A and AAAA
+	require.Equal(t, "1.2.3.4", ips[0].Addr.String(), "first IP mismatch")
+	require.Equal(t, 120*time.Second, ips[0].TTL, "first IP TTL mismatch")
+	require.Equal(t, "2001:db8::1", ips[1].Addr.String(), "second IP mismatch")
+	require.Equal(t, 60*time.Second, ips[1].TTL, "second IP TTL mismatch")
+	require.Equal(t, "5.6.7.8", ips[2].Addr.String(), "third IP mismatch")
+	require.Equal(t, 90*time.Second, ips[2].TTL, "third IP TTL mismatch")
+}
+
+func TestExtractResolvedIPs_EmptyOrNil(t *testing.T) {
+	require.Nil(t, extractResolvedIPs(nil), "nil msg: expected nil")
+	msg := new(dns.Msg)
+	require.Nil(t, extractResolvedIPs(msg), "empty answer: expected nil")
+	msg.Answer = []dns.RR{&dns.CNAME{Hdr: dns.RR_Header{Name: "x."}, Target: "y."}}
+	require.Nil(t, extractResolvedIPs(msg), "CNAME only: expected nil")
+}
+
+func TestForwardAddsEDNS0BufferSize(t *testing.T) {
+	t.Cleanup(func() { resetNameserverExemptCache(t) })
+	t.Setenv(constants.EnvNameserverExempt, "127.0.0.1")
+	resetNameserverExemptCache(t)
+
+	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	seen := make(chan uint16, 1)
+	server := &dns.Server{
+		PacketConn: conn,
+		Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+			opt := r.IsEdns0()
+			require.NotNil(t, opt)
+			seen <- opt.UDPSize()
+
+			resp := new(dns.Msg)
+			resp.SetReply(r)
+			resp.Answer = []dns.RR{
+				&dns.A{Hdr: dns.RR_Header{Name: "example.com.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}, A: net.ParseIP("1.2.3.4")},
+			}
+			_ = w.WriteMsg(resp)
+		}),
+	}
+	go func() { _ = server.ActivateAndServe() }()
+	t.Cleanup(func() { _ = server.Shutdown() })
+
+	proxy := &Proxy{
+		upstreams:               []string{conn.LocalAddr().String()},
+		activeUpstreams:         []string{conn.LocalAddr().String()},
+		upstreamExchangeTimeout: time.Second,
+	}
+	query := new(dns.Msg)
+	query.SetQuestion("example.com.", dns.TypeA)
+
+	resp, failure, err := proxy.forward(query)
+	require.NoError(t, err)
+	require.Empty(t, failure, "a successful forward must not report a failure reason")
+	require.Len(t, resp.Answer, 1)
+	require.Equal(t, uint16(4096), <-seen)
+}
+
+func TestResolveDomain(t *testing.T) {
+	t.Setenv(constants.EnvNameserverExempt, "127.0.0.1")
+	resetNameserverExemptCache(t)
+	t.Cleanup(func() { resetNameserverExemptCache(t) })
+	for _, outcome := range []string{"success", "servfail", "truncated", "negative", "mixed-negative", "timeout"} {
+		t.Run(outcome, func(t *testing.T) {
+			conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = conn.Close() })
+			server := &dns.Server{PacketConn: conn, Handler: dns.HandlerFunc(func(writer dns.ResponseWriter, query *dns.Msg) {
+				response := new(dns.Msg)
+				response.SetReply(query)
+				if outcome == "negative" {
+					response.Rcode = dns.RcodeNameError
+				} else if query.Question[0].Qtype == dns.TypeA {
+					response.Answer = []dns.RR{&dns.A{Hdr: dns.RR_Header{Name: "example.com.", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 40}, A: net.ParseIP("192.0.2.1")}}
+				} else {
+					switch outcome {
+					case "success":
+						response.Answer = []dns.RR{&dns.AAAA{Hdr: dns.RR_Header{Name: "example.com.", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 50}, AAAA: net.ParseIP("2001:db8::1")}}
+					case "servfail":
+						response.Rcode = dns.RcodeServerFailure
+					case "truncated":
+						response.Truncated = true
+					case "mixed-negative":
+						response.Rcode = dns.RcodeNameError
+					case "timeout":
+						return
+					}
+				}
+				_ = writer.WriteMsg(response)
+			})}
+			ready := make(chan struct{})
+			server.NotifyStartedFunc = func() { close(ready) }
+			go func() { _ = server.ActivateAndServe() }()
+			t.Cleanup(func() { _ = server.Shutdown() })
+			<-ready
+			proxy := &Proxy{upstreams: []string{conn.LocalAddr().String()}, upstreamExchangeTimeout: 5 * time.Second}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			started := time.Now()
+			ips, err := proxy.ResolveDomain(ctx, "example.com")
+			require.Less(t, time.Since(started), 2*time.Second, "caller deadline must bound upstream exchange")
+			switch outcome {
+			case "success":
+				require.NoError(t, err)
+				require.Equal(t, []nftables.ResolvedIP{
+					{Addr: netip.MustParseAddr("192.0.2.1"), TTL: 40 * time.Second},
+					{Addr: netip.MustParseAddr("2001:db8::1"), TTL: 50 * time.Second},
+				}, ips)
+			case "negative":
+				require.NoError(t, err)
+				require.Empty(t, ips)
+			default:
+				require.Error(t, err)
+				require.Empty(t, ips, "partial A results must not renew after AAAA fails")
+			}
+		})
+	}
+}
+
+// A failed lookup has to be classifiable: serveDNS turns the reason into the
+// egress.dns.query.failed_total attribute, which is the only signal an operator gets that
+// resolution is broken rather than merely denied by policy.
+func TestForwardClassifiesFailures(t *testing.T) {
+	t.Run("no upstreams configured", func(t *testing.T) {
+		proxy := &Proxy{upstreamExchangeTimeout: time.Second}
+		query := new(dns.Msg)
+		query.SetQuestion("example.com.", dns.TypeA)
+
+		resp, failure, err := proxy.forward(query)
+
+		require.Error(t, err)
+		require.Nil(t, resp)
+		require.Equal(t, telemetry.DNSFailureNoUpstreams, failure)
+	})
+
+	t.Run("every upstream unreachable", func(t *testing.T) {
+		// Exempt loopback so the dialer skips SO_MARK: without CAP_NET_ADMIN it fails with
+		// EPERM, which would classify as upstream_error for the wrong reason.
+		t.Setenv(constants.EnvNameserverExempt, "127.0.0.1")
+		resetNameserverExemptCache(t)
+
+		// Port 1 on loopback: nothing listens, so the exchange fails rather than timing out.
+		proxy := &Proxy{
+			upstreams:               []string{"127.0.0.1:1"},
+			activeUpstreams:         []string{"127.0.0.1:1"},
+			upstreamExchangeTimeout: 200 * time.Millisecond,
+		}
+		query := new(dns.Msg)
+		query.SetQuestion("example.com.", dns.TypeA)
+
+		resp, failure, err := proxy.forward(query)
+
+		require.Error(t, err)
+		require.Nil(t, resp)
+		require.Equal(t, telemetry.DNSFailureUpstreamError, failure)
+	})
+
+	t.Run("upstream answers with a failover rcode", func(t *testing.T) {
+		t.Setenv(constants.EnvNameserverExempt, "127.0.0.1")
+		resetNameserverExemptCache(t)
+
+		conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() })
+
+		server := &dns.Server{
+			PacketConn: conn,
+			Handler: dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+				resp := new(dns.Msg)
+				resp.SetRcode(r, dns.RcodeServerFailure)
+				_ = w.WriteMsg(resp)
+			}),
+		}
+		started := make(chan struct{})
+		server.NotifyStartedFunc = func() { close(started) }
+		go func() { _ = server.ActivateAndServe() }()
+		t.Cleanup(func() { _ = server.Shutdown() })
+		<-started
+
+		proxy := &Proxy{
+			upstreams:               []string{conn.LocalAddr().String()},
+			activeUpstreams:         []string{conn.LocalAddr().String()},
+			upstreamExchangeTimeout: time.Second,
+		}
+		query := new(dns.Msg)
+		query.SetQuestion("example.com.", dns.TypeA)
+
+		resp, failure, err := proxy.forward(query)
+
+		require.Error(t, err, "SERVFAIL from the only upstream must exhaust the chain")
+		require.Nil(t, resp)
+		require.Equal(t, telemetry.DNSFailureRcode, failure)
+	})
+}
+
+// failingRespWriter records every reply attempt and always fails the write, so
+// the serveDNS stages can be exercised end to end on their error path.
+type failingRespWriter struct {
+	fakeRespWriter
+	attempts int
+}
+
+func (w *failingRespWriter) WriteMsg(m *dns.Msg) error {
+	w.attempts++
+	return errors.New("simulated reply write failure")
+}
+
+// newFailingWriter returns a writer whose replies always fail, seen from ip.
+func newFailingWriter(ip string) *failingRespWriter {
+	return &failingRespWriter{fakeRespWriter: fakeRespWriter{remote: addrFromIP(ip)}}
+}
+
+// A handled query whose reply write fails used to be indistinguishable from an
+// unhandled one: every WriteMsg error in serveDNS was swallowed (issue #1704).
+// writeReply must attempt the write exactly once on every decision stage so the
+// failure is observable instead of silently lost.
+func TestServeDNSReplyWriteFailuresAreSurfaced(t *testing.T) {
+	newQuery := func() *dns.Msg {
+		q := new(dns.Msg)
+		q.SetQuestion("example.com.", dns.TypeA)
+		return q
+	}
+
+	t.Run("deny", func(t *testing.T) {
+		proxy := &Proxy{
+			effectivePolicy: policy.DefaultDenyPolicy(),
+			userPolicy:      policy.DefaultDenyPolicy(),
+		}
+		w := newFailingWriter("10.0.0.9")
+		proxy.serveDNS(w, newQuery())
+		require.Equal(t, 1, w.attempts, "deny reply must be attempted exactly once")
+	})
+
+	t.Run("unknown source", func(t *testing.T) {
+		proxy := &Proxy{
+			effectivePolicy: policy.DefaultDenyPolicy(),
+			userPolicy:      policy.DefaultDenyPolicy(),
+		}
+		proxy.SetQueryPolicySelector(func(netip.Addr) (*QueryPolicy, string) { return nil, "" })
+		w := newFailingWriter("10.0.0.9")
+		proxy.serveDNS(w, newQuery())
+		require.Equal(t, 1, w.attempts, "fail-closed reply must be attempted exactly once")
+	})
+
+	t.Run("upstream error", func(t *testing.T) {
+		// Exempt loopback so the dialer skips SO_MARK (see TestForwardClassifiesFailures).
+		t.Setenv(constants.EnvNameserverExempt, "127.0.0.1")
+		resetNameserverExemptCache(t)
+
+		proxy := &Proxy{
+			upstreams:               []string{"127.0.0.1:1"},
+			activeUpstreams:         []string{"127.0.0.1:1"},
+			upstreamExchangeTimeout: 200 * time.Millisecond,
+		}
+		w := newFailingWriter("10.0.0.9")
+		proxy.serveDNS(w, newQuery())
+		require.Equal(t, 1, w.attempts, "SERVFAIL reply must be attempted exactly once")
+	})
+
+	t.Run("answer after allow decision", func(t *testing.T) {
+		proxy := selectorProxy(t)
+		allowPol, err := policy.ParsePolicy(`{"defaultAction":"deny","egress":[{"action":"allow","target":"example.com"}]}`)
+		require.NoError(t, err)
+		proxy.SetQueryPolicySelector(func(netip.Addr) (*QueryPolicy, string) {
+			return &QueryPolicy{Policy: allowPol}, ""
+		})
+		w := newFailingWriter("10.0.0.9")
+		proxy.serveDNS(w, newQuery())
+		require.Equal(t, 1, w.attempts, "answer reply must be attempted exactly once")
+	})
+}
+
+func TestSetOnResolved(t *testing.T) {
+	proxy, err := New(policy.DefaultDenyPolicy(), "", nil, nil)
+	require.NoError(t, err)
+	proxy.SetOnResolved(func(_ string, _ []nftables.ResolvedIP) {})
+	require.NotNil(t, proxy.onResolved, "SetOnResolved did not set callback")
+	proxy.SetOnResolved(nil)
+	require.Nil(t, proxy.onResolved, "SetOnResolved(nil) did not clear callback")
+}
+
+func TestMaybeNotifyResolved_CallsCallbackWhenAOrAAAA(t *testing.T) {
+	proxy, err := New(policy.DefaultDenyPolicy(), "", nil, nil)
+	require.NoError(t, err)
+	ch := make(chan struct {
+		domain string
+		ips    []nftables.ResolvedIP
+	}, 1)
+	proxy.SetOnResolved(func(domain string, ips []nftables.ResolvedIP) {
+		ch <- struct {
+			domain string
+			ips    []nftables.ResolvedIP
+		}{domain, ips}
+	})
+
+	msg := new(dns.Msg)
+	msg.Answer = []dns.RR{
+		&dns.A{Hdr: dns.RR_Header{Name: "example.com.", Ttl: 120}, A: net.ParseIP("1.2.3.4")},
+	}
+	proxy.maybeNotifyResolved("example.com.", msg)
+
+	select {
+	case got := <-ch:
+		require.Equal(t, "example.com.", got.domain, "domain mismatch")
+		require.Len(t, got.ips, 1, "expected one resolved IP")
+		require.Equal(t, "1.2.3.4", got.ips[0].Addr.String(), "resolved IP mismatch")
+	case <-time.After(2 * time.Second):
+		require.FailNow(t, "callback was not invoked")
+	}
+}
+
+func TestMaybeNotifyResolved_NoCallWhenOnResolvedNil(t *testing.T) {
+	proxy, err := New(policy.DefaultDenyPolicy(), "", nil, nil)
+	require.NoError(t, err)
+	msg := new(dns.Msg)
+	msg.Answer = []dns.RR{&dns.A{Hdr: dns.RR_Header{Name: "x.", Ttl: 60}, A: net.ParseIP("10.0.0.1")}}
+	proxy.maybeNotifyResolved("x.", msg)
+	// No callback set; should not panic. No assertion needed.
+}
+
+func TestMaybeNotifyResolved_NoCallWhenNoAOrAAAA(t *testing.T) {
+	proxy, err := New(policy.DefaultDenyPolicy(), "", nil, nil)
+	require.NoError(t, err)
+	ch := make(chan struct {
+		domain string
+		ips    []nftables.ResolvedIP
+	}, 1)
+	proxy.SetOnResolved(func(domain string, ips []nftables.ResolvedIP) {
+		ch <- struct {
+			domain string
+			ips    []nftables.ResolvedIP
+		}{domain, ips}
+	})
+
+	msg := new(dns.Msg)
+	msg.Answer = []dns.RR{&dns.CNAME{Hdr: dns.RR_Header{Name: "x."}, Target: "y."}}
+	proxy.maybeNotifyResolved("x.", msg)
+
+	select {
+	case <-ch:
+		require.FailNow(t, "callback should not be invoked when resp has no A/AAAA")
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no callback
+	}
+}
+
+func TestProxyShouldSkipOutboundLog_Default(t *testing.T) {
+	p := &Proxy{}
+	require.False(t, p.shouldSkipOutboundLog("metadata.internal"),
+		"default (no SetLogSkip call) must preserve current behavior: log every outbound")
+}
+
+func TestProxyShouldSkipOutboundLog_MatchesAndMisses(t *testing.T) {
+	p := &Proxy{}
+	p.SetLogSkip([]string{"metadata.internal", "*.cluster.local"})
+
+	require.True(t, p.shouldSkipOutboundLog("metadata.internal"), "exact pattern hit")
+	require.True(t, p.shouldSkipOutboundLog("svc.cluster.local"), "wildcard subdomain hit")
+	require.True(t, p.shouldSkipOutboundLog("METADATA.INTERNAL."), "case + trailing dot normalised")
+	require.False(t, p.shouldSkipOutboundLog("cluster.local"),
+		"wildcard *.cluster.local must not match bare cluster.local")
+	require.False(t, p.shouldSkipOutboundLog("evil.com"), "non-listed host must not be skipped")
+}
+
+func TestProxyShouldSkipOutboundLog_ClearedByEmptyList(t *testing.T) {
+	p := &Proxy{}
+	p.SetLogSkip([]string{"metadata.internal"})
+	require.True(t, p.shouldSkipOutboundLog("metadata.internal"))
+
+	p.SetLogSkip(nil)
+	require.False(t, p.shouldSkipOutboundLog("metadata.internal"),
+		"clearing the list must re-enable logging for all hosts")
+}

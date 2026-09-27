@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Introduction",
+  "icon_name": "user-smile-line",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon introduces himself and greets you.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "introduce_leon": {
+      "type": "logic",
+      "description": "Introduce Leon and greet the owner."
+    }
+  }
+}
