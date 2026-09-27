@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS pulse_runs(
  started INTEGER NOT NULL, finished INTEGER, status TEXT NOT NULL, summary TEXT,
  PRIMARY KEY(scope,id));
 CREATE INDEX IF NOT EXISTS pulse_run_time ON pulse_runs(scope,started);
+CREATE TABLE IF NOT EXISTS pulse_run_receipts(
+ scope TEXT NOT NULL, id TEXT NOT NULL, status TEXT NOT NULL, started INTEGER NOT NULL,
+ PRIMARY KEY(scope,id));
 '''
 
 
@@ -97,6 +100,44 @@ class Pulse:
                 'limits':{'retained_runs':512,'runs_per_utc_day':96,'runs_per_minute':6},
                 'foreground_process_required':True,'external_effects':False,'model_used':False}
 
+    def _history_plan(self, db):
+        # Preserve all starts in the rolling 24h AND current UTC day so history
+        # pruning cannot reset the rate limits. Keep at least 64 latest records.
+        cutoff=min(self.store.now()-86400,(self.store.now()//86400)*86400)
+        rows=[dict(r) for r in db.execute('SELECT id,status,started FROM pulse_runs WHERE scope=? ORDER BY started DESC,id DESC',(self.scope,))]
+        eligible=[r for r in rows[64:] if r['started']<cutoff and r['status']!='running']
+        receipts=db.execute('SELECT count(*) FROM pulse_run_receipts WHERE scope=?',(self.scope,)).fetchone()[0]
+        manifest={'scope':self.scope,'records':eligible}
+        return {'fingerprint':hashlib.sha256(json.dumps(manifest,sort_keys=True,separators=(',',':')).encode()).hexdigest(),'records':eligible,'eligible':len(eligible),
+                'retained':len(rows)-len(eligible),'receipts':receipts,'receipt_capacity':65536,
+                'can_prune':bool(eligible) and receipts+len(eligible)<=65536,
+                'secure_erasure':False,'idempotency_receipts_preserved':True}
+
+    def history_plan(self,bearer):
+        with self.supervisor.lock,self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            if p['scope']!=self.scope or p['id']!=self.supervisor.principal['id']:
+                raise Fault('routine_owner_not_hosted',403)
+            value=self._history_plan(db);value.pop('records');return value
+
+    def prune_history(self,bearer,body):
+        exact(body,{'fingerprint'})
+        with self.supervisor.lock,self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            if p['scope']!=self.scope or p['id']!=self.supervisor.principal['id']:
+                raise Fault('routine_owner_not_hosted',403)
+            plan=self._history_plan(db)
+            if body['fingerprint']!=plan['fingerprint']:raise Fault('pulse_history_changed',409)
+            if plan['receipts']+plan['eligible']>65536:raise Fault('pulse_receipt_capacity',409)
+            for r in plan['records']:
+                db.execute('INSERT OR IGNORE INTO pulse_run_receipts VALUES (?,?,?,?)',
+                           (self.scope,r['id'],r['status'],r['started']))
+                db.execute('DELETE FROM pulse_runs WHERE scope=? AND id=?',(self.scope,r['id']))
+            if plan['eligible']:
+                self.store.log(db,self.scope,p['id'],'pulse.history_pruned',str(plan['eligible']))
+        return {'removed_reports':plan['eligible'],'idempotency_receipts_preserved':True,
+                'secure_erasure':False,'schedule_changed':False}
+
     def manual(self, bearer, identity, body):
         self._routine(identity);exact(body,{'request_id'});ident(body['request_id'])
         return self._run(bearer,identity,'manual:'+body['request_id'])
@@ -127,6 +168,9 @@ class Pulse:
                 existing=db.execute('SELECT status,summary FROM pulse_runs WHERE scope=? AND id=?',(self.scope,run_id)).fetchone()
                 if existing:
                     return {'id':run_id,'state':existing['status'],'duplicate':True}
+                receipt=db.execute('SELECT status FROM pulse_run_receipts WHERE scope=? AND id=?',(self.scope,run_id)).fetchone()
+                if receipt:
+                    return {'id':run_id,'state':receipt['status'],'duplicate':True,'receipt_only':True}
                 if self.store.paused(self.scope): raise Fault('processing_paused',409)
                 r=db.execute('SELECT * FROM pulse_routines WHERE scope=? AND id=?',(self.scope,identity)).fetchone()
                 if due is not None and (not r['enabled'] or r['next_due']!=due or due>now or r['actor']!=p['id']):

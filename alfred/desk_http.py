@@ -13,8 +13,10 @@ from .knowledge_http import knowledge_get
 from .grounded import ask, check_sources
 from .pulse import Pulse
 from .conversation import ConversationService
+from .reviewed_memory import ReviewedMemory
 
-ASSETS = {'/assets/conversation.js': ('conversation.js', 'text/javascript; charset=utf-8'),
+ASSETS = {'/assets/reviewed-memory.js': ('reviewed-memory.js', 'text/javascript; charset=utf-8'),
+          '/assets/reviewed-memory.css': ('reviewed-memory.css', 'text/css; charset=utf-8'),'/assets/conversation.js': ('conversation.js', 'text/javascript; charset=utf-8'),
           '/assets/conversation.css': ('conversation.css', 'text/css; charset=utf-8'),'/assets/os.js': ('os.js', 'text/javascript; charset=utf-8'),
           '/assets/os.css': ('os.css', 'text/css; charset=utf-8'),'/assets/ask.js': ('ask.js', 'text/javascript; charset=utf-8'),
           '/assets/ask.css': ('ask.css', 'text/css; charset=utf-8'),'/assets/knowledge.js': ('knowledge.js', 'text/javascript; charset=utf-8'),
@@ -72,6 +74,7 @@ class DeskHTTPServer(HTTPServer):
     def __init__(self, store, supervisor, port=8765, assets=None, local_model=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
         self.local_model = local_model
+        self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
         self.conversations = ConversationService(store, local_model, supervisor.scope) if hasattr(store, 'knowledge') else None
         self.pulse = Pulse(store, supervisor) if hasattr(store, 'knowledge') and hasattr(supervisor, 'owner') else None
         if self.pulse is not None: supervisor.pulse = self.pulse
@@ -96,7 +99,7 @@ class DeskHTTPServer(HTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'ALFRED-OS/0.7'
+    server_version = 'ALFRED-OS/0.8'
     sys_version = ''
     def log_message(self, *_):
         pass
@@ -182,7 +185,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_payload(200, b'', content_type='image/x-icon')
                 return
             if not mutation and url.path == '/health' and not url.query:
-                self.send_payload(200, {'version': '0.7.0-dev', 'local_only': True, 'live_ai': False, 'model_configured': self.server.local_model is not None})
+                self.send_payload(200, {'version': '0.8.0-dev', 'local_only': True, 'live_ai': False, 'model_configured': self.server.local_model is not None})
                 return
             if mutation and url.query:
                 raise Fault('query_not_allowed')
@@ -225,6 +228,21 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         exact(body,set());result=service.forget(bearer,parts[0])
                 else: raise Fault('not_found',404)
+            elif (url.path == '/desk/memory' or url.path.startswith('/desk/memory/')) and not url.query:
+                memory = self.server.memory
+                if memory is None: raise Fault('memory_not_configured',409)
+                if not mutation and url.path in ('/desk/memory','/desk/memory/export'):
+                    result = memory.view(bearer)
+                elif mutation and url.path == '/desk/memory/entities':
+                    result = memory.create_entity(bearer,body)
+                elif mutation and url.path == '/desk/memory/proposals':
+                    result = memory.propose(bearer,body)
+                elif mutation and re.fullmatch(r'/desk/memory/claims/[A-Za-z0-9_.-]+/review',url.path):
+                    result = memory.review(bearer,url.path.split('/')[4],body)
+                else: raise Fault('not_found',404)
+            elif url.path == '/desk/pulse/history' and not url.query:
+                if self.server.pulse is None: raise Fault('pulse_not_configured',409)
+                result = self.server.pulse.prune_history(bearer,body) if mutation else self.server.pulse.history_plan(bearer)
             elif not mutation and url.path == '/desk/pulse' and not url.query:
                 if self.server.pulse is None: raise Fault('pulse_not_configured', 409)
                 result = self.server.pulse.view(bearer)

@@ -1,3 +1,41 @@
+# ALFRED current roadmap: reviewed memory v0.8
+
+26 September 2026. Source branch: `feat/alfred-reviewed-memory-2026-09-26`.
+Base v0.7: `e0a0ef973d20d3f60606423ab2035d9f9df9e68f`. No merge or deployment.
+The existing OS shell remains provisional, not a newly approved visual identity.
+
+## Completed jobs in this increment
+
+1. Reviewed memory: typed, credential-private entities and proposals with exact source
+   provenance; separate acceptance/dispute/withdraw/supersession; bounded validity/conflicts;
+   source invalidation; working Memory UI and export. Not automatic semantic extraction.
+2. Evidence checks: literal unsupported-number and missing-amount rejection in both
+   synchronous questions and queued conversations; precise failure labels and retained sources.
+   Not entailment, broad relevance assurance or a successful stronger-model evaluation.
+3. Routine lifecycle: preview/confirm older Pulse report pruning while keeping recent/running
+   records and compact retry receipts, without resetting rate limits or changing schedules.
+
+## Next unfinished acceptance gates
+
+- Independently measured reasoning: the attempted new model comparison did not run because
+  its tool operation was blocked. Do not claim it passed or reroute that blocked operation.
+  Preserve v0.7 failure evidence. Broader semantic support, missing-answer and conflict
+  handling still need independent evaluation; the new heuristics do not solve them.
+- Integrate reviewed memory into controlled contextual retrieval with clear provenance,
+  revocation and no promotion of human-reviewed statements to objective facts. Currently
+  the reviewed graph is inspectable/exportable, not automatically sent to the model.
+- Mature person/device identity, key rotation, finer grants, entity deletion/migration and
+  encrypted-data/backup/retention decisions before any sensitive real-data pilot.
+- One explicitly authorised official account connector; then one harmless test-account
+  action with exact approval and capability-specific result reconciliation.
+- Measured visible push-to-talk, then deliberate service installation/cross-device operation.
+  No implied ambient capture, remote daemon or live ENDSTATE/Noir integration.
+
+Acceptance remains end-to-end behaviour, negative tests and actual evidence, not a test
+count alone. The rest of this file is retained historical roadmap context.
+
+---
+
 # ALFRED current roadmap: v0.7 conversation increment
 
 The visual direction remains provisional. Do not restart the interface or represent it

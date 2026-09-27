@@ -10,6 +10,7 @@ import secrets
 import threading
 import time
 from .local import Fault, exact, ident, text, fingerprint, canonical
+from .evidence_review import assess_interpretation
 from .grounded import retrieve, question_terms, references, check_sources, validate_interpretation
 
 SCHEMA = '''
@@ -218,8 +219,10 @@ class ConversationService:
                 result['content_sent_to_model']=True
                 value=self.provider.generate(packet)
                 result['claims']=validate_interpretation(value,packet)
+                result['claims'],result['evidence_review']=assess_interpretation(result['claims'],packet)
                 result.update(model_used=True,model=self.provider.model,status='model_interpretation' if result['claims'] else 'model_abstained',
                               usage=getattr(self.provider,'last_usage',None))
+                if result['evidence_review']['status']=='withheld_for_review':result['status']='model_needs_review'
             result['elapsed_ms']=round((time.monotonic()-started)*1000)
             if self.stop_event.is_set():raise Fault('conversation_worker_stopped')
             with self.store.transaction() as db:

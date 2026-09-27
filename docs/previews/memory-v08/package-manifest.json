@@ -1,0 +1,6 @@
+{
+  "file": "ALFRED-OS-v08-Developer-Package.zip",
+  "sha256": "0d60bb35920cdd74da1c195fd45874759393fe182409e200e4e044dbb7c89b75",
+  "files": 151,
+  "excludes": "upstream quarantine and runtime data"
+}
