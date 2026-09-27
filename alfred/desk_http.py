@@ -11,8 +11,10 @@ from urllib.parse import urlsplit, parse_qs
 from .local import Fault, exact, parse_json
 from .knowledge_http import knowledge_get
 from .grounded import ask, check_sources
+from .pulse import Pulse
 
-ASSETS = {'/assets/ask.js': ('ask.js', 'text/javascript; charset=utf-8'),
+ASSETS = {'/assets/os.js': ('os.js', 'text/javascript; charset=utf-8'),
+          '/assets/os.css': ('os.css', 'text/css; charset=utf-8'),'/assets/ask.js': ('ask.js', 'text/javascript; charset=utf-8'),
           '/assets/ask.css': ('ask.css', 'text/css; charset=utf-8'),'/assets/knowledge.js': ('knowledge.js', 'text/javascript; charset=utf-8'),
           '/assets/knowledge.css': ('knowledge.css', 'text/css; charset=utf-8'),
           '/': ('index.html', 'text/html; charset=utf-8'),
@@ -68,6 +70,8 @@ class DeskHTTPServer(HTTPServer):
     def __init__(self, store, supervisor, port=8765, assets=None, local_model=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
         self.local_model = local_model
+        self.pulse = Pulse(store, supervisor) if hasattr(store, 'knowledge') and hasattr(supervisor, 'owner') else None
+        if self.pulse is not None: supervisor.pulse = self.pulse
         self.assets = Path(assets) if assets else Path(__file__).resolve().parents[1] / 'web'
         super().__init__(('127.0.0.1', port), Handler)
         self.host = f'127.0.0.1:{self.server_port}'
@@ -83,7 +87,7 @@ class DeskHTTPServer(HTTPServer):
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'ALFRED-Desk/0.4'
+    server_version = 'ALFRED-OS/0.6'
     sys_version = ''
     def log_message(self, *_):
         pass
@@ -169,7 +173,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_payload(200, b'', content_type='image/x-icon')
                 return
             if not mutation and url.path == '/health' and not url.query:
-                self.send_payload(200, {'version': '0.4.0-dev', 'local_only': True, 'live_ai': False})
+                self.send_payload(200, {'version': '0.6.0-dev', 'local_only': True, 'live_ai': False, 'model_configured': self.server.local_model is not None})
                 return
             if mutation and url.query:
                 raise Fault('query_not_allowed')
@@ -198,6 +202,13 @@ class Handler(BaseHTTPRequestHandler):
                 before = int(query['before'][0]) if 'before' in query else None
                 result = store.desk_state(bearer, before=before)
                 result['supervisor'] = self.server.supervisor.view(result['scope'])
+            elif not mutation and url.path == '/desk/pulse' and not url.query:
+                if self.server.pulse is None: raise Fault('pulse_not_configured', 409)
+                result = self.server.pulse.view(bearer)
+            elif mutation and re.fullmatch(r'/desk/pulse/(memory-health|briefing-refresh)/(configure|run)', url.path):
+                if self.server.pulse is None: raise Fault('pulse_not_configured', 409)
+                routine, operation = url.path.split('/')[3:5]
+                result = (self.server.pulse.configure if operation == 'configure' else self.server.pulse.manual)(bearer, routine, body)
             elif not mutation and url.path == '/desk/ask/status' and not url.query:
                 p = store.principal(bearer, {'owner', 'reader'})
                 result = {'local_model_configured': self.server.local_model is not None,

@@ -1,6 +1,6 @@
 # ALFRED engineering instructions
 
-Read README.md, SESSION_HANDOFF.md, docs/ROADMAP.md, docs/GROUNDED_DESK.md and
+Read README.md, SESSION_HANDOFF.md, docs/ROADMAP.md, docs/PERSONAL_OS.md and
 docs/MEMORY_ARCHITECTURE.md first. Older docs describe the foundation and target design,
 not necessarily the current implementation. Never claim capabilities from a roadmap.
 
@@ -27,8 +27,8 @@ Branch from the actual remote head, preserving concurrent work. No force-push, a
 merge or deployment. Report exact commit/branch/PR, actual tests and limitations. A local
 file, Git tree object or queued CI run is not a successful published delivery.
 
-The current branch is feat/alfred-grounded-desk-2026-09-26, extending the existing Knowledge
-Desk at 554949273be84d9b420ce11201e2489a77948648. Refresh its actual remote head. Use the stacked PR chain rather than assuming main contains the application.
+The current branch is feat/alfred-personal-os-2026-09-26, extending grounded Desk
+af10f961665962a42d2d78f00864edb9c267db26. Refresh its actual remote head. Use the stacked PR chain rather than assuming main contains the application.
 Independent work packages are issues #2 core, #3 runtime and #4 voice, not running agents.
 
 ## Implemented boundary
@@ -69,3 +69,11 @@ python3 tools/extend_sources.py --verify
 Run only ALFRED-owned tests, never upstream code. Current CI exercises Python 3.12.3 on
 Ubuntu; do not infer mobile/Windows/macOS, battery, audio, sandbox isolation or field safety
 from these results. Every live integration needs its own consent, containment and tests.
+
+## Personal OS presentation and routines
+
+The owner rejected the generic dashboard. Preserve Home/Ask/Memory/Work/Pulse/Controls,
+the dock, keyboard launcher and restrained true-black shell. Do not restore the admin
+rail as the default experience. Pulse has two fixed, opt-in read-only reports; never
+turn its routine IDs into arbitrary shell/prompt execution. Limits and actual host
+lifecycle stay visible. Focus changes presentation only. Read docs/PERSONAL_OS.md.

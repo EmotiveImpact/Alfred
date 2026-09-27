@@ -1,3 +1,53 @@
+# ALFRED roadmap: Personal OS v0.6
+
+26 September 2026. Current working branch: feat/alfred-personal-os-2026-09-26.
+Base: af10f961665962a42d2d78f00864edb9c267db26. No automatic main merge or deployment.
+
+## Delivered in this increment
+
+Personal OS shell: full viewport, Home, persistent dock, Ctrl/Cmd+K, focus and task spaces.
+The previous source-first Ask, Memory graph, Work approvals and local draft verification
+are retained. Raw implementation details are exposed on inspection, not as the main UI.
+
+Pulse: two fixed, bounded local report routines with opt-in intervals, durable run records,
+idempotent due slots, rate/history caps, pause, expiry/revocation and visible failures.
+No model, arbitrary tool, external effect or installed background service is introduced.
+
+## Next build sequence
+
+1. **Real source-grounded reasoning.** Run one configured model on answerable, insufficient,
+   conflicting and malicious-source questions. Measure citation support and failures.
+   The current optional adapter is protocol-tested, not inference-validated.
+2. **Reviewed typed memory.** Add entity and claim proposals, source lineage, user review,
+   conflict/supersession and stable identities. The existing note graph remains separate.
+3. **Private-work readiness.** Finish source/capability grants, pairing/key rotation,
+   encryption decisions, correction/deletion and backup/retention accounting. Add an explicit
+   bounded Pulse history retention/clear path before its 512-record stop makes unattended
+   use impractical. Source freshness and transient failures must remain honest.
+4. **One real account workflow.** A test-account read connector, followed by a narrow approved
+   write and capability-specific receipt/result reconciliation. Preserve the current ledger.
+5. **Voice and actual host lifecycle.** Visible push-to-talk, measured interruptions and
+   playback, then a deliberately installed local/private-host service. No blanket always-on
+   mobile or cloud claim. Intervals already exist; calendar/timezone scheduling does not.
+6. **Devices, team contexts and specialist engines.** Read the actual authorised interfaces
+   before connecting Home Assistant, ENDSTATE or Noir. Keep independent data/authority
+   boundaries and start operational evaluation with synthetic/non-critical exercises.
+
+## Acceptance bar
+
+The interface must work as a personal intelligence environment, not merely acquire more
+menus. Test the whole user loop: question, relevant sources, interpretation where available,
+exact approval, result, interruption/restart, correction and revocation. Record failed
+cases and avoid declaring completion from a test count or an attractive screenshot.
+
+The owner’s name preference remains ALFRED; Emotive Impact versus Black State branding is
+not resolved by this engineering increment. Earlier research and source archive decisions
+remain available in research/ and the prior product/architecture docs.
+
+---
+
+## Previous detailed roadmap (historical v0.5 context)
+
 # ALFRED execution roadmap: Grounded Desk v0.5
 
 Updated 26 September 2026. This supersedes the v0.4 status summary, not the product

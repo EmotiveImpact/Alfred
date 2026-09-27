@@ -13,7 +13,7 @@ from alfred.knowledge import KnowledgeStore,KnowledgeSupervisor
 from alfred.desk_http import DeskHTTPServer
 
 ROOT=Path(__file__).resolve().parents[1]
-OUT=ROOT/'docs/evidence/grounded-v05';OUT.mkdir(parents=True,exist_ok=True)
+OUT=Path(os.environ.get('ALFRED_GROUNDED_OUTPUT',str(ROOT/'docs/evidence/grounded-v05')));OUT.mkdir(parents=True,exist_ok=True)
 checks=[]
 
 def record(name,condition=True):
@@ -46,11 +46,11 @@ def main():
                 record('question retrieves real indexed note excerpts',0<page.locator('.ask-source-card').count()<=5)
                 expect(page.locator('#ask-status')).to_contain_text('not an AI-generated answer')
                 record('source mode does not impersonate a live model')
-                record('hashes and source line ranges are displayed','SHA-256' in page.locator('#ask-results').inner_text() and 'lines' in page.locator('#ask-results').inner_text())
+                record('source line ranges are displayed','lines' in page.locator('#ask-results').inner_text())
                 record('no generated claims in source mode',page.locator('.ask-claim').count()==0)
                 page.screenshot(path=str(OUT/'ALFRED-ask-desktop.png'),full_page=True)
                 page.locator('.ask-source-card .text-button').first.click();expect(page.locator('#detail')).to_be_visible();expect(page.locator('.knowledge-source')).to_be_visible()
-                record('citation opens actual numbered source snapshot')
+                record('citation opens actual numbered source snapshot with source hash','SHA-256' in page.locator('#detail-body').inner_text())
                 page.screenshot(path=str(OUT/'ALFRED-ask-source.png'),full_page=True);page.keyboard.press('Escape')
                 with page.expect_download() as download_info:page.locator('#ask-export').click()
                 download=download_info.value;file=OUT/'ALFRED-example-evidence.md';download.save_as(str(file))

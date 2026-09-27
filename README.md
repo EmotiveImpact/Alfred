@@ -1,84 +1,45 @@
 # ALFRED
 
-Personal and operational intelligence, under your authority.
+Personal intelligence. Your context, your attention, your authority.
 
-## Grounded Desk v0.5: local development alpha
+## Personal OS v0.6: local development build
 
-A working browser Desk over a persistent local service, read-only Markdown knowledge
-index, explicit note-reference graph and source-first question interface. No model is
-enabled by default. An optional tool-free local-model adapter is implemented; actual
-model inference and answer quality have not been validated in this release.
+The default interface is now a full-screen personal workspace, not the v0.5 administrative
+dashboard. Home, Ask, Memory, Work, Pulse and Controls share a persistent dock and a
+keyboard launcher. The existing core, evidence, approvals and source retrieval are retained.
 
-**Current working branch:** `feat/alfred-grounded-desk-2026-09-26`.
-This extends the existing Knowledge Desk. Main remains separate until the reviewed PR
-stack is merged. No hosted deployment or installation on the user's devices is implied.
+![Actual ALFRED personal OS, fictional local workspace](docs/evidence/personal-os-v06/ALFRED-OS-Home.png)
 
-![Actual ALFRED Knowledge workspace with fictional notes](docs/evidence/grounded-v05/ALFRED-knowledge-desktop.png)
+**Working branch:** `feat/alfred-personal-os-2026-09-26`.
+Built on grounded Desk `af10f961665962a42d2d78f00864edb9c267db26`. The pull-request stack is
+not automatically merged and main is not the application. Nothing is hosted by this work.
 
-## See it
+[Run guide](docs/PERSONAL_OS.md) · [Roadmap](docs/ROADMAP.md) ·
+[Continuation](SESSION_HANDOFF.md) · [Memory architecture](docs/MEMORY_ARCHITECTURE.md)
 
-[Ask Alfred screenshot](docs/evidence/grounded-v05/ALFRED-ask-desktop.png) ·
-[Mobile question view](docs/evidence/grounded-v05/ALFRED-ask-mobile.png) ·
-[Briefing](docs/evidence/grounded-v05/ALFRED-overview.png) ·
-[Source inspection](docs/evidence/grounded-v05/ALFRED-ask-source.png)
+### What works
 
-[Open/download the standalone HTML preview](docs/previews/grounded-v05/ALFRED-Desk-v05.html).
-This packages the actual frontend with fictional in-file data. It is read-only and
-supports three precomputed question examples. It is not the live backend, a connected
-model or a hosted assistant. Full question retrieval requires the local application.
+A local authenticated workspace with source-first questions, read-only Markdown and JSON
+connectors, an explicit note-reference graph, source inspection and invalidation, evidence
+export, exact draft approvals and local result verification. The supervisor scans while
+the launched process is alive. New Pulse routines perform bounded memory-health and
+briefing-count reports, with opt-in schedules and durable run records. Both start off.
 
-## Run the actual local application
+Ctrl/Cmd+K navigates or searches sources. Focus changes presentation, not permissions.
+The only action effect remains a draft inside ALFRED's database. Nothing is sent externally.
+
+### Start locally
 
 ```sh
-python3 -m alfred.desk init --data-dir ~/.local/share/alfred/desk-v05-demo
-python3 -m alfred.desk access --data-dir ~/.local/share/alfred/desk-v05-demo
-python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/desk-v05-demo
+python3 -m alfred.desk init --data-dir ~/.local/share/alfred/os-v06-demo
+python3 -m alfred.desk access --data-dir ~/.local/share/alfred/os-v06-demo
+python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/os-v06-demo
 ```
 
-Open `http://127.0.0.1:8765` on that machine. The access command reveals your private
-local key in your terminal: do not share or commit it. Use a fresh data directory outside
-the repository. Python/POSIX development target; no runtime dependencies or cloud keys
-are needed for source mode. The CLI has an explicit `--local-model` option for a separately
-installed local Ollama server; see [the boundaries and instructions](docs/GROUNDED_DESK.md).
+Open the local address printed by the command. Keep the access key private. Use synthetic
+files while developing. The service binds to 127.0.0.1; it is not a public hosting server.
 
-## What works
-
-The existing Desk retains sign-in, briefings, acknowledgements, exact local-draft
-approvals, result history, source health and pause/resume. SQLite state survives restart.
-The launched local supervisor scans configured sources and processes already approved
-local drafts while the process remains alive. It is not a cloud automation service.
-
-Knowledge reads an explicitly selected Markdown folder, indexes declared note metadata,
-resolves explicit links and supports a graph, list, backlinks and exact source inspection.
-MAP.md checks flag broken links and map coverage. No Obsidian plugins or private vaults
-have been loaded in this delivery. Files remain canonical and are not modified.
-
-Ask Alfred adds short natural-language questions, bounded keyword and one-hop link
-retrieval, up to five source excerpts with exact lines/revisions/hashes, source-change
-invalidation and portable Markdown evidence export. Source mode is visibly not an
-AI-generated answer. Optional generated interpretations must cite valid source ranges;
-that checks reference integrity, not factual entailment. No tools are offered to the model.
-
-The graph currently means note A explicitly links to note B. A typed entity-and-claim
-graph is a separate planned layer, not a capability inferred from attractive visual dots.
-
-**The only implemented action effect is a local SQLite draft. Nothing is sent.**
-No microphone, external account/device control or ENDSTATE/Noir integration is active.
-
-## Research and programme
-
-[Current memory/graph architecture](docs/MEMORY_ARCHITECTURE.md) ·
-[Source-first question guide](docs/GROUNDED_DESK.md) ·
-[Roadmap](docs/ROADMAP.md) · [Original MAPS assessment](research/MAPS_AND_OBSIDIAN.md) ·
-[Agent landscape](research/LANDSCAPE.md) · [Jev and Alibaba](research/JEV_AND_ALIBABA.md) ·
-[Continuation record](SESSION_HANDOFF.md)
-
-All 2,073 retained files across eight pinned upstream projects remain research data,
-not installed agent runtimes. Keep their licences/notices and exact source scope. The
-MAPS guide was assessed, not copied wholesale under an unverified licence. No blanket
-licence for ALFRED-original code has been selected by this work.
-
-## Verification
+### Inspect and test
 
 ```sh
 python3 -m unittest discover -s tests -v
@@ -86,15 +47,25 @@ python3 tools/import_sources.py --verify
 python3 tools/extend_sources.py --verify
 ```
 
-[Acceptance workflow](.github/workflows/grounded-v05.yml) runs first-party tests, source
-archive verification, the previous Desk and Knowledge browser regressions, new question
-acceptance and standalone preview checks. [Evidence and exact source receipts](docs/evidence/grounded-v05/)
-record the actual run. A workflow file alone is not a passing result.
+The two source verifiers need the full GitHub branch; the developer ZIP excludes upstream
+archives. All 2,073 retained third-party files remain inert and unchanged. See the source
+locks, licences and copy receipts, not just a count. No upstream agent has been executed.
 
-## Limits
+The acceptance workflow records code tests, old browser regressions, new OS/Pulse browser
+checks, standalone-preview checks and exact source hashes under
+`docs/evidence/personal-os-v06/`. A workflow file is not a test result.
 
-Synthetic-data local alpha, not a hardened service. No application-level database
-encryption, mature key rotation, production tenancy/retention, full Obsidian parser,
-semantic world model, tested real-model quality, voice, external accounts, cloud scheduler
-or operational safety validation. The stdlib HTTP server must not be exposed publicly.
-No private notes, recordings, credentials or client data belong in this public repository.
+The [offline preview](docs/previews/personal-os-v06/ALFRED-OS-v06.html) is fictional,
+read-only and not connected to a server or model. Run the actual local app for actions.
+
+### Boundaries
+
+This is a browser-based personal OS shell over local intelligence infrastructure, not a
+native operating system. No real model inference has been validated, no microphone or
+external account/device is connected and ENDSTATE/Noir remain separate. Optional local
+Ollama is off by default; selecting valid citations does not establish factual entailment.
+
+No mature device pairing, application encryption, general capability grants or complete
+retention/deletion service. Pulse stops starting work at its 512-run history bound until
+retention is implemented. No cloud daemon or continued ChatGPT background work is installed.
+No operational safety, autonomous use of force or unlimited security-system control.
