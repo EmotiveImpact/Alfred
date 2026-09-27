@@ -1,59 +1,47 @@
-# ALFRED continuation: reviewed memory v0.8
+# ALFRED continuation: governed-memory planning revision
 
-26 September 2026. Read AGENTS.md, docs/REVIEWED_MEMORY.md, docs/EVIDENCE_REVIEW.md and
-current docs/ROADMAP.md. Branch `feat/alfred-reviewed-memory-2026-09-26` extends verified
-v0.7 `e0a0ef973d20d3f60606423ab2035d9f9df9e68f`. Refresh its actual remote head.
-No force push, automatic merge or deployment. Main remains separate.
+27 September 2026. Start with AGENTS.md, docs/PRD.md, docs/ROADMAP.md and plans/memory-backlog.json.
 
-The user's goal is personal/operational intelligence, not an admin dashboard. They said
-the shell is still not quite right but asked to keep moving. Preserve it as provisional;
-do not repeatedly restart its design or falsely record final approval.
+## Source checkpoint
 
-## New source
+Planning branch: research/alfred-memory-system-2026-09-27.
+Base commit: 73a255a10cb43f55a14aaf45165800bd17e60553 on feat/alfred-obsidian-console-2026-09-27.
+Base tree: a7b21f02338036a7c1b96aed5e87262133cae27a.
+This is one console-toolchain commit ahead of v0.8 22e64567f69508928b164d55c578834abcb404e8. It preserves the full local application. Refresh refs and compare concurrent console work before continuing. No automatic merge/main update or deployment.
 
-alfred/reviewed_memory.py: additive private entity/claim store with source binding,
-review/version transitions, temporal conflicts, projection invalidation and graph/export.
-web/reviewed-memory.js/css: Memory > Reviewed memory plus exact review and source inspector.
-The original note graph remains separate. Entity names do not merge identities.
+## User request addressed
 
-alfred/evidence_review.py: narrow rejection heuristics after reference validation in
-both grounded.py and conversation.py. Withheld interpretations have model_needs_review
-status. No entailment, factual truth or model quality guarantee. The checker is not an
-agent permission system and does not prevent egress already made to a configured model.
+Research Obsidian plus deeper memory and useful repositories, update product/build plans across ALFRED, and publish them. The conclusion is optional Obsidian/Markdown authoring plus ALFRED-owned evidence, reviews, authority and lifecycle. Do not require Obsidian to be open for selected-folder reading. Do not confuse the console's internal name with an integrated note application.
 
-Pulse report-retention endpoints/UI preserve recent detail, active records, rate counters
-and compact idempotency receipts. They do not erase WAL/backups, undo drafts, or change
-schedules. Read the explicit capacities and host-lifecycle limits.
+## Delivered by this revision
 
-## Blocked operation and evidence discipline
+Current canonical PRD; updated architecture/product brief/roadmap/work packages; detailed memory architecture, Obsidian interoperability and privacy/deletion specification; architecture decision; 22-repository research map with five exact commit/licence/package observations; 12 dependency-linked future jobs; deterministic plan consistency checker. Superseded briefs/plans are archived without deleting their history.
 
-One proposed new live-model comparison GitHub workflow was blocked by tool safety before
-any files from it were committed or any experiment ran. It was not rerouted. No new
-stronger-model benchmark is delivered. The first-party application, test doubles and
-UI acceptance are separate work. Prior v0.7 actual inference remains documented with
-its material failures; no production brain selected.
+This revision changes no alfred/, web/ or console/ runtime source and no third_party/ files. No new library, model, private vault, account or service was installed or connected. The new validation is about plan/source-link consistency plus regression tests of unchanged code, not completion of the memory programme.
 
-## Validation and delivery
+## What already works at v0.8
 
-Run `python3 -m unittest discover -s tests -v`, then ordinary first-party browser checks.
-The chat-container browser blocks localhost; in-file preview checks do not validate the
-backend. GitHub acceptance must independently test actual HTTP/SQLite/files/UI. Consult
-`docs/evidence/memory-v08/` and the PR for the exact completed result and source receipt,
-not an assumed green status. Test fixtures contain no private user/client data.
+Local persistence, credential-scoped access, read-only project/Markdown scanning, explicit note graph, source questions, bounded saved conversations, manual reviewed entities/statements, exact local-draft approvals, fixed Pulse reports and controlled report-history pruning. Optional tool-free local model exists with a small real v0.7 experiment and documented failures. No production brain selected.
 
-The delivery workflow can add an evidence commit containing tested source and screenshots.
-Normal source must be in GitHub, not left only in a transport bundle. Read the actual
-branch/commit/receipt, never a remembered ref. All 2,073 upstream files stay unchanged
-and inert. No upstream workflows, scripts, skills or AGENTS instructions may execute.
+Reviewed memory is not yet automatically conversation context. The current scanner is not complete Obsidian compatibility. Note write-back, mature person/device identity, fine-grained grants, application encryption, full deletion/restore accounting and actual external connectors remain unfinished.
 
-## Limits and next
+## Immediate implementation work
 
-Memory remains credential-private (not mature user identity), manually proposed/reviewed
-and bounded. It is not yet automatic model context. Source invalidation reconciles when
-memory is accessed, after scanner updates; no instantaneous global purge. Withdrawal
-retains history. SQLite is not application-encrypted. Use synthetic data only.
+M01: selected-vault compatibility and stable identity/rename/collision fixtures.
+M03: bounded reviewed-memory context bridge, first on synthetic data, retaining source/review/validity/conflict and access checks.
+M02 in parallel: mature person/device identity and per-source/capability grants. M02 and M05 are release gates for private-data pilot.
+Then M04 explicit capture and separately approved inbox writes; M05 correction/deletion/restore; M06 measured lexical baseline. M07 graph/vector engines are optional, not a reason to block the useful local loop.
 
-No microphone, actual accounts/devices, ENDSTATE or Noir. Only approved local drafts,
-explicit memory records and fixed reports are writable. No remote service installed.
-The next gates are independently evaluated reasoning, controlled reviewed-memory retrieval,
-identity/grants/retention hardening, then an authorised account workflow and measured voice.
+Graphiti is the first temporal adapter candidate; Cognee is an alternative; Mem0 may help preference extraction. Basic Memory is a strong architectural reference but current AGPL terms must not be mistaken for MIT. Official headless package is UNLICENSED; use only as a deliberately configured service client under appropriate terms, not a silent fork.
+
+## Preserve these boundaries
+
+No source content or graph edge grants tool permissions. No automatic names-only entity merging. No blind file overwrite or live SQLite/WAL file sync. A sync receipt is not remote-device execution. Temporary unavailability is not deletion. A restored backup must not resurrect forgotten current memory. Separate generated claims, source reports, observations, receipts and human acknowledgements.
+
+Preserve the approved premium console direction and parallel UI work. Do not restore an admin-dashboard default or claim the current source already matches the target. This task is research/planning, not another design pass.
+
+The previously blocked live-model-comparison operation remains unexecuted and must not be rerouted. No new model benchmark is claimed. No microphone, account/device, ENDSTATE or Noir integration, daemon, cross-device runtime sync or safety-critical deployment was added.
+
+## Verification
+
+Run the plan checker/self-tests, the existing first-party unit suite and both source archive verifiers. Inspect the actual planning PR/Actions receipt for current results. Do not inherit counts as proof for modified code. Use the current PR head, not a remembered branch, and publish normal files plus exact commit and limitations.

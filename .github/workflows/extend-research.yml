@@ -1,7 +1,7 @@
-name: Extend reviewed source archive
+name: Preserve reviewed extension source shelf
 on:
   push:
-    branches: [feat/alfred-local-core-2026-09-25]
+    branches: [research/alfred-memory-system-2026-09-27]
     paths: [third_party/extension.lock.json, tools/extend_sources.py, .github/workflows/extend-research.yml]
 permissions:
   contents: write
@@ -10,24 +10,25 @@ concurrency:
   cancel-in-progress: false
 jobs:
   preserve:
+    if: github.repository == 'EmotiveImpact/Alfred'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           ref: ${{ github.sha }}
-      - name: Copy pinned sources as data only
+      - name: Copy pinned sources as inert data only
         run: python3 tools/extend_sources.py
-      - name: Preserve source bytes and honest receipt without force-push
+      - name: Preserve source bytes and exact receipt on this research branch
         run: |
           git config user.name 'ALFRED source importer'
           git config user.email 'alfred-importer@users.noreply.github.com'
           git add -f third_party/extensions third_party/EXTENSION_RECEIPT.json
           if ! git diff --cached --quiet; then
-            git commit --quiet -m 'research: preserve Jev SDK QwenPaw and OpenSandbox source selections'
-            git push origin HEAD:refs/heads/feat/alfred-local-core-2026-09-25
+            git commit --quiet -m 'research: preserve pinned build-reference source shelf'
+            git push origin HEAD:refs/heads/research/alfred-memory-system-2026-09-27
           fi
-      - name: Verify both archives
+      - name: Verify both source archives without executing upstream
         run: |
           python3 tools/import_sources.py --verify
           python3 tools/extend_sources.py --verify

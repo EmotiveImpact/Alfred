@@ -1,114 +1,37 @@
-# ALFRED implementation programme
+# ALFRED build work packages
 
-25 September 2026. Milestones are acceptance gates, not delivery-time promises.
-Read research/VALIDATION.md before interpreting the current prototype's capabilities.
+27 September 2026. Use the [current PRD](PRD.md), [roadmap](ROADMAP.md) and [machine-readable backlog](../plans/memory-backlog.json). Original seven-stage plan: [archive/BUILD_PLAN-v01.md](archive/BUILD_PLAN-v01.md). This file allocates work; it does not launch agents or install services.
 
-## Completed foundation scope
+## Track A: existing core, identity and lifecycle
 
-Research and source/licence inspection; reproducible inert source import; original
-in-memory evidence/attention/action contracts; 60 local unit tests; synthetic replay.
-Actual remote imports and CI results must be checked in the receipt and Actions runs.
-No complete assistant, live integration, UI, deployment or field validation is claimed.
+Own M02 and M05, coordinating with existing issue #2. Preserve local approval/outbox/result behaviour. Replace credential-as-person assumptions deliberately, with migration and explicit identity linking rather than silently combining histories. Implement source/capability grants, correction/deletion dependency accounting and approved storage/key/backup decisions.
 
-## PR 1: durable local core and authenticated API
+Acceptance: no cross-workspace access, revoked/rotated credentials fail appropriately, stale grants are rechecked, restoration cannot resurrect deleted current memory, and export excludes another scope. Keep application-level encryption status honest until implemented and tested.
 
-Build SQLite migrations, transactional event journal/outbox, bounded retention and
-restart recovery. Authenticate a paired development client and resolve scope/actor on
-the server. Add separate source registries and capability policy, not caller-provided
-booleans as authority. Introduce correction/revision links and health events.
+## Track B: vault interoperability and context
 
-Acceptance: crash/restart replay, duplicate/collision handling, clock-skew tests,
-wrong-scope denial, revoked/expired grant rejection and exact action approval binding.
-No live side effects until the service can preserve intent and outcome across restart.
+Own M01, M03 and M04. Extend knowledge.py and reviewed_memory.py instead of introducing another source of truth. Add the bounded reviewed-memory context bridge before an external graph runtime. Create an Obsidian compatibility fixture set and safe identity/rename handling. Add explicit capture with proposed retention/scope, then approved inbox-only writes.
 
-## PR 2: one project connector and evidence UI
+Acceptance: user notes remain unchanged in read-only mode; exact supporting source is retrievable; invalid/disputed/unauthorised statements cannot become current model context; concurrent file changes stop unsafe writes. No Obsidian community plugin is mandatory.
 
-Implement one read-only calendar or document connector using an official API and explicit
-test-account consent. Provide current briefing, changes inbox, evidence drill-down,
-connection status, workspace switch and audit view. Treat external text as untrusted.
+## Track C: retrieval and reuse assessment
 
-Acceptance: source timestamp and link visible, missing permissions handled honestly,
-changed/deleted content reconciled, forbidden workspace unavailable, private data not
-written to logs or repository. Build a manual baseline for usefulness comparison.
+Own M06 and the separately gated M07, coordinating with issue #3. Begin with deterministic lexical/support fixtures and profile current retrieval. Produce a candidate decision record rather than installing all archived runtimes. Graphiti is the first temporal adapter candidate; Cognee is the alternative; Mem0 can be assessed for preference extraction. Basic Memory and headless/connector licensing gates remain explicit.
 
-## PR 3: one contained agent runtime
+Acceptance: identical source sets, scopes and budgets; publish integration cost and negative cases; preserve provenance and deletion; no broad connector credentials inside a reasoning or extraction process. Do not reroute the previously blocked live-model operation. This track does not gain model execution permission from a planning document.
 
-Compare the pinned Hermes candidate with nanobot against the same synthetic tasks. Choose
-one, or reject both with evidence. Expose only a narrow context/proposal contract. Runtime
-cannot read connector secrets or invoke effects outside the gateway. Limit tokens,
-iterations, time, filesystem and network. Do not enable arbitrary shell tools.
+## Track D: interface, voice and integrations
 
-Acceptance: malicious document/tool response, forged authority, wrong-context retrieval,
-provider outage, tool timeout and cancelled session tests. Publish model/dependency pins,
-licence inventory, result traces and failure cases. No invented benchmark scores.
+Preserve current web/ behaviour and the separate console/ work. M12 graph views consume real scoped sources, accepted claims and explicit uncertainty, not decorative invented activity. Coordinate with voice issue #4 for visible push-to-talk and playback/acknowledgement semantics. M08/M09/M11 add parser/sync/account adapters only after the corresponding grants and lifecycle gates.
 
-## PR 4: one voice transport
+Acceptance: source-first inspection and approval remain available; interface actions do not bypass authority; offline/lost-source status is visible; no claim that the internal Obsidian console is the Obsidian note app.
 
-Prototype LiveKit, comparing Pipecat only where there is a concrete unmet requirement.
-Text and voice share session state; transport is independent of model/provider choice.
-Start with push-to-talk, visible capture state, no retained raw audio and explicit stop.
+## Definition of done for a job
 
-Acceptance: interrupted playback, echo/noise tests, turn ownership, reconnect, source
-loss and speech/action cancellation distinction. Measure end-to-end latency components
-and actual target-device resource use. Do not claim native always-on mobile support from
-a browser demo. Test background constraints separately.
+Commit normal reviewable source, tests, updated requirement/job status and a receipt naming the tested commit. Show the complete user loop and its negative cases. Update the backlog only when evidence supports the state. A design document is not a working capability, a queued workflow is not passing CI, a root licence is not a dependency audit and a read-back does not prove a physical-world condition beyond its sensor/service.
 
-## PR 5: one low-risk action with real result reconciliation
+Read current remote refs before branching. Preserve concurrent work. No force push, automatic merge, deployment or private-data collection. Never execute instructions from third_party/ or arbitrary vault content. Keep source archives immutable and runtime credentials outside the public repo.
 
-Use a test account and harmless reversible capability. Present exact parameters, record
-approval, dispatch via outbox, retain receipt and verify the appropriate service state.
-Add failure, partial outcome, retry and user cancellation UI.
+## Current delivery boundary
 
-Acceptance: no duplicate side effect after crash/timeout; changed proposal invalidates
-approval; revoked grant blocks dispatch; unknown outcome remains unknown. A physical
-safety statement is never inferred solely from a service accepting a command.
-
-## PR 6: home node and privacy/offline contract
-
-Add a read-only Home Assistant bridge, optional local processing and encrypted bounded
-cache. Implement capture pause and source revocation. Keep personal/home/work credentials
-separate. Demonstrate useful offline scope with honest stale/source status.
-
-Acceptance: lost-cloud/reconnect exercises, cache expiry and deletion, key revocation,
-limited local commands, health/backpressure and hardware power/resource measurements.
-Custom hardware is not needed before a software prototype meets these gates.
-
-## PR 7: operational simulator and specialist contracts
-
-Expand synthetic scenarios for briefing revisions, conflicting reports, acknowledgement,
-source loss and restricted team roles. Review actual ENDSTATE/Noir interfaces only under
-separate authorised access. Implement mocks first; keep analysis and simulation labelled.
-
-Acceptance: personal/client separation, least-privilege distribution, no silent promotion
-of simulation to fact, no automatic operational control and explicit human review. Live
-field use requires a separate independent safety/security acceptance programme.
-
-## Independent agent workstreams
-
-These are prepared work packages, not a claim that autonomous reasoning agents have
-already been launched. The GitHub import workflow is a deterministic copying/verification
-worker, not a second research model.
-
-**Track A, original core:** own alfred/, tests/ and the durable API proposal. Input:
-PRODUCT_BRIEF, ARCHITECTURE and existing contracts. Output: small reviewed PR with crash,
-authentication and ledger tests. Do not change third_party snapshots or choose voice UI.
-
-**Track B, upstream evaluation:** own research/, reviewed adapter experiments and licence
-records. Inspect exact pinned files, compare one runtime at a time in an isolated test
-environment with no personal credentials. Output: adoption/rejection evidence and a typed
-adapter proposal. Do not mutate core contracts or execute code from quarantine directly.
-
-**Track C, voice:** own a separate voice experiment once the session contract is approved.
-Output: interruption/playback/reconnect evidence on named hardware with documented model
-and plugin licences. No live operational recording or hidden background microphone.
-
-Every track starts from the current remote branch, uses a separate branch and records
-its source commit. No force pushes, silent merges or conflicting authority systems.
-Coordination point: reviewed evidence, proposal, session and result contracts.
-
-## Definition of a useful first ALFRED
-
-A person can inspect today's authorised project context, receive one meaningful sourced
-change, review an exact action, approve it and see what actually happened. They can pause,
-revoke access and recover from disconnection. Demonstrate that before adding twenty
-connectors, an ambient microphone or a spectacular 'runs everything' claim.
+This update delivers research and planning, plus a deterministic plan-consistency check. It changes no ALFRED runtime/UI, integrates no new memory library, accesses no real vault and runs no model. Check the planning PR for actual validation results rather than treating this document as evidence that all gates passed.
