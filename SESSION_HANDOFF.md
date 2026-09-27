@@ -1,74 +1,62 @@
-# ALFRED continuation record: Knowledge Desk v0.4
+# ALFRED continuation: Grounded Desk v0.5
 
-26 September 2026. Read this file, AGENTS.md, docs/KNOWLEDGE.md and docs/ROADMAP.md first.
+26 September 2026. Read README.md, docs/GROUNDED_DESK.md, docs/MEMORY_ARCHITECTURE.md,
+AGENTS.md and actual acceptance/source receipts before continuing.
 
-## Branch and continuity
+## Current branch and ancestry
 
-Use `feat/alfred-knowledge-desk-2026-09-26`, not main as though it contains the application.
-Base Desk checkpoint: `a43c4adcbc8ca9c8bf310443fc1fc33734bacd14` on
-`feat/alfred-desk-2026-09-25`. That work already added the browser UI, project-file connector,
-foreground supervisor and actual browser evidence. Preserve it. Earlier v0.2 handoff
-text was stale about the absence of a UI.
+Work on `feat/alfred-grounded-desk-2026-09-26`. It extends Knowledge Desk commit
+554949273be84d9b420ce11201e2489a77948648, preserving the earlier Desk, persistent core
+and source foundation. Main was separately checked at b0614d70ab6e26e8ed358e02ad8d0586ca514427
+and is not merged by this task. No deployment is made. Read the latest remote ref because
+the verification workflow adds a commit containing exact tested source and evidence.
 
-The new source graph/index/retrieval is original ALFRED code. It does not execute or merge
-the retained third-party agents. All eight pinned archives and their 2,073 files remain
-unchanged. The MAPS guide is attributed and assessed, not copied without a verified licence.
+Initial v0.5 authored commit c9540464742efb48aa122eb8408aadb86b07b2e9 had one failing local
+HTTP adapter test. The close-after-read error was fixed in d73b75bafa64137f3b5b6c90e29e8d18ad6c1d9d.
+Acceptance run 36210271331 then passed all code checks and the three browser flows;
+tested integration and actual visuals were committed at c88c303db7a95fff1504b425fbee5f829030ce7b.
+Later packaging/preview changes must have their own actual run checked, not inherited green status.
 
-Always fetch the current branch head: successful acceptance can add a verification commit
-containing the tested integration and screenshots. Its source receipt records exact file
-hashes. Do not mistake the pre-integration input commit for the final tested file tree.
-No force-push, automatic merge, private-data publication or unrequested deployment.
+## Product direction
 
-## Current implementation
+Keep ALFRED: personal, work and authorised operational intelligence. Ownership between
+Emotive Impact and Black State remains open. Markdown/Obsidian is a memory input layer,
+not a replacement for the whole assistant. ENDSTATE and Noir remain separate projects;
+neither is connected here. No unrestricted security control or autonomous use of force.
 
-Persistent local events and action ledger; scoped local bearer credentials; same-origin
-browser sessions and CSRF; JSON project-file scanner; evidence and approval UI; automatic
-processing while the launched Desk process is alive; local draft write and read-back.
+## Delivered implementation
 
-Knowledge adds a read-only bounded Markdown vault connector, authored note metadata,
-explicit link graph, search/type filters, source/backlink inspection, map-health checking
-and bounded exact-line retrieval packets. It supports a subset of Obsidian-style links,
-not plugins/sync or full Markdown/YAML semantics. No private vault has been accessed.
+Persistent authenticated local Desk; browser evidence/approval/result flow; launched
+local supervisor; read-only JSON and Markdown sources; explicit file-reference graph;
+source-first questions with bounded keyword/one-hop retrieval; exact citation line/hash
+inspection, source invalidation and Markdown export. Optional owner-only local Ollama
+adapter is tool-free and off by default. No actual model inference was tested.
 
-No live model, semantic embeddings, generated answers, microphone, cloud daemon, external
-account/device control, ENDSTATE or Noir integration. Knowledge source packets are not
-answers, and graph edges are references rather than verified real-world facts.
+The only effect is a local SQLite draft. Existing private-vault/account/device access
+has not been configured. All demonstrations use fictional files. Graph links are authored
+references, not verified facts. Citation checks establish reference integrity, not whether
+a generated sentence is truly supported. The optional local server itself is not sandboxed.
 
-## Test and visual receipts
+## Immediate next work
 
-The acceptance workflow runs all original tests, the prior Desk browser regression and
-the Knowledge browser flow against a real loopback server, SQLite and fictional files.
-It also verifies both source archives. Inspect actual logs and
-`docs/evidence/knowledge-v04/`, not just workflow YAML. Initial acceptance passed 302 tests
-and all 33 prior browser checks but caught a graph node obscured by the legend; the layout
-was corrected and extra cross-source bounds were added before final acceptance.
+1. Validate a real configured local model using a saved evidence-question set, reporting
+   failures, citation accuracy, latency and resource use. No invented benchmark claims.
+2. Add typed claim proposals with provenance, review and conflict/supersession handling,
+   separate from the existing note graph. Do not merge identities on name alone.
+3. Harden pairing/key rotation, retention/deletion and per-capability grants before
+   handling private client data or live external actions.
+4. Add a bounded durable routine registry and compare one contained agent runtime.
+5. Voice and external device/ENDSTATE/Noir integrations need their own acceptance gates.
 
-The optional self-contained HTML under `docs/previews/` uses the actual frontend with a
-clearly labelled fictional read-only in-file transport. It is not a hosted server, cannot
-perform approvals/effects and contains no sign-in secrets. Check its manifest hash.
+## Verification and preservation
 
-## Commands
+Run first-party unit tests and the existing source verifiers. Keep all 2,073 retained
+upstream files unchanged and inert. No quarantined scripts, prompts, skills or workflows
+are execution authority. No force push, silent merge, unrequested deployment or private
+context in this public repo. Code changes must be tested, committed and remote-verified.
 
-```sh
-python3 -m unittest discover -s tests -v
-python3 tools/import_sources.py --verify
-python3 tools/extend_sources.py --verify
-python3 -m alfred.desk init --data-dir ~/.local/share/alfred/desk-v04-demo
-python3 -m alfred.desk access --data-dir ~/.local/share/alfred/desk-v04-demo
-python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/desk-v04-demo
-```
-
-Use a new data directory for the generated 20-note fictional vault. Init never overwrites.
-The explicitly requested access command prints a private local sign-in key, so do not put
-its output into chat, logs or screenshots. The service binds to 127.0.0.1 only.
-
-## Next priority
-
-A sourced conversation over bounded knowledge packets, using one contained model/runtime
-adapter with explicit provider egress and an evaluation set. In parallel finish key/source
-grants, retention/correction and reviewed unattended-service lifecycle. Then add voice
-and one test-account connector. Follow the acceptance gates in docs/ROADMAP.md.
-
-This record is not a promise of autonomous work after the conversation ends. No separate
-reasoning agents have been launched. GitHub Actions is used for deterministic tests,
-copy verification and preservation, with real success/failure receipts.
+`tools/integrate_grounded.py` applies additive hooks only to its pinned predecessor files;
+the completed branch already contains those hooks. It is not a migration system for
+arbitrary future code. Do not rerun older source-patching tools to overwrite v0.5 behaviour.
+Standalone previews contain fictional in-file transport, not the backend. The developer
+package excludes upstream research archives; full source verification uses the GitHub branch.

@@ -10,8 +10,10 @@ import secrets
 from urllib.parse import urlsplit, parse_qs
 from .local import Fault, exact, parse_json
 from .knowledge_http import knowledge_get
+from .grounded import ask, check_sources
 
-ASSETS = {'/assets/knowledge.js': ('knowledge.js', 'text/javascript; charset=utf-8'),
+ASSETS = {'/assets/ask.js': ('ask.js', 'text/javascript; charset=utf-8'),
+          '/assets/ask.css': ('ask.css', 'text/css; charset=utf-8'),'/assets/knowledge.js': ('knowledge.js', 'text/javascript; charset=utf-8'),
           '/assets/knowledge.css': ('knowledge.css', 'text/css; charset=utf-8'),
           '/': ('index.html', 'text/html; charset=utf-8'),
           '/assets/app.js': ('app.js', 'text/javascript; charset=utf-8'),
@@ -63,8 +65,9 @@ class Sessions:
 
 class DeskHTTPServer(HTTPServer):
     allow_reuse_address = True
-    def __init__(self, store, supervisor, port=8765, assets=None):
+    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
+        self.local_model = local_model
         self.assets = Path(assets) if assets else Path(__file__).resolve().parents[1] / 'web'
         super().__init__(('127.0.0.1', port), Handler)
         self.host = f'127.0.0.1:{self.server_port}'
@@ -195,6 +198,17 @@ class Handler(BaseHTTPRequestHandler):
                 before = int(query['before'][0]) if 'before' in query else None
                 result = store.desk_state(bearer, before=before)
                 result['supervisor'] = self.server.supervisor.view(result['scope'])
+            elif not mutation and url.path == '/desk/ask/status' and not url.query:
+                p = store.principal(bearer, {'owner', 'reader'})
+                result = {'local_model_configured': self.server.local_model is not None,
+                          'model': self.server.local_model.model if self.server.local_model else None,
+                          'model_allowed': p['role'] == 'owner' and p['scope'] == self.server.supervisor.scope,
+                          'default_mode': 'sources', 'tools_enabled': False}
+            elif mutation and url.path == '/desk/ask':
+                result = ask(store, bearer, body, self.server.local_model, self.server.supervisor.scope)
+            elif mutation and url.path == '/desk/ask/check':
+                exact(body, {'references'})
+                result = check_sources(store, bearer, body['references'])
             elif not mutation and url.path.startswith('/desk/knowledge'):
                 result = knowledge_get(store, bearer, url)
             elif not mutation and re.fullmatch(r'/desk/evidence/[0-9]+', url.path) and not url.query:

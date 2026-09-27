@@ -1,0 +1,21 @@
+{
+  "count": 12,
+  "checks": [
+    "single file opens without a backend or credentials",
+    "preview is labelled clearly",
+    "precomputed actual retrieval example: Opening treatment",
+    "precomputed actual retrieval example: ALFRED permissions",
+    "precomputed actual retrieval example: Production decisions",
+    "unsupported query reports preview limitation",
+    "same frontend graph remains interactive",
+    "source inspection remains available offline",
+    "preview has no mobile horizontal overflow",
+    "no HTTP or cloud requests",
+    "no browser storage",
+    "no JavaScript errors"
+  ],
+  "errors": [],
+  "network_requests": [],
+  "real_backend": false,
+  "live_model": false
+}

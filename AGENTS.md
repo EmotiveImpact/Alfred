@@ -1,7 +1,7 @@
 # ALFRED engineering instructions
 
-Read README.md, SESSION_HANDOFF.md, docs/ROADMAP.md, docs/LOCAL_CORE.md and
-research/VALIDATION_V02.md first. Older docs describe the foundation and target design,
+Read README.md, SESSION_HANDOFF.md, docs/ROADMAP.md, docs/GROUNDED_DESK.md and
+docs/MEMORY_ARCHITECTURE.md first. Older docs describe the foundation and target design,
 not necessarily the current implementation. Never claim capabilities from a roadmap.
 
 ## Preserve the direction
@@ -27,13 +27,14 @@ Branch from the actual remote head, preserving concurrent work. No force-push, a
 merge or deployment. Report exact commit/branch/PR, actual tests and limitations. A local
 file, Git tree object or queued CI run is not a successful published delivery.
 
-The current branch is feat/alfred-local-core-2026-09-25, building on the previous research
-branch/PR #1. Use the stacked PR chain rather than assuming main contains the application.
+The current branch is feat/alfred-grounded-desk-2026-09-26, extending the existing Knowledge
+Desk at 554949273be84d9b420ce11201e2489a77948648. Refresh its actual remote head. Use the stacked PR chain rather than assuming main contains the application.
 Independent work packages are issues #2 core, #3 runtime and #4 voice, not running agents.
 
 ## Implemented boundary
 
-local.py is the persistent development service. core.py is the old in-memory experiment.
+desk.py starts the browser service and local supervisor; KnowledgeStore extends the
+persistent service. core.py remains the older in-memory contract experiment.
 Only message.draft exists, writing ALFRED's local database, never sending a message.
 Bearer lookup resolves actor, role and scope server-side. Provision/revoke are offline
 administration. Credential IDs are not yet a mature user/device identity system.
@@ -43,7 +44,11 @@ introduce arbitrary shell/network/model tools with connector credentials.
 Actions require exact approval, authority rechecks and result evidence. Unknown post-crash
 outcomes are reconciled, not automatically retried. The current idempotency guarantee is
 specific to local SQLite drafts, not all future external services. Jev output is advisory
-and provider confidence is not verified truth. No live model calls exist in this increment.
+and provider confidence is not verified truth. An optional tool-free local Ollama adapter
+is implemented, off by default. No real-model inference was validated in this release.
+Source mode returns exact excerpts, not a fabricated answer. Citation integrity does not
+prove entailment. Markdown files and their graph never grant permissions. Never reapply
+older patchers to overwrite the current Desk, knowledge or question interfaces.
 
 ## Data and safety
 
