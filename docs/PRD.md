@@ -1,16 +1,24 @@
 # ALFRED product requirements
 
-Planning revision: 27 September 2026. Product baseline: local application v0.8, plus the separately developing console toolchain. This is a requirements update, not a v0.9 runtime release.
+<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+
+**Current product category: operational and executive intelligence.** See [positioning](PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
+
+Planning revision: 27 September 2026. Product baseline: local application v0.8 and the functional, separately tested React/Three.js fixture console, consolidated in main. This is a requirements update, not a v0.9 runtime release.
 
 This is the current product source of truth. Implementation sequencing is in [ROADMAP.md](ROADMAP.md) and [the machine-readable memory backlog](../plans/memory-backlog.json). Older documents under archive/ retain historical decisions, not current completion claims.
 
 ## Product and problem
 
-ALFRED is a persistent personal and authorised operational intelligence layer. It helps a person maintain context across people, projects, communications, knowledge and devices; recognise meaningful changes; reason with appropriate evidence; and carry out deliberately authorised work. It is not merely a note application, a chatbot skin, a coding agent or a military-only product.
+ALFRED is operational and executive intelligence delivered through a personal AI operating environment. It helps a person maintain context across people, projects, communications, knowledge and devices; recognise meaningful changes; reason with appropriate evidence; and carry out deliberately authorised work. It is not merely a note application, a chatbot skin, a coding agent or a military-only product.
 
 The problem is broken continuity. People repeatedly reconstruct what was agreed, what changed, who is responsible, what remains unconfirmed and whether an action actually happened. The first experience must close that loop without demanding that the user maintain an elaborate graph manually.
 
 Product identity remains ALFRED. Emotive Impact versus Black State ownership is unresolved. ENDSTATE stays an independent specialist analysis engine; Noir stays a separate operational system. A plan is not evidence of either integration.
+
+## Executive and operational outcomes
+
+Executive intelligence covers priorities, planning, decision briefs, commitments, preparation and follow-up. Operational intelligence covers current state, source health, changes, coordination and traceable authorised outcomes. Personal knowledge and everyday usefulness remain central. Existing requirement IDs continue to apply; this positioning does not invent completed functionality.
 
 ## Users and operating contexts
 
@@ -26,7 +34,7 @@ Not yet implemented: automatic reviewed-memory context injection; dependable gen
 
 The v0.7 small-model experiment has documented relevance, abstention and conflict-handling failures. v0.8 added narrow literal evidence checks, not a semantic verifier. The previously blocked model-comparison operation remains blocked and must not be rerouted by this plan. No stronger-model result is claimed.
 
-A newer branch contains an isolated console toolchain. Its internal 'Obsidian console' name is not evidence of an integration with the Obsidian note application. Preserve that concurrent work and the current functioning web interface.
+The newer React/TypeScript/Three.js console is now present in main. Its fictional fixtures are not real backend data. Preserve this functional frontend and the existing backend-connected web interface while implementing their authenticated adapter. The internal Obsidian console name is not an Obsidian note-app integration.
 
 ## First complete personal-memory experience
 
@@ -74,7 +82,7 @@ This is a target workflow. Some steps exist separately, but the complete loop is
 | CON-001 | Official account/device connectors with least access and observable freshness. | Read-only test account first, then one harmless approved write. |
 | VOI-001 | Voice shares context without confusing generated, played and acknowledged speech. | Visible push-to-talk first; interruption/reconnect tests on actual hardware. |
 | OPS-001 | Role-limited team and operational workspaces, specialist-engine adapters. | Read actual ENDSTATE/Noir contracts; keep simulation distinct from observation. |
-| UX-001 | Premium personal intelligence console, not an admin-dashboard default. | Preserve the approved black/graphite/ivory, sparse-amber direction and concurrent console work; do not claim implementation matches the target before inspection. |
+| UX-001 | Premium operational and executive intelligence console, not an admin-dashboard default. | Preserve the approved black/graphite/ivory, sparse-amber direction and concurrent console work; do not claim implementation matches the target before inspection. |
 | RUN-001 | Explicit host lifecycle, pause, recovery, bounded offline capability and health. | Local process exists; no always-on deployment or native background-device claim yet. |
 
 ## Acceptance and evaluation

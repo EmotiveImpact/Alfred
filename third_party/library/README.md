@@ -6,12 +6,12 @@ This catalogue covers every repository requested in the two research landscapes 
 Source is inert reference material, not an enabled dependency. Existing historical snapshots are preserved separately.
 No upstream scripts, skills, tests, workflows, packages or models are executed by this importer.
 
-**30 source snapshots; 12 reference-only; 0 errors.**
-**87,900 eligible source-text files copied.**
+**33 source snapshots; 9 reference-only; 0 errors.**
+**89,788 eligible source-text files copied.**
 
 | Repository | Availability | Licence observed | Files | Details |
 |---|---|---|---:|---|
-| [openclaw/openclaw](https://github.com/openclaw/openclaw/tree/8133be64d156a7a7f625ab69469b642930e29aec) | reference_only | NOASSERTION | 0 | Licence requires specific review outside the redistribution allowlist; source not copied. |
+| [openclaw/openclaw](https://github.com/openclaw/openclaw/tree/8133be64d156a7a7f625ab69469b642930e29aec) | reference_only | MIT | 0 | Broad source-text copy exceeded the 192 MiB and 512 MiB per-repository limits in runs 36290752368 and 36290874461. No partial broad snapshot was committed. The original pinned 146-file focused selection remains available; this is not a complete copy. |
 | [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent/tree/8fe53200c7fcb65ef0650d6ede59b28d5cd761e9) | copied | MIT | 16043 | [Source](snapshots/NousResearch__hermes-agent) · [manifest](manifests/NousResearch__hermes-agent.json) |
 | [HKUDS/nanobot](https://github.com/HKUDS/nanobot/tree/9756468a8cb475dbf685f64837c0e0ecdac9ad10) | copied | MIT | 1552 | [Source](snapshots/HKUDS__nanobot) · [manifest](manifests/HKUDS__nanobot.json) |
 | [eadmin2/jarvis_ai](https://github.com/eadmin2/jarvis_ai/tree/88998de8369e9d36f6d434b5e01feb93fcf1c33f) | copied | MIT | 27 | [Source](snapshots/eadmin2__jarvis_ai) · [manifest](manifests/eadmin2__jarvis_ai.json) |
@@ -22,7 +22,7 @@ No upstream scripts, skills, tests, workflows, packages or models are executed b
 | [llm-guy/jarvis](https://github.com/llm-guy/jarvis/tree/f278f5c0e5dbfeb60b6a4e0d9fc3f4c768db6df4) | reference_only | not established | 0 | No recognised root licence returned at the pinned revision; source not copied. |
 | [Priler/jarvis](https://github.com/Priler/jarvis/tree/520b98143fdcf72bad855f722e7b32932d61cd46) | reference_only | NOASSERTION | 0 | Licence requires specific review outside the redistribution allowlist; source not copied. |
 | [leon-ai/leon](https://github.com/leon-ai/leon/tree/6bae9220b0515f95c05553e44396a33ad51caa8a) | copied | MIT | 1371 | [Source](snapshots/leon-ai__leon) · [manifest](manifests/leon-ai__leon.json) |
-| [livekit/agents](https://github.com/livekit/agents/tree/57b3227a7842697e6ad45b1275369cf9700bf161) | reference_only | NOASSERTION | 0 | Licence requires specific review outside the redistribution allowlist; source not copied. |
+| [livekit/agents](https://github.com/livekit/agents/tree/57b3227a7842697e6ad45b1275369cf9700bf161) | copied | Apache-2.0 | 1448 | [Source](snapshots/livekit__agents) · [manifest](manifests/livekit__agents.json) |
 | [pipecat-ai/pipecat](https://github.com/pipecat-ai/pipecat/tree/2967e1c09ad484076089bc88427d305fe8f79fa9) | copied | BSD-2-Clause | 1715 | [Source](snapshots/pipecat-ai__pipecat) · [manifest](manifests/pipecat-ai__pipecat.json) |
 | [openinterpreter/openinterpreter](https://github.com/openinterpreter/openinterpreter/tree/89e7a862435645cfe0209ab4e18199c832629261) | copied | Apache-2.0 | 7634 | [Source](snapshots/openinterpreter__openinterpreter) · [manifest](manifests/openinterpreter__openinterpreter.json) |
 | [browser-use/browser-use](https://github.com/browser-use/browser-use/tree/4cbe921673b48a488f5415d9159249afd12a625b) | copied | MIT | 508 | [Source](snapshots/browser-use__browser-use) · [manifest](manifests/browser-use__browser-use.json) |
@@ -39,8 +39,8 @@ No upstream scripts, skills, tests, workflows, packages or models are executed b
 | [getzep/graphiti](https://github.com/getzep/graphiti/tree/ba4a9cb32495b6864160616f8dfa2b898f4a500c) | copied | Apache-2.0 | 371 | [Source](snapshots/getzep__graphiti) · [manifest](manifests/getzep__graphiti.json) |
 | [topoteretes/cognee](https://github.com/topoteretes/cognee/tree/eb90d03740755f5252b8b12cce91fd09970f2d81) | copied | Apache-2.0 | 3597 | [Source](snapshots/topoteretes__cognee) · [manifest](manifests/topoteretes__cognee.json) |
 | [letta-ai/letta-code](https://github.com/letta-ai/letta-code/tree/44b154e45384d2e38a8c503b33dc1695e7fd91dd) | copied | Apache-2.0 | 2375 | [Source](snapshots/letta-ai__letta-code) · [manifest](manifests/letta-ai__letta-code.json) |
-| [asg017/sqlite-vec](https://github.com/asg017/sqlite-vec/tree/04d28bd21773981e2d266bbf6aa4efbd011eb4f6) | reference_only | NOASSERTION | 0 | Licence requires specific review outside the redistribution allowlist; source not copied. |
-| [pgvector/pgvector](https://github.com/pgvector/pgvector/tree/7db2345ed99bc77bf33cbdc8b12bd1973210dc81) | reference_only | NOASSERTION | 0 | Licence requires specific review outside the redistribution allowlist; source not copied. |
+| [asg017/sqlite-vec](https://github.com/asg017/sqlite-vec/tree/04d28bd21773981e2d266bbf6aa4efbd011eb4f6) | copied | MIT | 282 | [Source](snapshots/asg017__sqlite-vec) · [manifest](manifests/asg017__sqlite-vec.json) |
+| [pgvector/pgvector](https://github.com/pgvector/pgvector/tree/7db2345ed99bc77bf33cbdc8b12bd1973210dc81) | copied | PostgreSQL | 158 | [Source](snapshots/pgvector__pgvector) · [manifest](manifests/pgvector__pgvector.json) |
 | [HKUDS/LightRAG](https://github.com/HKUDS/LightRAG/tree/453dce83d6d0354a06e46c8d4029a0895c4e054b) | copied | MIT | 1291 | [Source](snapshots/HKUDS__LightRAG) · [manifest](manifests/HKUDS__LightRAG.json) |
 | [microsoft/graphrag](https://github.com/microsoft/graphrag/tree/769542fbf1d8e5b4c6a8677fefc34621c87894c5) | copied | MIT | 800 | [Source](snapshots/microsoft__graphrag) · [manifest](manifests/microsoft__graphrag.json) |
 | [docling-project/docling](https://github.com/docling-project/docling/tree/2d5c590c34b6378fd8a47c65b534b280aa40c93c) | copied | MIT | 692 | [Source](snapshots/docling-project__docling) · [manifest](manifests/docling-project__docling.json) |
