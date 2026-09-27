@@ -1,0 +1,24 @@
+name: ALFRED contract checks
+on:
+  push:
+    branches: [research/alfred-foundation-2026-09-25]
+    paths: [alfred/**, tests/**, tools/**, research/**, docs/**, .github/workflows/contract-checks.yml]
+  pull_request:
+    paths: [alfred/**, tests/**, tools/**, research/**, docs/**, third_party/**, .github/workflows/contract-checks.yml]
+permissions:
+  contents: read
+jobs:
+  original-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test ALFRED-owned code only
+        run: |
+          python3 --version
+          python3 -m unittest discover -s tests -v
+          python3 -m alfred.demo
+      - name: Verify inert upstream file sets and hashes, never execute upstream
+        run: python3 tools/import_sources.py --verify
