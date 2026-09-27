@@ -1,0 +1,65 @@
+name: Obsidian console build
+on:
+  push:
+    branches: [feat/alfred-obsidian-console-2026-09-27]
+    paths: ['console/**', '!console/docs/**', '!console/README.md', '.github/workflows/console-build.yml']
+permissions:
+  contents: read
+jobs:
+  console:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked frontend dependencies
+        working-directory: console
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.20.0
+          npm --version > npm-version.txt
+          npm ci
+          npm ls --depth=0 > dependency-versions.txt
+          npm audit --json > dependency-audit.json || true
+      - name: Typecheck, production build and domain regression
+        working-directory: console
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          npm run build 2>&1 | tee evidence/build.txt
+          npm test 2>&1 | tee evidence/unit-tests.txt
+          node tools/standalone.mjs
+      - name: Install isolated browser test runtime
+        working-directory: console
+        run: npx playwright install --with-deps chromium
+      - name: Real HTTP, WebGL, interaction and responsive checks
+        working-directory: console
+        run: npm run test:browser
+      - name: Preserve actual source and evidence
+        if: always()
+        run: |
+          mkdir -p delivery
+          tar --exclude=node_modules --exclude=dist --exclude=test-results --exclude=evidence --exclude=ALFRED-Console.html -czf delivery/console-source.tar.gz console
+          cp console/ALFRED-Console.html delivery/ 2>/dev/null || true
+          cp -r console/evidence delivery/ 2>/dev/null || true
+          cp console/dependency-versions.txt console/dependency-audit.json console/package-lock.json console/npm-version.txt delivery/ 2>/dev/null || true
+          git rev-parse HEAD > delivery/TESTED_COMMIT.txt
+          if test -d console/node_modules; then tar -czf delivery/console-toolchain.tar.gz -C console node_modules package-lock.json; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: obsidian-console-preview
+          path: delivery/
+          retention-days: 7
+  preserve-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.3'
+      - name: Existing first-party core regression
+        run: python3 -m unittest discover -s tests -v
