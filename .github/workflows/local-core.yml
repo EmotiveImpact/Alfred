@@ -1,0 +1,27 @@
+name: ALFRED local core
+on:
+  push:
+    branches: [feat/alfred-local-core-2026-09-25]
+    paths: [alfred/**, tests/**, docs/**, research/**, README.md, SESSION_HANDOFF.md, .github/workflows/local-core.yml]
+  pull_request:
+    paths: [alfred/**, tests/**, docs/**, research/**, .github/workflows/local-core.yml]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test original code, real loopback HTTP and restart behaviour
+        run: |
+          python3 --version
+          python3 -m unittest discover -s tests -v
+          python3 -m alfred.demo
+          python3 -m alfred.run demo
+      - name: Verify both inert upstream archives
+        run: |
+          python3 tools/import_sources.py --verify
+          python3 tools/extend_sources.py --verify
