@@ -22,7 +22,7 @@ export function makePointField(count:number,seed=814):{positions:Float32Array;st
 }
 export function makeLattice(count=160):{positions:Float32Array;nodes:Point3[];alpha:Float32Array}{
  const rng=randomSeed(45),nodes:Point3[]=[],p:number[]=[],alpha:number[]=[];for(let i=0;i<count;i++)nodes.push(fibonacciPoint(i,count,1.012));
- for(let i=0;i<count;i++){const pairs=nodes.map((v,j)=>({j,d:Math.hypot(v[0]-nodes[i][0],v[1]-nodes[i][1],v[2]-nodes[i][2])})).filter(v=>v.j>i).sort((a,b)=>a.d-b.d).slice(0,3);for(const{j,d}of pairs){if(d>.76)continue;p.push(...nodes[i],...nodes[j]);const a=.045+rng()*.065;alpha.push(a,a);}if(i%7===0){const j=(i+47)%count;p.push(...nodes[i],...nodes[j]);alpha.push(.025,.025);}}
+ for(let i=0;i<count;i++){const pairs=nodes.map((v,j)=>({j,d:Math.hypot(v[0]-nodes[i][0],v[1]-nodes[i][1],v[2]-nodes[i][2])})).filter(v=>v.j>i).sort((a,b)=>a.d-b.d).slice(0,3);for(const{j,d}of pairs){if(d>.76)continue;p.push(...nodes[i],...nodes[j]);const a=.10+rng()*.12;alpha.push(a,a);}if(i%7===0){const j=(i+47)%count;p.push(...nodes[i],...nodes[j]);alpha.push(.035,.035);}}
  return{positions:new Float32Array(p),nodes,alpha:new Float32Array(alpha)};
 }
 export function makeOrbit(radius:number,tilt:number,segments=240):Float32Array{const p:number[]=[];for(let i=0;i<segments;i++){const a=i/segments*Math.PI*2,b=(i+1)/segments*Math.PI*2;for(const t of[a,b])p.push(radius*Math.cos(t),radius*Math.sin(t)*Math.sin(tilt),radius*Math.sin(t)*Math.cos(tilt));}return new Float32Array(p);}
