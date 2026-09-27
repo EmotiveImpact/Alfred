@@ -1,3 +1,4 @@
+import './notices.mjs';
 import {readFile,writeFile,readdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 const dist=resolve('dist');const files=await readdir(resolve(dist,'assets'));
@@ -6,5 +7,6 @@ if(scripts.length!==1||styles.length!==1)throw new Error('Standalone packer expe
 const mark='data:image/svg+xml;base64,'+Buffer.from(await readFile('public/mark.svg')).toString('base64');
 const source=(await readFile(resolve(dist,'assets',scripts[0]),'utf8')).replaceAll('./mark.svg',mark).replace(/\/\/# sourceMappingURL=.*$/gm,'');
 const style=await readFile(resolve(dist,'assets',styles[0]),'utf8');
-const html=`<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#030405"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none';"><title>ALFRED / Interactive console preview</title><link rel="icon" href="${mark}"><style>${style}</style></head><body><div id="root"></div><script type="module">${source.replaceAll('</script','<\\/script')}</script></body></html>`;
+const notices=await readFile('THIRD_PARTY_NOTICES.md','utf8');
+const html=`<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#000000"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none';"><title>ALFRED / Interactive console preview</title><link rel="icon" href="${mark}"><style>${style}</style></head><body><div id="root"></div><script type="module">${source.replaceAll('</script','<\\/script')}</script><!--\n${notices.replaceAll('--','- -')}\n--></body></html>`;
 const output=process.argv[2]||'ALFRED-Console.html';await writeFile(output,html);console.log(output);

@@ -4,3 +4,6 @@
 @media(min-width:1800px){.console{grid-template-columns:190px minmax(0,1fr) 385px}.focus-mode{grid-template-columns:190px minmax(0,1fr) 0}.focus-row{min-height:84px;padding:14px 18px}.focus-row strong{font-size:13px}.approval-row{min-height:58px}.project-row{min-height:66px}.priority-row{font-size:11px;padding:10px 0}.brief-copy{font-size:14px}}
 @media(min-width:1101px) and (max-width:1350px){.console{grid-template-columns:145px minmax(0,1fr) 310px}.sphere-stage{inset:-3% 4% 4% 25%}.focus-mode{grid-template-columns:145px minmax(0,1fr) 0}.focus-row strong{font-size:11px}.focus-row em{font-size:9px}.priority-row{font-size:9px}.approval-row strong,.project-row strong{font-size:10px}.category-text small{display:none}.category-knowledge{top:25%;right:0}.category-projects{top:30%}.category-resources{bottom:4%}.command-zone{margin-right:8%}}
 @media(max-width:1100px){.console{grid-template-rows:auto}.command-zone{margin-left:auto;margin-right:auto}}
+/* Match the post-processed WebGL black, rather than a lighter canvas rectangle. */
+:root{--black:#000000}
+@media(min-width:1101px){.category-people{top:0}.category-people small{background:#0009}.category-resources{bottom:-1%}.category-text{position:relative;z-index:1}.category-text small{color:#999b98}}

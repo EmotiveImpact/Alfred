@@ -1,0 +1,29 @@
+name: Pin console dependency lock
+on:
+  push:
+    branches: [feat/alfred-obsidian-console-2026-09-27]
+    paths: ['console/package.json', '.github/workflows/console-lockfile.yml']
+permissions:
+  contents: write
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Commit the generated lock only on the isolated UI branch
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'feat/alfred-obsidian-console-2026-09-27'
+          if test -f console/package-lock.json; then exit 0; fi
+          npm install -g npm@11.20.0
+          (cd console && npm install --package-lock-only)
+          test "$(git ls-remote origin refs/heads/feat/alfred-obsidian-console-2026-09-27 | cut -f1)" = "$GITHUB_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add console/package-lock.json
+          git commit -m 'build(console): pin resolved dependency lock'
+          git push origin HEAD:refs/heads/feat/alfred-obsidian-console-2026-09-27

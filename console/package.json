@@ -1,5 +1,5 @@
 {
- "name":"@alfred/obsidian-console","version":"0.1.0","private":true,"type":"module",
+ "name":"@alfred/obsidian-console","version":"0.1.0","private":true,"type":"module","packageManager":"npm@11.20.0",
  "scripts":{"dev":"vite --host 127.0.0.1","build":"tsc --noEmit && vite build","preview":"vite preview --host 127.0.0.1","test":"vitest run","test:browser":"playwright test","standalone":"node tools/standalone.mjs"},
  "engines":{"node":">=22.12.0"},
  "dependencies":{"@phosphor-icons/react":"2.1.10","@react-three/fiber":"9.8.1","motion":"12.43.0","react":"19.2.8","react-dom":"19.2.8","three":"0.180.0"},
