@@ -78,8 +78,22 @@ def check(root: Path) -> dict:
     errors = validate_plan(plan, requirements, source_ids)
     if len(source_ids) != len(entries) or len({e['repository'] for e in entries}) != len(entries):
         errors.append('Duplicate repository records')
-    if registry['upstream_code_executed'] is not False or registry['new_upstream_files_copied'] != 0:
-        errors.append('Research register overstates this delivery')
+    if registry['upstream_code_executed'] is not False:
+        errors.append('Research register says upstream code executed')
+    new_count = registry.get('new_upstream_files_copied')
+    if type(new_count) is not int or new_count < 0:
+        errors.append('Invalid copied-source count')
+    shelf = registry.get('preserved_source_shelf', [])
+    if len({x.get('repository') for x in shelf}) != len(shelf) or any(type(x.get('files')) is not int or x.get('files', -1) < 1 for x in shelf):
+        errors.append('Invalid preserved source shelf')
+    shelf_total = sum(x['files'] for x in shelf) if shelf else 0
+    if shelf_total != registry.get('extension_source_files_total'):
+        errors.append('Extension source total differs from shelf')
+    new_total = sum(x['files'] for x in shelf if x.get('added_on') == registry.get('reviewed_on'))
+    if new_total != new_count:
+        errors.append('New copied-source count differs from dated shelf')
+    if registry.get('original_source_files_total', 0) + shelf_total != registry.get('all_preserved_source_files_total'):
+        errors.append('All-archive source total differs')
     for item in registry['pinned_reviews']:
         for key in ('commit', 'licence_blob'):
             if not re.fullmatch(r'[0-9a-f]{40}', item[key]):
@@ -109,8 +123,11 @@ def check(root: Path) -> dict:
                 errors.append(f'{job["id"]}: missing local evidence')
     if errors:
         raise ValueError('\n'.join(errors))
-    return {'scope': 'planning consistency only', 'requirements': len(requirements), 'jobs': len(plan['jobs']),
+    return {'scope': 'planning/source-shelf consistency only', 'requirements': len(requirements), 'jobs': len(plan['jobs']),
             'repository_references': len(entries), 'pinned_reviews': len(registry['pinned_reviews']),
+            'preserved_extension_repositories': len(registry.get('preserved_source_shelf', [])),
+            'preserved_extension_files': registry.get('extension_source_files_total', 0),
+            'preserved_all_source_files': registry.get('all_preserved_source_files_total', 0),
             'local_links_checked': link_count, 'runtime_changed': False, 'model_run': False, 'sha256': hashes}
 
 
