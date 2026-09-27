@@ -1,2 +1,6 @@
 /* Final portrait framing correction. Keep the canvas inside the actual workspace. */
 @media(max-width:700px){.sphere-stage{inset:40px 0 30px}}
+/* Visual delays only: no competing delayed state updates in navigation. */
+.rail-surface{transition-delay:160ms}
+.is-expanded .rail-surface{transition-delay:100ms}
+@media(prefers-reduced-motion:reduce){.rail-surface{transition-delay:0ms}}
