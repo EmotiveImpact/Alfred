@@ -6,7 +6,7 @@ varying float vAlpha; varying float vWarmth;
 void main() {
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   vec3 n = normalize(normalMatrix * normalize(position));
-  vAlpha = mix(0.015, 0.82, smoothstep(-0.08, 0.82, n.z));
+  vAlpha = mix(0.015, 0.62, smoothstep(-0.08, 0.82, n.z));
   vWarmth = aWarmth;
   gl_PointSize = clamp(aStrength * 12.0 * uDpr / -mv.z, 1.35 * uDpr, 8.0 * uDpr);
   gl_Position = projectionMatrix * mv;

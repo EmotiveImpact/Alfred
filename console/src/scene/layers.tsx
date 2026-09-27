@@ -15,7 +15,7 @@ export function ParticleField({high}:{high:boolean}) {
   return <points geometry={geometry} renderOrder={10}><shaderMaterial uniforms={uniforms} vertexShader={S.pointVertex} fragmentShader={S.pointFragment} transparent depthWrite={false} depthTest={false} blending={THREE.AdditiveBlending}/></points>;
 }
 export function Lattice(){
-  const data=useMemo(()=>makeLattice(170),[]);
+  const data=useMemo(()=>makeLattice(280),[]);
   const geometry=useMemo(()=>{const g=buffer(data.positions);g.setAttribute('aAlpha',new THREE.BufferAttribute(data.alpha,1));return g;},[data]);
   const points=useMemo(()=>{
     const g=buffer(new Float32Array(data.nodes.flat()));g.setAttribute('aSize',new THREE.Float32BufferAttribute(data.nodes.map((_,i)=>i%11===0?53:18),1));g.setAttribute('aWarmth',new THREE.Float32BufferAttribute(data.nodes.map((_,i)=>i%7===0?.9:.05),1));return g;
@@ -36,7 +36,7 @@ export function EvidenceLinks({records,relationships,selected}:{records:Knowledg
     for(const edge of relationships){const ar=lookup.get(edge.from),br=lookup.get(edge.to);if(!ar||!br)continue;
       const a=new THREE.Vector3(...recordPosition(ar)),b=new THREE.Vector3(...recordPosition(br));
       const strong=!selected||edge.from===selected||edge.to===selected;
-      for(let i=0;i<32;i++)for(const t of[i/32,(i+1)/32]){const v=a.clone().lerp(b,t).normalize().multiplyScalar(1.044+Math.sin(Math.PI*t)*.025);positions.push(v.x,v.y,v.z);alpha.push(strong?.75:.075);}
+      for(let i=0;i<32;i++)for(const t of[i/32,(i+1)/32]){const v=a.clone().lerp(b,t).normalize().multiplyScalar(1.044+Math.sin(Math.PI*t)*.025);positions.push(v.x,v.y,v.z);alpha.push(strong?(selected?.68:.26):.045);}
     }
     const g=buffer(new Float32Array(positions));g.setAttribute('aAlpha',new THREE.Float32BufferAttribute(alpha,1));return g;
   },[records,relationships,selected]);

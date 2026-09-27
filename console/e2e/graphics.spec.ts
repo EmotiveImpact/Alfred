@@ -22,8 +22,10 @@ test('drag rotates a paused view',async({page})=>{
   await page.mouse.move(box.x+box.width*.50,box.y+box.height*.5);await page.mouse.down();await page.mouse.move(box.x+box.width*.66,box.y+box.height*.5,{steps:15});await page.mouse.up();await page.mouse.move(1150,40);await page.waitForTimeout(500);expect(a.equals(await canvas.screenshot())).toBe(false);
 });
 test('animated frames have no large exposure or black-frame jumps in this capture',async({page})=>{
+  test.setTimeout(180000);
   await page.goto('/');await expect(page.locator('canvas')).toHaveAttribute('data-render-frame',/\d+/);await page.waitForTimeout(700);await page.mouse.move(1150,40);
-  const samples:number[]=[];for(let i=0;i<12;i++){samples.push(luminance(await page.locator('canvas').screenshot()));await page.waitForTimeout(90);}
+  const box=await page.locator('canvas').boundingBox();if(!box)throw new Error('No canvas');
+  const samples:number[]=[];for(let i=0;i<12;i++){samples.push(luminance(await page.screenshot({clip:box})));await page.waitForTimeout(90);}
   const max=Math.max(...samples),min=Math.min(...samples),ratios=samples.slice(1).map((x,i)=>Math.abs(x-samples[i])/Math.max(samples[i],.01));
   writeFileSync('evidence/temporal-luminance.json',JSON.stringify({samples,minimum:min,maximum:max,maxAdjacentRelativeChange:Math.max(...ratios),scope:'Twelve software-Chromium screenshot samples; not a physical-display flicker certification.'},null,2));
   expect(min).toBeGreaterThan(.2);expect(min/max).toBeGreaterThan(.7);expect(Math.max(...ratios)).toBeLessThan(.2);

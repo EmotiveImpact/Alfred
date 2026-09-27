@@ -1,12 +1,12 @@
-# ALFRED / Obsidian console
+# ALFRED operational console / refinement 02
 
-A working React/TypeScript presentation build for the owner's approved black intelligence console. The knowledge sphere is actual Three.js geometry rendered through React Three Fiber and original GLSL, not a background image or video.
+A direct evolution of the existing React/TypeScript console, with the owner's slim-rail, true-black visual direction. It uses actual Three.js / React Three Fiber geometry and original GLSL, not an image of a dashboard.
 
-**This is a frontend design build with fictional fixtures. It is not the ALFRED brain.** No model, microphone, account, repository, device or backend is connected. Reviews change this browser session only. Reloading resets them. Project names in the fixture do not assert current project status.
+Start with [component architecture](docs/COMPONENT_ARCHITECTURE.md), [precise build brief](docs/BUILD_BRIEF.md) and [next-builder prompt](docs/NEXT_BUILDER.md). The original v0.1 receipt remains historical; consult the new refinement receipt for current tested source and limitations.
 
-## Open the preview
+## Run or preview
 
-The delivered `ALFRED-Console.html` is a standalone offline build. Open it in a browser with WebGL2 enabled. It makes no network requests. The same application can also be run through Vite:
+Open the delivered standalone `ALFRED-Console.html` in a browser with WebGL2. It contains the compiled application and licence notices and needs no network requests. Editable source remains in this directory.
 
 ```sh
 cd console
@@ -14,7 +14,7 @@ npm ci
 npm run dev
 ```
 
-Node 22.12 or later is required. Use npm 11.20.0 and the resolved lockfile; npm 10.9.8 failed dependency resolution during the initial build. Development and preview bind to loopback. Read `docs/BUILDER_HANDOFF.md` before connecting services.
+Use Node 22.12+ and npm 11.20.0 with the existing lock. Development and preview bind to loopback. The underlying package retains its initial private development version; this is visual/architectural revision 02.
 
 ```sh
 npm run build
@@ -24,34 +24,26 @@ npm run test:browser
 npm run standalone
 ```
 
-The full repository's Python regression remains separate: `python3 -m unittest discover -s tests -v` from the repository root. Do not execute the quarantined third-party research archive.
+## What changed
 
-## Use it
+The small ALFRED logo now sits inside the narrow icon rail. Hover/focus/click expands labels over the workspace without resizing the canvas; Escape and pin are supported. The headline/slogan block is removed. Priorities, approvals, projects and a source-backed sample insight share one executive surface. The command bar remains persistent.
 
-Switch Personal, Work, Operation, Research or Systems to change the fixture scope. Drag the sphere to rotate it. Select its visible bright record nodes or use the category labels / Browse control for keyboard-accessible inspection. The inspector shows exact fixture provenance and explicitly authored relationships.
+The monolithic screen is split into explicit state, navigation, stage, executive sections, command, inspector, dialogs and rendering pipeline components. Scene brightness has no time oscillation. A single stable composer owns rendering; scope, task and quality changes do not replace the WebGL canvas. The scene uses explicit layer order and bounded soft points. See the evidence for measured temporal and context-lifecycle checks.
 
-Press Ctrl/Cmd+K to search. The command bar accepts local commands such as `/brief`, `/tasks`, `/settings`, `/handoff`, a scope name, or record search. It is not an AI chat pretending to answer arbitrary questions. Review an example draft only after reading its exact local effect. Use Controls to change graphics quality, pause motion, reduce motion, export local review receipts or reset the demonstration.
+Field mode combines decorative geometry and fixture records. Relationships mode removes decoration and shows only explicit records and links. Stable record IDs determine layout. Browse, search and inspection remain usable without WebGL.
 
-A missing WebGL2 context leaves record navigation working and shows an explicit graphics-unavailable state. OS reduced-motion preference takes precedence over the manual setting. The microphone button explains that nothing is listening; it never requests capture permission.
+## Actual capability boundary
 
-## Architectural boundary
+All data is fictional. The known project names are context, not current status or live telemetry. Reviews and priorities modify this browser session only. No model, microphone, account, private vault or live backend approval is connected. No records or credentials are persisted to browser storage.
 
-`src/domain/model.ts` describes the **presentation fixture contract**, not an existing HTTP endpoint or security boundary. The existing Python and vanilla-JavaScript application is unchanged. The next builder must implement and test a deliberately scoped adapter, not point the UI at guessed endpoints or promote local demo receipts into real approvals.
+Commands such as `/brief`, `/tasks`, `/settings`, `/handoff` and scope names route locally; other text is literal scoped search. Unknown text is never executable code. The microphone control explains the disconnected state without requesting capture permission.
 
-This directory is additive to ALFRED v0.8 at `22e64567f69508928b164d55c578834abcb404e8`. Its visual brief supersedes the old provisional appearance only in this new presentation lane. Preserve the existing app while the brain work continues.
+`src/integration/ConsoleReadPort.ts` is a proposed contract for the next builder, not an implemented HTTP client or a claim about existing routes. Preserve server-side authority and inspect actual Python interfaces before connecting it.
 
-## Source map
+## Repository continuity
 
-- `src/scene`: deterministic field geometry, original GLSL materials, bloom, camera, explicit record nodes and evidence links.
-- `src/domain`: fictional records, strict scope selectors, search, local review reducer and transient receipts.
-- `src/components/Dialog.tsx`: native modal dialog with Escape handling and focus return.
-- `src/App.tsx`: single operational workspace and functional controls.
-- `src/styles.css`, `src/refinements.css`: material, layout and responsive treatment.
-- `tests`, `e2e`: deterministic domain checks and real-browser rendering/interaction tests.
-- `tools/standalone.mjs`: offline preview packer, including runtime dependency notices. It rejects unexpected chunk splitting rather than silently dropping assets.
+Base: merged main `03e946fc3fb6fe0b540abe5ff52204de6f0f99ed`. The older console PR #13 is already merged. New branch: `feat/alfred-console-refinement-2026-09-27`. Do not overwrite the brain's root handoff or the existing Python/web application. No main merge or deployment is implied by this revision.
 
-No fonts or decorative image dependencies are included. System sans-serif fonts are used. The small original ALFRED mark is SVG. The sphere uses no downloaded textures.
+There are no font binaries, remote textures or new runtime dependencies in this refinement. System sans-serif fonts and the existing icon library are retained. The sphere is an abstract procedural knowledge view, not an Earth map.
 
-## What is not established
-
-No production performance guarantee, GPU-device certification, Safari/Firefox acceptance, exhaustive accessibility audit, production tenancy, real brain integration or exact pixel identity with the generated reference is claimed. CI rendering on software-backed Chromium is not a benchmark of the owner's Mac. Check the actual evidence receipt for completed tests and retained visual differences.
+Physical-GPU performance, final on-device visual tuning, Firefox/Safari acceptance, full accessibility review, scalable large-graph layout and live brain/voice integration remain separate gates. Software-rendered Chromium evidence does not prove those properties.
