@@ -24,6 +24,8 @@ test('drag rotates a paused view',async({page})=>{
 test('animated frames have no large exposure or black-frame jumps in this capture',async({page})=>{
   test.setTimeout(180000);
   await page.goto('/');await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-render-frame')),{timeout:30000}).toBeGreaterThan(8);await page.mouse.move(1150,40);
+  await expect(page.locator('.navigation-rail')).not.toHaveClass(/is-expanded/);
+  await expect.poll(async()=>Math.round((await page.locator('.rail-surface').boundingBox())!.width)).toBe(78);
   const box=await page.locator('canvas').boundingBox();if(!box)throw new Error('No canvas');
   const samples:number[]=[];for(let i=0;i<12;i++){samples.push(luminance(await page.screenshot({clip:box})));await page.waitForTimeout(90);}
   const max=Math.max(...samples),min=Math.min(...samples),ratios=samples.slice(1).map((x,i)=>Math.abs(x-samples[i])/Math.max(samples[i],.01));
