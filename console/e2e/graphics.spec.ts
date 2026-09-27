@@ -51,5 +51,12 @@ test('context can recover and resume real rendering',async({page})=>{
   await page.goto('/');await expect(page.locator('canvas')).toHaveAttribute('data-render-frame',/\d+/);
   await page.locator('canvas').evaluate(c=>{const ext=(c as HTMLCanvasElement).getContext('webgl2')?.getExtension('WEBGL_lose_context');ext?.loseContext();setTimeout(()=>ext?.restoreContext(),400);});
   await expect(page.getByText(/Graphics paused. Waiting for context recovery/)).toBeVisible();await expect(page.getByText(/Graphics paused. Waiting for context recovery/)).toHaveCount(0);
-  const a=await page.locator('canvas').getAttribute('data-render-frame');await page.waitForTimeout(500);const b=await page.locator('canvas').getAttribute('data-render-frame');expect(Number(b)).toBeGreaterThan(Number(a));expect(luminance(await page.locator('canvas').screenshot())).toBeGreaterThan(.2);
+  const resumedAt=Date.now(),a=Number(await page.locator('canvas').getAttribute('data-render-frame'));
+  // Context restoration may recompile GPU resources. Assert actual new frames,
+  // not an unmeasured promise that every software renderer recovers in 500 ms.
+  await expect.poll(async()=>Number(await page.locator('canvas').getAttribute('data-render-frame')),{timeout:15000,intervals:[100,250,500]}).toBeGreaterThan(a);
+  const b=Number(await page.locator('canvas').getAttribute('data-render-frame'));
+  const mean=luminance(await page.locator('canvas').screenshot());
+  writeFileSync('evidence/context-recovery.json',JSON.stringify({frameBefore:a,frameAfter:b,waitMs:Date.now()-resumedAt,meanLuminance:mean,scope:'Software-Chromium context-recovery check, not a physical-GPU latency target.'},null,2));
+  expect(mean).toBeGreaterThan(.2);
 });
