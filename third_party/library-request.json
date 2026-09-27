@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "requested_on": "2026-09-27",
+  "product": "ALFRED: operational and executive intelligence",
+  "scope": "All 42 unique repositories from the original agent landscape, memory landscape and three agent additions. Broad source-text snapshots where redistribution terms are established; explicit pinned references otherwise.",
+  "repositories": [
+    "openclaw/openclaw", "NousResearch/hermes-agent", "HKUDS/nanobot", "eadmin2/jarvis_ai", "microsoft/JARVIS",
+    "isair/jarvis", "ethanplusai/jarvis", "AlexandreSajus/JARVIS", "llm-guy/jarvis", "Priler/jarvis",
+    "leon-ai/leon", "livekit/agents", "pipecat-ai/pipecat", "openinterpreter/openinterpreter", "browser-use/browser-use",
+    "mem0ai/mem0", "letta-ai/letta", "home-assistant/core", "typesafe-ai/typesafe-sdk-python", "agentscope-ai/QwenPaw",
+    "opensandbox-group/OpenSandbox", "obsidianmd/obsidian-api", "obsidianmd/obsidian-headless", "coddingtonbear/obsidian-local-rest-api",
+    "basicmachines-co/basic-memory", "getzep/graphiti", "topoteretes/cognee", "letta-ai/letta-code", "asg017/sqlite-vec",
+    "pgvector/pgvector", "HKUDS/LightRAG", "microsoft/graphrag", "docling-project/docling", "xiaowu0162/LongMemEval",
+    "xiaowu0162/LongMemEval-V2", "snap-research/locomo", "langchain-ai/langgraph", "openfga/openfga", "open-policy-agent/opa",
+    "NangoHQ/nango", "restic/restic", "pavrus117/ai-os-maps-guide"
+  ]
+}

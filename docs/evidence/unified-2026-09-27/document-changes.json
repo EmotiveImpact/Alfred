@@ -1,0 +1,51 @@
+{
+  "baseline": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed",
+  "runtime_changed": false,
+  "changes": [
+    {
+      "path": "docs/PRD.md",
+      "before_sha256": "53e59beb1182609860e3e5a544affbd1e284172f862ccc3183116d163d9ec8b9",
+      "after_sha256": "a696e4c908f374ce536ac44993b4472076345988ae31566019d2170d8ce22970"
+    },
+    {
+      "path": "docs/PRODUCT_BRIEF.md",
+      "before_sha256": "44840d0d9022c86ca1c0b46c81b07cecd49d973e6a069213b640d0c67ac30395",
+      "after_sha256": "93f10d61f38fa879fc2e6d024d2ec171abc9eb628505518d495bb605724171f6"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "before_sha256": "3270d3ea8b9a0793ea3af4c6e1ab0f992272622c6e71f18047be8f0c4c2d0db4",
+      "after_sha256": "42957359ca45e5b15293bf8150e66d1349b7c99f22a07da3da09dd8b37b1c845"
+    },
+    {
+      "path": "docs/MEMORY_ARCHITECTURE.md",
+      "before_sha256": "d560ace6267fb054b528735ee30ba58730dce29878c6de1a1791e5ade7c9d728",
+      "after_sha256": "d7baa84c2c57e5198431c4a193a1dd42c99914ff1f02d88eec3e6998a8ab0b2b"
+    },
+    {
+      "path": "docs/OBSIDIAN_INTEGRATION.md",
+      "before_sha256": "36dc37671ac32b88c810fd77bf5c505561cdba43def8ed658502406f44187c24",
+      "after_sha256": "9ed30916dc5aea53b28e16e96dcbda9dd8dc16364e00722a388f767d19c3c169"
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "before_sha256": "09fe5455a5eb0c285996ae43227fe7ba739b0ecc4fdf325ede05ab326f94beec",
+      "after_sha256": "dc29c96faf50a01fb27f4f099a94556efcc330e82c06e534e65bd46cb0fd509b"
+    },
+    {
+      "path": "docs/BUILD_PLAN.md",
+      "before_sha256": "ce51c6eca0032da97d62fd9527a8128174d67ff8f39ce2d97b07a45a29be1e2e",
+      "after_sha256": "9ab78524d8e17dbc6bd886f78dd4e47a30464f66defc3727d7eb49d8fbe4b7b1"
+    },
+    {
+      "path": "docs/MEMORY_SECURITY.md",
+      "before_sha256": "8caf057355d51ffcd2e2942a7e8b749fabc67186da88d84a4c73d1f730c2f9f6",
+      "after_sha256": "7a386ef11c2deeebf3615e2dc9fd3249d41bbf09b2a992fe20e31eb3c7f9a12e"
+    },
+    {
+      "path": "docs/adr/MEMORY-001.md",
+      "before_sha256": "dbfed774c42f60666a8e023f00560ab926918419d304aac32104bc5c59103954",
+      "after_sha256": "be8244e04bcb03bc12d27b9d453b6e53a79873f719c30b44747dec80bb86913d"
+    }
+  ]
+}

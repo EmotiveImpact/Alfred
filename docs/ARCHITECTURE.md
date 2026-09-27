@@ -1,5 +1,9 @@
 # ALFRED architecture and current system boundaries
 
+<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+
+**Current product category: operational and executive intelligence.** See [positioning](PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
+
 Updated 27 September 2026. Current requirements: [PRD.md](PRD.md). Memory specification: [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md). The original architecture is preserved in [archive/ARCHITECTURE-v01.md](archive/ARCHITECTURE-v01.md).
 
 ## One personal intelligence, not one omnipotent model
@@ -30,7 +34,7 @@ The first-party Python service persists local data in SQLite and exposes an auth
 
 Manual reviewed statements are stored separately from the authored note graph and have provenance/review/conflict/invalidity rules. They are not yet automatically included in model context. Model mode is optional and tool-free; current evidence rejection rules are limited heuristics. No general agent framework from the source archive has been fully integrated.
 
-The newer `console/` toolchain is preserved alongside `web/`. Do not infer a completed visual implementation, note-app integration or deployment from its existence. This planning revision changes no application or UI source.
+The functional React/Three.js `console/` implementation is preserved alongside `web/`. The console runs fictional fixture interactions; do not infer a live backend, note-app integration or deployment from the merge. This planning revision changes no application or UI source.
 
 ## Memory integration decision
 

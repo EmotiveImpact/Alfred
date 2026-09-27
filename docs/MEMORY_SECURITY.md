@@ -1,5 +1,9 @@
 # Memory security, privacy and lifecycle gates
 
+<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+
+**Current product category: operational and executive intelligence.** See [positioning](PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
+
 27 September 2026. Extends [SECURITY_AND_DATA.md](SECURITY_AND_DATA.md) and requirements MEM-009/010/013/014, SYS-001/002 in [PRD.md](PRD.md). These are required controls, not claims of completed encryption or independent security review.
 
 ## Before a private-data pilot

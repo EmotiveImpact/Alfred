@@ -1,12 +1,16 @@
 # ALFRED current execution roadmap
 
-27 September 2026. Requirements: [PRD.md](PRD.md). Job IDs/dependencies/acceptance cases: [memory-backlog.json](../plans/memory-backlog.json). Current planning branch: `research/alfred-memory-system-2026-09-27`. Historical roadmaps are preserved in [archive/ROADMAP-through-v08.md](archive/ROADMAP-through-v08.md).
+<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+
+**Current product category: operational and executive intelligence.** See [positioning](PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
+
+27 September 2026. Requirements: [PRD.md](PRD.md). Job IDs/dependencies/acceptance cases: [memory-backlog.json](../plans/memory-backlog.json). Current integration baseline: `main`. The former planning branch is historical. Historical roadmaps are preserved in [archive/ROADMAP-through-v08.md](archive/ROADMAP-through-v08.md).
 
 ## Where we are
 
-v0.8 provides local persistence, credential-scoped sessions, source retrieval, conversations, manually reviewed memory, fixed Pulse routines and exact approvals for local drafts. The console branch adds an isolated UI toolchain over that baseline. Source archive remains 2,073 inert files. Current appearance is not represented as a finished version of the target console.
+v0.8 provides local persistence, credential-scoped sessions, source retrieval, conversations, manually reviewed memory, fixed Pulse routines and exact approvals for local drafts. The latest functional React/Three.js fixture console is merged alongside that baseline. Source archive remains 2,073 inert files. Current appearance is not represented as a finished version of the target console.
 
-The memory work in this revision is researched requirements and a build plan, not an implemented Obsidian connector upgrade, graph engine, account integration or new model. The v0.7 small model's known failures and the blocked v0.8 comparison remain recorded. No main merge or deployment.
+The memory work in this revision is researched requirements and a build plan, not an implemented Obsidian connector upgrade, graph engine, account integration or new model. The v0.7 small model's known failures and the blocked v0.8 comparison remain recorded. The development stack is merged into main; no deployment has occurred.
 
 ## Immediate deliverable
 
@@ -33,7 +37,7 @@ The memory work in this revision is researched requirements and a build plan, no
 
 M01, M02 and retrieval-fixture preparation can begin independently. M03 can be developed on synthetic data against existing coarse scope checks while M02 matures; private-data release still requires M02 and M05. M04 requires the vault/context/grant contracts. M07 is an optional candidate experiment after the lexical and lifecycle baseline, not a dependency that blocks useful local memory.
 
-Console work continues on its own branch against reviewed data contracts. Do not overwrite it with an Obsidian clone or another admin dashboard. Design target remains the premium true-black/graphite/ivory console with sparse amber and a meaningful graph view.
+Console work starts on a new focused branch from main against reviewed data contracts. The next missing console task is the authenticated real-backend adapter, not another visual restart. Do not overwrite it with an Obsidian clone or another admin dashboard. Design target remains the premium true-black/graphite/ivory console with sparse amber and a meaningful graph view.
 
 The [programme issue #11](https://github.com/EmotiveImpact/Alfred/issues/11) coordinates memory work. Existing #2 core, #3 runtime and #4 voice remain separate workstreams; none is an already running autonomous agent. See [BUILD_PLAN.md](BUILD_PLAN.md) for handoff boundaries.
 

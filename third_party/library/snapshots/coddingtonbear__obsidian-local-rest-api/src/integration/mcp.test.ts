@@ -1,0 +1,1482 @@
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+
+import {
+  API_KEY,
+  BASE_URL,
+  authedFetch,
+  ensureServerReachable,
+  resetFixture,
+  deleteFixture,
+} from "./client";
+import {
+  TEST_DIR,
+  TEST_PATH,
+  FIXTURE_DOCUMENT,
+  TERM_ALPHA,
+  TERM_DELTA,
+  FM_TITLE_VALUE,
+  FM_PRIORITY_VALUE,
+  TAG_FIXTURE,
+  HEADING_DELTA,
+  HEADING_ALPHA,
+  HEADING_SUB,
+  BLOCK_BETA,
+  FM_TITLE,
+  FM_PRIORITY,
+  TERM_SUB,
+} from "./fixtures";
+
+// Sessionful-leg coverage: this suite drives the v1 MCP SDK client, which opens with the
+// `initialize` handshake and therefore exercises the endpoint's sessionful leg end to end.
+// The sessionless (2026-07-28) leg is covered by mcpSessionless.test.ts.
+
+// A separate temp path so vault_write / vault_delete tests don't touch the shared fixture.
+const TEMP_PATH = `${TEST_DIR}/mcp-temp.md`;
+
+// ---------------------------------------------------------------------------
+// Client factory
+// ---------------------------------------------------------------------------
+
+function makeClient(): Client {
+  return new Client({ name: "integration-test", version: "1.0.0" });
+}
+
+function makeTransport(): StreamableHTTPClientTransport {
+  return new StreamableHTTPClientTransport(new URL(`${BASE_URL}/mcp`), {
+    requestInit: {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Response helpers
+// ---------------------------------------------------------------------------
+
+type ToolResult = Awaited<ReturnType<Client["callTool"]>>;
+
+function textOf(result: ToolResult): string {
+  const item = (result.content as any[])[0];
+  if (!item || item.type !== "text") throw new Error("Expected text content item");
+  return item.text as string;
+}
+
+function jsonOf<T = unknown>(result: ToolResult): T {
+  return JSON.parse(textOf(result)) as T;
+}
+
+// ---------------------------------------------------------------------------
+// Shared client — opened once per file, closed in afterAll
+// ---------------------------------------------------------------------------
+
+let client: Client;
+let transport: StreamableHTTPClientTransport;
+
+beforeAll(async () => {
+  await ensureServerReachable();
+  await resetFixture(FIXTURE_DOCUMENT, TEST_PATH);
+  client = makeClient();
+  transport = makeTransport();
+  await client.connect(transport);
+});
+
+afterAll(async () => {
+  try {
+    // `client.close()` alone tears down only this end of the connection: the SDK's
+    // StreamableHTTPClientTransport.close() aborts its own request controller and never
+    // sends the DELETE, and the plugin drops a session from its map only on that DELETE
+    // (`onsessionclosed`, src/mcpHandler.ts). So closing without terminating leaves this
+    // file's session — and its `listChanged` subscription — live in the plugin for as long
+    // as Obsidian stays up, taxing every vault write in every integration file that runs
+    // after this one, and in the user's own editor afterwards.
+    //
+    // Order matters: terminateSession() sends its DELETE with the transport's own abort
+    // signal, so calling close() first would cancel the very request that ends the session.
+    // Not swallowed, either — a session we could not end is exactly the state this file is
+    // trying to avoid, and it should fail the run rather than pass quietly.
+    await transport?.terminateSession();
+  } finally {
+    await client?.close();
+    await deleteFixture(TEST_PATH);
+    // Best-effort cleanup of the temp path used by write/delete tests.
+    await deleteFixture(TEMP_PATH).catch((_e: unknown): void => {});
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Session lifecycle — revisions 2024-10-07 through 2025-11-25 are sessionful, and the capabilities the
+// handshake advertises (tools.listChanged) only hold while a session is live.
+// ---------------------------------------------------------------------------
+
+describe("MCP sessionful lifecycle", () => {
+  // Every session opened through `initializeAt` is registered here and terminated in
+  // afterEach. Each live session is a subscriber the plugin pushes `listChanged`
+  // notifications to on every vault write, so one left behind taxes each write-then-read-back
+  // test further down this file — enough, measured, to make `vault_patch` › "sets a
+  // frontmatter list from a native JSON array value" fail 2 runs in 4 where a clean run
+  // failed 0 in 4. Registering inside the helper rather than test by test is the point: the
+  // next sessionful test added here is cleaned up whether its author thought about this or
+  // not, which is what stops the flake reappearing somewhere else in the file.
+  const openSessions = new Set<string>();
+
+  // DELETE a session and take it off the cleanup list, so a test that terminates its own
+  // session does not leave afterEach to DELETE an id the plugin has already forgotten.
+  async function deleteSession(sessionId: string): Promise<Response> {
+    openSessions.delete(sessionId);
+    return authedFetch("/mcp/", {
+      method: "DELETE",
+      headers: { "Mcp-Session-Id": sessionId },
+    });
+  }
+
+  afterEach(async () => {
+    // Asserted rather than best-effort: a DELETE that does not answer 200 means the session
+    // is still in the plugin's map, which is the one thing this arrangement exists to
+    // prevent. Swallowing that would put the file back where it started, quietly.
+    for (const sessionId of [...openSessions]) {
+      const res = await deleteSession(sessionId);
+      expect(res.status).toBe(200);
+    }
+  });
+
+  async function initializeAt(
+    version: string,
+  ): Promise<{ sessionId: string | null; result: any }> {
+    const res = await authedFetch("/mcp/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: version,
+          capabilities: {},
+          clientInfo: { name: "integration-test-sessionful", version: "1.0.0" },
+        },
+      }),
+    });
+    const text = await res.text();
+    const line = text.split("\n").find((l) => l.startsWith("data: "));
+    if (!line) throw new Error(`No SSE data frame in initialize response: ${text}`);
+    const sessionId = res.headers.get("mcp-session-id");
+    if (sessionId) openSessions.add(sessionId);
+    return {
+      sessionId,
+      result: JSON.parse(line.slice("data: ".length)).result,
+    };
+  }
+
+  async function initialize(): Promise<{ sessionId: string | null; result: any }> {
+    return initializeAt("2025-06-18");
+  }
+
+  test("initialize hands back a session id and listChanged capabilities", async () => {
+    const { sessionId, result } = await initialize();
+    expect(typeof sessionId).toBe("string");
+    expect(result.protocolVersion).toBe("2025-06-18");
+    expect(result.capabilities.tools.listChanged).toBe(true);
+    expect(result.capabilities.resources.listChanged).toBe(true);
+  });
+
+  test("initialize at 2025-11-25 is answered, and negotiates that revision unchanged", async () => {
+    // Against the live plugin, since that is the configuration issue #329 reported as
+    // hanging: a real socket to a real Obsidian, not the in-process express app. The
+    // hardcoded literal is deliberate — see mcpEndpoint.test.ts.
+    const { sessionId, result } = await initializeAt("2025-11-25");
+    expect(typeof sessionId).toBe("string");
+    expect(result.protocolVersion).toBe("2025-11-25");
+    expect(result.capabilities.tools.listChanged).toBe(true);
+    // The session this opened is terminated by the describe's afterEach, which runs whether
+    // the assertions above passed or threw — the try/finally this test used to carry.
+  });
+
+  test("an unknown session id is rejected with 404", async () => {
+    const res = await authedFetch("/mcp/", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json, text/event-stream",
+        "MCP-Protocol-Version": "2025-06-18",
+        "Mcp-Session-Id": "a-session-that-never-existed",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list", params: {} }),
+    });
+    expect(res.status).toBe(404);
+  });
+
+  test("DELETE terminates a session", async () => {
+    const { sessionId } = await initialize();
+    if (!sessionId) throw new Error("initialize returned no Mcp-Session-Id");
+    const res = await deleteSession(sessionId);
+    expect(res.status).toBe(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resources
+// ---------------------------------------------------------------------------
+
+describe("MCP resources", () => {
+  test("openapi-spec resource is listed", async () => {
+    const res = await client.listResources();
+    expect(res.resources.some((r) => r.name === "openapi-spec")).toBe(true);
+  });
+
+  test("openapi-spec content contains 'openapi:'", async () => {
+    const res = await client.readResource({
+      uri: "obsidian://local-rest-api/openapi.yaml",
+    });
+    const item = res.contents[0];
+    const text = item && "text" in item ? item.text : undefined;
+    expect(typeof text).toBe("string");
+    expect(text).toContain("openapi:");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_list
+// ---------------------------------------------------------------------------
+
+describe("vault_list tool", () => {
+  test("lists integration test directory", async () => {
+    const result = await client.callTool({
+      name: "vault_list",
+      arguments: { path: TEST_DIR },
+    });
+    const body = jsonOf<{ files: string[] }>(result);
+    expect(Array.isArray(body.files)).toBe(true);
+    expect(body.files.some((f) => f.includes("fixture"))).toBe(true);
+  });
+
+  test("lists vault root when path omitted", async () => {
+    const result = await client.callTool({ name: "vault_list", arguments: {} });
+    const body = jsonOf<{ files: string[] }>(result);
+    expect(Array.isArray(body.files)).toBe(true);
+    expect(body.files.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_read
+// ---------------------------------------------------------------------------
+
+describe("vault_read tool", () => {
+  test("returns correct metadata and content for fixture", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH },
+    });
+    const body = jsonOf<any>(result);
+    expect(body.path).toBe(TEST_PATH);
+    expect(body.frontmatter?.title).toBe(FM_TITLE_VALUE);
+    expect(body.frontmatter?.priority).toBe(FM_PRIORITY_VALUE);
+    expect(Array.isArray(body.tags)).toBe(true);
+    expect(body.tags).toContain(TAG_FIXTURE);
+    expect(typeof body.content).toBe("string");
+    expect(body.content).toContain(TERM_ALPHA);
+    expect(typeof body.stat?.ctime).toBe("number");
+  });
+
+  test("returns isError for non-existent file", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: `${TEST_DIR}/no-such-file.md` },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("returns heading section content when targetType=heading", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH, targetType: "heading", target: [HEADING_ALPHA] },
+    });
+    const text = textOf(result);
+    expect(text).toContain(TERM_ALPHA);
+    expect(text).not.toContain(TERM_DELTA);
+  });
+
+  test("returns nested heading section using an array address", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: [HEADING_ALPHA, HEADING_SUB],
+      },
+    });
+    const text = textOf(result);
+    expect(text).toContain(TERM_SUB);
+    expect(text).not.toContain(TERM_ALPHA);
+  });
+
+  test("returns block content when targetType=block", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH, targetType: "block", target: BLOCK_BETA },
+    });
+    const text = textOf(result);
+    expect(typeof text).toBe("string");
+    expect(text.length).toBeGreaterThan(0);
+  });
+
+  test("returns frontmatter value when targetType=frontmatter", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH, targetType: "frontmatter", target: FM_TITLE },
+    });
+    expect(textOf(result)).toBe(FM_TITLE_VALUE);
+  });
+
+  test("returns numeric frontmatter value when targetType=frontmatter", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH, targetType: "frontmatter", target: FM_PRIORITY },
+    });
+    expect(JSON.parse(textOf(result))).toBe(FM_PRIORITY_VALUE);
+  });
+
+  test("returns isError when heading target is not found", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH, targetType: "heading", target: ["NoSuchHeading"] },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("returns isError when heading target is a bare string", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH, targetType: "heading", target: HEADING_ALPHA },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("array");
+    expect(textOf(result)).toContain("anyOf");
+  });
+
+  // Simulates a client that doesn't resolve anyOf parameter schemas and
+  // forwards the array argument as its raw JSON text (#315).
+  test("accepts a JSON-encoded string heading target", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: JSON.stringify([HEADING_ALPHA, HEADING_SUB]),
+      },
+    });
+    const text = textOf(result);
+    expect(text).toContain(TERM_SUB);
+    expect(text).not.toContain(TERM_ALPHA);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_get_document_map
+// ---------------------------------------------------------------------------
+
+describe("vault_get_document_map tool", () => {
+  test("returns headings, blocks, and frontmatterFields for fixture", async () => {
+    const result = await client.callTool({
+      name: "vault_get_document_map",
+      arguments: { path: TEST_PATH },
+    });
+    const body = jsonOf<any>(result);
+    expect(typeof body.version).toBe("string");
+    expect(Array.isArray(body.blocks)).toBe(true);
+    expect(Array.isArray(body.frontmatterFields)).toBe(true);
+    // 2.0 map: headings nest by containment (Sub under Alpha); block ids bare.
+    expect(Array.isArray(body.headings)).toBe(false);
+    expect(body.headings).toHaveProperty(HEADING_ALPHA);
+    expect(body.headings[HEADING_ALPHA]).toHaveProperty(HEADING_SUB);
+    expect(body.blocks).toContain(BLOCK_BETA);
+    expect(body.frontmatterFields).toContain(FM_TITLE);
+    expect(body.frontmatterFields).toContain(FM_PRIORITY);
+  });
+
+  test("returns isError for non-existent file", async () => {
+    const result = await client.callTool({
+      name: "vault_get_document_map",
+      arguments: { path: `${TEST_DIR}/no-such-file.md` },
+    });
+    expect(result.isError).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Duplicate sibling heading addressing (uses its own path so it doesn't
+// disturb the shared fixture's heading structure)
+// ---------------------------------------------------------------------------
+
+describe("duplicate sibling heading addressing", () => {
+  const DUP_PATH = `${TEST_DIR}/mcp-duplicate-headings.md`;
+  const DUP_DOCUMENT = [
+    "# Notes",
+    "",
+    "first",
+    "",
+    "# Notes",
+    "",
+    "second",
+    "",
+    "# Notes",
+    "",
+    "third",
+    "",
+  ].join("\n");
+
+  beforeEach(async () => {
+    await resetFixture(DUP_DOCUMENT, DUP_PATH);
+  });
+
+  afterAll(async () => {
+    await deleteFixture(DUP_PATH).catch((_e: unknown): void => {});
+  });
+
+  test("the map lists a distinct key per occurrence, each reachable via vault_read", async () => {
+    const mapResult = await client.callTool({
+      name: "vault_get_document_map",
+      arguments: { path: DUP_PATH },
+    });
+    const body = jsonOf<{ headings: Record<string, unknown> }>(mapResult);
+    const keys = Object.keys(body.headings);
+    expect(keys).toHaveLength(3);
+    // The first occurrence keeps its plain text; the exact form of the
+    // marker suffix on the others is an implementation detail — what matters
+    // is that they round-trip through the real MCP JSON transport intact and
+    // each resolves to its own section.
+    expect(keys[0]).toBe("Notes");
+    expect(keys[1]).not.toBe("Notes");
+    expect(keys[2]).not.toBe("Notes");
+    expect(keys[2]).not.toBe(keys[1]);
+
+    const expectedBodies = ["first", "second", "third"];
+    for (let i = 0; i < keys.length; i++) {
+      const readResult = await client.callTool({
+        name: "vault_read",
+        arguments: { path: DUP_PATH, targetType: "heading", target: [keys[i]] },
+      });
+      expect(textOf(readResult).trim()).toBe(expectedBodies[i]);
+    }
+  });
+
+  test("vault_patch on the third occurrence's key edits only that section", async () => {
+    const mapResult = await client.callTool({
+      name: "vault_get_document_map",
+      arguments: { path: DUP_PATH },
+    });
+    const body = jsonOf<{ headings: Record<string, unknown> }>(mapResult);
+    const thirdKey = Object.keys(body.headings)[2];
+
+    const patchResult = await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: DUP_PATH,
+        targetType: "heading",
+        target: [thirdKey],
+        operation: "replace",
+        content: "replaced third",
+      },
+    });
+    expect(patchResult.isError).toBeFalsy();
+
+    const readBody = jsonOf<{ content: string }>(
+      await client.callTool({ name: "vault_read", arguments: { path: DUP_PATH } })
+    );
+    expect(readBody.content).toContain("first");
+    expect(readBody.content).toContain("second");
+    expect(readBody.content).toContain("replaced third");
+    // The original (unreplaced) third section's body is gone — checked as a
+    // standalone line so it doesn't false-match inside "replaced third".
+    expect(readBody.content).not.toContain("\nthird\n");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Duplicate block-id addressing (uses its own path so it doesn't disturb the
+// shared fixture's block ids)
+// ---------------------------------------------------------------------------
+
+describe("duplicate block-id addressing", () => {
+  const DUP_BLOCK_PATH = `${TEST_DIR}/mcp-duplicate-blocks.md`;
+  const DUP_BLOCK_DOCUMENT = [
+    "first ^dup",
+    "",
+    "second ^dup",
+    "",
+    "third ^dup",
+    "",
+  ].join("\n");
+
+  beforeEach(async () => {
+    await resetFixture(DUP_BLOCK_DOCUMENT, DUP_BLOCK_PATH);
+  });
+
+  afterAll(async () => {
+    await deleteFixture(DUP_BLOCK_PATH).catch((_e: unknown): void => {});
+  });
+
+  test("the map lists a distinct entry per occurrence, each reachable via vault_read", async () => {
+    const mapResult = await client.callTool({
+      name: "vault_get_document_map",
+      arguments: { path: DUP_BLOCK_PATH },
+    });
+    const body = jsonOf<{ blocks: string[] }>(mapResult);
+    expect(body.blocks).toHaveLength(3);
+    // The first occurrence keeps its plain id; the exact form of the marker
+    // suffix on the others is an implementation detail — what matters is
+    // that they round-trip through the real MCP JSON transport intact and
+    // each resolves to its own block.
+    expect(body.blocks[0]).toBe("dup");
+    expect(body.blocks[1]).not.toBe("dup");
+    expect(body.blocks[2]).not.toBe("dup");
+    expect(body.blocks[2]).not.toBe(body.blocks[1]);
+
+    const expectedContent = ["first", "second", "third"];
+    for (let i = 0; i < body.blocks.length; i++) {
+      const readResult = await client.callTool({
+        name: "vault_read",
+        arguments: { path: DUP_BLOCK_PATH, targetType: "block", target: body.blocks[i] },
+      });
+      expect(textOf(readResult).trim()).toBe(expectedContent[i]);
+    }
+  });
+
+  test("vault_patch on the third occurrence's id edits only that block", async () => {
+    const mapResult = await client.callTool({
+      name: "vault_get_document_map",
+      arguments: { path: DUP_BLOCK_PATH },
+    });
+    const body = jsonOf<{ blocks: string[] }>(mapResult);
+    const thirdId = body.blocks[2];
+
+    const patchResult = await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: DUP_BLOCK_PATH,
+        targetType: "block",
+        target: thirdId,
+        operation: "replace",
+        content: "replaced third",
+      },
+    });
+    expect(patchResult.isError).toBeFalsy();
+
+    const readBody = jsonOf<{ content: string }>(
+      await client.callTool({ name: "vault_read", arguments: { path: DUP_BLOCK_PATH } })
+    );
+    expect(readBody.content).toContain("first");
+    expect(readBody.content).toContain("second");
+    expect(readBody.content).toContain("replaced third");
+    // The original (unreplaced) third block's content is gone — checked as a
+    // standalone line so it doesn't false-match inside "replaced third ^dup".
+    expect(readBody.content).not.toContain("\nthird ^dup");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_write + vault_delete (use TEMP_PATH to avoid disturbing shared fixture)
+// ---------------------------------------------------------------------------
+
+describe("vault_write and vault_delete tools", () => {
+  test("writes a file, verifies content, then deletes it", async () => {
+    const writeResult = await client.callTool({
+      name: "vault_write",
+      arguments: { path: TEMP_PATH, content: "# Temp\n\nwritten-by-mcp-test\n" },
+    });
+    expect(jsonOf<any>(writeResult).message).toBe("OK");
+
+    // Give Obsidian's index a moment to register the new file.
+    await new Promise((r) => setTimeout(r, 300));
+
+    const readResult = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEMP_PATH },
+    });
+    expect(jsonOf<any>(readResult).content).toContain("written-by-mcp-test");
+
+    const deleteResult = await client.callTool({
+      name: "vault_delete",
+      arguments: { path: TEMP_PATH },
+    });
+    expect(jsonOf<any>(deleteResult).message).toBe("OK");
+
+    const afterDelete = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEMP_PATH },
+    });
+    expect(afterDelete.isError).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_read_binary, and the signed-URL tools
+//
+// The fixture is a real PNG uploaded over REST: its 0x89 lead byte is not valid UTF-8,
+// so any path that decodes it as text loses it. Reading it back as an image block is the
+// one thing the unit tests cannot show — the downscaling runs on Obsidian's own canvas —
+// so that is what is checked here against the live plugin.
+//
+// The signed-URL tools exist only while the "Enable signed URLs" setting is on in the
+// running plugin, which this suite cannot toggle. Their tests run when tools/list shows
+// them and are skipped otherwise; a skip is reported, not hidden.
+// ---------------------------------------------------------------------------
+
+const PIXEL_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+const PIXEL_BYTES = Buffer.from(PIXEL_BASE64, "base64");
+
+async function putBytes(path: string, bytes: Buffer, contentType: string): Promise<void> {
+  const res = await authedFetch(`/vault/${path}`, {
+    method: "PUT",
+    headers: { "Content-Type": contentType },
+    body: new Uint8Array(bytes),
+  });
+  if (res.status !== 204) throw new Error(`PUT /vault/${path} => ${res.status}`);
+  // Give Obsidian's index a moment to register the new file.
+  await new Promise((r) => setTimeout(r, 300));
+}
+
+function contentOf(result: ToolResult): Array<Record<string, any>> {
+  return result.content as Array<Record<string, any>>;
+}
+
+describe("vault_read_binary tool", () => {
+  const BINARY_PATH = `${TEST_DIR}/mcp-temp-pixel.png`;
+  const BLOB_PATH = `${TEST_DIR}/mcp-temp-data.bin`;
+  const BLOB_BYTES = Buffer.from([0, 1, 2, 3, 255]);
+  const SVG_PATH = `${TEST_DIR}/mcp-temp-drawing.svg`;
+  const SVG_SOURCE =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>';
+  let signedUrlsEnabled: boolean;
+
+  beforeAll(async () => {
+    await putBytes(BINARY_PATH, PIXEL_BYTES, "image/png");
+    await putBytes(BLOB_PATH, BLOB_BYTES, "application/octet-stream");
+    await putBytes(SVG_PATH, Buffer.from(SVG_SOURCE, "utf-8"), "image/svg+xml");
+    const { tools } = await client.listTools();
+    signedUrlsEnabled = tools.some((t) => t.name === "vault_get_download_url");
+    if (!signedUrlsEnabled) {
+      console.warn(
+        "Signed URLs are off in the running plugin: link-mode assertions are skipped. Enable them under Advanced settings to cover that path.",
+      );
+    }
+  });
+
+  afterAll(async () => {
+    await deleteFixture(BINARY_PATH).catch((_e: unknown): void => {});
+    await deleteFixture(BLOB_PATH).catch((_e: unknown): void => {});
+    await deleteFixture(SVG_PATH).catch((_e: unknown): void => {});
+  });
+
+  test("returns an SVG unchanged as its source text, not as a rasterized image", async () => {
+    const result = await client.callTool({
+      name: "vault_read_binary",
+      arguments: { path: SVG_PATH },
+    });
+    expect(result.isError).toBeFalsy();
+    const [resource, meta] = contentOf(result);
+    expect(resource.type).toBe("resource");
+    expect(resource.resource.mimeType).toBe("image/svg+xml");
+    expect(resource.resource.text).toBe(SVG_SOURCE);
+    expect(JSON.parse(meta.text)).toEqual({
+      path: SVG_PATH,
+      mimeType: "image/svg+xml",
+      size: Buffer.byteLength(SVG_SOURCE, "utf-8"),
+    });
+  });
+
+  test("returns a PNG as an image block the renderer decoded, with its dimensions", async () => {
+    const result = await client.callTool({
+      name: "vault_read_binary",
+      arguments: { path: BINARY_PATH },
+    });
+    expect(result.isError).toBeFalsy();
+    const [image, meta] = contentOf(result);
+    expect(image.type).toBe("image");
+    expect(image.mimeType).toBe("image/png");
+    // A 1×1 PNG fits, so the bytes are the originals, not a re-encoding.
+    expect(image.data).toBe(PIXEL_BASE64);
+    expect(image.annotations).toEqual({ audience: ["user", "assistant"], priority: 0.9 });
+    expect(meta.type).toBe("text");
+    expect(JSON.parse(meta.text)).toEqual({
+      path: BINARY_PATH,
+      mimeType: "image/png",
+      size: PIXEL_BYTES.byteLength,
+      width: 1,
+      height: 1,
+    });
+  });
+
+  test("as: 'bytes' embeds the raw bytes as a resource block", async () => {
+    const result = await client.callTool({
+      name: "vault_read_binary",
+      arguments: { path: BINARY_PATH, as: "bytes" },
+    });
+    const [resource] = contentOf(result);
+    expect(resource.type).toBe("resource");
+    expect(resource.resource.mimeType).toBe("image/png");
+    expect(resource.resource.blob).toBe(PIXEL_BASE64);
+  });
+
+  test("a non-image file comes back as embedded bytes, or as a signed link when those are on", async () => {
+    const result = await client.callTool({
+      name: "vault_read_binary",
+      arguments: { path: BLOB_PATH },
+    });
+    expect(result.isError).toBeFalsy();
+    const [first] = contentOf(result);
+    if (signedUrlsEnabled) {
+      expect(first.type).toBe("resource_link");
+      expect(first.uri).toMatch(/\/vault\/.*mcp-temp-data\.bin\?sig=/);
+      const fetched = await fetch(first.uri);
+      expect(fetched.status).toBe(200);
+      expect(Buffer.from(await fetched.arrayBuffer()).equals(BLOB_BYTES)).toBe(true);
+    } else {
+      expect(first.type).toBe("resource");
+      expect(first.resource.blob).toBe(BLOB_BYTES.toString("base64"));
+    }
+  });
+
+  test("as: 'link' either returns a link or explains which setting is off", async () => {
+    const result = await client.callTool({
+      name: "vault_read_binary",
+      arguments: { path: BINARY_PATH, as: "link" },
+    });
+    if (signedUrlsEnabled) {
+      expect(result.isError).toBeFalsy();
+      expect(contentOf(result)[0].type).toBe("resource_link");
+    } else {
+      expect(result.isError).toBe(true);
+      expect(textOf(result)).toMatch(/Enable signed URLs/);
+    }
+  });
+
+  test("reports a missing file as an error", async () => {
+    const result = await client.callTool({
+      name: "vault_read_binary",
+      arguments: { path: `${TEST_DIR}/definitely-not-here.png` },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("vault_write refuses to write text to an image path", async () => {
+    const result = await client.callTool({
+      name: "vault_write",
+      arguments: { path: BINARY_PATH, content: "not a png" },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/image\/png/);
+    // The file is untouched.
+    const response = await authedFetch(`/vault/${BINARY_PATH}`);
+    expect(Buffer.from(await response.arrayBuffer()).toString("base64")).toBe(PIXEL_BASE64);
+  });
+});
+
+// Signed URLs are on by default, so this suite runs by default and opts *out*, unlike
+// the OBSIDIAN_ACTIVE_FILE / OBSIDIAN_TEST_OPEN_FILE suites which opt in. Gating at
+// registration time is what lets Jest report a skip as a skip.
+const signedUrlSuite = process.env.OBSIDIAN_SIGNED_URLS === "0" ? describe.skip : describe;
+
+signedUrlSuite("signed URL tools", () => {
+  const UPLOAD_PATH = `${TEST_DIR}/mcp-temp-uploaded.png`;
+  const TARGETED_PATH = `${TEST_DIR}/mcp-temp-targeted.md`;
+  let enabled = false;
+
+  beforeAll(async () => {
+    const { tools } = await client.listTools();
+    enabled = tools.some((t) => t.name === "vault_get_upload_url");
+  });
+
+  afterAll(async () => {
+    await deleteFixture(UPLOAD_PATH).catch((_e: unknown): void => {});
+    await deleteFixture(TARGETED_PATH).catch((_e: unknown): void => {});
+  });
+
+  test("an upload link accepts one PUT without the API key, then a download link serves it back", async () => {
+    // Returning early here used to make Jest record a *pass*: the only end-to-end
+    // upload/replay/download coverage reported green while executing none of its
+    // assertions, which is worse than no test at all. Signed URLs are on by default, so
+    // finding them off is a misconfiguration worth failing on -- and someone who has
+    // deliberately turned them off opts out with OBSIDIAN_SIGNED_URLS=0, which skips the
+    // whole describe at registration time where Jest can report it honestly.
+    if (!enabled) {
+      throw new Error(
+        "Signed URLs are off in the running plugin, so this round trip exercised nothing. " +
+          'Enable "Enable signed URLs" under Advanced settings, or set OBSIDIAN_SIGNED_URLS=0 ' +
+          "to skip this suite deliberately.",
+      );
+    }
+    const uploadResult = await client.callTool({
+      name: "vault_get_upload_url",
+      arguments: { path: UPLOAD_PATH },
+    });
+    expect(uploadResult.isError).toBeFalsy();
+    const upload = jsonOf<{ url: string; contentType: string; command: string }>(uploadResult);
+    // `method` and `singleUse` are not in the result: both are constants the tool
+    // description states, so they are not restated on every call. The PUT below is what
+    // actually proves the method.
+    expect(upload.contentType).toBe("image/png");
+    expect(upload.command).toContain("curl -X PUT");
+
+    const put = await fetch(upload.url, {
+      method: "PUT",
+      headers: { "Content-Type": "image/png" },
+      body: new Uint8Array(PIXEL_BYTES),
+    });
+    expect(put.status).toBe(204);
+    const replay = await fetch(upload.url, {
+      method: "PUT",
+      headers: { "Content-Type": "image/png" },
+      body: new Uint8Array(PIXEL_BYTES),
+    });
+    expect(replay.status).toBe(401);
+    await new Promise((r) => setTimeout(r, 300));
+
+    // A signed upload URL authorizes writing the whole file it names. Neither the
+    // Target-Type/Target headers nor extra /heading path elements are covered by the
+    // signature, so both routes into a targeted edit are refused (40102). Verified live
+    // against this vault before the fix: both wrote successfully.
+    // A different path from the upload above. Since the nonce landed, two links for one
+    // path are distinct and this is no longer load-bearing for correctness -- it just
+    // keeps the two halves of this test from writing over each other, so a failure names
+    // the half that actually broke.
+    const targetedUpload = await client.callTool({
+      name: "vault_get_upload_url",
+      arguments: { path: TARGETED_PATH },
+    });
+    const targeted = jsonOf<{ url: string }>(targetedUpload);
+    const viaHeaders = await fetch(targeted.url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "text/markdown",
+        "Markdown-Patch-Version": "1",
+        "Target-Type": "heading",
+        Target: "Alpha",
+      },
+      body: "should be refused",
+    });
+    expect(viaHeaders.status).toBe(401);
+    expect((await viaHeaders.json()).errorCode).toBe(40102);
+    // The refusal must not spend the link: the claim is released when a request does
+    // not finish 2xx, so the legitimate whole-file upload still works afterwards.
+    const afterRefusal = await fetch(targeted.url, {
+      method: "PUT",
+      headers: { "Content-Type": "text/markdown" },
+      body: "# Alpha\n\nwhole-file write after the refusal\n",
+    });
+    expect(afterRefusal.status).toBe(204);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const downloadResult = await client.callTool({
+      name: "vault_get_download_url",
+      arguments: { path: UPLOAD_PATH },
+    });
+    const [link, text] = contentOf(downloadResult);
+    expect(link.type).toBe("resource_link");
+    expect(link.mimeType).toBe("image/png");
+    expect(link.size).toBe(PIXEL_BYTES.byteLength);
+    expect(text.type).toBe("text");
+    const get = await fetch(link.uri);
+    expect(get.status).toBe(200);
+    expect(get.headers.get("content-disposition")).toMatch(/^inline;/);
+    expect(Buffer.from(await get.arrayBuffer()).toString("base64")).toBe(PIXEL_BASE64);
+    const asDownload = await fetch(`${link.uri}&download=1`);
+    expect(asDownload.headers.get("content-disposition")).toMatch(/^attachment;/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_read's refusal of non-text files
+//
+// The unit tests hand the handler bytes through a mocked ops layer; only here do a real
+// file's bytes come back from Obsidian's own adapter and get decoded. Both directions are
+// covered, because the guard is only worth having if it separates them.
+// ---------------------------------------------------------------------------
+
+describe("vault_read on a non-text file", () => {
+  const PNG_PATH = `${TEST_DIR}/mcp-temp-refused.png`;
+  // A note whose text genuinely contains the replacement character: its own bytes are
+  // valid UTF-8, so it must read normally. This is the file a check that looked for the
+  // character itself would wrongly refuse.
+  const MARKER_PATH = `${TEST_DIR}/mcp-temp-marker.md`;
+  const MARKER_BODY = `# Marker\n\nA pasted glyph survived as ${String.fromCodePoint(0xfffd)} here.\n`;
+
+  beforeAll(async () => {
+    await putBytes(PNG_PATH, PIXEL_BYTES, "image/png");
+    await client.callTool({
+      name: "vault_write",
+      arguments: { path: MARKER_PATH, content: MARKER_BODY },
+    });
+    // Give Obsidian's index a moment to register the note.
+    await new Promise((r) => setTimeout(r, 300));
+  });
+
+  afterAll(async () => {
+    await deleteFixture(PNG_PATH).catch((_e: unknown): void => {});
+    await deleteFixture(MARKER_PATH).catch((_e: unknown): void => {});
+  });
+
+  test("refuses the PNG and points at vault_read_binary", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: PNG_PATH },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/not valid UTF-8/);
+    expect(textOf(result)).toMatch(/vault_read_binary/);
+  });
+
+  // The refusal is on the file's bytes, so it lands before the target is looked up: a
+  // targeted read of an attachment says the file is not text, rather than that the
+  // heading was not found in it.
+  test("refuses a targeted read of the PNG for the same reason", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: PNG_PATH, targetType: "heading", target: ["Anything"] },
+    });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toMatch(/not valid UTF-8/);
+  });
+
+  test("still reads a text file containing a literal replacement character", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: MARKER_PATH },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(jsonOf<any>(result).content).toBe(MARKER_BODY);
+  });
+
+  test("the REST layer is unchanged and still serves the PNG's raw bytes", async () => {
+    const response = await authedFetch(`/vault/${PNG_PATH}`);
+    expect(response.status).toBe(200);
+    expect(Buffer.from(await response.arrayBuffer()).toString("base64")).toBe(
+      PIXEL_BASE64,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_append
+// ---------------------------------------------------------------------------
+
+describe("vault_append tool", () => {
+  beforeEach(async () => {
+    await resetFixture(FIXTURE_DOCUMENT, TEST_PATH);
+  });
+
+  test("appends content and preserves original", async () => {
+    const appendResult = await client.callTool({
+      name: "vault_append",
+      arguments: { path: TEST_PATH, content: "mcp-appended-content\n" },
+    });
+    expect(jsonOf<any>(appendResult).message).toBe("OK");
+
+    const readResult = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH },
+    });
+    const body = jsonOf<any>(readResult);
+    expect(body.content).toContain("mcp-appended-content");
+    expect(body.content).toContain(TERM_ALPHA);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_patch
+// ---------------------------------------------------------------------------
+
+describe("vault_patch tool", () => {
+  beforeEach(async () => {
+    await resetFixture(FIXTURE_DOCUMENT, TEST_PATH);
+  });
+
+  test("appends to a heading section", async () => {
+    await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: [HEADING_DELTA],
+        operation: "append",
+        content: "mcp-patch-append\n",
+      },
+    });
+    const body = jsonOf<any>(
+      await client.callTool({ name: "vault_read", arguments: { path: TEST_PATH } })
+    );
+    expect(body.content).toContain(TERM_DELTA);
+    expect(body.content).toContain("mcp-patch-append");
+  });
+
+  test("replaces a heading section", async () => {
+    await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: [HEADING_DELTA],
+        operation: "replace",
+        content: "mcp-patch-replace\n",
+      },
+    });
+    const body = jsonOf<any>(
+      await client.callTool({ name: "vault_read", arguments: { path: TEST_PATH } })
+    );
+    expect(body.content).toContain("mcp-patch-replace");
+    expect(body.content).not.toContain(TERM_DELTA);
+  });
+
+  // Simulates a client that doesn't resolve anyOf parameter schemas and
+  // forwards the array argument as its raw JSON text (#315).
+  test("appends to a heading section addressed by a JSON-encoded string target", async () => {
+    const patchResult = await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: JSON.stringify([HEADING_DELTA]),
+        operation: "append",
+        content: "mcp-patch-anyof-append\n",
+      },
+    });
+    expect(jsonOf<any>(patchResult).message).toBe("OK");
+    const body = jsonOf<any>(
+      await client.callTool({ name: "vault_read", arguments: { path: TEST_PATH } })
+    );
+    expect(body.content).toContain(TERM_DELTA);
+    expect(body.content).toContain("mcp-patch-anyof-append");
+  });
+
+  test("replaces a frontmatter field with a native JSON value", async () => {
+    await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "frontmatter",
+        target: "title",
+        operation: "replace",
+        value: "MCP Patched Title",
+      },
+    });
+    const body = jsonOf<any>(
+      await client.callTool({ name: "vault_read", arguments: { path: TEST_PATH } })
+    );
+    expect(body.frontmatter?.title).toBe("MCP Patched Title");
+  });
+
+  test("sets a frontmatter list from a native JSON array value", async () => {
+    await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "frontmatter",
+        target: "related",
+        operation: "replace",
+        value: ["alpha", "beta"],
+        createTargetIfMissing: true,
+      },
+    });
+    const body = jsonOf<any>(
+      await client.callTool({ name: "vault_read", arguments: { path: TEST_PATH } })
+    );
+    expect(body.frontmatter?.related).toEqual(["alpha", "beta"]);
+  });
+
+  test("surfaces an error for an unresolvable target", async () => {
+    const result = await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: ["NoSuchHeadingMcp"],
+        operation: "replace",
+        content: "x",
+      },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("within continues an existing block literally", async () => {
+    const result = await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: ["Alpha"],
+        within: 0,
+        operation: "append",
+        content: " mcp-within-continued",
+      },
+    });
+    expect(result.isError).toBeFalsy();
+    const body = jsonOf<any>(
+      await client.callTool({ name: "vault_read", arguments: { path: TEST_PATH } })
+    );
+    // Continued on the same line: no library-supplied separator.
+    expect(body.content).toContain("#inline-tag mcp-within-continued");
+  });
+
+  test("an out-of-range within surfaces the engine's message", async () => {
+    const result = await client.callTool({
+      name: "vault_patch",
+      arguments: {
+        path: TEST_PATH,
+        targetType: "heading",
+        target: ["Alpha"],
+        within: 9,
+        operation: "append",
+        content: "x",
+      },
+    });
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result.content)).toContain("out of range");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// vault_move
+// ---------------------------------------------------------------------------
+
+describe("vault_move tool", () => {
+  const MOVE_SRC = `${TEST_DIR}/mcp-move-source.md`;
+  const MOVE_DST = `${TEST_DIR}/mcp-move-destination.md`;
+
+  beforeEach(async () => {
+    const result = await client.callTool({
+      name: "vault_write",
+      arguments: { path: MOVE_SRC, content: "mcp-move-source-content\n" },
+    });
+    if (result.isError) throw new Error(`MOVE_SRC setup failed`);
+    // Give Obsidian's index a moment to register the new file.
+    await new Promise((r) => setTimeout(r, 300));
+  });
+
+  afterEach(async () => {
+    await deleteFixture(MOVE_SRC).catch((_e: unknown): void => {});
+    await deleteFixture(MOVE_DST).catch((_e: unknown): void => {});
+  });
+
+  test("moves file: returns oldPath and newPath, source gone, dest has original content", async () => {
+    const result = await client.callTool({
+      name: "vault_move",
+      arguments: { path: MOVE_SRC, destination: MOVE_DST },
+    });
+    expect(result.isError).toBeFalsy();
+    const body = jsonOf<any>(result);
+    expect(body.message).toBe("OK");
+    expect(body.oldPath).toBe(MOVE_SRC);
+    expect(body.newPath).toBe(MOVE_DST);
+
+    const srcRead = await client.callTool({ name: "vault_read", arguments: { path: MOVE_SRC } });
+    expect(srcRead.isError).toBe(true);
+
+    const dstRead = await client.callTool({ name: "vault_read", arguments: { path: MOVE_DST } });
+    expect(jsonOf<any>(dstRead).content).toContain("mcp-move-source-content");
+  });
+
+  test("trailing-slash destination resolves to source filename", async () => {
+    const dstDir = `${TEST_DIR}/mcp-move-subdir/`;
+    const expectedDst = `${TEST_DIR}/mcp-move-subdir/mcp-move-source.md`;
+
+    const result = await client.callTool({
+      name: "vault_move",
+      arguments: { path: MOVE_SRC, destination: dstDir },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(jsonOf<any>(result).newPath).toBe(expectedDst);
+
+    await deleteFixture(expectedDst).catch((_e: unknown): void => {});
+  });
+
+  test("returns isError for non-existent source", async () => {
+    const result = await client.callTool({
+      name: "vault_move",
+      arguments: { path: `${TEST_DIR}/no-such-file.md`, destination: MOVE_DST },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("returns isError when destination exists without allowOverwrite", async () => {
+    const setup = await client.callTool({
+      name: "vault_write",
+      arguments: { path: MOVE_DST, content: "existing content\n" },
+    });
+    if (setup.isError) throw new Error(`MOVE_DST setup failed`);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const result = await client.callTool({
+      name: "vault_move",
+      arguments: { path: MOVE_SRC, destination: MOVE_DST },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  test("allowOverwrite: true succeeds and dest has source content", async () => {
+    const setup = await client.callTool({
+      name: "vault_write",
+      arguments: { path: MOVE_DST, content: "existing content\n" },
+    });
+    if (setup.isError) throw new Error(`MOVE_DST setup failed`);
+    await new Promise((r) => setTimeout(r, 300));
+
+    const result = await client.callTool({
+      name: "vault_move",
+      arguments: { path: MOVE_SRC, destination: MOVE_DST, allowOverwrite: true },
+    });
+    expect(result.isError).toBeFalsy();
+    expect(jsonOf<any>(result).message).toBe("OK");
+
+    const dstRead = await client.callTool({ name: "vault_read", arguments: { path: MOVE_DST } });
+    expect(jsonOf<any>(dstRead).content).toContain("mcp-move-source-content");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// search_simple
+// ---------------------------------------------------------------------------
+
+describe("search_simple tool", () => {
+  test("finds fixture by unique term", async () => {
+    const result = await client.callTool({
+      name: "search_simple",
+      arguments: { query: TERM_ALPHA },
+    });
+    const body = jsonOf<any[]>(result);
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.some((item) => item.filename === TEST_PATH)).toBe(true);
+  });
+
+  test("returns empty array for no-match query", async () => {
+    const result = await client.callTool({
+      name: "search_simple",
+      arguments: { query: "zzzzzz-no-match-zzzzzz" },
+    });
+    const body = jsonOf<any[]>(result);
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// search_query (JsonLogic)
+// ---------------------------------------------------------------------------
+
+describe("search_query tool", () => {
+  test("tag membership query finds fixture", async () => {
+    const result = await client.callTool({
+      name: "search_query",
+      arguments: { query: { in: [TAG_FIXTURE, { var: "tags" }] } },
+    });
+    const body = jsonOf<any[]>(result);
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.some((item) => item.filename === TEST_PATH)).toBe(true);
+  });
+
+  test("frontmatter numeric comparison finds fixture", async () => {
+    const result = await client.callTool({
+      name: "search_query",
+      arguments: {
+        query: { "==": [{ var: "frontmatter.priority" }, FM_PRIORITY_VALUE] },
+      },
+    });
+    const body = jsonOf<any[]>(result);
+    expect(body.some((item) => item.filename === TEST_PATH)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// tag_list
+// ---------------------------------------------------------------------------
+
+describe("tag_list tool", () => {
+  test("returns tags array containing fixture tag", async () => {
+    const result = await client.callTool({ name: "tag_list", arguments: {} });
+    const body = jsonOf<{ tags: { name: string; count: number }[] }>(result);
+    expect(Array.isArray(body.tags)).toBe(true);
+    expect(body.tags.some((t) => t.name === TAG_FIXTURE)).toBe(true);
+  });
+
+  test("each tag has name and count", async () => {
+    const result = await client.callTool({ name: "tag_list", arguments: {} });
+    const body = jsonOf<{ tags: { name: string; count: number }[] }>(result);
+    for (const tag of body.tags) {
+      expect(typeof tag.name).toBe("string");
+      expect(typeof tag.count).toBe("number");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// command_list + command_execute
+// ---------------------------------------------------------------------------
+
+describe("command_list tool", () => {
+  test("returns commands with id and name strings", async () => {
+    const result = await client.callTool({ name: "command_list", arguments: {} });
+    const body = jsonOf<{ commands: { id: string; name: string }[] }>(result);
+    expect(Array.isArray(body.commands)).toBe(true);
+    expect(body.commands.length).toBeGreaterThan(0);
+    for (const cmd of body.commands) {
+      expect(typeof cmd.id).toBe("string");
+      expect(typeof cmd.name).toBe("string");
+    }
+  });
+});
+
+describe("command_execute tool", () => {
+  test("executes editor:save-file and returns OK", async () => {
+    const listResult = await client.callTool({ name: "command_list", arguments: {} });
+    const { commands } = jsonOf<{ commands: { id: string }[] }>(listResult);
+    if (!commands.find((c) => c.id === "editor:save-file")) {
+      throw new Error(
+        'Command "editor:save-file" not found — cannot safely execute an arbitrary command.'
+      );
+    }
+    const result = await client.callTool({
+      name: "command_execute",
+      arguments: { commandId: "editor:save-file" },
+    });
+    expect(jsonOf<any>(result).message).toBe("OK");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// open_file
+// ---------------------------------------------------------------------------
+
+// Skipped by default: this is the one test that pulls Obsidian to the foreground and
+// steals focus, which is disruptive enough to be worth opting into rather than paying
+// for on every run — keystrokes intended elsewhere can land in whatever note it opened.
+// Set OBSIDIAN_TEST_OPEN_FILE=1 to run it.
+const openFileTest =
+  process.env.OBSIDIAN_TEST_OPEN_FILE === "1" ? test : test.skip;
+
+describe("open_file tool", () => {
+  openFileTest("opens fixture file and returns OK", async () => {
+    const result = await client.callTool({
+      name: "open_file",
+      arguments: { path: TEST_PATH },
+    });
+    expect(jsonOf<any>(result).message).toBe("OK");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// active_file_* (conditional on OBSIDIAN_ACTIVE_FILE)
+// ---------------------------------------------------------------------------
+
+const activeRun =
+  typeof process.env.OBSIDIAN_ACTIVE_FILE === "string" &&
+  process.env.OBSIDIAN_ACTIVE_FILE.length > 0;
+const activeTest = activeRun ? test : test.skip;
+
+describe("active_file_get_path tool", () => {
+  activeTest("returns vault-relative path of active file", async () => {
+    const result = await client.callTool({ name: "active_file_get_path", arguments: {} });
+    const body = jsonOf<any>(result);
+    expect(typeof body.path).toBe("string");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-session routing (regression for shared-McpServer bug)
+// ---------------------------------------------------------------------------
+
+describe("multi-session routing", () => {
+  test("first session remains functional after a second session connects", async () => {
+    const clientA = makeClient();
+    const clientB = makeClient();
+    try {
+      await clientA.connect(makeTransport());
+      // Connecting clientB previously overwrote the shared McpServer's internal
+      // _transport reference, causing clientA's subsequent tool calls to hang
+      // indefinitely as their responses were routed to clientB's transport.
+      await clientB.connect(makeTransport());
+
+      const resultA = await clientA.callTool({ name: "vault_list", arguments: {} });
+      expect(resultA.isError).toBeFalsy();
+      expect(Array.isArray(jsonOf<{ files: string[] }>(resultA).files)).toBe(true);
+
+      const resultB = await clientB.callTool({ name: "vault_list", arguments: {} });
+      expect(resultB.isError).toBeFalsy();
+      expect(Array.isArray(jsonOf<{ files: string[] }>(resultB).files)).toBe(true);
+    } finally {
+      await clientA.close().catch((_e: unknown): void => {});
+      await clientB.close().catch((_e: unknown): void => {});
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Path traversal
+//
+// The live check for the advisory: a `path` argument holding "../" must be refused
+// by every tool that takes one, and nothing must appear outside the vault. The probe
+// filename is distinctive so that a regression leaves something obvious next to the
+// vault directory rather than clobbering a real file, and the traversal is kept to a
+// single level for the same reason.
+// ---------------------------------------------------------------------------
+
+describe("MCP vault path traversal", () => {
+  const PROBE = "../obsidian-local-rest-api-traversal-probe.md";
+  const ABSOLUTE_PROBE = "/tmp/obsidian-local-rest-api-traversal-probe.md";
+
+  async function expectRefused(
+    name: string,
+    args: Record<string, unknown>,
+  ): Promise<void> {
+    const result = await client.callTool({ name, arguments: args });
+    expect(result.isError).toBe(true);
+    expect(textOf(result)).toContain("must not escape the vault root");
+  }
+
+  for (const probe of [PROBE, ABSOLUTE_PROBE]) {
+    const label = probe === PROBE ? "relative traversal" : "absolute path";
+
+    test(`vault_write refuses a ${label}`, async () => {
+      await expectRefused("vault_write", { path: probe, content: "traversal probe" });
+    });
+
+    test(`vault_append refuses a ${label}`, async () => {
+      await expectRefused("vault_append", { path: probe, content: "traversal probe" });
+    });
+
+    test(`vault_delete refuses a ${label}`, async () => {
+      await expectRefused("vault_delete", { path: probe });
+    });
+
+    test(`a permanent vault_delete refuses a ${label}`, async () => {
+      await expectRefused("vault_delete", { path: probe, permanent: true });
+    });
+
+    test(`vault_read refuses a ${label}`, async () => {
+      await expectRefused("vault_read", { path: probe });
+    });
+
+    test(`vault_move refuses a ${label} as destination`, async () => {
+      await expectRefused("vault_move", { path: TEST_PATH, destination: probe });
+    });
+
+    test(`vault_copy refuses a ${label} as destination`, async () => {
+      await expectRefused("vault_copy", { path: TEST_PATH, destination: probe });
+    });
+
+    test(`vault_list refuses a ${label}`, async () => {
+      await expectRefused("vault_list", { path: probe });
+    });
+  }
+
+  test("an ordinary path is still accepted after all that", async () => {
+    const result = await client.callTool({
+      name: "vault_read",
+      arguments: { path: TEST_PATH },
+    });
+    expect(result.isError).toBeFalsy();
+  });
+});

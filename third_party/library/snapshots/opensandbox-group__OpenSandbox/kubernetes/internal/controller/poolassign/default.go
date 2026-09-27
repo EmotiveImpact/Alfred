@@ -1,0 +1,100 @@
+// Copyright 2025 The OpenSandbox Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package assign
+
+import (
+	"context"
+	"fmt"
+
+	sandboxv1alpha1 "github.com/alibaba/OpenSandbox/sandbox-k8s/apis/sandbox/v1alpha1"
+)
+
+type defaultAssigner struct {
+	profile *Profile
+}
+
+func NewDefaultAssigner(profile *Profile) assigner {
+	return &defaultAssigner{profile: profile}
+}
+
+func (a *defaultAssigner) AssignPool(ctx context.Context, sbx *sandboxv1alpha1.BatchSandbox, pools []*sandboxv1alpha1.Pool) (string, error) {
+	predicates, err := newPredicates(a.profile)
+	if err != nil {
+		return "", fmt.Errorf("failed to create predicates: %w", err)
+	}
+	scorers, err := newScorers(a.profile)
+	if err != nil {
+		return "", fmt.Errorf("failed to create scorers: %w", err)
+	}
+
+	var candidates []*sandboxv1alpha1.Pool
+	var rejections []poolRejection
+	for _, pool := range pools {
+		if rejection := a.collectRejections(ctx, sbx, pool, predicates); len(rejection.Reasons) > 0 {
+			rejection.PoolName = pool.Name
+			rejections = append(rejections, rejection)
+		} else {
+			candidates = append(candidates, pool)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return "", &NoEligiblePoolError{
+			SandboxName: sbx.Name,
+			TotalPools:  len(pools),
+			Rejections:  rejections,
+		}
+	}
+
+	best := candidates[0]
+	bestScore := a.weightedScore(ctx, sbx, best, scorers)
+	for _, pool := range candidates[1:] {
+		score := a.weightedScore(ctx, sbx, pool, scorers)
+		if score > bestScore || (score == bestScore && pool.Name < best.Name) {
+			best = pool
+			bestScore = score
+		}
+	}
+	return best.Name, nil
+}
+
+func (a *defaultAssigner) collectRejections(ctx context.Context, sbx *sandboxv1alpha1.BatchSandbox, pool *sandboxv1alpha1.Pool, predicates []predicate) poolRejection {
+	var rejection poolRejection
+	for _, p := range predicates {
+		if !p.predicate(ctx, sbx, pool) {
+			reason := "predicate failed"
+			if pr, ok := p.(predicateWithReason); ok {
+				if detail := pr.Reason(ctx, sbx, pool); detail != "" {
+					reason = detail
+				}
+			}
+			rejection.Reasons = append(rejection.Reasons, reason)
+			failureCode := ""
+			if coded, ok := p.(predicateWithFailureCode); ok {
+				failureCode = coded.FailureCode()
+			}
+			rejection.FailureCodes = append(rejection.FailureCodes, failureCode)
+		}
+	}
+	return rejection
+}
+
+func (a *defaultAssigner) weightedScore(ctx context.Context, sbx *sandboxv1alpha1.BatchSandbox, pool *sandboxv1alpha1.Pool, scorers []weightedScorer) float64 {
+	var total float64
+	for _, s := range scorers {
+		total += s.Score(ctx, sbx, pool) * float64(s.weight)
+	}
+	return total
+}

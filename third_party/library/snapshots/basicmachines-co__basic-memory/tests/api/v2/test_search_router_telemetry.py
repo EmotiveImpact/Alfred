@@ -1,0 +1,75 @@
+"""Telemetry coverage for the v2 search router."""
+
+from __future__ import annotations
+
+import importlib
+from contextlib import contextmanager
+from typing import Any, cast
+
+import logfire
+import pytest
+from fastapi import Response
+
+from basic_memory.schemas.search import SearchQuery
+
+search_router_module = importlib.import_module("basic_memory.api.v2.routers.search_router")
+
+
+@pytest.mark.asyncio
+async def test_search_router_wraps_request_in_manual_operation(monkeypatch) -> None:
+    router = cast(Any, search_router_module)
+    operations: list[tuple[str, dict[str, Any]]] = []
+
+    class FakeSearchService:
+        async def search(self, query, *, limit, offset):
+            return []
+
+        async def count(self, query):
+            return 0
+
+    @contextmanager
+    def fake_span(name: str, **attrs):
+        operations.append((name, attrs))
+        yield
+
+    async def fake_to_search_results(
+        entity_service, results, *, temporal_by_source=None, project_external_ids=None
+    ):
+        return []
+
+    monkeypatch.setattr(logfire, "span", fake_span)
+    monkeypatch.setattr(router, "to_search_results", fake_to_search_results)
+
+    http_response = Response()
+    search_response = await router.search(
+        query=SearchQuery(text="hello world"),
+        search_service=FakeSearchService(),
+        entity_service=object(),
+        # This query carries no valid-time filter, so neither is touched.
+        temporal_repository=object(),
+        session_maker=object(),
+        read_cache=None,
+        response=http_response,
+        internal_project_id=1,
+        project_id="11111111-1111-1111-1111-111111111111",
+        page=2,
+        page_size=5,
+    )
+
+    assert search_response.current_page == 2
+    assert http_response.headers["Accept-Query"] == "application/json"
+    # The root span fires with these attrs; additional nested spans may fire as well.
+    assert operations[0] == (
+        "api.request.search",
+        {
+            "entrypoint": "api",
+            "domain": "search",
+            "action": "search",
+            "page": 2,
+            "page_size": 5,
+            "retrieval_mode": "fts",
+            "has_query": True,
+            "has_filters": False,
+            "has_temporal_filter": False,
+        },
+    )

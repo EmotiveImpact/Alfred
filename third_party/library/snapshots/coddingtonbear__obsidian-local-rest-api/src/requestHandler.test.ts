@@ -1,0 +1,5157 @@
+import { createHash } from "crypto";
+import http from "http";
+import forge from "node-forge";
+import request from "supertest";
+import { parse } from "yaml";
+
+import openapiYaml from "../docs/openapi.yaml";
+import { generateCryptoSettings } from "./certificates";
+
+// Mock McpHandler so tests don't load the MCP SDK (which bundles ESM-only zod)
+jest.mock("./mcpHandler", () => ({
+  McpHandler: jest.fn().mockImplementation(() => ({
+    handleRequest: jest.fn().mockImplementation((_req: unknown, res: { status: (c: number) => { json: (b: unknown) => void } }) => {
+      res.status(200).json({ ok: true });
+    }),
+    // Classification is exercised for real in mcpEndpoint.test.ts; here it stands in for
+    // a sessionful-shaped request so the router's version filter applies its plain rejection.
+    isSessionlessRequest: jest.fn().mockResolvedValue(false),
+    registerTool: jest.fn().mockReturnValue(jest.fn()),
+    registerToolDefinition: jest.fn().mockReturnValue(jest.fn()),
+    registerResource: jest.fn().mockReturnValue(jest.fn()),
+    registerResourceTemplate: jest.fn().mockReturnValue(jest.fn()),
+    registerPrompt: jest.fn().mockReturnValue(jest.fn()),
+    close: jest.fn(),
+  })),
+}));
+
+import type express from "express";
+
+import RequestHandler, { redactSignedUrl } from "./requestHandler";
+import type { LocalRestApiPublicApi, VaultSubresourceRequest } from "./publicApi";
+import { ErrorCode, LocalRestApiSettings } from "./types";
+import { CERT_NAME } from "./constants";
+import { UrlSigner } from "./signedUrls";
+import {
+  DestinationAlreadyExistsError,
+  FileNotFoundError,
+} from "./vaultOperations";
+import { FrontmatterParseError } from "markdown-patch";
+import {
+  App,
+  TFile,
+  Command,
+  CachedMetadata,
+  PluginManifest,
+  _prepareSimpleSearchMock,
+} from "../mocks/obsidian";
+
+describe("requestHandler", () => {
+  const API_KEY = "my api key";
+
+  let settings: LocalRestApiSettings;
+  let app: App;
+  let manifest: PluginManifest;
+  let handler: RequestHandler;
+  let server: http.Server;
+
+  beforeEach(() => {
+    settings = getMockSettings();
+    // This 'App' instance is actually a mock, and it doesn't define
+    // quite a perfectly-matching interface for the actual Obsidian
+    // App interface.
+    app = new App();
+    manifest = new PluginManifest();
+    // @ts-ignore: Ignore missing App properties
+    handler = new RequestHandler(app, manifest, settings);
+    handler.setupRouter();
+    server = http.createServer(handler.api);
+  });
+
+  afterEach(() => {
+    server.close();
+  });
+
+  function getMockSettings(): LocalRestApiSettings {
+    return {
+      apiKey: API_KEY,
+      crypto: {
+        cert: "cert",
+        privateKey: "privateKey",
+        publicKey: "publicKey",
+      },
+      port: 1,
+      insecurePort: 2,
+      enableInsecureServer: false,
+    };
+  }
+  describe("requestIsAuthenticated", () => {
+    const arbitraryAuthenticatedRoute = "/vault/";
+
+    test("missing header", async () => {
+      await request(server).get(arbitraryAuthenticatedRoute).expect(401);
+    });
+    test("incorrect header", async () => {
+      await request(server)
+        .get(arbitraryAuthenticatedRoute)
+        .set("Authorization", "Bearer of good tidings")
+        .expect(401);
+    });
+    test("correct header", async () => {
+      await request(server)
+        .get(arbitraryAuthenticatedRoute)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+    });
+  });
+
+  describe("root", () => {
+    test("withhout auth", async () => {
+      const result = await request(server).get("/").expect(200);
+
+      expect(result.body.status).toEqual("OK");
+      expect(result.body.authenticated).toBeFalsy();
+    });
+
+    test("with auth", async () => {
+      const result = await request(server)
+        .get("/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.status).toEqual("OK");
+      expect(result.body.authenticated).toBeTruthy();
+    });
+  });
+
+  describe("certificateGet", () => {
+    const certPath = `/${CERT_NAME}`;
+
+    test("withhout auth", async () => {
+      const result = await request(server).get(certPath).expect(200);
+
+      expect(result.body.toString()).toEqual(settings.crypto?.cert);
+    });
+
+    test("with auth", async () => {
+      const result = await request(server)
+        .get(certPath)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.toString()).toEqual(settings.crypto.cert);
+    });
+  });
+
+  describe("certificate material generated with a CA", () => {
+    // 2048-bit generation is slow under jest; the served shape is what matters.
+    const generated = generateCryptoSettings({ keySize: 1024 });
+
+    function legacySelfSignedCertificate(): string {
+      const keypair = forge.pki.rsa.generateKeyPair(1024);
+      const attrs = [{ name: "commonName", value: "Obsidian Local REST API" }];
+      const certificate = forge.pki.createCertificate();
+      certificate.setIssuer(attrs);
+      certificate.setSubject(attrs);
+      certificate.setExtensions([
+        { name: "basicConstraints", cA: true, critical: true },
+        { name: "keyUsage", keyCertSign: true, digitalSignature: true, critical: true },
+        { name: "subjectAltName", altNames: [{ type: 7, ip: "127.0.0.1" }] },
+      ]);
+      certificate.serialNumber = "1";
+      certificate.publicKey = keypair.publicKey;
+      certificate.validity.notBefore = new Date();
+      certificate.validity.notAfter = new Date(Date.now() + 365 * 24 * 3600 * 1000);
+      certificate.sign(keypair.privateKey, forge.md.sha256.create());
+      return forge.pki.certificateToPem(certificate);
+    }
+
+    test("the certificate download is the CA, not the server certificate", async () => {
+      settings.crypto = generated;
+      const result = await request(server).get(`/${CERT_NAME}`).expect(200);
+
+      expect(result.body.toString()).toEqual(generated.caCert);
+      expect(result.body.toString()).not.toEqual(generated.cert);
+    });
+
+    test("legacy material without a CA downloads the self-signed certificate", async () => {
+      settings.crypto = {
+        cert: generated.cert,
+        privateKey: generated.privateKey,
+        publicKey: generated.publicKey,
+      };
+      const result = await request(server).get(`/${CERT_NAME}`).expect(200);
+
+      expect(result.body.toString()).toEqual(generated.cert);
+    });
+
+    test("root reports a CA-signed server certificate as up to standards", async () => {
+      settings.crypto = generated;
+      const result = await request(server)
+        .get("/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.certificateInfo).toEqual({
+        validityDays: expect.any(Number),
+        regenerateRecommended: false,
+        regenerateReason: null,
+      });
+      expect(result.body.certificateInfo.validityDays).toBeGreaterThan(360);
+    });
+
+    test("root recommends regenerating a legacy CA-as-leaf certificate", async () => {
+      settings.crypto = {
+        cert: legacySelfSignedCertificate(),
+        privateKey: generated.privateKey,
+        publicKey: generated.publicKey,
+      };
+      const result = await request(server)
+        .get("/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.certificateInfo.regenerateRecommended).toBe(true);
+      expect(result.body.certificateInfo.regenerateReason).toBe("ca-used-as-leaf");
+    });
+
+    test("root omits certificate info without auth", async () => {
+      settings.crypto = generated;
+      const result = await request(server).get("/").expect(200);
+
+      expect(result.body.certificateInfo).toBeUndefined();
+    });
+  });
+
+  describe("vaultGet", () => {
+    test("directory empty", async () => {
+      app.vault._files = [];
+
+      const result = await request(server)
+        .get("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.files).toEqual([]);
+    });
+
+    test("empty subdirectory returns 404", async () => {
+      app.vault._files = [];
+      app.vault.adapter._exists = false;
+
+      await request(server)
+        .get("/vault/nonexistent/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(404);
+    });
+
+    test("directory with files", async () => {
+      const arbitraryDirectory = "somewhere";
+
+      const rootFile = new TFile();
+      rootFile.path = "rootFile.md";
+
+      const notRootFile = new TFile();
+      notRootFile.path = `${arbitraryDirectory}/anotherFile.md`;
+
+      app.vault._files = [rootFile, notRootFile];
+
+      const result = await request(server)
+        .get("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.files).toEqual([
+        rootFile.path,
+        `${arbitraryDirectory}/`,
+      ]);
+    });
+
+    test("unauthorized", async () => {
+      const arbitraryFilename = "somefile.md";
+      const arbitraryFileContent = "Beep boop";
+
+      app.vault.adapter._read = arbitraryFileContent;
+
+      await request(server).get(`/vault/${arbitraryFilename}`).expect(401);
+    });
+
+    test("file content", async () => {
+      const arbitraryFilename = "somefile.md";
+      const arbitraryFileContent = "Beep boop";
+      const fileContentBuffer = new ArrayBuffer(arbitraryFileContent.length);
+      const fileContentBufferView = new Uint8Array(fileContentBuffer);
+      for (let i = 0; i < arbitraryFileContent.length; i++) {
+        fileContentBufferView[i] = arbitraryFileContent.charCodeAt(i);
+      }
+
+      app.vault.adapter._readBinary = fileContentBuffer;
+
+      const result = await request(server)
+        .get(`/vault/${arbitraryFilename}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.header["content-disposition"]).toEqual(
+        `attachment; filename="${arbitraryFilename}"`
+      );
+      expect(result.header["content-type"]).toEqual(
+        "text/markdown; charset=utf-8"
+      );
+      expect(result.text).toEqual(arbitraryFileContent);
+    });
+
+    test("file does not exist", async () => {
+      const arbitraryFilename = "somefile.md";
+
+      app.vault.adapter._exists = false;
+
+      await request(server)
+        .get(`/vault/${arbitraryFilename}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(404);
+    });
+
+    test("Accept: text/html returns rendered HTML", async () => {
+      const arbitraryFilename = "somefile.md";
+      const renderedHtml = "<h1>Rendered</h1>";
+      jest.spyOn(handler.operations, "renderFileToHtml").mockResolvedValue(renderedHtml);
+
+      const result = await request(server)
+        .get(`/vault/${arbitraryFilename}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/html")
+        .expect(200);
+
+      expect(result.header["content-type"]).toEqual("text/html; charset=utf-8");
+      expect(result.text).toEqual(renderedHtml);
+      expect(handler.operations.renderFileToHtml).toHaveBeenCalledWith(
+        app.vault._getAbstractFileByPath,
+      );
+    });
+
+    test("Accept: text/html on non-existent file returns 404", async () => {
+      const arbitraryFilename = "somefile.md";
+      app.vault._getAbstractFileByPath = null;
+
+      await request(server)
+        .get(`/vault/${arbitraryFilename}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/html")
+        .expect(404);
+    });
+
+    test("Accept: application/vnd.olrapi.note+json includes links, backlinks, and unresolvedLinks", async () => {
+      const targetPath = app.vault._getAbstractFileByPath.path;
+
+      app.metadataCache.resolvedLinks = {
+        [targetPath]: { "resolved-target.md": 1 },
+        "other.md": { [targetPath]: 1 },
+      };
+      app.metadataCache.unresolvedLinks = {
+        [targetPath]: { "not-yet-created.md": 1 },
+      };
+
+      const result = await request(server)
+        .get(`/vault/${targetPath}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "application/vnd.olrapi.note+json")
+        .expect(200);
+
+      expect(result.body.links).toEqual(["resolved-target.md"]);
+      expect(result.body.backlinks).toEqual(["other.md"]);
+      expect(result.body.unresolvedLinks).toEqual(["not-yet-created.md"]);
+
+    });
+  });
+
+  describe("vaultGet section retrieval", () => {
+    const markdownWithHeadings = [
+      "---",
+      "title: Test Doc",
+      "---",
+      "# Heading1",
+      "Content under heading1",
+      "## SubHeading",
+      "Sub content",
+      "# Heading2",
+      "Content under heading2",
+      "",
+    ].join("\n");
+
+    const markdownWithBlock = [
+      "# Heading1",
+      "Some content",
+      "Block content ^myblock",
+      "# Heading2",
+      "More content",
+      "",
+    ].join("\n");
+
+    function setFileContent(content: string): void {
+      app.vault.adapter._read = content;
+      // readBinary is used by the default GET path
+      const buf = new ArrayBuffer(content.length);
+      const view = new Uint8Array(buf);
+      for (let i = 0; i < content.length; i++) {
+        view[i] = content.charCodeAt(i);
+      }
+      app.vault.adapter._readBinary = buf;
+    }
+
+    // Header-based targeting is a deprecated 1.x feature and is only processed
+    // under Markdown-Patch-Version: 1; the 2.0 (default) way to target a read is
+    // URL path elements (covered in the "URL segment targeting" block below).
+    test("heading section (1.x header targeting) returns only that heading's content", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const result = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading2")
+        .expect(200);
+
+      expect(result.text).toEqual("Content under heading2\n");
+      expect(result.headers["deprecation"]).toBe('true; sunset-version="6.0"');
+    });
+
+    test("header targeting without Markdown-Patch-Version: 1 is rejected (40083)", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading2");
+
+      expect(res.status).toBe(400);
+      expect(JSON.parse(res.text).errorCode).toBe(40083);
+    });
+
+    test("nested heading section via delimiter", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const result = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1::SubHeading")
+        .expect(200);
+
+      expect(result.text).toEqual("Sub content\n");
+    });
+
+    test("nested heading with custom delimiter", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const result = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1||SubHeading")
+        .set("Target-Delimiter", "||")
+        .expect(200);
+
+      expect(result.text).toEqual("Sub content\n");
+    });
+
+    test("block reference returns block content", async () => {
+      setFileContent(markdownWithBlock);
+
+      const result = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "block")
+        .set("Target", "myblock")
+        .expect(200);
+
+      expect(result.text).toEqual("Some content\nBlock content");
+    });
+
+    test("frontmatter field returns value as JSON", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const result = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "frontmatter")
+        .set("Target", "title")
+        .expect(200);
+
+      expect(result.body).toEqual("Test Doc");
+    });
+
+    test("non-existent heading returns 404", async () => {
+      setFileContent(markdownWithHeadings);
+
+      await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "NoSuchHeading")
+        .expect(404);
+    });
+
+    test("non-existent block returns 404", async () => {
+      setFileContent(markdownWithBlock);
+
+      await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "block")
+        .set("Target", "nonexistent")
+        .expect(404);
+    });
+
+    test("non-existent frontmatter field returns 404", async () => {
+      setFileContent(markdownWithHeadings);
+
+      await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "frontmatter")
+        .set("Target", "nonexistent")
+        .expect(404);
+    });
+
+    test("Target-Type without Target returns 400", async () => {
+      setFileContent(markdownWithHeadings);
+
+      await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .expect(400);
+    });
+
+    test("an unknown target type in the URL path is not blamed on a header", async () => {
+      // The target type came from the URL, so a message about the 'Target-Type'
+      // header sends the reader hunting for a header they never sent.
+      setFileContent(markdownWithHeadings);
+      app.vault.adapter._statForPath = "somefile.md";
+
+      const result = await request(server)
+        .get("/vault/somefile.md/nonsense/Heading1")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown");
+
+      expect(result.status).toBe(400);
+      expect(JSON.parse(result.text).message).not.toContain("header");
+    });
+
+    test("invalid Target-Type returns 400", async () => {
+      setFileContent(markdownWithHeadings);
+
+      await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Target-Type", "invalid")
+        .set("Target", "something")
+        .expect(400);
+    });
+
+    test("invalid Target-Type without Target still returns 400 for bad type", async () => {
+      setFileContent(markdownWithHeadings);
+
+      await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Target-Type", "invalid")
+        .expect(400);
+    });
+
+    test("non-existent file returns 404", async () => {
+      app.vault.adapter._exists = false;
+
+      await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .expect(404);
+    });
+
+    test("directory path ignores section headers", async () => {
+      const rootFile = new TFile();
+      rootFile.path = "rootFile.md";
+      app.vault._files = [rootFile];
+
+      const result = await request(server)
+        .get("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .expect(200);
+
+      expect(result.body.files).toEqual(["rootFile.md"]);
+    });
+
+    test("heading section with parent includes nested content", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const result = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .expect(200);
+
+      // Heading1's content includes everything down to Heading2
+      expect(result.text).toContain("Content under heading1");
+      expect(result.text).toContain("Sub content");
+      expect(result.text).not.toContain("Content under heading2");
+    });
+
+    test("Accept: text/html with heading target renders only that section", async () => {
+      setFileContent(markdownWithHeadings);
+      app.vault.adapter._statForPath = "somefile.md";
+      const renderedHtml = "<p>Sub content</p>";
+      jest.spyOn(handler.operations, "renderFileToHtml").mockResolvedValue(renderedHtml);
+
+      const result = await request(server)
+        .get("/vault/somefile.md/heading/Heading1/SubHeading")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/html")
+        .expect(200);
+
+      expect(result.header["content-type"]).toEqual("text/html; charset=utf-8");
+      expect(result.text).toEqual(renderedHtml);
+      expect(handler.operations.renderFileToHtml).toHaveBeenCalledWith(
+        app.vault._getAbstractFileByPath,
+        "Sub content\n",
+      );
+    });
+
+    test("Accept: text/html with block target renders only that block", async () => {
+      setFileContent(markdownWithBlock);
+      app.vault.adapter._statForPath = "somefile.md";
+      const renderedHtml = "<p>Some content Block content</p>";
+      jest.spyOn(handler.operations, "renderFileToHtml").mockResolvedValue(renderedHtml);
+
+      const result = await request(server)
+        .get("/vault/somefile.md/block/myblock")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/html")
+        .expect(200);
+
+      expect(result.text).toEqual(renderedHtml);
+      expect(handler.operations.renderFileToHtml).toHaveBeenCalledWith(
+        app.vault._getAbstractFileByPath,
+        "Some content\nBlock content",
+      );
+    });
+
+    test("Accept: text/html with frontmatter target returns 400", async () => {
+      setFileContent(markdownWithHeadings);
+      app.vault.adapter._statForPath = "somefile.md";
+
+      await request(server)
+        .get("/vault/somefile.md/frontmatter/title")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/html")
+        .expect(400);
+    });
+
+    test("Accept: text/html with non-existent heading target returns 404", async () => {
+      setFileContent(markdownWithHeadings);
+      app.vault.adapter._statForPath = "somefile.md";
+
+      await request(server)
+        .get("/vault/somefile.md/heading/NoSuchHeading")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/html")
+        .expect(404);
+    });
+
+    test("a default (2.0) path-targeted read carries no Deprecation header", async () => {
+      setFileContent(markdownWithHeadings);
+      app.vault.adapter._statForPath = "somefile.md";
+
+      const result = await request(server)
+        .get("/vault/somefile.md/heading/Heading2")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .expect(200);
+
+      expect(result.text).toEqual("Content under heading2\n");
+      expect(result.headers["deprecation"]).toBeUndefined();
+    });
+
+    describe("Target-Scope on a path-targeted read", () => {
+      test("marker returns a heading's raw label text", async () => {
+        setFileContent(markdownWithHeadings);
+        app.vault.adapter._statForPath = "somefile.md";
+
+        const result = await request(server)
+          .get("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Accept", "text/markdown")
+          .set("Target-Scope", "marker")
+          .expect(200);
+
+        expect(result.text).toEqual("SubHeading");
+      });
+
+      test("markerAndContent returns the subtree at the parent's baseline", async () => {
+        setFileContent(markdownWithHeadings);
+        app.vault.adapter._statForPath = "somefile.md";
+
+        const result = await request(server)
+          .get("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Accept", "text/markdown")
+          .set("Target-Scope", "markerAndContent")
+          .expect(200);
+
+        // SubHeading is h2 in the document; at its parent's baseline its own
+        // line reads as "# SubHeading" — the shape a markerAndContent replace
+        // consumes.
+        expect(result.text).toEqual("# SubHeading\nSub content\n");
+      });
+
+      test("markerAndContent returns a block's full span including its ^id", async () => {
+        setFileContent(markdownWithBlock);
+        app.vault.adapter._statForPath = "somefile.md";
+
+        const result = await request(server)
+          .get("/vault/somefile.md/block/myblock")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Accept", "text/markdown")
+          .set("Target-Scope", "markerAndContent")
+          .expect(200);
+
+        expect(result.text).toEqual("Some content\nBlock content ^myblock");
+      });
+
+      test("marker and markerAndContent on a frontmatter target return key and entry", async () => {
+        setFileContent(markdownWithHeadings);
+        app.vault.adapter._statForPath = "somefile.md";
+
+        const keyResult = await request(server)
+          .get("/vault/somefile.md/frontmatter/title")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Target-Scope", "marker")
+          .expect(200);
+        expect(keyResult.body).toEqual("title");
+
+        const entryResult = await request(server)
+          .get("/vault/somefile.md/frontmatter/title")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Target-Scope", "markerAndContent")
+          .expect(200);
+        expect(entryResult.body).toEqual({ title: "Test Doc" });
+      });
+
+      test("a non-read scope is rejected with InvalidTargetScopeHeader", async () => {
+        setFileContent(markdownWithHeadings);
+        app.vault.adapter._statForPath = "somefile.md";
+
+        const res = await request(server)
+          .get("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Target-Scope", "parent");
+        expect(res.status).toBe(400);
+        expect(JSON.parse(res.text).errorCode).toBe(40059);
+      });
+    });
+
+    test("a Markdown-Patch-Version: 1 read still works and is marked deprecated", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const result = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1::SubHeading")
+        .expect(200);
+
+      expect(result.text).toEqual("Sub content\n");
+      expect(result.headers["deprecation"]).toBe('true; sunset-version="6.0"');
+    });
+
+    test("an invalid Markdown-Patch-Version on a targeted read returns 400 (40082)", async () => {
+      setFileContent(markdownWithHeadings);
+
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown")
+        .set("Markdown-Patch-Version", "9")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading2");
+      expect(res.status).toBe(400);
+      expect(JSON.parse(res.text).errorCode).toBe(40082);
+    });
+  });
+
+  describe("vaultGet document map", () => {
+    const mapDoc = [
+      "---",
+      "title: Test Doc",
+      "priority: 3",
+      "---",
+      "# Heading1",
+      "Content ^blk",
+      "## SubHeading",
+      "Sub content",
+      "# Heading2",
+      "More",
+      "",
+    ].join("\n");
+    const MAP_CT = "application/vnd.olrapi.document-map+json";
+
+    test("defaults to the 2.0 map with a nested heading tree and a version token", async () => {
+      app.vault.adapter._read = mapDoc;
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT)
+        .expect(200);
+      expect(res.headers["content-type"]).toContain("document-map");
+      expect(res.headers["deprecation"]).toBeUndefined();
+      expect(res.body.headings).toEqual({
+        Heading1: { SubHeading: {} },
+        Heading2: {},
+      });
+      expect(res.body.blocks).toEqual(["blk"]);
+      expect(res.body.frontmatterFields).toEqual(["title", "priority"]);
+      expect(res.body.version).toMatch(/^[0-9a-f]{6}$/);
+    });
+
+    test("Markdown-Patch-Version: 1 returns the deprecated ::-joined map with a Deprecation header", async () => {
+      app.vault.adapter._read = mapDoc;
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT)
+        .set("Markdown-Patch-Version", "1")
+        .expect(200);
+      expect(res.headers["deprecation"]).toBe('true; sunset-version="6.0"');
+      expect(res.body.headings).toEqual([
+        "Heading1",
+        "Heading1::SubHeading",
+        "Heading2",
+      ]);
+      expect(res.body.version).toBeUndefined();
+    });
+
+    test("an invalid Markdown-Patch-Version returns 400 (40082)", async () => {
+      app.vault.adapter._read = mapDoc;
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT)
+        .set("Markdown-Patch-Version", "9");
+      expect(res.status).toBe(400);
+      // This GET path pre-sets a text/markdown Content-Type, so the canned JSON
+      // error body is not auto-parsed by supertest; read it from res.text.
+      expect(JSON.parse(res.text).errorCode).toBe(40082);
+    });
+
+    const malformedFrontmatterDoc = [
+      "---",
+      "purpose: Check patch behavior with targetType: block",
+      "---",
+      "# Heading1",
+      "Content",
+      "",
+    ].join("\n");
+
+    test("malformed frontmatter YAML returns 400 (40005), not a 500, for the 2.0 map", async () => {
+      app.vault.adapter._read = malformedFrontmatterDoc;
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT);
+      expect(res.status).toBe(400);
+      expect(JSON.parse(res.text).errorCode).toBe(40005);
+    });
+
+    test("malformed frontmatter YAML returns 400 (40005), not a 500, for the deprecated 1.x map", async () => {
+      app.vault.adapter._read = malformedFrontmatterDoc;
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT)
+        .set("Markdown-Patch-Version", "1");
+      expect(res.status).toBe(400);
+      expect(JSON.parse(res.text).errorCode).toBe(40005);
+    });
+
+    test("a duplicate sibling heading gets its own disambiguated key in the 2.0 map", async () => {
+      app.vault.adapter._read = [
+        "# Notes",
+        "first",
+        "# Notes",
+        "second",
+        "",
+      ].join("\n");
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT)
+        .expect(200);
+      const keys = Object.keys(res.body.headings);
+      expect(keys).toHaveLength(2);
+      expect(keys[0]).toBe("Notes");
+      // The second occurrence's key carries a non-printable marker suffix the
+      // caller must copy verbatim, not reconstruct.
+      expect(keys[1]).not.toBe("Notes");
+      expect(keys[1].startsWith("Notes")).toBe(true);
+      expect(keys[1].length).toBeGreaterThan("Notes".length);
+    });
+
+    test("a heading colliding with the reserved marker sequence returns 400 (40080), not a 500", async () => {
+      app.vault.adapter._read = `# Heading\u{FC750}\u{F6440}\n\nbody\n`;
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT);
+      expect(res.status).toBe(400);
+      expect(JSON.parse(res.text).errorCode).toBe(40080);
+    });
+
+    test("a duplicate block id gets its own disambiguated entry in the 2.0 map", async () => {
+      app.vault.adapter._read = ["first ^dup", "", "second ^dup", ""].join("\n");
+      const res = await request(server)
+        .get("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", MAP_CT)
+        .expect(200);
+      expect(res.body.blocks).toHaveLength(2);
+      expect(res.body.blocks[0]).toBe("dup");
+      expect(res.body.blocks[1]).not.toBe("dup");
+      expect(res.body.blocks[1].startsWith("dup")).toBe(true);
+    });
+  });
+
+  // A signed URL stands in for the bearer header on exactly the request it names. These
+  // tests mint signatures with the handler's own signer — the same one the MCP tools use —
+  // and redeem them over HTTP without an Authorization header.
+  describe("signed URLs", () => {
+    const PATH = "attachments/pixel.png";
+    const BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01]);
+    let clock: number;
+
+    beforeEach(() => {
+      clock = 1_700_000_000_000;
+      settings.enableSignedUrls = true;
+      // @ts-ignore: the mock App is close enough.
+      handler = new RequestHandler(app, manifest, settings, new UrlSigner(Buffer.from("secret"), () => clock));
+      handler.setupRouter();
+      server.close();
+      server = http.createServer(handler.api);
+      app.vault.adapter._readBinary = BYTES.buffer.slice(BYTES.byteOffset, BYTES.byteOffset + BYTES.byteLength);
+    });
+
+    function signedPath(method: "GET" | "PUT", path: string, query: Record<string, string> = {}): string {
+      const { sig, exp, nonce } = handler.urlSigner.sign(method, path, 300);
+      const params = new URLSearchParams({ ...query, sig, exp: String(exp), n: nonce });
+      return `/vault/${path}?${params}`;
+    }
+
+    test("a signed GET serves the file without an API key, inline", async () => {
+      const result = await request(server).get(signedPath("GET", PATH)).expect(200);
+      expect(Buffer.from(result.body).equals(BYTES)).toBe(true);
+      expect(result.header["content-type"]).toBe("image/png");
+      expect(result.header["content-disposition"]).toBe(`inline; filename="${PATH}"`);
+    });
+
+    test("download=1 asks for an attachment instead", async () => {
+      const result = await request(server)
+        .get(signedPath("GET", PATH, { download: "1" }))
+        .expect(200);
+      expect(result.header["content-disposition"]).toBe(`attachment; filename="${PATH}"`);
+    });
+
+    test("every comma in a filename is escaped in Content-Disposition, not just the first", async () => {
+      const commas = "attachments/a,b,c.png";
+      app.vault.adapter._statForPath = undefined;
+      const result = await request(server).get(signedPath("GET", commas)).expect(200);
+      // A comma separates header list items, so one left unescaped splits the value.
+      // `replace` with a string argument only replaces the first -- CodeQL's
+      // incomplete-sanitization rule caught it.
+      expect(result.header["content-disposition"]).toBe(
+        'inline; filename="attachments/a%2Cb%2Cc.png"',
+      );
+    });
+
+    test("an API-key request keeps the attachment disposition it always had", async () => {
+      const result = await request(server)
+        .get(`/vault/${PATH}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+      expect(result.header["content-disposition"]).toBe(`attachment; filename="${PATH}"`);
+    });
+
+    test("a GET link is reusable until it expires", async () => {
+      const path = signedPath("GET", PATH);
+      await request(server).get(path).expect(200);
+      await request(server).get(path).expect(200);
+      clock += 301_000;
+      const result = await request(server).get(path).expect(401);
+      expect(result.body.message).toMatch(/expired/);
+    });
+
+    // A signed URL authorizes writing the file it names. Both of these turn the same
+    // request into an edit of part of a document -- and of a *different* file, in the
+    // path-element case -- while the signature covers neither the path elements nor the
+    // headers. Verified against a live vault before the fix: both wrote successfully.
+    test("the verbose log redacts the credential parts of a signed URL", async () => {
+      // `sig` and `n` are a bearer capability; console output gets pasted into bug
+      // reports. `exp` stays legible because it is useful and grants nothing alone.
+      const line = redactSignedUrl("/vault/a.png?sig=deadbeef&exp=1790000000&n=AbC-_123");
+      expect(line).toBe("/vault/a.png?sig=<redacted>&exp=1790000000&n=<redacted>");
+      expect(redactSignedUrl("/vault/a.png")).toBe("/vault/a.png");
+      expect(redactSignedUrl("/vault/a.png?download=1&sig=x&n=y")).toBe(
+        "/vault/a.png?download=1&sig=<redacted>&n=<redacted>",
+      );
+    });
+
+    test("a signed request carrying a backslash is refused", async () => {
+      // `normalizeVaultFilePath` folds `\\` into `/` when verifying, but `wholeFilePath`
+      // joins segments verbatim when dispatching, so the two layers disagree about which
+      // file `a%5Cb` names. Obsidian happens to normalize it again before the write, but
+      // a signed URL should not depend on that to address the right file.
+      const { sig, exp, nonce } = handler.urlSigner.sign("GET", PATH, 300);
+      // Every separator, so the intent is "spell this path with backslashes" rather
+      // than "swap the first slash" -- which is also what keeps CodeQL's
+      // incomplete-sanitization rule from flagging it, the same rule that caught a real
+      // Content-Disposition bug earlier in this branch.
+      const backslashed = PATH.replaceAll("/", "%5C");
+      const result = await request(server)
+        .get(`/vault/${backslashed}?sig=${sig}&exp=${exp}&n=${nonce}`)
+        .expect(401);
+      expect(result.body.message).toMatch(/not valid for this request/);
+      // The canonical spelling still works, so this rejects only the ambiguous form.
+      await request(server).get(signedPath("GET", PATH)).expect(200);
+    });
+
+    test("a signed PUT refuses URL path-element targeting", async () => {
+      // The prefix must stat as a real file for the resolver to read the remaining
+      // segments as a target -- which is exactly the live condition: an upload URL for
+      // `note.md/heading/Alpha` edits `note.md` because `note.md` exists.
+      app.vault.adapter._exists = true;
+      app.vault.adapter._statForPath = PATH;
+      const { sig, exp, nonce } = handler.urlSigner.sign("PUT", `${PATH}/heading/Alpha`, 300);
+      const result = await request(server)
+        .put(`/vault/${PATH}/heading/Alpha?sig=${sig}&exp=${exp}&n=${nonce}`)
+        .set("Content-Type", "text/markdown")
+        .send("injected")
+        .expect(401);
+      expect(result.body.errorCode).toBe(ErrorCode.SignedUrlIsWholeFileOnly);
+    });
+
+    test("a signed PUT refuses Target-Type/Target header targeting", async () => {
+      const result = await request(server)
+        .put(signedPath("PUT", PATH))
+        .set("Content-Type", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "Alpha")
+        .send("injected")
+        .expect(401);
+      expect(result.body.errorCode).toBe(ErrorCode.SignedUrlIsWholeFileOnly);
+    });
+
+    test("a rejected targeted attempt does not spend the link", async () => {
+      const path = signedPath("PUT", PATH);
+      await request(server)
+        .put(path)
+        .set("Content-Type", "text/markdown")
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "Alpha")
+        .send("injected")
+        .expect(401);
+      // The claim is taken before dispatch, so it has to be given back when the request
+      // turns out not to have succeeded -- otherwise one bad attempt burns the link.
+      await request(server).put(path).set("Content-Type", "image/png").send(BYTES).expect(204);
+    });
+
+    test.each([
+      ["application/json", '{\n  "b": 2,\n  "a": 1\n}\n'],
+      ["text/markdown", "# Title\r\n\r\ntrailing spaces   \r\n"],
+      ["text/plain", "  leading and trailing  \n\n"],
+    ])("a signed PUT sent as %s stores the bytes verbatim", async (contentType, body) => {
+      // The upload tool advertises the destination's real media type, so a `.json`
+      // destination got application/json, the JSON parser turned the file into a value
+      // and `writeFileContent` re-serialized it -- storing `{"b":2,"a":1}` for the input
+      // below, and answering 204. A signed URL authorizes writing exactly the bytes sent.
+      await request(server)
+        .put(signedPath("PUT", PATH))
+        .set("Content-Type", contentType)
+        .send(body)
+        .expect(204);
+      const written = app.vault.adapter._writeBinary?.[1];
+      expect(written).toBeDefined();
+      expect(Buffer.from(written).toString("utf-8")).toBe(body);
+    });
+
+    test("a PUT with no Content-Type stores the bytes, not Express's empty object", async () => {
+      // Before the octet-stream default, no parser matched a body with no declared type,
+      // `req.body` kept Express's `{}`, and the two bytes "{}" were written over the
+      // caller's file -- answered 204, so nothing looked wrong until it was opened.
+      const body = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x01, 0xff]);
+      await request(server)
+        .put(signedPath("PUT", PATH))
+        .set("Content-Type", "")
+        .send(body)
+        .expect(204);
+      const written = app.vault.adapter._writeBinary?.[1];
+      expect(written).toBeDefined();
+      expect(Buffer.from(written).equals(body)).toBe(true);
+    });
+
+    test("a signed PUT stores the body and is spent by the request that succeeds", async () => {
+      const path = signedPath("PUT", PATH);
+      await request(server)
+        .put(path)
+        .set("Content-Type", "image/png")
+        .send(BYTES)
+        .expect(204);
+      const [writtenPath, written] = app.vault.adapter._writeBinary;
+      expect(writtenPath).toBe(PATH);
+      expect(Buffer.from(written).equals(BYTES)).toBe(true);
+
+      const replay = await request(server)
+        .put(path)
+        .set("Content-Type", "image/png")
+        .send(BYTES)
+        .expect(401);
+      expect(replay.body.message).toMatch(/already been used/);
+    });
+
+    test("a signature is bound to its method and path", async () => {
+      const get = handler.urlSigner.sign("GET", PATH, 300);
+      const query = `sig=${get.sig}&exp=${get.exp}`;
+      const put = await request(server)
+        .put(`/vault/${PATH}?${query}`)
+        .set("Content-Type", "image/png")
+        .send(BYTES)
+        .expect(401);
+      expect(put.body.message).toMatch(/not valid/);
+      await request(server).delete(`/vault/${PATH}?${query}`).expect(401);
+      await request(server).get(`/vault/other.png?${query}`).expect(401);
+      await request(server).get(`/vault/${PATH}?sig=${"0".repeat(64)}&exp=${get.exp}`).expect(401);
+    });
+
+    test("the signature covers the normalized path, so another spelling of the same file is accepted", async () => {
+      const { sig, exp, nonce } = handler.urlSigner.sign("GET", PATH, 300);
+      await request(server)
+        .get(`/vault/notes/../attachments/pixel.png?sig=${sig}&exp=${exp}&n=${nonce}`)
+        .expect(200);
+    });
+
+    test("signatures are refused outright while the setting is off", async () => {
+      const path = signedPath("GET", PATH);
+      settings.enableSignedUrls = false;
+      const result = await request(server).get(path).expect(401);
+      expect(result.body.message).toMatch(/not valid/);
+    });
+
+    test("a request with no signature is still refused as before", async () => {
+      const result = await request(server).get(`/vault/${PATH}`).expect(401);
+      expect(result.body.message).not.toMatch(/signed/i);
+    });
+
+    test("the signature parameters do not leak into the vault path", async () => {
+      // If `?sig=` were part of the path, the file would not resolve and this would 404.
+      app.vault.adapter._statForPath = PATH;
+      await request(server).get(signedPath("GET", PATH)).expect(200);
+    });
+  });
+
+  describe("vaultPut", () => {
+    test("directory", async () => {
+      await request(server)
+        .put("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(405);
+    });
+
+    test("unauthorized", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      await request(server)
+        .put(`/vault/${arbitraryFilePath}`)
+        .set("Content-Type", "text/markdown")
+        .send(arbitraryBytes)
+        .expect(401);
+    });
+
+    test("acceptable content", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      await request(server)
+        .put(`/vault/${arbitraryFilePath}`)
+        .set("Content-Type", "text/markdown")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send(arbitraryBytes)
+        .expect(204);
+
+      expect(app.vault.adapter._write).toEqual([
+        arbitraryFilePath,
+        arbitraryBytes,
+      ]);
+    });
+
+    test("acceptable binary content", async () => {
+      const arbitraryFilePath = "test.png";
+      const arbitraryBytes = "bytes"; // mock a picture binary
+
+      await request(server)
+        .put(`/vault/${arbitraryFilePath}`)
+        .set("Content-Type", "image/jpeg")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send(arbitraryBytes)
+        .expect(204);
+
+      expect(app.vault.adapter._writeBinary[0]).toEqual(arbitraryFilePath);
+      const data = app.vault.adapter._writeBinary[1];
+      expect(Buffer.isBuffer(data) || data instanceof ArrayBuffer).toEqual(
+        true
+      );
+      // We won't be able to convert the incoming data
+      // to bytes with this mechanism in a _normal_
+      // situation because those bytes won't be encodable
+      // as ASCII, but we can do this here because we're
+      // lying about the incoming content type above
+      const decoder = new TextDecoder();
+      expect(decoder.decode(data)).toEqual(arbitraryBytes);
+    });
+
+    test("non-bytes content", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      await request(server)
+        .put(`/vault/${arbitraryFilePath}`)
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send(arbitraryBytes)
+        .expect(400);
+
+      expect(app.vault.adapter._write).toBeUndefined();
+    });
+  });
+
+  describe("vaultPost", () => {
+    test("directory", async () => {
+      await request(server)
+        .post("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(405);
+    });
+
+    test("unauthorized", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      const arbitraryExistingBytes = "something\nsomething\n";
+
+      app.vault._read = arbitraryExistingBytes;
+
+      await request(server)
+        .post(`/vault/${arbitraryFilePath}`)
+        .set("Content-Type", "text/markdown")
+        .send(arbitraryBytes)
+        .expect(401);
+    });
+
+    describe("acceptable content", () => {
+      test("existing with trailing newline", async () => {
+        const arbitraryFilePath = "somefile.md";
+        const arbitraryBytes = "bytes";
+
+        const arbitraryExistingBytes = "something\nsomething\n";
+
+        app.vault._read = arbitraryExistingBytes;
+
+        await request(server)
+          .post(`/vault/${arbitraryFilePath}`)
+          .set("Content-Type", "text/markdown")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .send(arbitraryBytes)
+          .expect(204);
+
+        expect(app.vault.adapter._write).toEqual([
+          arbitraryFilePath,
+          arbitraryExistingBytes + arbitraryBytes,
+        ]);
+      });
+
+      test("existing without trailing newline", async () => {
+        const arbitraryFilePath = "somefile.md";
+        const arbitraryBytes = "bytes";
+
+        const arbitraryExistingBytes = "something\nsomething";
+
+        app.vault._read = arbitraryExistingBytes;
+
+        await request(server)
+          .post(`/vault/${arbitraryFilePath}`)
+          .set("Content-Type", "text/markdown")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .send(arbitraryBytes)
+          .expect(204);
+
+        expect(app.vault.adapter._write).toEqual([
+          arbitraryFilePath,
+          arbitraryExistingBytes + "\n" + arbitraryBytes,
+        ]);
+      });
+    });
+
+    test("non-bytes content", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      await request(server)
+        .post(`/vault/${arbitraryFilePath}`)
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send(arbitraryBytes)
+        .expect(400);
+
+      expect(app.vault.adapter._write).toBeUndefined();
+    });
+  });
+
+  describe("vaultDelete", () => {
+    test("directory", async () => {
+      await request(server)
+        .delete("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(405);
+    });
+
+    test("non-existing file with ?permanent=true", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      app.vault.adapter._exists = false;
+
+      await request(server)
+        .delete(`/vault/${arbitraryFilePath}?permanent=true`)
+        .set("Content-Type", "text/markdown")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send(arbitraryBytes)
+        .expect(404);
+
+      expect(app.vault.adapter._remove).toBeUndefined();
+    });
+
+    test("non-existing file with default trash behavior", async () => {
+      const arbitraryFilePath = "somefile.md";
+
+      app.vault._getAbstractFileByPath = null;
+
+      await request(server)
+        .delete(`/vault/${arbitraryFilePath}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(404);
+
+      expect(app.fileManager._trashFile).toBeUndefined();
+    });
+
+    test("unauthorized", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      await request(server)
+        .delete(`/vault/${arbitraryFilePath}`)
+        .set("Content-Type", "text/markdown")
+        .send(arbitraryBytes)
+        .expect(401);
+    });
+
+    test("existing file moves to trash by default", async () => {
+      const arbitraryFilePath = "somefile.md";
+
+      await request(server)
+        .delete(`/vault/${arbitraryFilePath}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(204);
+
+      expect(app.fileManager._trashFile).toEqual(app.vault._getAbstractFileByPath);
+      expect(app.vault.adapter._remove).toBeUndefined();
+    });
+
+    test("existing file with ?permanent=true hard-deletes", async () => {
+      const arbitraryFilePath = "somefile.md";
+      const arbitraryBytes = "bytes";
+
+      await request(server)
+        .delete(`/vault/${arbitraryFilePath}?permanent=true`)
+        .set("Content-Type", "text/markdown")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send(arbitraryBytes)
+        .expect(204);
+
+      expect(app.vault.adapter._remove).toEqual([arbitraryFilePath]);
+      expect(app.fileManager._trashFile).toBeUndefined();
+    });
+
+    test("?permanent=false is equivalent to omitting the parameter", async () => {
+      const arbitraryFilePath = "somefile.md";
+
+      await request(server)
+        .delete(`/vault/${arbitraryFilePath}?permanent=false`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(204);
+
+      expect(app.fileManager._trashFile).toEqual(app.vault._getAbstractFileByPath);
+      expect(app.vault.adapter._remove).toBeUndefined();
+    });
+  });
+
+  describe("vaultMove", () => {
+    test("directory path rejected", async () => {
+      await request(server)
+        .move("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "somewhere/file.md")
+        .expect(405);
+    });
+
+    test("successful move", async () => {
+      const oldPath = "folder/file.md";
+      const newPath = "another-folder/subfolder/file.md";
+      jest.spyOn(handler.operations, "moveVaultFile").mockResolvedValue(newPath);
+
+      const response = await request(server)
+        .move(`/vault/${oldPath}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", newPath)
+        .expect(204);
+
+      expect(response.headers["content-location"]).toEqual(newPath);
+      expect(handler.operations.moveVaultFile).toHaveBeenCalledWith(
+        oldPath,
+        newPath,
+        false,
+      );
+    });
+
+    test("move to vault root", async () => {
+      jest.spyOn(handler.operations, "moveVaultFile").mockResolvedValue("file.md");
+
+      await request(server)
+        .move("/vault/deep/nested/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "file.md")
+        .expect(204);
+    });
+
+    test("non-existent source file returns 404", async () => {
+      jest
+        .spyOn(handler.operations, "moveVaultFile")
+        .mockRejectedValue(new FileNotFoundError("not found"));
+
+      await request(server)
+        .move("/vault/non-existent.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "new-location/file.md")
+        .expect(404);
+    });
+
+    test("destination already exists returns 409", async () => {
+      jest
+        .spyOn(handler.operations, "moveVaultFile")
+        .mockRejectedValue(new DestinationAlreadyExistsError("exists"));
+
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "another-folder/existing-file.md")
+        .expect(409);
+
+      expect(response.body.message).toContain("Destination file already exists");
+    });
+
+    test("missing Destination header returns 400", async () => {
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(400);
+
+      expect(response.body.message).toContain("Destination header is required");
+    });
+
+    test("destination with trailing slash uses source filename", async () => {
+      jest.spyOn(handler.operations, "moveVaultFile").mockResolvedValue("new-folder/file.md");
+
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "new-folder/")
+        .expect(204);
+
+      expect(response.headers["content-location"]).toEqual("new-folder/file.md");
+      expect(handler.operations.moveVaultFile).toHaveBeenCalledWith(
+        "folder/file.md",
+        "new-folder/file.md",
+        false,
+      );
+    });
+
+    test("Allow-Overwrite: true passes flag to moveVaultFile", async () => {
+      jest.spyOn(handler.operations, "moveVaultFile").mockResolvedValue("another-folder/existing-file.md");
+
+      await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "another-folder/existing-file.md")
+        .set("Allow-Overwrite", "true")
+        .expect(204);
+
+      expect(handler.operations.moveVaultFile).toHaveBeenCalledWith(
+        "folder/file.md",
+        "another-folder/existing-file.md",
+        true,
+      );
+    });
+
+    test("path traversal attempt returns 400", async () => {
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "../../../etc/passwd")
+        .expect(400);
+
+      expect(response.body.errorCode).toEqual(40021);
+      expect(response.body.message).toContain("Path traversal is not allowed");
+    });
+
+    test("absolute destination path returns 400", async () => {
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "/etc/passwd")
+        .expect(400);
+
+      expect(response.body.errorCode).toEqual(40021);
+    });
+
+    test("destination starting with /vault/ returns 400", async () => {
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "/vault/notes/file.md")
+        .expect(400);
+
+      expect(response.body.errorCode).toEqual(40021);
+    });
+
+    test("destination with '..' as a substring (not a segment) is accepted", async () => {
+      jest.spyOn(handler.operations, "moveVaultFile").mockResolvedValue("archive/notes..md");
+
+      await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "archive/notes..md")
+        .expect(204);
+
+      expect(handler.operations.moveVaultFile).toHaveBeenCalledWith(
+        "folder/file.md",
+        "archive/notes..md",
+        false,
+      );
+    });
+
+    test("whitespace-only Destination moves file to vault root", async () => {
+      jest.spyOn(handler.operations, "moveVaultFile").mockResolvedValue("file.md");
+
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "   ")
+        .expect(204);
+
+      expect(response.headers["content-location"]).toEqual("file.md");
+      expect(handler.operations.moveVaultFile).toHaveBeenCalledWith(
+        "folder/file.md",
+        "file.md",
+        false,
+      );
+    });
+
+    test("malformed percent-encoding in Destination returns 400", async () => {
+      const response = await request(server)
+        .move("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "%E0%")
+        .expect(400);
+
+      expect(response.body.errorCode).toEqual(40022);
+    });
+
+    test("unauthorized", async () => {
+      await request(server)
+        .move("/vault/file.md")
+        .set("Destination", "other/file.md")
+        .expect(401);
+    });
+  });
+
+  describe("vaultCopy", () => {
+    test("directory path rejected", async () => {
+      await request(server)
+        .copy("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "somewhere/file.md")
+        .expect(405);
+    });
+
+    test("successful copy", async () => {
+      const sourcePath = "folder/file.md";
+      const newPath = "another-folder/subfolder/file.md";
+      jest.spyOn(handler.operations, "copyVaultFile").mockResolvedValue(newPath);
+
+      const response = await request(server)
+        .copy(`/vault/${sourcePath}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", newPath)
+        .expect(204);
+
+      expect(response.headers["content-location"]).toEqual(newPath);
+      expect(handler.operations.copyVaultFile).toHaveBeenCalledWith(
+        sourcePath,
+        newPath,
+        false,
+      );
+    });
+
+    test("non-existent source file returns 404", async () => {
+      jest
+        .spyOn(handler.operations, "copyVaultFile")
+        .mockRejectedValue(new FileNotFoundError("not found"));
+
+      await request(server)
+        .copy("/vault/non-existent.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "new-location/file.md")
+        .expect(404);
+    });
+
+    test("destination already exists returns 409", async () => {
+      jest
+        .spyOn(handler.operations, "copyVaultFile")
+        .mockRejectedValue(new DestinationAlreadyExistsError("exists"));
+
+      const response = await request(server)
+        .copy("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "another-folder/existing-file.md")
+        .expect(409);
+
+      expect(response.body.message).toContain("Destination file already exists");
+    });
+
+    test("missing Destination header returns 400", async () => {
+      const response = await request(server)
+        .copy("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(400);
+
+      expect(response.body.message).toContain("Destination header is required");
+    });
+
+    test("destination with trailing slash uses source filename", async () => {
+      jest.spyOn(handler.operations, "copyVaultFile").mockResolvedValue("new-folder/file.md");
+
+      const response = await request(server)
+        .copy("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "new-folder/")
+        .expect(204);
+
+      expect(response.headers["content-location"]).toEqual("new-folder/file.md");
+      expect(handler.operations.copyVaultFile).toHaveBeenCalledWith(
+        "folder/file.md",
+        "new-folder/file.md",
+        false,
+      );
+    });
+
+    test("Allow-Overwrite: true passes flag to copyVaultFile", async () => {
+      jest.spyOn(handler.operations, "copyVaultFile").mockResolvedValue("another-folder/existing-file.md");
+
+      await request(server)
+        .copy("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "another-folder/existing-file.md")
+        .set("Allow-Overwrite", "true")
+        .expect(204);
+
+      expect(handler.operations.copyVaultFile).toHaveBeenCalledWith(
+        "folder/file.md",
+        "another-folder/existing-file.md",
+        true,
+      );
+    });
+
+    test("path traversal attempt returns 400", async () => {
+      const response = await request(server)
+        .copy("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "../../../etc/passwd")
+        .expect(400);
+
+      expect(response.body.errorCode).toEqual(40021);
+      expect(response.body.message).toContain("Path traversal is not allowed");
+    });
+
+    test("absolute destination path returns 400", async () => {
+      const response = await request(server)
+        .copy("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "/etc/passwd")
+        .expect(400);
+
+      expect(response.body.errorCode).toEqual(40021);
+    });
+
+    test("malformed percent-encoding in Destination returns 400", async () => {
+      const response = await request(server)
+        .copy("/vault/folder/file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "%E0%")
+        .expect(400);
+
+      expect(response.body.errorCode).toEqual(40022);
+    });
+
+    test("unauthorized", async () => {
+      await request(server)
+        .copy("/vault/file.md")
+        .set("Destination", "other/file.md")
+        .expect(401);
+    });
+  });
+
+  describe("vaultPatch", () => {
+    test("directory", async () => {
+      await request(server)
+        .patch("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(405);
+    });
+
+    test("missing Target-Type header", async () => {
+      await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Content-Type", "text/markdown")
+        .send("bytes")
+        .expect(400);
+    });
+
+    test("non-existing file via Target-Type header returns 404", async () => {
+      app.vault._getAbstractFileByPath = null;
+
+      await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Content-Type", "text/markdown")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .set("Operation", "append")
+        .send("new content")
+        .expect(404);
+    });
+
+    test("FrontmatterParseError returns 400 with errorCode 40005", async () => {
+      jest.spyOn(handler.operations, "patchFileSection").mockRejectedValueOnce(
+        new FrontmatterParseError("YAML parse error on line 2: nested mappings are not allowed")
+      );
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Content-Type", "text/markdown")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .set("Operation", "append")
+        .send("new content");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40005);
+    });
+
+    test("Target-Type: frontmatter with Target-Scope: marker returns 400 with errorCode 40059", async () => {
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "frontmatter")
+        .set("Target", "title")
+        .set("Target-Scope", "marker")
+        .set("Operation", "replace")
+        .send("new value");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40059);
+    });
+
+    test("Target-Type: frontmatter with Target-Scope: markerAndContent returns 400 with errorCode 40059", async () => {
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "frontmatter")
+        .set("Target", "title")
+        .set("Target-Scope", "markerAndContent")
+        .set("Operation", "replace")
+        .send("new value");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40059);
+    });
+
+    test("Target-Type: frontmatter with Target-Scope: content is accepted", async () => {
+      jest.spyOn(handler.operations, "patchFileSection").mockResolvedValueOnce("patched");
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Content-Type", "application/json")
+        .set("Target-Type", "frontmatter")
+        .set("Target", "title")
+        .set("Target-Scope", "content")
+        .set("Operation", "replace")
+        .send('"new value"');
+      expect(res.status).toBe(200);
+    });
+
+    test("Target-Type: heading with Target-Scope: marker is accepted", async () => {
+      jest.spyOn(handler.operations, "patchFileSection").mockResolvedValueOnce("patched");
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Content-Type", "text/markdown")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .set("Target-Scope", "marker")
+        .set("Operation", "replace")
+        .send("## New Heading");
+      expect(res.status).toBe(200);
+    });
+
+    test("a 1.x PATCH response carries the Deprecation header", async () => {
+      jest.spyOn(handler.operations, "patchFileSection").mockResolvedValueOnce("# Patched\n");
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Content-Type", "text/markdown")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .set("Operation", "append")
+        .send("new content");
+      expect(res.status).toBe(200);
+      expect(res.headers["deprecation"]).toBe('true; sunset-version="6.0"');
+    });
+
+    test("an invalid Markdown-Patch-Version header returns 400 (40082)", async () => {
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "9")
+        .set("Content-Type", "application/json")
+        .send({ targetType: "heading", target: ["Heading1"], operation: "append", content: "x" });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40082);
+    });
+
+    test("the 2.0 default rejects a non-object body with 400 (40081)", async () => {
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("just some text, not an instruction");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40081);
+    });
+
+  });
+
+  describe("vaultPatch — markdown-patch 2.0 (JSON instruction body)", () => {
+    // The 2.0 engine runs for real here (no mock of patchFileSectionMdp2), driven
+    // by the mock vault: `vault.read` returns `app.vault._read`, and the write
+    // is captured in `app.vault.adapter._write`. Fixtures mirror the engine's
+    // own unit tests so expected output is authoritative. Routing to the 2.0
+    // engine is the default (no Markdown-Patch-Version header) with an object
+    // JSON body.
+    const DOC = "# A\na-body\n\n## B\nb-body\n\n# C\nc-body\n";
+
+    function patchV2(instruction: unknown) {
+      return request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send(instruction as object);
+    }
+
+    test("append @ content edits the section body and returns the patched document", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A", "B"],
+        operation: "append",
+        scope: "content",
+        content: "x",
+      });
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("b-body\n\nx");
+      // The patched document was written back to the vault.
+      expect(app.vault.adapter._write[1]).toContain("b-body\n\nx");
+    });
+
+    test("an omitted scope defaults to content", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A", "B"],
+        operation: "replace",
+        content: "z",
+      });
+      expect(res.status).toBe(200);
+      expect(res.text).toBe("# A\na-body\n\n## B\nz\n\n# C\nc-body\n");
+    });
+
+    test("frontmatter value carried in the JSON `value` field", async () => {
+      app.vault._read = "---\ntitle: Hello\n---\nbody\n";
+      const res = await patchV2({
+        targetType: "frontmatter",
+        target: "title",
+        operation: "replace",
+        value: "Bye",
+      });
+      expect(res.status).toBe(200);
+      expect(res.text).toBe("---\ntitle: Bye\n---\nbody\n");
+    });
+
+    test("engine warnings are surfaced in the Markdown-Patch-Warnings header", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A", "B"],
+        operation: "replace",
+        scope: "content",
+        content: "##### deep", // level 5 + baseline 2 = 7, overflows h6
+      });
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("####### deep");
+      const warnings = JSON.parse(decodeURIComponent(res.headers["markdown-patch-warnings"]));
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0].code).toBe("heading-depth-overflow");
+    });
+
+    test("the 2.0 path does not carry the Deprecation header", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A", "B"],
+        operation: "append",
+        scope: "content",
+        content: "x",
+      });
+      expect(res.headers["deprecation"]).toBeUndefined();
+    });
+
+    test("no Markdown-Patch-Warnings header when there are no warnings", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A", "B"],
+        operation: "append",
+        scope: "content",
+        content: "x",
+      });
+      expect(res.headers["markdown-patch-warnings"]).toBeUndefined();
+    });
+
+    test("a warning containing non-ASCII heading text is percent-encoded, not dropped or crashed on", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A", "B"],
+        operation: "replace",
+        scope: "content",
+        content: "##### Déjà vu 🎉", // level 5 + baseline 2 = 7, overflows h6
+      });
+      expect(res.status).toBe(200);
+      const warnings = JSON.parse(decodeURIComponent(res.headers["markdown-patch-warnings"]));
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0].message).toContain("Déjà vu 🎉");
+    });
+
+    test("an ifMatch mismatch returns 412", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A", "B"],
+        operation: "append",
+        scope: "content",
+        content: "x",
+        ifMatch: "deadbeef",
+      });
+      expect(res.status).toBe(412);
+    });
+
+    test("an unresolvable target returns 404", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["Nope"],
+        operation: "replace",
+        scope: "content",
+        content: "x",
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test("a missing file returns 404", async () => {
+      app.vault._read = DOC;
+      app.vault._getAbstractFileByPath = null;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A"],
+        operation: "replace",
+        scope: "content",
+        content: "x",
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test("malformed frontmatter YAML returns 400 (40005), not PatchFailed", async () => {
+      app.vault._read = [
+        "---",
+        "purpose: Check patch behavior with targetType: block",
+        "---",
+        "# A",
+        "a-body",
+        "",
+      ].join("\n");
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A"],
+        operation: "append",
+        content: "x",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40005);
+    });
+
+    test("renaming a frontmatter key onto an existing key returns 409", async () => {
+      app.vault._read = "---\ntitle: Hello\ntags:\n  - a\n---\nbody\n";
+      const res = await patchV2({
+        targetType: "frontmatter",
+        target: "title",
+        operation: "replace",
+        scope: "marker",
+        content: "tags",
+      });
+      expect(res.status).toBe(409);
+    });
+
+    test("inserting a frontmatter entry whose key already exists returns 409", async () => {
+      app.vault._read = "---\ntitle: Hello\ntags:\n  - a\n---\nbody\n";
+      const res = await patchV2({
+        targetType: "frontmatter",
+        target: "title",
+        operation: "append",
+        scope: "markerAndContent",
+        value: { tags: ["b"] },
+      });
+      expect(res.status).toBe(409);
+    });
+
+    test("an explicit Markdown-Patch-Version: 2 also routes to the 2.0 engine", async () => {
+      app.vault._read = DOC;
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "2")
+        .set("Content-Type", "application/json")
+        .send({ targetType: "heading", target: ["A"], operation: "append", content: "x" });
+      expect(res.status).toBe(200);
+      expect(res.headers["deprecation"]).toBeUndefined();
+    });
+
+    // A JSON instruction body has no headers in it, so a bad field is reported
+    // as a malformed instruction (40081) naming the field — not as one of the
+    // 4005x "…header you provided was invalid" errors, which would send the
+    // caller looking for a header they never sent.
+    test("an invalid targetType returns 400 naming the field, not a header", async () => {
+      const res = await patchV2({
+        targetType: "nonsense",
+        target: ["A"],
+        operation: "replace",
+        content: "x",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40081);
+      expect(res.body.message).toContain("targetType");
+      expect(res.body.message).not.toContain("header");
+    });
+
+    test("an invalid operation returns 400 naming the field, not a header", async () => {
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A"],
+        operation: "nonsense",
+        content: "x",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40081);
+      expect(res.body.message).toContain("operation");
+      expect(res.body.message).not.toContain("header");
+    });
+
+    test("an invalid scope returns 400 naming the field, not a header", async () => {
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A"],
+        operation: "replace",
+        scope: "nonsense",
+        content: "x",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40081);
+      expect(res.body.message).toContain("scope");
+      expect(res.body.message).not.toContain("header");
+    });
+
+    test("a malformed instruction is rejected before the vault is touched", async () => {
+      await patchV2({
+        targetType: "nonsense",
+        target: ["A"],
+        operation: "replace",
+        content: "x",
+      });
+      expect(app.vault.adapter._write).toBeUndefined();
+    });
+
+    // The engine's schema validates the whole instruction, not just the enum
+    // fields, so a well-typed but malformed instruction (a valid cell missing
+    // its payload carrier, or an operation×scope outside the algebra) is
+    // rejected as an invalid patch instruction rather than silently misapplied.
+    test("a heading write missing its content carrier returns InvalidPatchInstruction", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "heading",
+        target: ["A"],
+        operation: "replace",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40081);
+    });
+
+    test("a frontmatter value write carrying content instead of value is rejected", async () => {
+      app.vault._read = "---\ntitle: Hello\n---\nbody\n";
+      const res = await patchV2({
+        targetType: "frontmatter",
+        target: "title",
+        operation: "replace",
+        content: "Bye",
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40081);
+    });
+
+    test("an operation×scope outside the algebra returns InvalidPatchInstruction", async () => {
+      app.vault._read = DOC;
+      const res = await patchV2({
+        targetType: "block",
+        target: "abc",
+        operation: "replace",
+        scope: "parent",
+        destination: { parent: null, place: "last" },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40081);
+    });
+
+    test("Markdown-Patch-Version: 1 forces the 1.x engine even with a JSON body", async () => {
+      // The opt-in header selects the 1.x path regardless of body shape. Omitting
+      // Operation triggers the 1.x missing-Operation error (which the 2.0 path has
+      // no notion of), proving the 1.x engine governed the request.
+      const res = await request(server)
+        .patch("/vault/somefile.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Target-Type", "heading")
+        .set("Target", "A")
+        .set("Content-Type", "application/json")
+        .send({ some: "json" });
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40056);
+    });
+  });
+
+  describe("vaultPatch — raw-content mode", () => {
+    // Raw-content mode: the instruction's fields travel outside the body (URL
+    // path segments and/or headers) and the body is the raw payload, so
+    // templating tools never have to JSON-escape content. The assembled
+    // instruction funnels through the same 2.0 engine as the JSON-body mode.
+    const markdown = [
+      "---",
+      "title: Test Doc",
+      "---",
+      "# Heading1",
+      "Content under heading1",
+      "## SubHeading",
+      "Sub content",
+      "# Heading2",
+      "Content under heading2",
+      "# Heading3",
+      "| City    | Population |",
+      "| ------- | ---------- |",
+      "| Seattle | 8          |",
+      "^table1",
+      "",
+    ].join("\n");
+
+    function setFileContent(content: string): void {
+      app.vault._read = content;
+      app.vault.adapter._read = content;
+      const buf = new ArrayBuffer(content.length);
+      const view = new Uint8Array(buf);
+      for (let i = 0; i < content.length; i++) {
+        view[i] = content.charCodeAt(i);
+      }
+      app.vault.adapter._readBinary = buf;
+    }
+
+    beforeEach(() => {
+      // Only return a valid stat for the bare file path so the walk-backward
+      // resolver identifies "somefile.md" as the file and the remaining URL
+      // segments as the target.
+      app.vault.adapter._statForPath = "somefile.md";
+      setFileContent(markdown);
+    });
+
+    describe("URL-segment targeting", () => {
+      test("append under a heading with a raw text body (no version header needed)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("- appended\n");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("Content under heading2\n\n- appended");
+      });
+
+      test("replace a nested heading's content via URL segments", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Content-Type", "text/markdown")
+          .send("Replaced sub content\n");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("Replaced sub content");
+        expect(res.text).not.toContain("Sub content");
+      });
+
+      test("delete with an empty body clears the section content", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "delete");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("# Heading2");
+        expect(res.text).not.toContain("Content under heading2");
+      });
+
+      test("a JSON body on a block target carries table rows", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/block/table1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Content-Type", "application/json")
+          .send([["Portland", "3"]]);
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("Portland");
+      });
+
+      test("a JSON body on a frontmatter target carries the value", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/frontmatter/title")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Content-Type", "application/json")
+          .send('"New Title"');
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("title: New Title");
+      });
+
+      test("Markdown-Patch-Version: 1 with a URL target returns 400 (40082)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "1")
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40082);
+      });
+    });
+
+    describe("header targeting", () => {
+      test("a heading Target is percent-encoded JSON, honored under an explicit version 2", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "heading")
+          .set("Target", encodeURIComponent(JSON.stringify(["Heading1", "SubHeading"])))
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("- appended\n");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("Sub content\n\n- appended");
+      });
+
+      test("a null heading Target addresses the document root", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "heading")
+          .set("Target", "null")
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("appended at end\n");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("appended at end");
+      });
+
+      test("header targeting without an explicit version header returns 400 (40084)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Target-Type", "heading")
+          .set("Target", encodeURIComponent(JSON.stringify(["Heading2"])))
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40084);
+      });
+
+      test("a block Target is a plain percent-encoded string", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "block")
+          .set("Target", "table1")
+          .set("Operation", "append")
+          .set("Content-Type", "application/json")
+          .send([["Portland", "3"]]);
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("Portland");
+      });
+
+      test("a frontmatter Target is a plain percent-encoded string", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "frontmatter")
+          .set("Target", "title")
+          .set("Operation", "replace")
+          .set("Content-Type", "application/json")
+          .send('"New Title"');
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("title: New Title");
+      });
+
+      test("a heading Target that is not valid JSON returns 400 (40058)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "heading")
+          .set("Target", "Heading2") // 1.x style: raw text, not JSON
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40058);
+      });
+
+      test("a heading Target that is JSON but not an array of strings returns 400 (40058)", async () => {
+        for (const bad of ["42", '{"a":1}', '["a",1]']) {
+          const res = await request(server)
+            .patch("/vault/somefile.md")
+            .set("Authorization", `Bearer ${API_KEY}`)
+            .set("Markdown-Patch-Version", "2")
+            .set("Target-Type", "heading")
+            .set("Target", encodeURIComponent(bad))
+            .set("Operation", "append")
+            .set("Content-Type", "text/markdown")
+            .send("x");
+          expect(res.status).toBe(400);
+          expect(res.body.errorCode).toBe(40058);
+        }
+      });
+
+      test("an undecodable percent sequence in Target returns 400 (40058)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "block")
+          .set("Target", "%E0%A4%A")
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40058);
+      });
+
+      test("a Target header without Target-Type returns 400 (40053)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target", "table1")
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40053);
+      });
+
+      test("a Target-Type header without Target returns 400 (40055)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "block")
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40055);
+      });
+    });
+
+    describe("conflicting specifications", () => {
+      test("URL target + Target-Type header returns 422", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Target-Type", "heading")
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(422);
+      });
+
+      test("instruction content type + URL target returns 422", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/vnd.olrapi.patch-instruction+json")
+          .send(JSON.stringify({ targetType: "heading", target: ["Heading2"], operation: "append", content: "x" }));
+        expect(res.status).toBe(422);
+      });
+
+      test("instruction content type + Target-Type header returns 422", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Markdown-Patch-Version", "2")
+          .set("Target-Type", "heading")
+          .set("Target", encodeURIComponent(JSON.stringify(["Heading2"])))
+          .set("Content-Type", "application/vnd.olrapi.patch-instruction+json")
+          .send(JSON.stringify({ targetType: "heading", target: ["Heading2"], operation: "append", content: "x" }));
+        expect(res.status).toBe(422);
+      });
+
+      test("the instruction content type alone is an explicit instruction-mode declaration", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/vnd.olrapi.patch-instruction+json")
+          .send(JSON.stringify({ targetType: "heading", target: ["Heading2"], operation: "append", content: "- appended\n" }));
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("Content under heading2\n\n- appended");
+      });
+    });
+
+    describe("operation, scope, and 1.x-only headers", () => {
+      test("a missing Operation header returns 400 (40056)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40056);
+      });
+
+      test("an invalid Operation header returns 400 (40057)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "nonsense")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40057);
+      });
+
+      test("Target-Scope: marker renames a heading from a raw text body", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Target-Scope", "marker")
+          .set("Content-Type", "text/markdown")
+          .send("RenamedHeading");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("# RenamedHeading");
+        expect(res.text).toContain("Content under heading2");
+      });
+
+      test("an invalid Target-Scope returns 400 (40059)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Target-Scope", "nonsense")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40059);
+      });
+
+      test("an invalid Target-Scope lists the 2.0 scopes once, without contradicting itself", async () => {
+        // The canned message is prepended to any custom one, so a call site
+        // that restates the valid values produced two lists in one response —
+        // the 1.x set ("content, marker, markerAndContent") followed by the 2.0
+        // set that also allows "parent", leaving the reader to guess.
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Target-Scope", "nonsense")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+
+        const message = res.body.message as string;
+        expect(message).toContain("parent");
+        expect(message.match(/Valid values are/g) ?? []).toHaveLength(1);
+      });
+
+      test("the 1.x-only Target-Delimiter header is rejected (40084)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Target-Delimiter", "::")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40084);
+      });
+
+      test("the 1.x-only Trim-Target-Whitespace header is rejected (40084)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Trim-Target-Whitespace", "true")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40084);
+      });
+    });
+
+    describe("Destination, If-Match, and flags", () => {
+      test("a Destination header (percent-encoded JSON) moves a heading", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Target-Scope", "parent")
+          .set(
+            "Destination",
+            encodeURIComponent(JSON.stringify({ parent: ["Heading2"], place: "last" })),
+          );
+        expect(res.status).toBe(200);
+        expect(res.text).toMatch(/# Heading2[\s\S]*SubHeading/);
+      });
+
+      test("a malformed Destination header returns 400 (40022)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Target-Scope", "parent")
+          .set("Destination", "not-json");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40022);
+      });
+
+      test("a Destination header plus a non-empty body is rejected by the carrier algebra (40081)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Target-Scope", "parent")
+          .set(
+            "Destination",
+            encodeURIComponent(JSON.stringify({ parent: ["Heading2"], place: "last" })),
+          )
+          .set("Content-Type", "text/markdown")
+          .send("stray body");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40081);
+      });
+
+      test("an If-Match mismatch returns 412", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("If-Match", "deadbe")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(412);
+      });
+
+      test("a matching If-Match succeeds, with or without ETag-style quotes", async () => {
+        const version = createHash("sha256")
+          .update(markdown, "utf8")
+          .digest("hex")
+          .slice(0, 6);
+        for (const headerValue of [version, `"${version}"`]) {
+          setFileContent(markdown);
+          const res = await request(server)
+            .patch("/vault/somefile.md/heading/Heading2")
+            .set("Authorization", `Bearer ${API_KEY}`)
+            .set("Operation", "append")
+            .set("If-Match", headerValue)
+            .set("Content-Type", "text/markdown")
+            .send("- appended\n");
+          expect(res.status).toBe(200);
+        }
+      });
+
+      test("Create-Target-If-Missing: true creates a missing heading", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Brand%20New")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Create-Target-If-Missing", "true")
+          .set("Content-Type", "text/markdown")
+          .send("created content\n");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("# Brand New");
+        expect(res.text).toContain("created content");
+      });
+
+      test("Reject-If-Content-Preexists: true returns 409 for duplicate content", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Reject-If-Content-Preexists", "true")
+          .set("Content-Type", "text/markdown")
+          .send("Content under heading2\n");
+        expect(res.status).toBe(409);
+      });
+    });
+
+    describe("Within header", () => {
+      test("Within splices the body literally into the addressed block", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Within", "0")
+          .set("Content-Type", "text/markdown")
+          .send(" continued");
+        expect(res.status).toBe(200);
+        // Same line: no library-supplied separator on a within splice.
+        expect(res.text).toContain("Content under heading2 continued");
+      });
+
+      test("a negative Within counts from the end of the section body", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "delete")
+          .set("Within", "-1");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain("# Heading2");
+        expect(res.text).not.toContain("Content under heading2");
+      });
+
+      test("Within with Target-Scope: markerAndContent inserts a sibling block", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Target-Scope", "markerAndContent")
+          .set("Within", "0")
+          .set("Content-Type", "text/markdown")
+          .send("a new sibling block");
+        expect(res.status).toBe(200);
+        expect(res.text).toContain(
+          "Content under heading2\n\na new sibling block",
+        );
+      });
+
+      test.each(["abc", "1.5", "1x", "%5B0%5D"])(
+        "a malformed Within header (%s) returns 400 (40023)",
+        async (value: string) => {
+          const res = await request(server)
+            .patch("/vault/somefile.md/heading/Heading2")
+            .set("Authorization", `Bearer ${API_KEY}`)
+            .set("Operation", "append")
+            .set("Within", value)
+            .set("Content-Type", "text/markdown")
+            .send("x");
+          expect(res.status).toBe(400);
+          expect(res.body.errorCode).toBe(40023);
+        },
+      );
+
+      test("an out-of-range Within returns 404", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Within", "5")
+          .set("Content-Type", "text/markdown")
+          .send("x");
+        expect(res.status).toBe(404);
+      });
+    });
+
+    describe("body carriers", () => {
+      test("an unsupported body content type returns 400 (40012)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Content-Type", "application/octet-stream")
+          .send(Buffer.from("binary"));
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40012);
+      });
+
+      test("an empty body on a replace is a missing carrier (40081), never a silent clear", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Content-Type", "text/markdown")
+          .send("");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40081);
+      });
+
+      test("a delete with a non-empty body is rejected by the carrier algebra (40081)", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "delete")
+          .set("Content-Type", "text/markdown")
+          .send("stray body");
+        expect(res.status).toBe(400);
+        expect(res.body.errorCode).toBe(40081);
+      });
+    });
+
+    describe("response conventions", () => {
+      test("raw-content mode carries no Deprecation header", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "append")
+          .set("Content-Type", "text/markdown")
+          .send("x\n");
+        expect(res.status).toBe(200);
+        expect(res.headers["deprecation"]).toBeUndefined();
+      });
+
+      test("engine warnings surface in the Markdown-Patch-Warnings header", async () => {
+        const res = await request(server)
+          .patch("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Operation", "replace")
+          .set("Content-Type", "text/markdown")
+          .send("###### deep\n"); // level 6 + baseline 2 overflows h6
+        expect(res.status).toBe(200);
+        const warnings = JSON.parse(
+          decodeURIComponent(res.headers["markdown-patch-warnings"]),
+        );
+        expect(warnings).toHaveLength(1);
+        expect(warnings[0].code).toBe("heading-depth-overflow");
+      });
+    });
+  });
+
+  describe("path traversal prevention", () => {
+    // Two ..%2F segments are enough to escape the synthetic /vault root.
+    const traversal = "/vault/..%2F..%2Fetc%2Fpasswd";
+
+    test("GET rejects ..%2F traversal with 400 and errorCode 40021", async () => {
+      const res = await request(server)
+        .get(traversal)
+        .set("Authorization", `Bearer ${API_KEY}`);
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40021);
+    });
+
+    test("PUT rejects ..%2F traversal with 400 and errorCode 40021", async () => {
+      const res = await request(server)
+        .put(traversal)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("pwned");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40021);
+    });
+
+    test("POST rejects ..%2F traversal with 400 and errorCode 40021", async () => {
+      const res = await request(server)
+        .post(traversal)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("pwned");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40021);
+    });
+
+    test("PATCH rejects ..%2F traversal with 400 and errorCode 40021", async () => {
+      const res = await request(server)
+        .patch(traversal)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .set("Target-Type", "heading")
+        .set("Target", "Heading1")
+        .set("Operation", "append")
+        .send("pwned");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40021);
+    });
+
+    test("DELETE rejects ..%2F traversal with 400 and errorCode 40021", async () => {
+      const res = await request(server)
+        .delete(traversal)
+        .set("Authorization", `Bearer ${API_KEY}`);
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40021);
+    });
+
+    test("MOVE rejects ..%2F traversal in source path with 400 and errorCode 40021", async () => {
+      const res = await request(server)
+        .move(traversal)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "safe/destination.md");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40021);
+    });
+
+    test("COPY rejects ..%2F traversal in source path with 400 and errorCode 40021", async () => {
+      const res = await request(server)
+        .copy(traversal)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Destination", "safe/destination.md");
+      expect(res.status).toBe(400);
+      expect(res.body.errorCode).toBe(40021);
+    });
+  });
+
+  describe("URL path decoding — literal slashes in a target", () => {
+    // A `/` inside a heading name is a real thing (e.g. "TODO/DONE"). It reaches
+    // the API percent-encoded as %2F; the path must split on the *raw* slashes
+    // and decode each segment, so the encoded slash stays literal inside the one
+    // heading segment instead of being read as a path boundary.
+    const markdown = [
+      "# A/B",
+      "slash-heading-body",
+      "# Plain",
+      "plain-body",
+      "",
+    ].join("\n");
+
+    function setFileContent(content: string): void {
+      app.vault._read = content;
+      app.vault.adapter._read = content;
+      const buf = new ArrayBuffer(content.length);
+      const view = new Uint8Array(buf);
+      for (let i = 0; i < content.length; i++) view[i] = content.charCodeAt(i);
+      app.vault.adapter._readBinary = buf;
+    }
+
+    beforeEach(() => {
+      app.vault.adapter._statForPath = "somefile.md";
+      setFileContent(markdown);
+    });
+
+    test("GET reads a heading whose text contains a slash", async () => {
+      const res = await request(server)
+        .get("/vault/somefile.md/heading/A%2FB")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown");
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("slash-heading-body");
+      expect(res.text).not.toContain("plain-body");
+    });
+
+    test("PUT replaces a heading whose text contains a slash", async () => {
+      const res = await request(server)
+        .put("/vault/somefile.md/heading/A%2FB")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("replaced\n");
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("replaced");
+      expect(res.text).not.toContain("slash-heading-body");
+      // The sibling section is untouched, proving only "A/B" was addressed.
+      expect(res.text).toContain("plain-body");
+    });
+
+    test("PATCH raw-content appends to a heading whose text contains a slash", async () => {
+      const res = await request(server)
+        .patch("/vault/somefile.md/heading/A%2FB")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Operation", "append")
+        .set("Content-Type", "text/markdown")
+        .send("- added\n");
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("slash-heading-body\n\n- added");
+    });
+
+    test("a slash-bearing heading segment is not mistaken for a nested heading path", async () => {
+      // Were the %2F read as a boundary, this would look for heading "B" under
+      // "A" — which does not exist — and 404. It must resolve "A/B" instead.
+      const res = await request(server)
+        .get("/vault/somefile.md/heading/A%2FB")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown");
+      expect(res.status).toBe(200);
+    });
+  });
+
+  describe("URL path decoding — an encoded slash is not a file separator", () => {
+    // Percent-encoding a `/` inside the *file* portion used to resolve the same
+    // as a real separator, because the whole path was decoded before splitting.
+    // A file or folder name can't contain a slash, so a segment that decodes to
+    // one can only be a target address — never a file path. `folder%2Fnote.md`
+    // (the file portion as one encoded segment) therefore no longer resolves.
+    beforeEach(() => {
+      const doc = "# H\nbody\n";
+      app.vault._read = doc;
+      app.vault.adapter._read = doc;
+      app.vault.adapter._readBinary = Buffer.from(doc);
+      // The real file lives at folder/note.md, reachable as /vault/folder/note.md.
+      app.vault.adapter._statForPath = "folder/note.md";
+    });
+
+    test("the natural /-separated path still resolves", async () => {
+      const res = await request(server)
+        .get("/vault/folder/note.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown");
+      expect(res.status).toBe(200);
+    });
+
+    test("the whole file path as one %2F-encoded segment no longer resolves", async () => {
+      const res = await request(server)
+        .get("/vault/folder%2Fnote.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Accept", "text/markdown");
+      expect(res.status).toBe(404);
+    });
+  });
+
+  describe("tagsGet", () => {
+    test("aggregates tags from markdown files", async () => {
+      const file1 = new TFile();
+      file1.path = "note1.md";
+      const file2 = new TFile();
+      file2.path = "note2.md";
+      app.vault._markdownFiles = [file1, file2];
+
+      const cache1 = new CachedMetadata();
+      cache1.tags = [{ tag: "#project" }, { tag: "#important" }];
+      const cache2 = new CachedMetadata();
+      cache2.tags = [{ tag: "#project" }, { tag: "#work/tasks" }];
+
+      app.metadataCache.getFileCache = (file: TFile) => {
+        if (file.path === "note1.md") return cache1;
+        if (file.path === "note2.md") return cache2;
+        return null;
+      };
+
+      const result = await request(server)
+        .get("/tags/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.tags).toEqual(
+        expect.arrayContaining([
+          { name: "project", count: 2 },
+          { name: "important", count: 1 },
+          { name: "work", count: 1 },
+          { name: "work/tasks", count: 1 },
+        ]),
+      );
+      expect(result.body.tags).toHaveLength(4);
+    });
+
+    test("counts frontmatter tags", async () => {
+      const file1 = new TFile();
+      file1.path = "note1.md";
+      app.vault._markdownFiles = [file1];
+
+      const cache1 = new CachedMetadata();
+      cache1.frontmatter = { tags: ["project", "important"] };
+
+      app.metadataCache.getFileCache = () => cache1;
+
+      const result = await request(server)
+        .get("/tags/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.tags).toEqual(
+        expect.arrayContaining([
+          { name: "project", count: 1 },
+          { name: "important", count: 1 },
+        ]),
+      );
+      expect(result.body.tags).toHaveLength(2);
+    });
+
+    test("handles files with no cache", async () => {
+      const file1 = new TFile();
+      app.vault._markdownFiles = [file1];
+      app.metadataCache.getFileCache = () => null;
+
+      const result = await request(server)
+        .get("/tags/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.tags).toEqual([]);
+    });
+
+    test("handles files with no tags", async () => {
+      const file1 = new TFile();
+      app.vault._markdownFiles = [file1];
+      const emptyCache = new CachedMetadata();
+      emptyCache.tags = [];
+      app.metadataCache.getFileCache = () => emptyCache;
+
+      const result = await request(server)
+        .get("/tags/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.tags).toEqual([]);
+    });
+
+    test("merges inline (#-prefixed) and frontmatter (no-#) forms of the same tag", async () => {
+      const file1 = new TFile();
+      file1.path = "note1.md";
+      const file2 = new TFile();
+      file2.path = "note2.md";
+      app.vault._markdownFiles = [file1, file2];
+
+      // note1 has the tag as an inline #project
+      const cache1 = new CachedMetadata();
+      cache1.tags = [{ tag: "#project" }];
+
+      // note2 has the same tag via frontmatter (no # prefix)
+      const cache2 = new CachedMetadata();
+      cache2.frontmatter = { tags: ["project"] };
+
+      app.metadataCache.getFileCache = (file: TFile) => {
+        if (file.path === "note1.md") return cache1;
+        if (file.path === "note2.md") return cache2;
+        return null;
+      };
+
+      const result = await request(server)
+        .get("/tags/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.tags).toEqual([{ name: "project", count: 2 }]);
+    });
+
+    test("unauthorized", async () => {
+      await request(server).get("/tags/").expect(401);
+    });
+  })
+
+    
+  describe("URL-embedded targets", () => {
+    const markdown = [
+      "---",
+      "title: Test Doc",
+      "---",
+      "# Heading1",
+      "Content under heading1",
+      "## SubHeading",
+      "Sub content",
+      "# Heading2",
+      "Content under heading2",
+      "# Heading3",
+      "| City    | Population |",
+      "| ------- | ---------- |",
+      "| Seattle | 8          |",
+      "^table1",
+      "",
+    ].join("\n");
+
+    function setFileContent(content: string): void {
+      app.vault._read = content;
+      app.vault.adapter._read = content;
+      const buf = new ArrayBuffer(content.length);
+      const view = new Uint8Array(buf);
+      for (let i = 0; i < content.length; i++) {
+        view[i] = content.charCodeAt(i);
+      }
+      app.vault.adapter._readBinary = buf;
+    }
+
+    beforeEach(() => {
+      // Only return a valid stat for the bare file path so that the
+      // walk-backward resolver correctly identifies "somefile.md" as the
+      // file and the remaining URL segments as the target.
+      app.vault.adapter._statForPath = "somefile.md";
+      setFileContent(markdown);
+    });
+
+    describe("GET", () => {
+      test("heading via URL segments returns section content", async () => {
+        const result = await request(server)
+          .get("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+
+        expect(result.text).toEqual("Content under heading2\n");
+      });
+
+      test("nested heading via URL segments", async () => {
+        const result = await request(server)
+          .get("/vault/somefile.md/heading/Heading1/SubHeading")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+
+        expect(result.text).toEqual("Sub content\n");
+      });
+
+      test("a duplicate sibling heading's disambiguated key reaches the correct (second) section", async () => {
+        setFileContent(
+          ["# Notes", "first", "# Notes", "second", ""].join("\n"),
+        );
+        const secondNotesKey = "Notes\u{FC750}\u{F6440}";
+
+        const first = await request(server)
+          .get("/vault/somefile.md/heading/Notes")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+        expect(first.text).toEqual("first\n");
+
+        const second = await request(server)
+          .get(`/vault/somefile.md/heading/${encodeURIComponent(secondNotesKey)}`)
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+        expect(second.text).toEqual("second\n");
+      });
+
+      test("a duplicate block id's disambiguated key reaches the correct (second) block", async () => {
+        setFileContent(
+          ["first ^dup", "", "second ^dup", ""].join("\n"),
+        );
+        const secondDupKey = "dup\u{FC750}\u{F6440}";
+
+        const first = await request(server)
+          .get("/vault/somefile.md/block/dup")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+        expect(first.text).toEqual("first");
+
+        const second = await request(server)
+          .get(`/vault/somefile.md/block/${encodeURIComponent(secondDupKey)}`)
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+        expect(second.text).toEqual("second");
+      });
+
+      test("frontmatter via URL segments returns JSON value", async () => {
+        const result = await request(server)
+          .get("/vault/somefile.md/frontmatter/title")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+
+        expect(result.body).toEqual("Test Doc");
+      });
+
+      test("URL target + Target-Type header returns 422", async () => {
+        await request(server)
+          .get("/vault/somefile.md/heading/Heading1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Target-Type", "heading")
+          .expect(422);
+      });
+
+      test("URL target + Target header returns 422", async () => {
+        await request(server)
+          .get("/vault/somefile.md/heading/Heading1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Target", "Heading1")
+          .expect(422);
+      });
+
+      test("non-existent file in URL path returns 404", async () => {
+        app.vault.adapter._exists = false;
+
+        await request(server)
+          .get("/vault/somefile.md/heading/Heading1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(404);
+      });
+
+      test("malformed frontmatter YAML returns 400 (40005), not a 500", async () => {
+        setFileContent(
+          [
+            "---",
+            "purpose: Check patch behavior with targetType: block",
+            "---",
+            "# Heading1",
+            "Content under heading1",
+            "",
+          ].join("\n"),
+        );
+
+        const res = await request(server)
+          .get("/vault/somefile.md/heading/Heading1")
+          .set("Authorization", `Bearer ${API_KEY}`);
+
+        expect(res.status).toBe(400);
+        // The GET path pre-sets a text/markdown Content-Type, so the canned
+        // JSON error body is not auto-parsed by supertest; read it from res.text.
+        expect(JSON.parse(res.text).errorCode).toBe(40005);
+      });
+    });
+
+    describe("PUT", () => {
+      test("a duplicate sibling heading's disambiguated key writes only the correct (second) section", async () => {
+        setFileContent(
+          ["# Notes", "first", "# Notes", "second", ""].join("\n"),
+        );
+        const secondNotesKey = "Notes\u{FC750}\u{F6440}";
+
+        const result = await request(server)
+          .put(`/vault/somefile.md/heading/${encodeURIComponent(secondNotesKey)}`)
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .send("replaced\n")
+          .expect(200);
+
+        expect(result.text).toContain("first");
+        expect(result.text).toContain("replaced");
+        expect(result.text).not.toContain("second");
+      });
+
+      test("a duplicate block id's disambiguated key writes only the correct (second) block", async () => {
+        setFileContent(
+          ["first ^dup", "", "second ^dup", ""].join("\n"),
+        );
+        const secondDupKey = "dup\u{FC750}\u{F6440}";
+
+        const result = await request(server)
+          .put(`/vault/somefile.md/block/${encodeURIComponent(secondDupKey)}`)
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .send("replaced")
+          .expect(200);
+
+        expect(result.text).toContain("first");
+        expect(result.text).toContain("replaced");
+        expect(result.text).not.toContain("second");
+      });
+
+      test("replaces section content via URL target", async () => {
+        const result = await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .send("Replaced content\n")
+          .expect(200);
+
+        expect(result.text).toContain("Replaced content");
+        expect(result.text).not.toContain("Content under heading2");
+      });
+
+      test("URL target + Target-Type header returns 422", async () => {
+        await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Target-Type", "heading")
+          .send("content")
+          .expect(422);
+      });
+
+      test("normalizes heading levels in the written content (2.0 engine)", async () => {
+        // Heading2 is an h1; under `content` scope a leading `#` in the body
+        // rebases to a direct child (h2), proving the 2.0 engine — not the
+        // level-blind 1.x engine — handled the path-targeted write.
+        const result = await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .send("# Child\n")
+          .expect(200);
+
+        expect(result.text).toContain("## Child");
+        expect(result.text).not.toContain("\n# Child");
+        expect(result.headers["deprecation"]).toBeUndefined();
+      });
+
+      test("header targeting without Markdown-Patch-Version: 1 is rejected (40083)", async () => {
+        const res = await request(server)
+          .put("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Target-Type", "heading")
+          .set("Target", "Heading2")
+          .send("content");
+
+        expect(res.status).toBe(400);
+        expect(JSON.parse(res.text).errorCode).toBe(40083);
+      });
+
+      test("header targeting under Markdown-Patch-Version: 1 still writes and is deprecated", async () => {
+        jest
+          .spyOn(handler.operations, "patchFileSection")
+          .mockResolvedValueOnce("# Patched\n");
+
+        const result = await request(server)
+          .put("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Markdown-Patch-Version", "1")
+          .set("Target-Type", "heading")
+          .set("Target", "Heading2")
+          .send("Replaced via 1.x\n")
+          .expect(200);
+
+        expect(result.headers["deprecation"]).toBe('true; sunset-version="6.0"');
+      });
+
+      test("path-targeted write with a stray Target-Scope header is rejected (40083), not silently widened to content scope", async () => {
+        // A 1.x client renaming a heading sends Target-Scope: marker. Without
+        // Markdown-Patch-Version: 1, that header must not be silently dropped —
+        // dropping it would make this write replace the whole section body
+        // instead of just the heading line.
+        const res = await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Target-Scope", "marker")
+          .send("Renamed Heading2");
+
+        expect(res.status).toBe(400);
+        expect(JSON.parse(res.text).errorCode).toBe(40083);
+        expect(app.vault.adapter._write).toBeUndefined();
+      });
+
+      test("path-targeted write with a stray Trim-Target-Whitespace header is rejected (40083)", async () => {
+        const res = await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Trim-Target-Whitespace", "true")
+          .send("content");
+
+        expect(res.status).toBe(400);
+        expect(JSON.parse(res.text).errorCode).toBe(40083);
+      });
+
+      test("path-targeted write with a stray Target-Delimiter header is rejected (40083)", async () => {
+        const res = await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Target-Delimiter", "::")
+          .send("content");
+
+        expect(res.status).toBe(400);
+        expect(JSON.parse(res.text).errorCode).toBe(40083);
+      });
+
+      test("a JSON array body on a block target replaces the table's rows", async () => {
+        const result = await request(server)
+          .put("/vault/somefile.md/block/table1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send([["Chicago", "16"]])
+          .expect(200);
+
+        expect(result.text).toContain("| Chicago | 16 |");
+        expect(result.text).not.toContain("| Seattle | 8          |");
+        expect(result.text).toContain("| City    | Population |");
+      });
+
+      test("a pipe in a table cell is escaped rather than splitting the column", async () => {
+        const result = await request(server)
+          .put("/vault/somefile.md/block/table1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send([["Seattle | Tacoma", "16"]])
+          .expect(200);
+
+        expect(result.text).toContain("| Seattle \\| Tacoma | 16 |");
+      });
+
+      test("a line break in a table cell is rejected with a 400", async () => {
+        const res = await request(server)
+          .put("/vault/somefile.md/block/table1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send([["two\nlines", "16"]]);
+
+        expect(res.status).toBe(400);
+        expect(app.vault.adapter._write).toBeUndefined();
+      });
+
+      test("a row with the wrong number of cells on a block target is rejected", async () => {
+        const res = await request(server)
+          .put("/vault/somefile.md/block/table1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send([["only-one-cell"]]);
+
+        expect(res.status).toBe(400);
+      });
+
+      test("a non-array JSON body on a block target is rejected, not silently stringified", async () => {
+        const res = await request(server)
+          .put("/vault/somefile.md/block/table1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send({ not: "an array" });
+
+        expect(res.status).toBe(400);
+        expect(app.vault.adapter._write).toBeUndefined();
+      });
+
+      test("a JSON object body on a heading target is rejected, not stringified into the document", async () => {
+        // A heading's `content` cell takes literal markdown text only. Coercing
+        // a parsed JSON body with String() would write "[object Object]" into
+        // the note and report success — silent corruption.
+        const res = await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send({ some: "object" });
+
+        expect(res.status).toBe(400);
+        expect(app.vault.adapter._write).toBeUndefined();
+      });
+
+      test("a JSON array body on a heading target is rejected, not comma-joined into the document", async () => {
+        // String([["x","y"]]) is "x,y" — plausible-looking garbage, which is
+        // worse than "[object Object]" because it can go unnoticed.
+        const res = await request(server)
+          .put("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send([["x", "y"]]);
+
+        expect(res.status).toBe(400);
+        expect(app.vault.adapter._write).toBeUndefined();
+      });
+
+      test("a JSON body on a frontmatter target still writes the value", async () => {
+        const result = await request(server)
+          .put("/vault/somefile.md/frontmatter/title")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send(JSON.stringify(["a", "b"]))
+          .expect(200);
+
+        expect(result.text).toContain("- a");
+        expect(result.text).toContain("- b");
+      });
+    });
+
+    describe("POST", () => {
+      test("appends to section via URL target", async () => {
+        const result = await request(server)
+          .post("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .send("Appended content\n")
+          .expect(200);
+
+        expect(result.text).toContain("Content under heading2");
+        expect(result.text).toContain("Appended content");
+      });
+
+      test("URL target + Target header returns 422", async () => {
+        await request(server)
+          .post("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Target", "Heading2")
+          .send("content")
+          .expect(422);
+      });
+
+      test("header targeting without Markdown-Patch-Version: 1 is rejected (40083)", async () => {
+        const res = await request(server)
+          .post("/vault/somefile.md")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Target-Type", "heading")
+          .set("Target", "Heading2")
+          .send("content");
+
+        expect(res.status).toBe(400);
+        expect(JSON.parse(res.text).errorCode).toBe(40083);
+      });
+
+      test("path-targeted append with a stray Target-Scope header is rejected (40083)", async () => {
+        const res = await request(server)
+          .post("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "text/markdown")
+          .set("Target-Scope", "marker")
+          .send("content");
+
+        expect(res.status).toBe(400);
+        expect(JSON.parse(res.text).errorCode).toBe(40083);
+      });
+
+      test("a JSON array body on a block target appends a table row", async () => {
+        const result = await request(server)
+          .post("/vault/somefile.md/block/table1")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send([["Chicago", "16"]])
+          .expect(200);
+
+        expect(result.text).toContain("| Seattle | 8          |");
+        expect(result.text).toContain("| Chicago | 16 |");
+      });
+
+      test("a JSON body on a heading target is rejected, not stringified into the document", async () => {
+        const res = await request(server)
+          .post("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .set("Content-Type", "application/json")
+          .send([["x", "y"]]);
+
+        expect(res.status).toBe(400);
+        expect(app.vault.adapter._write).toBeUndefined();
+      });
+    });
+
+    describe("DELETE", () => {
+      test("targeted DELETE returns 405", async () => {
+        await request(server)
+          .delete("/vault/somefile.md/heading/Heading2")
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(405);
+      });
+    });
+  });
+
+  describe("commandGet", () => {
+    test("acceptable", async () => {
+      const arbitraryCommand = new Command();
+      arbitraryCommand.id = "beep";
+      arbitraryCommand.name = "boop";
+
+      app.commands.commands[arbitraryCommand.id] = arbitraryCommand;
+
+      const result = await request(server)
+        .get(`/commands/`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body.commands).toEqual([
+        {
+          id: arbitraryCommand.id,
+          name: arbitraryCommand.name,
+        },
+      ]);
+    });
+
+    test("unauthorized", async () => {
+      const arbitraryCommand = new Command();
+      arbitraryCommand.id = "beep";
+      arbitraryCommand.name = "boop";
+
+      app.commands.commands[arbitraryCommand.id] = arbitraryCommand;
+
+      await request(server).get(`/commands/`).expect(401);
+    });
+  });
+
+  describe("commandPost", () => {
+    test("acceptable", async () => {
+      const arbitraryCommand = new Command();
+      arbitraryCommand.id = "beep";
+      arbitraryCommand.name = "boop";
+
+      app.commands.commands[arbitraryCommand.id] = arbitraryCommand;
+
+      await request(server)
+        .post(`/commands/${arbitraryCommand.id}/`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(204);
+
+      expect(app._executeCommandById).toEqual([arbitraryCommand.id]);
+    });
+
+    test("command not found returns 404", async () => {
+      await request(server)
+        .post(`/commands/nonexistent-command/`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(404);
+    });
+
+    test("command execution error returns 500", async () => {
+      const arbitraryCommand = new Command();
+      arbitraryCommand.id = "beep";
+      arbitraryCommand.name = "boop";
+
+      app.commands.commands[arbitraryCommand.id] = arbitraryCommand;
+      app.commands.executeCommandById = () => {
+        throw new Error("command crashed");
+      };
+
+      await request(server)
+        .post(`/commands/${arbitraryCommand.id}/`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(500);
+    });
+
+    test("unauthorized", async () => {
+      const arbitraryCommand = new Command();
+      arbitraryCommand.id = "beep";
+      arbitraryCommand.name = "boop";
+
+      app.commands.commands[arbitraryCommand.id] = arbitraryCommand;
+
+      await request(server)
+        .post(`/commands/${arbitraryCommand.id}`)
+        .expect(401);
+    });
+  });
+
+  describe("searchSimplePost", () => {
+    beforeEach(() => {
+      // Setup mock for prepareSimpleSearch
+      _prepareSimpleSearchMock.behavior = (query: string) => {
+        const queryLower = query.toLowerCase();
+        const queryLength = query.length;
+        return (text: string) => {
+          const textLower = text.toLowerCase();
+          const matches: [number, number][] = [];
+          let index = 0;
+
+          // Find all matches (case-insensitive)
+          while ((index = textLower.indexOf(queryLower, index)) !== -1) {
+            matches.push([index, index + queryLength]);
+            index += 1;
+          }
+
+          if (matches.length === 0) {
+            return null;
+          }
+
+          // Calculate score based on number of matches
+          const score = matches.length;
+
+          return {
+            score,
+            matches,
+          };
+        };
+      };
+    });
+
+    afterEach(() => {
+      // Clean up mock
+      _prepareSimpleSearchMock.behavior = null;
+    });
+
+    test("match at beginning of filename", async () => {
+      const testFile = new TFile();
+      testFile.basename = "Master Plan";
+      testFile.path = "Master Plan.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "Some content here";
+
+      const result = await request(server)
+        .post("/search/simple/?query=Master")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("Master Plan.md");
+      expect(result.body[0].matches).toHaveLength(1);
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(0);
+      expect(result.body[0].matches[0].match.end).toBe(6);
+      expect(result.body[0].matches[0].context).toBe("Master Plan");
+    });
+
+    test("match in middle of filename", async () => {
+      const testFile = new TFile();
+      testFile.basename = "1 - Master Plan";
+      testFile.path = "1 - Master Plan.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "Some content here";
+
+      const result = await request(server)
+        .post("/search/simple/?query=Master")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("1 - Master Plan.md");
+      expect(result.body[0].matches).toHaveLength(1);
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(4);
+      expect(result.body[0].matches[0].match.end).toBe(10);
+      expect(result.body[0].matches[0].context).toBe("1 - Master Plan");
+    });
+
+    test("match at end of filename", async () => {
+      const testFile = new TFile();
+      testFile.basename = "My Master Plan";
+      testFile.path = "My Master Plan.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "Some content here";
+
+      const result = await request(server)
+        .post("/search/simple/?query=Plan")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("My Master Plan.md");
+      expect(result.body[0].matches).toHaveLength(1);
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(10);
+      expect(result.body[0].matches[0].match.end).toBe(14);
+      expect(result.body[0].matches[0].context).toBe("My Master Plan");
+    });
+
+    test("match in content only", async () => {
+      const testFile = new TFile();
+      testFile.basename = "Random Note";
+      testFile.path = "Random Note.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "This is my master plan for the project.";
+
+      const result = await request(server)
+        .post("/search/simple/?query=master")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("Random Note.md");
+      expect(result.body[0].matches).toHaveLength(1);
+      expect(result.body[0].matches[0].match.source).toBe("content");
+      expect(result.body[0].matches[0].match.start).toBe(11);
+      expect(result.body[0].matches[0].match.end).toBe(17);
+    });
+
+    test("match in both filename and content", async () => {
+      const testFile = new TFile();
+      testFile.basename = "Master Plan";
+      testFile.path = "Master Plan.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "The master plan is to complete this project.";
+
+      const result = await request(server)
+        .post("/search/simple/?query=master")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("Master Plan.md");
+      expect(result.body[0].matches).toHaveLength(2);
+
+      // First match should be in filename (case-insensitive)
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(0);
+      expect(result.body[0].matches[0].match.end).toBe(6);
+      expect(result.body[0].matches[0].context).toBe("Master Plan");
+
+      // Second match should be in content
+      expect(result.body[0].matches[1].match.source).toBe("content");
+      expect(result.body[0].matches[1].match.start).toBe(4);
+      expect(result.body[0].matches[1].match.end).toBe(10);
+    });
+
+    test("multiple matches in filename", async () => {
+      const testFile = new TFile();
+      testFile.basename = "Test Test Test";
+      testFile.path = "Test Test Test.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "Content without the search term";
+
+      const result = await request(server)
+        .post("/search/simple/?query=Test")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("Test Test Test.md");
+      expect(result.body[0].matches).toHaveLength(3);
+
+      // All matches should be in filename
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(0);
+      expect(result.body[0].matches[0].match.end).toBe(4);
+
+      expect(result.body[0].matches[1].match.source).toBe("filename");
+      expect(result.body[0].matches[1].match.start).toBe(5);
+      expect(result.body[0].matches[1].match.end).toBe(9);
+
+      expect(result.body[0].matches[2].match.source).toBe("filename");
+      expect(result.body[0].matches[2].match.start).toBe(10);
+      expect(result.body[0].matches[2].match.end).toBe(14);
+    });
+
+    test("filename with special characters", async () => {
+      const testFile = new TFile();
+      testFile.basename = "Project (2024) - Master Plan";
+      testFile.path = "Project (2024) - Master Plan.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "Project details";
+
+      const result = await request(server)
+        .post("/search/simple/?query=2024")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("Project (2024) - Master Plan.md");
+      expect(result.body[0].matches).toHaveLength(1);
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(9);
+      expect(result.body[0].matches[0].match.end).toBe(13);
+      expect(result.body[0].matches[0].context).toBe("Project (2024) - Master Plan");
+    });
+
+    test("context length for content matches", async () => {
+      const testFile = new TFile();
+      testFile.basename = "Note";
+      testFile.path = "Note.md";
+
+      const longContent = "A".repeat(200) + "MATCH" + "B".repeat(200);
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = longContent;
+
+      const result = await request(server)
+        .post("/search/simple/?query=MATCH&contextLength=50")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].matches).toHaveLength(1);
+      expect(result.body[0].matches[0].match.source).toBe("content");
+
+      // Context should be approximately 50 chars before + match + 50 chars after
+      const context = result.body[0].matches[0].context;
+      expect(context.length).toBeLessThanOrEqual(105); // 50 + 5 + 50
+      expect(context).toContain("MATCH");
+    });
+
+    test("no matches returns empty array", async () => {
+      const testFile = new TFile();
+      testFile.basename = "Random Note";
+      testFile.path = "Random Note.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "Some content";
+
+      const result = await request(server)
+        .post("/search/simple/?query=NonExistentTerm")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(0);
+    });
+
+    test("case insensitive search", async () => {
+      const testFile = new TFile();
+      testFile.basename = "MASTER Plan";
+      testFile.path = "MASTER Plan.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "master plan details";
+
+      const result = await request(server)
+        .post("/search/simple/?query=master")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].matches).toHaveLength(2);
+
+      // Should match "MASTER" in filename (case-insensitive)
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(0);
+      expect(result.body[0].matches[0].match.end).toBe(6);
+
+      // Should match "master" in content
+      expect(result.body[0].matches[1].match.source).toBe("content");
+      expect(result.body[0].matches[1].match.start).toBe(0);
+      expect(result.body[0].matches[1].match.end).toBe(6);
+    });
+
+    test("boundary-spanning matches are filtered out", async () => {
+      // This test verifies that matches spanning from filename into content are skipped.
+      // When searching for a term that bridges the filename and content (e.g., "Master\n\nThe"),
+      // such matches would produce invalid results (negative start positions).
+      const testFile = new TFile();
+      testFile.basename = "Master";
+      testFile.path = "Master.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "The content starts here";
+
+      // Mock prepareSimpleSearch to return a boundary-spanning match
+      _prepareSimpleSearchMock.behavior = (query: string) => {
+        return (text: string) => {
+          // Simulate a match that spans from filename into content
+          // filename "Master" + "\n\n" = 8 chars (positionOffset)
+          // A boundary-spanning match would have start < 8 and end > 8
+          const matches: [number, number][] = [
+            [0, 11], // Spans from "Master" (0) into content "The" (ends at 11)
+          ];
+          return {
+            score: 1,
+            matches,
+          };
+        };
+      };
+
+      const result = await request(server)
+        .post("/search/simple/?query=Master%0A%0AThe")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      // The file should still be in results (because there was a match)
+      expect(result.body).toHaveLength(1);
+      // But the boundary-spanning match should be filtered out
+      expect(result.body[0].matches).toHaveLength(0);
+    });
+
+    test("boundary-spanning matches don't affect valid matches", async () => {
+      // Verify that when there are both boundary-spanning and valid matches,
+      // only the valid ones are returned
+      const testFile = new TFile();
+      testFile.basename = "Master";
+      testFile.path = "Master.md";
+
+      app.vault._markdownFiles = [testFile];
+      app.vault._cachedRead = "The Master plan content";
+
+      // Mock prepareSimpleSearch to return both valid and boundary-spanning matches
+      _prepareSimpleSearchMock.behavior = (query: string) => {
+        return (text: string) => {
+          // text = "Master\n\n" + "The Master plan content"
+          // positionOffset = 8
+          const matches: [number, number][] = [
+            [0, 11],  // Boundary-spanning: starts in filename, ends in content (should be filtered)
+            [0, 6],   // Valid: entirely in filename "Master" (should be kept)
+            [12, 18], // Valid: "Master" in content at position 4, adjusted = 12-8=4, 18-8=10 (should be kept)
+          ];
+          return {
+            score: 3,
+            matches,
+          };
+        };
+      };
+
+      const result = await request(server)
+        .post("/search/simple/?query=Master")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      // Only 2 valid matches should be returned (boundary-spanning filtered out)
+      expect(result.body[0].matches).toHaveLength(2);
+
+      // First match: filename
+      expect(result.body[0].matches[0].match.source).toBe("filename");
+      expect(result.body[0].matches[0].match.start).toBe(0);
+      expect(result.body[0].matches[0].match.end).toBe(6);
+
+      // Second match: content (position adjusted by positionOffset)
+      expect(result.body[0].matches[1].match.source).toBe("content");
+      expect(result.body[0].matches[1].match.start).toBe(4);  // 12 - 8
+      expect(result.body[0].matches[1].match.end).toBe(10);   // 18 - 8
+    });
+
+    test("unauthorized", async () => {
+      await request(server)
+        .post("/search/simple/?query=test")
+        .expect(401);
+    });
+
+    test("missing query parameter", async () => {
+      await request(server)
+        .post("/search/simple/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(400);
+    });
+  });
+
+  describe("searchQueryPost", () => {
+    test("returns matching files for a frontmatter query", async () => {
+      const file1 = new TFile();
+      file1.path = "match.md";
+      const file2 = new TFile();
+      file2.path = "no-match.md";
+      app.vault._markdownFiles = [file1, file2];
+
+      const cache1 = new CachedMetadata();
+      cache1.frontmatter = { status: "done" };
+      const cache2 = new CachedMetadata();
+      cache2.frontmatter = { status: "todo" };
+
+      app.metadataCache.getFileCache = (file: TFile) => {
+        if (file.path === "match.md") return cache1;
+        if (file.path === "no-match.md") return cache2;
+        return null;
+      };
+
+      const result = await request(server)
+        .post("/search/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "application/vnd.olrapi.jsonlogic+json")
+        .send({ "==": [{ var: "frontmatter.status" }, "done"] })
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("match.md");
+    });
+
+    test("does not call cachedRead when query does not reference content", async () => {
+      const file1 = new TFile();
+      file1.path = "note.md";
+      app.vault._markdownFiles = [file1];
+
+      const cache = new CachedMetadata();
+      cache.frontmatter = { status: "done" };
+      app.metadataCache.getFileCache = () => cache;
+
+      const cachedReadSpy = jest.spyOn(app.vault, "cachedRead");
+
+      await request(server)
+        .post("/search/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "application/vnd.olrapi.jsonlogic+json")
+        .send({ "==": [{ var: "frontmatter.status" }, "done"] })
+        .expect(200);
+
+      expect(cachedReadSpy).not.toHaveBeenCalled();
+      cachedReadSpy.mockRestore();
+    });
+
+    test("calls cachedRead when query references content", async () => {
+      const file1 = new TFile();
+      file1.path = "note.md";
+      app.vault._markdownFiles = [file1];
+      app.vault._cachedRead = "hello world";
+
+      const cache = new CachedMetadata();
+      app.metadataCache.getFileCache = () => cache;
+
+      const cachedReadSpy = jest.spyOn(app.vault, "cachedRead");
+
+      const result = await request(server)
+        .post("/search/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "application/vnd.olrapi.jsonlogic+json")
+        .send({ in: ["hello", { var: "content" }] })
+        .expect(200);
+
+      expect(cachedReadSpy).toHaveBeenCalled();
+      expect(result.body).toHaveLength(1);
+      cachedReadSpy.mockRestore();
+    });
+
+    test("returns empty string for content when query does not reference content", async () => {
+      const file1 = new TFile();
+      file1.path = "note.md";
+      app.vault._markdownFiles = [file1];
+      app.vault._cachedRead = "actual file content";
+
+      const cache = new CachedMetadata();
+      app.metadataCache.getFileCache = () => cache;
+
+      const result = await request(server)
+        .post("/search/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "application/vnd.olrapi.jsonlogic+json")
+        .send({ "==": [{ var: "path" }, "note.md"] })
+        .expect(200);
+
+      expect(result.body).toHaveLength(1);
+      expect(result.body[0].filename).toBe("note.md");
+    });
+
+    test("returns 400 when content-type is missing", async () => {
+      await request(server)
+        .post("/search/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .send({ "==": [{ var: "path" }, "note.md"] })
+        .expect(400);
+    });
+
+    test("returns 401 without auth", async () => {
+      await request(server)
+        .post("/search/")
+        .set("Content-Type", "application/vnd.olrapi.jsonlogic+json")
+        .send({ "==": [{ var: "path" }, "note.md"] })
+        .expect(401);
+    });
+  });
+
+  describe("cors", () => {
+    // Without `exposedHeaders`, the `cors` package omits Access-Control-Expose-Headers
+    // entirely, and a browser may then read only the seven CORS-safelisted response
+    // headers. Every header this API sets to tell a client something -- Content-Location,
+    // Deprecation, Markdown-Patch-Warnings, Mcp-Session-Id -- is on the wire but
+    // unreadable from JavaScript. These tests pin the directive onto both routers.
+
+    test("GET / exposes every response header to browser clients", async () => {
+      const response = await request(server)
+        .get("/")
+        .set("Origin", "https://example.com")
+        .expect(200);
+
+      expect(response.headers["access-control-expose-headers"]).toEqual("*");
+    });
+
+    test("the /mcp/ router exposes every response header to browser clients", async () => {
+      // Mcp-Session-Id rides this router, and the MCP SDK's own browser client reads it
+      // off the response to complete a sessionful handshake.
+      const response = await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Origin", "https://example.com")
+        .expect(200);
+
+      expect(response.headers["access-control-expose-headers"]).toEqual("*");
+    });
+
+    test("a preflight still reflects the headers the request asked for", async () => {
+      // The request direction was never broken -- `cors` reflects
+      // Access-Control-Request-Headers by default. Pinned so a change to the response
+      // direction cannot quietly cost us the request direction.
+      const response = await request(server)
+        .options("/")
+        .set("Origin", "https://example.com")
+        .set("Access-Control-Request-Method", "GET")
+        .set("Access-Control-Request-Headers", "authorization, content-type")
+        .expect(204);
+
+      expect(response.headers["access-control-allow-headers"]).toEqual(
+        "authorization, content-type"
+      );
+    });
+  });
+
+  describe("/mcp/ routes", () => {
+    test("GET /mcp/ without auth returns 401", async () => {
+      await request(server).get("/mcp/").expect(401);
+    });
+
+    test("POST /mcp/ without auth returns 401", async () => {
+      await request(server).post("/mcp/").expect(401);
+    });
+
+    test("POST /mcp/ with valid auth reaches McpHandler.handleRequest", async () => {
+      await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+    });
+
+    test("GET /mcp/ with valid auth and session ID reaches McpHandler.handleRequest", async () => {
+      await request(server)
+        .get("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Mcp-Session-Id", "some-session-id")
+        .expect(200);
+    });
+
+    test("POST /mcp/ with unsupported MCP-Protocol-Version returns 400", async () => {
+      await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("MCP-Protocol-Version", "9999-01-01")
+        .expect(400);
+    });
+
+    test("GET /mcp/ with unsupported MCP-Protocol-Version returns 400", async () => {
+      await request(server)
+        .get("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("MCP-Protocol-Version", "9999-01-01")
+        .expect(400);
+    });
+
+    test("POST /mcp/ with MCP-Protocol-Version 2025-06-18 passes through", async () => {
+      await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("MCP-Protocol-Version", "2025-06-18")
+        .expect(200);
+    });
+
+    test("POST /mcp/ with MCP-Protocol-Version 2025-03-26 passes through", async () => {
+      await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("MCP-Protocol-Version", "2025-03-26")
+        .expect(200);
+    });
+
+    test("POST /mcp/ with an unrecognised version reaches the handler when the request is sessionless-shaped", async () => {
+      const mcpHandler = handler.mcpHandler as unknown as {
+        isSessionlessRequest: jest.Mock;
+        handleRequest: jest.Mock;
+      };
+      mcpHandler.isSessionlessRequest.mockResolvedValueOnce(true);
+
+      // The router must not answer this itself: only the MCP handler can reply with the
+      // JSON-RPC -32022 that names the revisions it serves.
+      await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("MCP-Protocol-Version", "2026-07-29")
+        .expect(200);
+
+      expect(mcpHandler.handleRequest).toHaveBeenCalled();
+    });
+
+    test("POST /mcp/ with an unrecognised version is rejected by the router when the request is sessionful-shaped", async () => {
+      const mcpHandler = handler.mcpHandler as unknown as {
+        isSessionlessRequest: jest.Mock;
+        handleRequest: jest.Mock;
+      };
+      mcpHandler.isSessionlessRequest.mockResolvedValueOnce(false);
+
+      const res = await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("MCP-Protocol-Version", "2026-07-29")
+        .expect(400);
+
+      expect(res.body.error).toMatch(/Unsupported MCP-Protocol-Version/);
+      expect(mcpHandler.handleRequest).not.toHaveBeenCalled();
+    });
+
+    test("POST /mcp/ with MCP-Protocol-Version 2026-07-28 passes through", async () => {
+      await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("MCP-Protocol-Version", "2026-07-28")
+        .expect(200);
+    });
+
+    test("POST /mcp/ without MCP-Protocol-Version passes through", async () => {
+      await request(server)
+        .post("/mcp/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+    });
+  });
+
+  describe("waitForFileCache", () => {
+    test("returns immediately if cache is already available", async () => {
+      const testFile = new TFile();
+      testFile.path = "test.md";
+
+      // Cache is already available (default mock behavior)
+      app.metadataCache._getFileCache = {
+        headings: [],
+        frontmatter: { title: "Test" },
+        tags: [],
+      };
+
+      // Access the private method via the handler instance
+      // @ts-ignore: Accessing private method for testing
+      const result = await handler.operations.waitForFileCache(testFile);
+
+      expect(result).not.toBeNull();
+      expect(result?.frontmatter?.title).toBe("Test");
+    });
+
+    test("waits for cache change event when cache is initially null", async () => {
+      const testFile = new TFile();
+      testFile.path = "test.md";
+
+      // Start with null cache
+      app.metadataCache._getFileCache = null;
+
+      // @ts-ignore: Accessing private method for testing
+      const cachePromise = handler.operations.waitForFileCache(testFile, 5000);
+
+      // Simulate cache becoming available after a short delay
+      setTimeout(() => {
+        app.metadataCache._getFileCache = {
+          headings: [],
+          frontmatter: { title: "Loaded" },
+          tags: [],
+        };
+        app.metadataCache._emitChanged(testFile);
+      }, 50);
+
+      const result = await cachePromise;
+
+      expect(result).not.toBeNull();
+      expect(result?.frontmatter?.title).toBe("Loaded");
+    });
+
+    test("ignores cache change events for other files", async () => {
+      const testFile = new TFile();
+      testFile.path = "test.md";
+
+      const otherFile = new TFile();
+      otherFile.path = "other.md";
+
+      // Start with null cache
+      app.metadataCache._getFileCache = null;
+
+      // @ts-ignore: Accessing private method for testing
+      const cachePromise = handler.operations.waitForFileCache(testFile, 200);
+
+      // Emit change for a different file - should be ignored
+      setTimeout(() => {
+        app.metadataCache._emitChanged(otherFile);
+      }, 20);
+
+      // Then emit for the correct file
+      setTimeout(() => {
+        app.metadataCache._getFileCache = {
+          headings: [],
+          frontmatter: { title: "Correct" },
+          tags: [],
+        };
+        app.metadataCache._emitChanged(testFile);
+      }, 50);
+
+      const result = await cachePromise;
+
+      expect(result).not.toBeNull();
+      expect(result?.frontmatter?.title).toBe("Correct");
+    });
+
+    test("returns current cache state on timeout", async () => {
+      const testFile = new TFile();
+      testFile.path = "test.md";
+
+      // Start with null cache and never populate it
+      app.metadataCache._getFileCache = null;
+
+      // Use a very short timeout for the test
+      // @ts-ignore: Accessing private method for testing
+      const result = await handler.operations.waitForFileCache(testFile, 100);
+
+      // Should return null (timeout reached without cache becoming available)
+      expect(result).toBeNull();
+    });
+
+    test("cleans up event listener after cache becomes available", async () => {
+      const testFile = new TFile();
+      testFile.path = "test.md";
+
+      // Start with null cache
+      app.metadataCache._getFileCache = null;
+
+      // Counted rather than compared against zero: VaultOperations keeps its own
+      // permanent `changed` listener for the backlinks index, and what this test
+      // is about is waitForFileCache leaving nothing of its own behind.
+      const before = (app.metadataCache._listeners.get("changed") || []).length;
+
+      // @ts-ignore: Accessing private method for testing
+      const cachePromise = handler.operations.waitForFileCache(testFile, 5000);
+
+      // Simulate cache becoming available
+      setTimeout(() => {
+        app.metadataCache._getFileCache = {
+          headings: [],
+          frontmatter: {},
+          tags: [],
+        };
+        app.metadataCache._emitChanged(testFile);
+      }, 50);
+
+      await cachePromise;
+
+      // Check that the listener was removed
+      const listeners = app.metadataCache._listeners.get("changed") || [];
+      expect(listeners.length).toBe(before);
+    });
+
+    test("cleans up event listener on timeout", async () => {
+      const testFile = new TFile();
+      testFile.path = "test.md";
+
+      // Start with null cache
+      app.metadataCache._getFileCache = null;
+
+      const before = (app.metadataCache._listeners.get("changed") || []).length;
+
+      // @ts-ignore: Accessing private method for testing
+      await handler.operations.waitForFileCache(testFile, 100);
+
+      // Check that the listener was removed after timeout
+      const listeners = app.metadataCache._listeners.get("changed") || [];
+      expect(listeners.length).toBe(before);
+    });
+  });
+
+  describe("unexpected error handling", () => {
+    // Before the handle() wrapper was added, any unhandled rejection from an
+    // async route handler was silently swallowed (void pattern), leaving the
+    // HTTP request to hang forever with no response.  These tests verify that
+    // unexpected errors are turned into 500 responses instead.
+
+    test("synchronous throw inside async vault GET returns 500", async () => {
+      jest.spyOn(handler.operations, "listVaultDirectory").mockImplementation(() => {
+        throw new Error("Unexpected internal error");
+      });
+      const res = await request(server)
+        .get("/vault/")
+        .set("Authorization", `Bearer ${API_KEY}`);
+      expect(res.status).toBe(500);
+    });
+
+    test("rejected promise from vault POST returns 500", async () => {
+      jest.spyOn(handler.operations, "appendFileContent").mockRejectedValue(
+        new Error("disk full"),
+      );
+      const res = await request(server)
+        .post("/vault/some-file.md")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/plain")
+        .send("hello");
+      expect(res.status).toBe(500);
+    });
+  });
+
+  describe("apiExtensions", () => {
+    test("addMcpTool registers a tool via McpHandler", () => {
+      const extManifest = Object.assign(new PluginManifest(), { id: "test-plugin" });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      const api = handler.registerApiExtension(extManifest);
+      const callback = async () => "result";
+      api.addMcpTool("my_tool", "Does something", {}, callback);
+      // @ts-ignore: registerTool is a jest mock on the McpHandler instance
+      expect(handler.mcpHandler.registerTool).toHaveBeenCalledWith("my_tool", "Does something", {}, callback, undefined);
+    });
+
+    test("unregister calls cleanup for all registered MCP tools", () => {
+      const extManifest = Object.assign(new PluginManifest(), { id: "test-plugin-2" });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      const api = handler.registerApiExtension(extManifest);
+      const mockCleanup = jest.fn();
+      // @ts-ignore: registerTool is a jest mock on the McpHandler instance
+      handler.mcpHandler.registerTool.mockReturnValueOnce(mockCleanup);
+      api.addMcpTool("cleanup_tool", "Desc", {}, async () => "");
+      api.unregister();
+      expect(mockCleanup).toHaveBeenCalledTimes(1);
+    });
+
+    test("reports API version 5", () => {
+      const extManifest = Object.assign(new PluginManifest(), { id: "test-plugin-version" });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      expect(handler.registerApiExtension(extManifest).apiVersion).toBe(5);
+    });
+
+    test("the object form of addMcpTool registers a tool definition", () => {
+      const extManifest = Object.assign(new PluginManifest(), { id: "test-plugin-3" });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      const api = handler.registerApiExtension(extManifest);
+      const definition = {
+        name: "defined_tool",
+        description: "Returns a full result",
+        callback: async () => ({ content: [] }),
+      };
+      api.addMcpTool(definition);
+      // @ts-ignore: registerToolDefinition is a jest mock on the McpHandler instance
+      expect(handler.mcpHandler.registerToolDefinition).toHaveBeenCalledWith(definition);
+      // @ts-ignore: registerTool is a jest mock on the McpHandler instance
+      expect(handler.mcpHandler.registerTool).not.toHaveBeenCalledWith("defined_tool", expect.anything());
+    });
+
+    test("unregister cleans up every tool, resource, template, and prompt", () => {
+      const extManifest = Object.assign(new PluginManifest(), { id: "test-plugin-4" });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      const api = handler.registerApiExtension(extManifest);
+      const mcp = handler.mcpHandler as unknown as Record<
+        "registerToolDefinition" | "registerResource" | "registerResourceTemplate" | "registerPrompt",
+        jest.Mock
+      >;
+      const cleanups = [jest.fn(), jest.fn(), jest.fn(), jest.fn()];
+      mcp.registerToolDefinition.mockReturnValueOnce(cleanups[0]);
+      mcp.registerResource.mockReturnValueOnce(cleanups[1]);
+      mcp.registerResourceTemplate.mockReturnValueOnce(cleanups[2]);
+      mcp.registerPrompt.mockReturnValueOnce(cleanups[3]);
+      const read = async (uri: URL) => ({ contents: [{ uri: uri.href, text: "" }] });
+
+      api.addMcpTool({ name: "t", description: "d", callback: async () => ({ content: [] }) });
+      api.addMcpResource({ name: "r", uri: "ext://r", read });
+      api.addMcpResourceTemplate({ name: "rt", uriTemplate: "ext://r/{id}", read });
+      api.addMcpPrompt({ name: "p", callback: async () => ({ messages: [] }) });
+      api.unregister();
+
+      for (const cleanup of cleanups) expect(cleanup).toHaveBeenCalledTimes(1);
+    });
+
+    test("nothing can be registered after unregister", () => {
+      const extManifest = Object.assign(new PluginManifest(), { id: "test-plugin-5" });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      const api = handler.registerApiExtension(extManifest);
+      api.unregister();
+      const read = async (uri: URL) => ({ contents: [{ uri: uri.href, text: "" }] });
+      expect(() => api.addMcpResource({ name: "r", uri: "ext://r", read })).toThrow(/unregistered/);
+      expect(() => api.addMcpResourceTemplate({ name: "rt", uriTemplate: "ext://r/{id}", read })).toThrow(
+        /unregistered/,
+      );
+      expect(() => api.addMcpPrompt({ name: "p", callback: async () => ({ messages: [] }) })).toThrow(
+        /unregistered/,
+      );
+      expect(() =>
+        api.addMcpTool({ name: "t", description: "d", callback: async () => ({ content: [] }) }),
+      ).toThrow(/unregistered/);
+    });
+
+    describe("addOpenApiDescription", () => {
+      const description = {
+        paths: { "/widgets/": { get: { summary: "List widgets.", responses: { "200": { description: "OK" } } } } },
+      };
+
+      function register(id: string) {
+        const extManifest = Object.assign(new PluginManifest(), { id });
+        // @ts-ignore: mock PluginManifest is close enough for runtime
+        return handler.registerApiExtension(extManifest);
+      }
+
+      test("publishes the description at /openapi.yaml and /openapi.json without auth", async () => {
+        register("widget-plugin").addOpenApiDescription(description);
+
+        const yamlRes = await request(server).get("/openapi.yaml").expect(200);
+        expect(yamlRes.headers["content-type"]).toMatch(/application\/yaml/);
+        const parsed = parse(yamlRes.text);
+        expect(parsed.paths["/widgets/"]["x-obsidian-extension"]).toBe("widget-plugin");
+        expect(parsed.paths["/widgets/"].get.summary).toBe("List widgets.");
+
+        const jsonRes = await request(server).get("/openapi.json").expect(200);
+        expect(jsonRes.headers["content-type"]).toMatch(/application\/json/);
+        expect(jsonRes.body).toEqual(parsed);
+      });
+
+      test("unregister removes the description again", async () => {
+        const api = register("widget-plugin");
+        api.addOpenApiDescription(description);
+        api.unregister();
+
+        const res = await request(server).get("/openapi.yaml").expect(200);
+        expect(res.text).toBe(openapiYaml);
+      });
+
+      test("refuses a path another extension already described", () => {
+        register("first").addOpenApiDescription(description);
+        expect(() => register("second").addOpenApiDescription(description)).toThrow(
+          'already described by extension "first"',
+        );
+      });
+
+      test("refuses once the handle is unregistered", () => {
+        const api = register("gone");
+        api.unregister();
+        expect(() => api.addOpenApiDescription(description)).toThrow("unregistered");
+      });
+    });
+  });
+
+  describe("openapi documents", () => {
+    test("GET /openapi.yaml serves the compiled spec unchanged", async () => {
+      const res = await request(server).get("/openapi.yaml").expect(200);
+      expect(res.text).toBe(openapiYaml);
+    });
+
+    test("GET /openapi.json serves the same document as JSON", async () => {
+      const res = await request(server).get("/openapi.json").expect(200);
+      expect(res.body).toEqual(parse(openapiYaml));
+    });
+
+    test("an extension cannot claim /openapi.json as a public route", () => {
+      const extManifest = Object.assign(new PluginManifest(), { id: "squatter" });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      const api = handler.registerApiExtension(extManifest);
+      expect(() => api.addPublicRoute("/openapi.json")).toThrow("reserved");
+    });
+  });
+
+  describe("vault sub-resources", () => {
+    const NOTE = "Notes/draft.md";
+
+    interface Seen {
+      url: string;
+      baseUrl: string;
+      params: Record<string, string>;
+      query: Record<string, unknown>;
+      filePath: string;
+      segments: string[];
+    }
+
+    function registerExtension(id: string): LocalRestApiPublicApi {
+      const extManifest = Object.assign(new PluginManifest(), { id });
+      // @ts-ignore: mock PluginManifest is close enough for runtime
+      return handler.registerApiExtension(extManifest);
+    }
+
+    /** Registers `comments` with GET handlers that echo what they saw. */
+    function registerComments(): { api: LocalRestApiPublicApi; seen: Seen[] } {
+      const api = registerExtension("comments-extension");
+      const seen: Seen[] = [];
+      const record = (req: express.Request, res: express.Response) => {
+        const { vaultFile, vaultSubresourceSegments } = req as VaultSubresourceRequest;
+        seen.push({
+          url: req.url,
+          baseUrl: req.baseUrl,
+          params: req.params,
+          query: req.query,
+          filePath: vaultFile.path,
+          segments: vaultSubresourceSegments,
+        });
+        res.json({ ok: true });
+      };
+      const router = api.addVaultSubresource("comments");
+      router.get("/", record);
+      router.get("/:id", record);
+      return { api, seen };
+    }
+
+    beforeEach(() => {
+      app.vault.adapter._exists = true;
+      app.vault.adapter._statForPath = NOTE;
+      app.vault._getAbstractFileByPath = Object.assign(new TFile(), { path: NOTE });
+    });
+
+    test("routes a request under a note to the extension's router", async () => {
+      const { seen } = registerComments();
+      await request(server)
+        .get(`/vault/${NOTE}/comments/a1f3`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200, { ok: true });
+      expect(seen).toEqual([
+        {
+          url: "/a1f3",
+          baseUrl: `/vault/${NOTE}/comments`,
+          params: { id: "a1f3" },
+          query: {},
+          filePath: NOTE,
+          segments: ["a1f3"],
+        },
+      ]);
+    });
+
+    test("routes the sub-resource root, with or without a trailing slash", async () => {
+      const { seen } = registerComments();
+      for (const suffix of ["comments", "comments/"]) {
+        await request(server)
+          .get(`/vault/${NOTE}/${suffix}`)
+          .set("Authorization", `Bearer ${API_KEY}`)
+          .expect(200);
+      }
+      expect(seen.map(({ url, segments }) => ({ url, segments }))).toEqual([
+        { url: "/", segments: [] },
+        { url: "/", segments: [] },
+      ]);
+    });
+
+    test("keeps the query string", async () => {
+      const { seen } = registerComments();
+      await request(server)
+        .get(`/vault/${NOTE}/comments/a1f3?resolved=true`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+      expect(seen[0].query).toEqual({ resolved: "true" });
+      expect(seen[0].url).toEqual("/a1f3?resolved=true");
+    });
+
+    test("an encoded slash stays inside its segment", async () => {
+      const { seen } = registerComments();
+      await request(server)
+        .get(`/vault/${NOTE}/comments/a%2Fb`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+      // Re-encoded rather than rejoined: the router matched `/:id`, not a two-segment path.
+      expect(seen[0].url).toEqual("/a%2Fb");
+      expect(seen[0].params).toEqual({ id: "a/b" });
+      expect(seen[0].segments).toEqual(["a/b"]);
+    });
+
+    test("routes under the active file too", async () => {
+      const active = Object.assign(new TFile(), { path: "Daily/today.md" });
+      jest.spyOn(app.workspace, "getActiveFile").mockReturnValue(active);
+      const { seen } = registerComments();
+      await request(server)
+        .get("/active/comments/a1f3")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+      expect(seen[0]).toMatchObject({
+        url: "/a1f3",
+        baseUrl: "/active/comments",
+        filePath: "Daily/today.md",
+        segments: ["a1f3"],
+      });
+    });
+
+    test("requires the API key", async () => {
+      const { seen } = registerComments();
+      const res = await request(server).get(`/vault/${NOTE}/comments/a1f3`);
+      expect(res.status).toBe(401);
+      expect(seen).toEqual([]);
+    });
+
+    test("a missing note never reaches the router", async () => {
+      const { seen } = registerComments();
+      app.vault.adapter._statForPath = "Notes/other.md";
+      await request(server)
+        .get(`/vault/${NOTE}/comments/a1f3`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(404);
+      expect(seen).toEqual([]);
+    });
+
+    test("a method the router does not handle falls through to the built-in handler", async () => {
+      const { seen } = registerComments();
+      const res = await request(server)
+        .delete(`/vault/${NOTE}/comments/a1f3`)
+        .set("Authorization", `Bearer ${API_KEY}`);
+      expect(seen).toEqual([]);
+      expect(res.body).not.toEqual({ ok: true });
+    });
+
+    // Without a registration, the built-in handler rejects `comments` as an unknown
+    // target type with a 400; the tests below check that nothing changed that.
+    test("without a registration the built-in handler answers as before", async () => {
+      await request(server)
+        .get(`/vault/${NOTE}/comments/a1f3`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(400);
+    });
+
+    test("a path that is really a file is served as the file", async () => {
+      const { seen } = registerComments();
+      const realFile = "Notes/comments/a1f3.md";
+      app.vault.adapter._statForPath = realFile;
+      app.vault.adapter._readBinary = Buffer.from("# Real\n");
+      const res = await request(server)
+        .get(`/vault/${realFile}`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+      expect(res.text).toEqual("# Real\n");
+      expect(seen).toEqual([]);
+    });
+
+    test("errors thrown by the router reach the host's error handler", async () => {
+      const api = registerExtension("throwing-extension");
+      api.addVaultSubresource("comments").get("/", () => {
+        throw new Error("extension failure");
+      });
+      const res = await request(server)
+        .get(`/vault/${NOTE}/comments/`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(500);
+      expect(res.body.message).toContain("extension failure");
+    });
+
+    test("unregister releases the name", async () => {
+      const { api, seen } = registerComments();
+      api.unregister();
+      await request(server)
+        .get(`/vault/${NOTE}/comments/a1f3`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(400);
+      expect(seen).toEqual([]);
+      // And another extension can now claim it.
+      expect(() => registerExtension("successor").addVaultSubresource("comments")).not.toThrow();
+    });
+
+    test.each(["heading", "block", "frontmatter"])("refuses the reserved name %s", (name) => {
+      expect(() => registerExtension("reserved").addVaultSubresource(name)).toThrow(/reserved/);
+    });
+
+    test.each(["", "a/b"])("refuses the invalid name %j", (name) => {
+      expect(() => registerExtension("invalid").addVaultSubresource(name)).toThrow(/Invalid/);
+    });
+
+    test("refuses a name another extension already holds", () => {
+      registerExtension("first").addVaultSubresource("comments");
+      expect(() => registerExtension("second").addVaultSubresource("comments")).toThrow(
+        /already registered/,
+      );
+    });
+
+    test("refuses registration after unregister", () => {
+      const api = registerExtension("gone");
+      api.unregister();
+      expect(() => api.addVaultSubresource("comments")).toThrow(/unregistered/);
+    });
+
+    test("reports an API version that includes sub-resources", () => {
+      expect(registerExtension("versioned").apiVersion).toBeGreaterThanOrEqual(3);
+    });
+
+    test("lists the sub-resource among the extension's routes", async () => {
+      registerExtension("listed").addVaultSubresource("comments");
+      const res = await request(server)
+        .get("/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+      expect(res.body.apiExtensions[0].routes).toEqual([
+        { path: "/vault/{path}/comments/", authenticated: true },
+      ]);
+    });
+
+    test("a signed URL never reaches the router", async () => {
+      settings.enableSignedUrls = true;
+      const { seen } = registerComments();
+      const { sig, exp, nonce } = handler.urlSigner.sign("GET", `${NOTE}/comments/a1f3`, 300);
+      await request(server)
+        .get(`/vault/${NOTE}/comments/a1f3?sig=${sig}&exp=${exp}&n=${nonce}`)
+        .expect(400);
+      expect(seen).toEqual([]);
+    });
+  });
+
+  describe("activeFile Content-Location header", () => {
+    const activeFilePath = "notes/active.md";
+
+    beforeEach(() => {
+      const activeFile = Object.assign(new TFile(), { path: activeFilePath });
+      jest.spyOn(app.workspace, "getActiveFile").mockReturnValue(activeFile);
+      app.vault.adapter._readBinary = Buffer.from("# Active\n");
+    });
+
+    test("GET returns Content-Location", async () => {
+      const res = await request(server)
+        .get("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(200);
+      expect(res.headers["content-location"]).toEqual(activeFilePath);
+    });
+
+    test("PUT (whole-file replace) returns Content-Location", async () => {
+      const res = await request(server)
+        .put("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("# Replaced\n")
+        .expect(204);
+      expect(res.headers["content-location"]).toEqual(activeFilePath);
+    });
+
+    test("POST (append) returns Content-Location", async () => {
+      const res = await request(server)
+        .post("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("appended\n")
+        .expect(204);
+      expect(res.headers["content-location"]).toEqual(activeFilePath);
+    });
+
+    test("PATCH returns Content-Location", async () => {
+      jest.spyOn(handler.operations, "patchFileSection").mockResolvedValue("# Patched\n");
+      const res = await request(server)
+        .patch("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Markdown-Patch-Version", "1")
+        .set("Content-Type", "text/markdown")
+        .set("Operation", "append")
+        .set("Target-Type", "heading")
+        .set("Target", "Active File")
+        .send("appended\n")
+        .expect(200);
+      expect(res.headers["content-location"]).toEqual(activeFilePath);
+    });
+
+    test("DELETE returns Content-Location", async () => {
+      const res = await request(server)
+        .delete("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(204);
+      expect(res.headers["content-location"]).toEqual(activeFilePath);
+    });
+  });
+
+  describe("vault Content-Location on URL-targeted routes", () => {
+    // `/vault/notes/some file.md/heading/Heading2` is ambiguous on its face: it
+    // could address a file literally named `notes/some file.md/heading/Heading2`
+    // just as well as the `Heading2` section of `notes/some file.md`. Only the
+    // server knows which way the walk-backward resolver went, so these routes
+    // answer with Content-Location the same way `/active/` and MOVE/COPY do.
+    const filePath = "notes/some file.md";
+    const encodedPath = "notes/some%20file.md";
+    const markdown = "# Heading1\nContent\n\n# Heading2\nContent under heading2\n";
+
+    beforeEach(() => {
+      // Only the bare file path stats, so the resolver has to split the URL.
+      app.vault.adapter._statForPath = filePath;
+      app.vault._read = markdown;
+      app.vault.adapter._read = markdown;
+      app.vault.adapter._readBinary = Buffer.from(markdown);
+    });
+
+    test("GET of a URL-targeted section returns Content-Location", async () => {
+      const res = await request(server)
+        .get(`/vault/${encodedPath}/heading/Heading2`)
+        .set("Authorization", `Bearer ${API_KEY}`);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-location"]).toEqual(encodedPath);
+    });
+
+    test("PUT of a URL-targeted section returns Content-Location", async () => {
+      const res = await request(server)
+        .put(`/vault/${encodedPath}/heading/Heading2`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("Replaced\n");
+      expect(res.status).toBe(200);
+      expect(res.headers["content-location"]).toEqual(encodedPath);
+    });
+
+    test("PATCH of a URL-targeted section returns Content-Location", async () => {
+      const res = await request(server)
+        .patch(`/vault/${encodedPath}/heading/Heading2`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Operation", "append")
+        .set("Content-Type", "text/markdown")
+        .send("- appended\n");
+      expect(res.status).toBe(200);
+      expect(res.headers["content-location"]).toEqual(encodedPath);
+    });
+
+    test("POST to a URL-targeted section returns Content-Location", async () => {
+      const res = await request(server)
+        .post(`/vault/${encodedPath}/heading/Heading2`)
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("- appended\n");
+      expect(res.status).toBe(200);
+      expect(res.headers["content-location"]).toEqual(encodedPath);
+    });
+
+    test("reserved filename characters are percent-encoded", async () => {
+      // `encodeURI` would leave all three of these alone. `#` would make a
+      // client read the rest of the path as a fragment, `?` as a query, and a
+      // comma is a header-list separator -- each of which hands the client a
+      // different filename than the one the request acted on.
+      const awkward = "notes/a#b?c,d.md";
+      app.vault.adapter._statForPath = awkward;
+      const res = await request(server)
+        .get(`/vault/${encodeURIComponent(awkward).replaceAll("%2F", "/")}/heading/Heading2`)
+        .set("Authorization", `Bearer ${API_KEY}`);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-location"]).toEqual("notes/a%23b%3Fc%2Cd.md");
+    });
+
+    test("a whole-file request sets no Content-Location", async () => {
+      // The header reports a resolution the client could not have made itself.
+      // A URL that already names the file outright has nothing to report.
+      const res = await request(server)
+        .get(`/vault/${encodedPath}`)
+        .set("Authorization", `Bearer ${API_KEY}`);
+      expect(res.status).toBe(200);
+      expect(res.headers["content-location"]).toBeUndefined();
+    });
+  });
+
+  describe("active-file write handlers surface failures instead of hanging", () => {
+    // Regression coverage for redirectToVaultPath's callers: they used to
+    // fire the underlying _vaultPut/_vaultPost/_vaultPatch/_vaultDelete call
+    // with `void`, discarding its promise. A thrown error then became an
+    // unhandled rejection instead of reaching errorHandler, and since
+    // nothing ever called res.json/res.status, the request just hung
+    // forever instead of failing fast with a 500. Before the fix, these
+    // tests would time out rather than fail cleanly.
+    const activeFilePath = "notes/active.md";
+
+    beforeEach(() => {
+      const activeFile = Object.assign(new TFile(), { path: activeFilePath });
+      jest.spyOn(app.workspace, "getActiveFile").mockReturnValue(activeFile);
+    });
+
+    test("PUT surfaces a write failure as a 500 instead of hanging", async () => {
+      jest
+        .spyOn(handler.operations, "writeFileContent")
+        .mockRejectedValue(new Error("disk full"));
+
+      await request(server)
+        .put("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("# Replaced\n")
+        .expect(500);
+    });
+
+    test("POST surfaces an append failure as a 500 instead of hanging", async () => {
+      jest
+        .spyOn(handler.operations, "appendFileContent")
+        .mockRejectedValue(new Error("disk full"));
+
+      await request(server)
+        .post("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "text/markdown")
+        .send("appended\n")
+        .expect(500);
+    });
+
+    test("DELETE still surfaces an unexpected deletion failure as a 500", async () => {
+      jest
+        .spyOn(handler.operations, "deleteVaultFile")
+        .mockRejectedValue(new Error("locked"));
+
+      await request(server)
+        .delete("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .expect(500);
+    });
+  });
+
+  describe("active PATCH — URL-target raw-content mode", () => {
+    // A URL suffix on an active-file PATCH was previously
+    // ignored (the whole file was patched); it now routes into raw-content
+    // mode against the resolved sub-target, matching PUT/POST.
+    const noteContent = "# Log\nEntry\n\n# Other\nOther content\n";
+
+    function setNote(path: string): void {
+      const noteFile = Object.assign(new TFile(), { path });
+      jest.spyOn(app.workspace, "getActiveFile").mockReturnValue(noteFile);
+      app.vault.adapter._statForPath = path;
+      app.vault._read = noteContent;
+      app.vault.adapter._read = noteContent;
+      app.vault.adapter._readBinary = Buffer.from(noteContent);
+    }
+
+    test("an active-file PATCH suffix targets the section and sets Content-Location", async () => {
+      setNote("notes/active.md");
+      const res = await request(server)
+        .patch("/active/heading/Log")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Operation", "append")
+        .set("Content-Type", "text/markdown")
+        .send("- appended\n");
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("Entry\n\n- appended");
+      expect(res.headers["content-location"]).toEqual("notes/active.md");
+    });
+
+    test("an active-file PATCH suffix plus Target-Type header returns 422", async () => {
+      setNote("notes/active.md");
+      const res = await request(server)
+        .patch("/active/heading/Log")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Target-Type", "heading")
+        .set("Operation", "append")
+        .set("Content-Type", "text/markdown")
+        .send("x");
+      expect(res.status).toBe(422);
+    });
+
+    test("an active-file PATCH without a suffix still takes an instruction body", async () => {
+      setNote("notes/active.md");
+      const res = await request(server)
+        .patch("/active/")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Content-Type", "application/json")
+        .send({ targetType: "heading", target: ["Log"], operation: "append", content: "- appended\n" });
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("Entry\n\n- appended");
+    });
+
+    test("an active-file PATCH suffix targets a heading whose text contains a slash", async () => {
+      // The suffix reaches these handlers through the wildcard capture, which
+      // Express decodes — collapsing %2F to a boundary. The raw suffix must be
+      // recovered from the request path so a slash-bearing heading still targets.
+      setNote("notes/active.md");
+      app.vault._read = "# A/B\nEntry\n\n# Other\nx\n";
+      app.vault.adapter._read = app.vault._read;
+      const res = await request(server)
+        .patch("/active/heading/A%2FB")
+        .set("Authorization", `Bearer ${API_KEY}`)
+        .set("Operation", "append")
+        .set("Content-Type", "text/markdown")
+        .send("- added\n");
+      expect(res.status).toBe(200);
+      expect(res.text).toContain("Entry\n\n- added");
+    });
+  });
+});

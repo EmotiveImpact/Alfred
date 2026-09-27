@@ -1,0 +1,411 @@
+"""Built-in pgvector implementation of the semantic vector index contract."""
+
+from __future__ import annotations
+
+import asyncio
+import re
+from collections.abc import Sequence
+
+from loguru import logger
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from basic_memory import db
+from basic_memory.repository.search_scope import ProjectScope
+from basic_memory.repository.semantic_errors import SemanticDependenciesMissingError
+from basic_memory.repository.semantic_vector_index import (
+    VectorDeletion,
+    VectorIndexScope,
+    VectorKey,
+    VectorMatch,
+    VectorRecord,
+    validate_query_dimensions,
+    validate_vector_dimensions,
+)
+
+
+# pgvector's HNSW scan hands back at most ``hnsw.ef_search`` rows, 40 by default,
+# whatever the LIMIT asks for; the server caps the setting at 1000.
+HNSW_EF_SEARCH_DEFAULT = 40
+HNSW_EF_SEARCH_MAX = 1000
+
+_PGVECTOR_VERSION = re.compile(r"^(\d+)\.(\d+)")
+
+
+def pgvector_supports_iterative_scan(extversion: str) -> bool:
+    """Whether this pgvector keeps scanning an HNSW index until the LIMIT is filled.
+
+    Iterative index scans arrived in pgvector 0.8.0. Before that, a scan stops at
+    ``hnsw.ef_search`` candidates, and a filter applied afterwards (the manifest
+    join, a scope narrower than the table) leaves the window under-filled, so the
+    adapter cannot promise the nearest ``limit`` rows in scope. A version string
+    the pattern cannot read counts as older.
+    """
+    match = _PGVECTOR_VERSION.match(extversion)
+    return match is not None and (int(match.group(1)), int(match.group(2))) >= (0, 8)
+
+
+def hnsw_ef_search_for(limit: int) -> int:
+    """The candidate-list size that lets one HNSW scan return ``limit`` rows."""
+    return min(max(limit, HNSW_EF_SEARCH_DEFAULT), HNSW_EF_SEARCH_MAX)
+
+
+class PgVectorIndex:
+    """Persist and query semantic vectors in PostgreSQL with pgvector."""
+
+    def __init__(
+        self,
+        session_maker: async_sessionmaker[AsyncSession],
+        scope: VectorIndexScope,
+    ) -> None:
+        self._session_maker = session_maker
+        self.scope = scope
+        self._initialized = False
+        self._initialize_lock = asyncio.Lock()
+
+    @staticmethod
+    def _format_vector(vector: Sequence[float]) -> str:
+        values = ",".join(f"{float(value):.12g}" for value in vector)
+        return f"[{values}]"
+
+    async def initialize(self) -> None:
+        if self._initialized:
+            return
+
+        async with self._initialize_lock:
+            if self._initialized:
+                return
+
+            async with db.scoped_session(self._session_maker) as session:
+                try:
+                    await session.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                except Exception as exc:
+                    raise SemanticDependenciesMissingError(
+                        "pgvector extension is unavailable for this Postgres database."
+                    ) from exc
+                version = await session.execute(
+                    text("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+                )
+                extversion = str(version.scalar_one())
+                # Trigger: the installed pgvector predates iterative index scans.
+                # Why: without them a scoped query silently returns fewer rows than
+                #   the window asked for; a deployment gap should read as one.
+                # Outcome: a typed dependency error the API reports as a bad request.
+                if not pgvector_supports_iterative_scan(extversion):
+                    raise SemanticDependenciesMissingError(
+                        f"pgvector {extversion} predates iterative index scans; semantic "
+                        "search needs pgvector 0.8 or later (ALTER EXTENSION vector UPDATE)."
+                    )
+
+                existing_dimensions = await self._existing_dimensions(session)
+                storage_missing = existing_dimensions is None
+                source_hash_missing = (
+                    existing_dimensions is not None
+                    and not await self._has_source_hash_column(session)
+                )
+                dimensions_changed = (
+                    existing_dimensions is not None and existing_dimensions != self.scope.dimensions
+                )
+                if dimensions_changed or source_hash_missing:
+                    logger.warning(
+                        "Vector storage schema mismatch: table dimensions={existing}, "
+                        "provider dimensions={expected}, source_hash_missing={source_hash_missing}. "
+                        "Recreating vector storage.",
+                        existing=existing_dimensions,
+                        expected=self.scope.dimensions,
+                        source_hash_missing=source_hash_missing,
+                    )
+                    await session.execute(text("DROP TABLE IF EXISTS search_vector_embeddings"))
+
+                await session.execute(
+                    text(f"""
+                        CREATE TABLE IF NOT EXISTS search_vector_embeddings (
+                            chunk_id BIGINT PRIMARY KEY
+                                REFERENCES search_vector_chunks(id) ON DELETE CASCADE,
+                            project_id INTEGER NOT NULL,
+                            embedding vector({self.scope.dimensions}) NOT NULL,
+                            embedding_dims INTEGER NOT NULL,
+                            source_hash TEXT NOT NULL,
+                            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        )
+                    """)
+                )
+                await session.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS "
+                        "idx_search_vector_embeddings_project_dims "
+                        "ON search_vector_embeddings (project_id, embedding_dims)"
+                    )
+                )
+                await session.execute(
+                    text(
+                        "CREATE INDEX IF NOT EXISTS idx_search_vector_embeddings_hnsw "
+                        "ON search_vector_embeddings "
+                        "USING hnsw (embedding vector_cosine_ops) "
+                        "WITH (m = 16, ef_construction = 64)"
+                    )
+                )
+
+                # Trigger: pgvector storage was created or its fixed-width column changed.
+                # Why: SQL manifest rows can otherwise remain `ready` after their vectors
+                # disappeared, causing incremental sync to skip them forever.
+                # Outcome: the normal sync pipeline re-embeds every affected chunk.
+                if storage_missing or dimensions_changed or source_hash_missing:
+                    await session.execute(
+                        text(
+                            "UPDATE search_vector_chunks SET embedding_status = 'pending' "
+                            "WHERE vector_index = 'pgvector'"
+                        )
+                    )
+                await session.commit()
+
+            self._initialized = True
+
+    async def _existing_dimensions(self, session: AsyncSession) -> int | None:
+        exists = await session.execute(
+            text(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema = ANY (current_schemas(false)) "
+                "AND table_name = 'search_vector_embeddings'"
+            )
+        )
+        if exists.fetchone() is None:
+            return None
+
+        result = await session.execute(
+            text(
+                "SELECT atttypmod FROM pg_attribute "
+                "WHERE attrelid = 'search_vector_embeddings'::regclass "
+                "AND attname = 'embedding'"
+            )
+        )
+        value = result.scalar_one_or_none()
+        return int(value) if value is not None else None
+
+    async def _has_source_hash_column(self, session: AsyncSession) -> bool:
+        result = await session.execute(
+            text(
+                "SELECT 1 FROM pg_attribute "
+                "WHERE attrelid = 'search_vector_embeddings'::regclass "
+                "AND attname = 'source_hash'"
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def upsert(self, project_id: int, records: Sequence[VectorRecord]) -> None:
+        if not records:
+            return
+        validate_vector_dimensions(self.scope, records)
+        await self.initialize()
+
+        async with db.scoped_session(self._session_maker) as session:
+            keys = [record.key for record in records]
+            params: dict[str, object] = {"project_id": project_id}
+            predicates: list[str] = []
+            for index, key in enumerate(keys):
+                params[f"entity_id_{index}"] = key.entity_id
+                params[f"chunk_key_{index}"] = key.chunk_key
+                predicates.append(
+                    f"(entity_id = :entity_id_{index} AND chunk_key = :chunk_key_{index})"
+                )
+            result = await session.execute(
+                text(
+                    "SELECT id, entity_id, chunk_key, source_hash "
+                    "FROM search_vector_chunks "
+                    "WHERE project_id = :project_id AND ("
+                    + " OR ".join(predicates)
+                    + ") FOR UPDATE"
+                ),
+                params,
+            )
+            manifest_by_key = {
+                VectorKey(
+                    entity_id=int(row["entity_id"]),
+                    chunk_key=str(row["chunk_key"]),
+                ): (int(row["id"]), str(row["source_hash"]))
+                for row in result.mappings().all()
+            }
+            missing = [key for key in keys if key not in manifest_by_key]
+            if missing:
+                raise RuntimeError(f"Vector manifest rows are missing for keys: {missing!r}")
+
+            current_records = [
+                record for record in records if manifest_by_key[record.key][1] == record.source_hash
+            ]
+            if not current_records:
+                return
+
+            params = {"project_id": project_id}
+            values: list[str] = []
+            for index, record in enumerate(current_records):
+                params[f"chunk_id_{index}"] = manifest_by_key[record.key][0]
+                params[f"embedding_{index}"] = self._format_vector(record.values)
+                params[f"dimensions_{index}"] = len(record.values)
+                params[f"source_hash_{index}"] = record.source_hash
+                values.append(
+                    f"(:chunk_id_{index}, :project_id, "
+                    f"CAST(:embedding_{index} AS vector), :dimensions_{index}, "
+                    f":source_hash_{index}, NOW())"
+                )
+            await session.execute(
+                text(f"""
+                    INSERT INTO search_vector_embeddings (
+                        chunk_id, project_id, embedding, embedding_dims, source_hash, updated_at
+                    ) VALUES {", ".join(values)}
+                    ON CONFLICT (chunk_id) DO UPDATE SET
+                        project_id = EXCLUDED.project_id,
+                        embedding = EXCLUDED.embedding,
+                        embedding_dims = EXCLUDED.embedding_dims,
+                        source_hash = EXCLUDED.source_hash,
+                        updated_at = NOW()
+                """),
+                params,
+            )
+            await session.commit()
+
+    async def delete(self, project_id: int, records: Sequence[VectorDeletion]) -> None:
+        if not records:
+            return
+        await self.initialize()
+        async with db.scoped_session(self._session_maker) as session:
+            params: dict[str, object] = {"project_id": project_id}
+            predicates: list[str] = []
+            for index, record in enumerate(records):
+                params[f"entity_id_{index}"] = record.key.entity_id
+                params[f"chunk_key_{index}"] = record.key.chunk_key
+                params[f"source_hash_{index}"] = record.source_hash
+                predicates.append(
+                    f"(entity_id = :entity_id_{index} "
+                    f"AND chunk_key = :chunk_key_{index} "
+                    f"AND source_hash = :source_hash_{index} "
+                    "AND embedding_status = 'pending')"
+                )
+            result = await session.execute(
+                text(
+                    "SELECT id, entity_id, chunk_key FROM search_vector_chunks "
+                    "WHERE project_id = :project_id AND ("
+                    + " OR ".join(predicates)
+                    + ") FOR UPDATE"
+                ),
+                params,
+            )
+            chunk_ids = [int(row["id"]) for row in result.mappings().all()]
+            if chunk_ids:
+                params = {f"chunk_id_{index}": value for index, value in enumerate(chunk_ids)}
+                placeholders = ", ".join(f":chunk_id_{index}" for index in range(len(chunk_ids)))
+                await session.execute(
+                    text(
+                        f"DELETE FROM search_vector_embeddings WHERE chunk_id IN ({placeholders})"
+                    ),
+                    params,
+                )
+                await session.execute(
+                    text(f"DELETE FROM search_vector_chunks WHERE id IN ({placeholders})"),
+                    params,
+                )
+                await session.commit()
+
+    async def delete_entity(self, project_id: int, entity_id: int) -> None:
+        await self.initialize()
+        async with db.scoped_session(self._session_maker) as session:
+            await session.execute(
+                text(
+                    "DELETE FROM search_vector_embeddings WHERE chunk_id IN ("
+                    "SELECT id FROM search_vector_chunks "
+                    "WHERE project_id = :project_id AND entity_id = :entity_id)"
+                ),
+                {"project_id": project_id, "entity_id": entity_id},
+            )
+            await session.commit()
+
+    async def delete_orphans(self, project_id: int, _live_keys: Sequence[VectorKey]) -> None:
+        """Remove pgvector rows absent from one project's current ready manifest."""
+        await self.initialize()
+        async with db.scoped_session(self._session_maker) as session:
+            await session.execute(
+                text(
+                    "DELETE FROM search_vector_embeddings AS embeddings "
+                    "WHERE embeddings.project_id = :project_id AND NOT EXISTS ("
+                    "SELECT 1 FROM search_vector_chunks AS chunks "
+                    "WHERE chunks.id = embeddings.chunk_id "
+                    "AND chunks.project_id = :project_id "
+                    "AND chunks.vector_index = 'pgvector' "
+                    "AND chunks.embedding_model = :embedding_identity "
+                    "AND chunks.source_hash = embeddings.source_hash "
+                    "AND chunks.embedding_status = 'ready')"
+                ),
+                {
+                    "project_id": project_id,
+                    "embedding_identity": self.scope.embedding_identity,
+                },
+            )
+            await session.commit()
+
+    async def search(
+        self,
+        query: Sequence[float],
+        *,
+        limit: int,
+        projects: ProjectScope,
+    ) -> list[VectorMatch]:
+        if not query or limit <= 0 or projects.is_empty:
+            return []
+        validate_query_dimensions(self.scope, query)
+        await self.initialize()
+        params: dict[str, object] = {
+            "query": self._format_vector(query),
+            "dimensions": self.scope.dimensions,
+            "embedding_identity": self.scope.embedding_identity,
+            "limit": limit,
+        }
+        # The scope binds its ids once; both predicates reference the same names.
+        embeddings_in_scope = projects.predicate("e.project_id", params)
+        chunks_in_scope = projects.predicate("c.project_id", params)
+        async with db.scoped_session(self._session_maker) as session:
+            # Both settings are transaction-local, so they last exactly as long as
+            # this scoped session. The scan is sized to the window it must fill
+            # and continues past that until the scope and manifest filters have
+            # admitted enough rows, instead of stopping at the first ef_search
+            # candidates and returning whatever of them survived.
+            await session.execute(
+                text("SELECT set_config('hnsw.ef_search', :ef_search, true)"),
+                {"ef_search": str(hnsw_ef_search_for(limit))},
+            )
+            await session.execute(
+                text("SELECT set_config('hnsw.iterative_scan', 'relaxed_order', true)")
+            )
+            # A relaxed iterative scan may hand rows back slightly out of distance
+            # order, so the window is taken by distance alone and sorted once more.
+            result = await session.execute(
+                text(
+                    "WITH nearest AS MATERIALIZED ("
+                    "SELECT c.entity_id, c.chunk_key, "
+                    "e.embedding <=> CAST(:query AS vector) AS distance "
+                    "FROM search_vector_embeddings e "
+                    "JOIN search_vector_chunks c ON c.id = e.chunk_id "
+                    f"WHERE {embeddings_in_scope} "
+                    "AND e.embedding_dims = :dimensions "
+                    f"AND {chunks_in_scope} "
+                    "AND c.vector_index = 'pgvector' "
+                    "AND c.embedding_status = 'ready' "
+                    "AND c.embedding_model = :embedding_identity "
+                    "AND e.source_hash = c.source_hash "
+                    "ORDER BY e.embedding <=> CAST(:query AS vector) "
+                    "LIMIT :limit"
+                    ") "
+                    "SELECT entity_id, chunk_key, 1 - distance AS similarity "
+                    "FROM nearest "
+                    "ORDER BY distance ASC, entity_id ASC, chunk_key ASC"
+                ),
+                params,
+            )
+        return [
+            VectorMatch(
+                key=VectorKey(
+                    entity_id=int(row["entity_id"]),
+                    chunk_key=str(row["chunk_key"]),
+                ),
+                similarity=max(0.0, min(1.0, float(row["similarity"]))),
+            )
+            for row in result.mappings().all()
+        ]

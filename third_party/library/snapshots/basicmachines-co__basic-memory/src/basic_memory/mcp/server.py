@@ -1,0 +1,272 @@
+"""
+Basic Memory FastMCP server.
+"""
+
+import time
+from contextlib import asynccontextmanager
+
+from fastmcp import FastMCP
+from fastmcp.server.transforms import Visibility
+from loguru import logger
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
+
+from basic_memory import db
+from basic_memory.api.container import ApiContainer, installed_container
+from basic_memory.cli.auth import CLIAuth
+from basic_memory.index.note_content_materialization import drain_pending_materializations
+from basic_memory.db import scoped_session
+from basic_memory.index.local_schedulers import drain_background_tasks
+from basic_memory.mcp.client_info import MCPClientInfoMiddleware
+from basic_memory.mcp.container import McpContainer, set_container
+from basic_memory.read_cache import ReadCache, ReadCacheUnavailable
+from basic_memory.read_cache.lifecycle import open_redis_read_cache
+from basic_memory.repository import ProjectRepository
+from basic_memory.services.initialization import initialize_app
+import logfire
+
+# Tools carrying this tag register at import time like every other tool but stay
+# hidden until the composition root enables them from config (#1399).
+POSIX_TOOLS_TAG = "posix"
+
+
+def set_posix_tools_visibility(server: FastMCP, enabled: bool) -> None:
+    """Mark the POSIX tool group visible or hidden.
+
+    Visibility transforms stack; the mark appended last wins, so this is safe to
+    call repeatedly (each lifespan start, and both directions in tests).
+    """
+    server.add_transform(Visibility(enabled, tags={POSIX_TOOLS_TAG}))
+
+
+async def _log_embedding_status(session_maker: async_sessionmaker[AsyncSession]) -> None:
+    """Log a clear summary of semantic embedding status at startup."""
+    try:
+        async with scoped_session(session_maker) as session:
+            entity_count = (
+                await session.execute(text("SELECT COUNT(*) FROM entity"))
+            ).scalar() or 0
+            chunk_count = (
+                await session.execute(text("SELECT COUNT(*) FROM search_vector_chunks"))
+            ).scalar() or 0
+            embedding_count = (
+                await session.execute(text("SELECT COUNT(*) FROM search_vector_embeddings_rowids"))
+            ).scalar() or 0
+
+        if entity_count == 0:
+            logger.info("Semantic embeddings: no entities yet")
+        elif embedding_count == 0:
+            logger.warning(
+                f"Semantic embeddings: EMPTY — {entity_count} entities have no embeddings. "
+                "Run 'bm reindex --embeddings' to build them."
+            )
+        else:
+            logger.info(
+                f"Semantic embeddings: {embedding_count} embeddings "
+                f"across {chunk_count} chunks for {entity_count} entities"
+            )
+    except Exception as exc:
+        logger.debug(f"Could not check embedding status at startup: {exc}")
+
+
+async def _invalidate_persisted_read_cache(
+    read_cache: ReadCache,
+    session_maker: async_sessionmaker[AsyncSession],
+) -> ReadCache | None:
+    """Invalidate cache generations that may predate offline file changes."""
+    project_repository = ProjectRepository()
+    async with scoped_session(session_maker) as session:
+        active_projects = await project_repository.get_active_projects(session)
+
+    try:
+        for project in active_projects:
+            await read_cache.invalidate_project(str(project.external_id))
+    except ReadCacheUnavailable as error:
+        # Trigger: Redis cannot invalidate every persisted project generation at startup.
+        # Why: reusing any prior generation could hide an offline file edit until TTL expiry.
+        # Outcome: disable caching for this lifespan and serve only authoritative reads.
+        logger.error(
+            "Standalone Redis read cache disabled because startup invalidation was unavailable",
+            error=str(error),
+        )
+        return None
+
+    return read_cache
+
+
+@asynccontextmanager
+async def lifespan(app: FastMCP):
+    """Lifecycle manager for the MCP server.
+
+    Handles:
+    - Database initialization and migrations
+    - Local file watching via WatchCoordinator (if enabled and not in cloud mode)
+    - Proper cleanup on shutdown
+    """
+    # --- Composition Root ---
+    # Create container and read config (single point of config access)
+    container = McpContainer.create()
+    config = container.config
+
+    # Trigger: the enable_posix_tools config flag.
+    # Why: tools register at import time; the composition root is the one place
+    #      config decides what clients see (no if-checks inside tool bodies).
+    # Outcome: enabled by default; an explicit opt-out hides the POSIX group.
+    set_posix_tools_visibility(app, config.enable_posix_tools)
+
+    standalone_redis_url = None if container.mode.is_cloud else config.redis_url
+
+    async with open_redis_read_cache(
+        standalone_redis_url,
+        max_connections=config.redis_max_connections,
+    ) as read_cache:
+        container.read_cache = read_cache
+        set_container(container)
+        api_container = ApiContainer(config=config, mode=container.mode, read_cache=read_cache)
+
+        # Local MCP requests use FastAPI through ASGITransport without entering its lifespan.
+        # Installing the same container keeps request reads and watcher invalidation on one cache.
+        with installed_container(api_container):
+            with logfire.span(
+                "mcp.lifecycle.startup",
+                entrypoint="mcp",
+                mode=container.mode.name.lower(),
+                default_project=config.default_project,
+            ):
+                logger.info(f"Starting Basic Memory MCP server (mode={container.mode.name})")
+                logger.info(
+                    f"Config: database_backend={config.database_backend.value}, "
+                    f"semantic_search_enabled={config.semantic_search_enabled}, "
+                    f"default_project={config.default_project}"
+                )
+                if config.semantic_search_enabled:
+                    logger.info(
+                        f"Semantic search: provider={config.semantic_embedding_provider}, "
+                        f"model={config.semantic_embedding_model}, "
+                        f"dimensions={config.semantic_embedding_dimensions or 'auto'}, "
+                        f"batch_size={config.semantic_embedding_batch_size}, "
+                        f"document_prefix_set={bool(config.semantic_embedding_document_prefix)}, "
+                        f"query_prefix_set={bool(config.semantic_embedding_query_prefix)}"
+                    )
+
+                # Log configured projects with their routing mode
+                for name, entry in config.projects.items():
+                    default = " (default)" if name == config.default_project else ""
+                    logger.info(
+                        f"Project: {name} -> {entry.path} [mode={entry.mode.value}]{default}"
+                    )
+
+                # Check cloud auth status (local file check, no network call)
+                auth = CLIAuth(client_id=config.cloud_client_id, authkit_domain=config.cloud_domain)
+                tokens = auth.load_tokens()
+                if tokens is not None:
+                    if not auth.is_token_valid(tokens):
+                        expires_at = tokens.get("expires_at", 0)
+                        expired_ago = int(time.time() - expires_at)
+                        logger.warning(
+                            f"Cloud token expired {expired_ago}s ago - may need 'bm cloud login'"
+                        )
+                    else:
+                        logger.info("Cloud: authenticated (OAuth token valid)")
+
+                if config.cloud_api_key:
+                    logger.info("Cloud: API key configured")
+
+                # Track if we created the engine (vs test fixtures providing it)
+                # This prevents disposing an engine provided by test fixtures when
+                # multiple Client connections are made in the same test
+                engine_was_none = db._engine is None
+
+                # Initialize app (runs migrations, reconciles projects)
+                await initialize_app(container.config)
+
+                if read_cache is not None:
+                    assert db._session_maker is not None, (
+                        "Database session maker missing after MCP initialization"
+                    )
+                    read_cache = await _invalidate_persisted_read_cache(
+                        read_cache,
+                        db._session_maker,
+                    )
+                    container.read_cache = read_cache
+                    api_container.read_cache = read_cache
+
+                # Log embedding status so it's easy to spot in the logs
+                if config.semantic_search_enabled and db._session_maker is not None:
+                    await _log_embedding_status(db._session_maker)
+
+                # Create and start local watch coordinator (lifecycle centralized in coordinator)
+                watch_coordinator = container.create_watch_coordinator()
+                await watch_coordinator.start()
+
+            try:
+                yield
+            finally:
+                # Shutdown - coordinator handles clean task cancellation
+                with logfire.span(
+                    "mcp.lifecycle.shutdown",
+                    entrypoint="mcp",
+                    mode=container.mode.name.lower(),
+                ):
+                    logger.debug("Shutting down Basic Memory MCP server")
+
+                    await watch_coordinator.stop()
+
+                    # A local note write returns 202 before its markdown file is written;
+                    # shutdown can land while that materialization (and the vector sync /
+                    # relation resolution it schedules) is still queued in the in-process
+                    # pool. Drain both queues before the engine closes so an accepted
+                    # write is never lost — mirrors the API lifespan shutdown.
+                    await drain_pending_materializations()
+                    await drain_background_tasks()
+
+                    # Only shutdown DB if we created it (not if test fixture provided it)
+                    if engine_was_none:
+                        await db.shutdown_db()
+                        logger.debug("Database connections closed")
+                    else:  # pragma: no cover
+                        logger.debug("Skipping DB shutdown - engine provided externally")
+
+
+# A newly-connected model only sees the server `instructions` for free — everything else
+# (the ai_assistant_guide resource, tool descriptions) requires it to choose to fetch. Without
+# this, a client that connects to an empty knowledge base has nothing telling it what Basic
+# Memory is or that a first note is worth offering, and it stays idle. The framing is
+# offer-not-act on purpose: orient, then *offer* a first note, but never write one unprompted so
+# power-user / coding sessions stay unobtrusive.
+BASIC_MEMORY_INSTRUCTIONS = (
+    "Basic Memory is the user's personal knowledge base: Markdown notes that persist "
+    "across conversations and that both the user and their AI assistants can read and write.\n\n"
+    "At the start of a session, call `recent_activity` to orient yourself in the user's notes "
+    "before answering from memory. If the knowledge base is empty, briefly explain that Basic "
+    "Memory gives them persistent notes shared between the user and their AI, and offer to save "
+    "something useful from this conversation as their first note with `write_note` — then wait "
+    "for them to agree before writing anything. Do not create notes unprompted.\n\n"
+    "When available in your tool list, use the read-only POSIX tools `ls`, `find`, "
+    "`grep`, `cat`, `tail`, and `man` for compact navigation. If they are absent, use "
+    "the existing rich tools instead. Projects are mount points: "
+    '`ls(path="/")` without a project constraint lists '
+    'addressable projects; `ls(path="research/notes")` and '
+    '`cat(identifier="research/notes/topic.md")` route into the research project. '
+    "Use returned project-qualified paths for follow-up reads. With multiple projects, "
+    "qualify paths or pass `project` (also required for `grep` and `tail`); an explicit "
+    "project must agree with any path prefix. `cat` supports bounded line, section, and "
+    "token-budget reads; `find` can return selected metadata fields. All existing tools "
+    "remain available. Set `enable_posix_tools=false` to hide the POSIX tools.\n\n"
+    "For a fuller guide, read the `memory://ai_assistant_guide` resource. The manual has a "
+    "page for nearly every tool, with verified examples and gotchas: `memory://man` lists "
+    "them, and `memory://man/<tool>(3)` (for example `memory://man/search-notes(3)`) is one "
+    "page — read it before using a tool for the first time. Any note is readable the same "
+    "way: its memory://<project>/<path> URL is a resource returning the raw markdown. If "
+    "you have a web or fetch tool "
+    "and need current "
+    "documentation, fetch `https://docs.basicmemory.com/llms.txt` first, then fetch only the "
+    "relevant linked `/raw/...md` page."
+)
+
+mcp = FastMCP(
+    name="Basic Memory",
+    instructions=BASIC_MEMORY_INSTRUCTIONS,
+    lifespan=lifespan,
+)
+mcp.add_middleware(MCPClientInfoMiddleware())

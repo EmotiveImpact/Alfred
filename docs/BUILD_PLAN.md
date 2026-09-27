@@ -1,5 +1,9 @@
 # ALFRED build work packages
 
+<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+
+**Current product category: operational and executive intelligence.** See [positioning](PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
+
 27 September 2026. Use the [current PRD](PRD.md), [roadmap](ROADMAP.md) and [machine-readable backlog](../plans/memory-backlog.json). Original seven-stage plan: [archive/BUILD_PLAN-v01.md](archive/BUILD_PLAN-v01.md). This file allocates work; it does not launch agents or install services.
 
 ## Track A: existing core, identity and lifecycle

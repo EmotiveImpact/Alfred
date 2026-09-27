@@ -1,5 +1,10 @@
 # ALFRED build-reference source shelf
 
+<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+
+This is the historical focused shelf. The broader current [source library](library/README.md) and [catalogue](library/CATALOGUE.json) cover all 42 researched repositories with actual copied/reference-only status. Start from main. Historical file counts below are preserved and overlap the broad collection.
+
+
 Updated 27 September 2026. This folder exists so future builders can inspect the exact
 pinned upstream source that informed ALFRED without depending on a mutable external branch.
 

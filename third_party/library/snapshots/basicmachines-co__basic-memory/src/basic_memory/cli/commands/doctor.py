@@ -1,0 +1,256 @@
+"""Doctor command for local consistency checks."""
+
+from __future__ import annotations
+
+import tempfile
+import uuid
+from pathlib import Path
+from typing import Protocol
+
+from loguru import logger
+from rich.console import Console
+import typer
+
+from basic_memory.cli.app import app
+from basic_memory.cli.commands.command_utils import run_with_cleanup
+from basic_memory.cli.commands.routing import force_routing, validate_routing_flags
+from basic_memory.mcp.async_client import get_client
+from basic_memory.mcp.clients import KnowledgeClient, ProjectClient, SearchClient
+from basic_memory.schemas.base import Entity
+from basic_memory.schemas.project_info import ProjectInfoRequest
+from basic_memory.schemas.search import SearchQuery
+from basic_memory.schemas import ProjectIndexRunResponse
+
+console = Console()
+
+
+class DoctorProjectClient(Protocol):
+    """Project-client capability required to clean up doctor state."""
+
+    async def delete_project(
+        self, project_external_id: str, delete_notes: bool = False
+    ) -> object: ...
+
+
+def _is_default_project_delete_error(error: Exception) -> bool:
+    """Return True only for the API guard that blocks deleting the default project."""
+    error_text = str(error)
+    return "Cannot delete default project" in error_text
+
+
+async def _delete_doctor_project_locally(project_name: str, project_id: str) -> None:
+    """Remove the generated doctor project when the public API guard blocks cleanup."""
+    from basic_memory import db
+    from basic_memory.config import ConfigManager
+    from basic_memory.repository import ProjectRepository
+
+    config_manager = ConfigManager()
+    repository = ProjectRepository()
+    _, session_maker = await db.get_or_create_db(
+        db_path=config_manager.config.database_path,
+        db_type=db.DatabaseType.FILESYSTEM,
+    )
+
+    async with db.scoped_session(session_maker) as session:
+        project = await repository.get_by_external_id(session, project_id)
+        if project is None:
+            raise ValueError(f"Doctor cleanup project '{project_id}' not found")
+        if project.name != project_name:
+            raise ValueError(
+                f"Doctor cleanup expected project '{project_name}', found '{project.name}'"
+            )
+        await repository.delete(session, project.id)
+
+    config = config_manager.load_config()
+    if project_name in config.projects:
+        del config.projects[project_name]
+        if config.default_project == project_name:
+            config.default_project = next(iter(config.projects), None)
+        config_manager.save_config(config)
+
+
+async def _delete_doctor_project(
+    project_client: DoctorProjectClient, project_name: str, project_id: str
+) -> None:
+    """Delete the generated doctor project without weakening the public API guard."""
+    # Deferred: ToolError lives in FastMCP's runtime, which must not load at CLI startup (#886).
+    from fastmcp.exceptions import ToolError
+
+    try:
+        await project_client.delete_project(project_id, delete_notes=True)
+    except ToolError as exc:
+        if not _is_default_project_delete_error(exc):
+            raise
+
+        # Trigger: fresh local configs can promote the generated doctor project
+        # to default because the placeholder default has no DB row.
+        # Why: the project is disposable doctor-owned state, while the public API
+        # must keep rejecting default-project deletion for normal callers.
+        # Outcome: cleanup removes only the exact doctor project it created.
+        await _delete_doctor_project_locally(project_name, project_id)
+
+
+async def _read_materialized_api_note(api_file: Path, file_path: str) -> str:
+    """Wait for the accepted local write, then read its canonical file."""
+    # Deferred: importing the materialization runtime at CLI module load would slow every
+    # command, while doctor is the only command that needs to observe its write immediately.
+    from basic_memory.index.note_content_materialization import drain_pending_materializations
+
+    # Trigger: production accepts note content before its markdown file is materialized.
+    # Why: doctor verifies the complete DB -> file contract, not only write acceptance.
+    # Outcome: wait for the same deferred work drained at normal CLI shutdown before checking.
+    await drain_pending_materializations()
+
+    if not api_file.exists():
+        raise ValueError(f"API note file missing: {file_path}")
+
+    return api_file.read_text(encoding="utf-8")
+
+
+async def run_doctor() -> None:
+    """Run local consistency checks for file <-> database flows."""
+    # Deferred: the markdown parsing stack is only needed while the checks run,
+    # and importing it at module level slows every CLI invocation (#886).
+    from basic_memory.markdown.entity_parser import EntityParser
+    from basic_memory.markdown.markdown_processor import MarkdownProcessor
+    from basic_memory.markdown.schemas import EntityFrontmatter, EntityMarkdown
+
+    console.print("[blue]Running Basic Memory doctor checks...[/blue]")
+
+    project_name = f"doctor-{uuid.uuid4().hex[:8]}"
+    api_note_title = "Doctor API Note"
+    manual_note_title = "Doctor Manual Note"
+    manual_permalink = "doctor/manual-note"
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_path = Path(temp_dir)
+
+        async with get_client() as client:
+            project_client = ProjectClient(client)
+            project_request = ProjectInfoRequest(
+                name=project_name,
+                path=str(temp_path),
+                set_default=False,
+            )
+
+            project_id: str | None = None
+
+            try:
+                from basic_memory.config import ConfigManager
+
+                status = (
+                    await project_client.create_doctor_project()
+                    if ConfigManager().config.project_root
+                    else await project_client.create_project(project_request.model_dump())
+                )
+                if not status.new_project:
+                    raise ValueError("Failed to create doctor project")
+                project_name = status.new_project.name
+                project_id = status.new_project.external_id
+                # Use the resolved path from the server — when project_root is configured,
+                # the actual project directory differs from the requested temp_path
+                project_path = Path(status.new_project.path)
+                console.print(f"[green]OK[/green] Created doctor project: {project_name}")
+
+                # --- DB -> File: create an entity via API ---
+                knowledge_client = KnowledgeClient(client, project_id)
+                api_note = Entity(
+                    title=api_note_title,
+                    directory="doctor",
+                    note_type="note",
+                    content_type="text/markdown",
+                    content=f"# {api_note_title}\n\n- [note] API to file check",
+                    entity_metadata={"tags": ["doctor"]},
+                )
+                api_result = await knowledge_client.create_entity(api_note.model_dump())
+
+                api_file = project_path / api_result.file_path
+                api_text = await _read_materialized_api_note(api_file, api_result.file_path)
+                if api_note_title not in api_text:
+                    raise ValueError("API note content missing from file")
+
+                console.print("[green]OK[/green] API write created file")
+
+                # --- File -> DB: write markdown file directly, then index ---
+                parser = EntityParser(project_path)
+                processor = MarkdownProcessor(parser)
+                manual_markdown = EntityMarkdown(
+                    frontmatter=EntityFrontmatter(
+                        metadata={
+                            "title": manual_note_title,
+                            "type": "note",
+                            "permalink": manual_permalink,
+                            "tags": ["doctor"],
+                        }
+                    ),
+                    content=f"# {manual_note_title}\n\n- [note] File to DB check",
+                )
+
+                manual_path = project_path / "doctor" / "manual-note.md"
+                await processor.write_file(manual_path, manual_markdown)
+                console.print("[green]OK[/green] Manual file written")
+
+                index_data = await project_client.index(
+                    project_id, force_full=False, run_in_background=False
+                )
+                project_index_run = ProjectIndexRunResponse.model_validate(index_data)
+                if project_index_run.enqueued_files == 0:
+                    raise ValueError("Project index did not enqueue any files")
+
+                console.print("[green]OK[/green] Project index processed manual file")
+
+                search_client = SearchClient(client, project_id)
+                search_query = SearchQuery(title=manual_note_title)
+                search_results = await search_client.search(
+                    search_query.model_dump(), page=1, page_size=5
+                )
+                if not any(result.title == manual_note_title for result in search_results.results):
+                    raise ValueError("Manual note not found in search index")
+
+                console.print("[green]OK[/green] Search confirmed manual file")
+
+                status_report = await project_client.get_status(project_id)
+                observed_paths = {
+                    observed_file.path for observed_file in status_report.observed_files
+                }
+                if "doctor/manual-note.md" not in observed_paths:
+                    raise ValueError("Project index status did not observe manual note")
+
+                console.print("[green]OK[/green] Status observed indexed file")
+
+            finally:
+                if project_id:
+                    await _delete_doctor_project(project_client, project_name, project_id)
+
+    console.print("[green]Doctor checks passed.[/green]")
+
+
+@app.command()
+def doctor(
+    local: bool = typer.Option(
+        False, "--local", help="Force local API routing (ignore cloud mode)"
+    ),
+    cloud: bool = typer.Option(False, "--cloud", help="Force cloud API routing"),
+) -> None:
+    """Run local consistency checks to verify file/database indexing."""
+    # Deferred: ToolError lives in FastMCP's runtime, which must not load at CLI startup (#886).
+    from fastmcp.exceptions import ToolError
+
+    try:
+        validate_routing_flags(local, cloud)
+        # Doctor runs local filesystem checks — always default to local routing
+        if not local and not cloud:
+            local = True
+        with force_routing(local=local, cloud=cloud):
+            run_with_cleanup(run_doctor())
+    except (ToolError, ValueError) as e:
+        # str() of a message-less exception (e.g. httpx.ReadTimeout) is empty;
+        # fall back to repr so the failure line always names the error (#1027).
+        error_detail = str(e) or repr(e)
+        console.print(f"[red]Doctor failed: {error_detail}[/red]")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        error_detail = str(e) or repr(e)
+        logger.error(f"Doctor failed: {error_detail}")
+        typer.echo(f"Doctor failed: {error_detail}", err=True)
+        raise typer.Exit(code=1)  # pragma: no cover

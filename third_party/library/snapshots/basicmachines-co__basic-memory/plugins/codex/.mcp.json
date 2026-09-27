@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "basic-memory": {
+      "command": "uvx",
+      "args": [
+        "--prerelease=allow",
+        "basic-memory",
+        "mcp"
+      ]
+    }
+  }
+}

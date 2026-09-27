@@ -1,0 +1,230 @@
+// Copyright 2025 The OpenSandbox Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package model
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/alibaba/opensandbox/execd/pkg/jupyter/execute"
+	"github.com/stretchr/testify/require"
+)
+
+func TestRunCodeRequestValidate(t *testing.T) {
+	req := RunCodeRequest{
+		Code: "print('hi')",
+	}
+	require.NoError(t, req.Validate())
+
+	req.Code = ""
+	require.Error(t, req.Validate(), "expected validation error when code is empty")
+}
+
+func TestRunCommandRequestValidate(t *testing.T) {
+	req := RunCommandRequest{Command: "ls"}
+	require.NoError(t, req.Validate(), "expected command validation success")
+
+	req.TimeoutMs = -100
+	require.Error(t, req.Validate(), "expected validation error when timeout is negative")
+
+	req.TimeoutMs = 0
+	req.Command = "ls"
+	require.NoError(t, req.Validate(), "expected success when timeout is omitted/zero")
+
+	req.TimeoutMs = 10
+	req.Command = ""
+	require.Error(t, req.Validate(), "expected validation error when command is empty")
+}
+
+func TestRunCommandRequestValidateCwd(t *testing.T) {
+	tmp := t.TempDir()
+	req := RunCommandRequest{Command: "ls", Cwd: tmp}
+	require.NoError(t, req.Validate())
+
+	req.Cwd = filepath.Join(tmp, "missing-subdir")
+	err := req.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "working directory")
+}
+
+func TestRunCommandRequestValidateCwdFromRequestEnv(t *testing.T) {
+	const (
+		requestOnlyKey = "OPENSANDBOX_TEST_MODEL_REQUEST_ONLY_CWD"
+		overrideKey    = "OPENSANDBOX_TEST_MODEL_OVERRIDE_CWD"
+		missingKey     = "OPENSANDBOX_TEST_MODEL_MISSING_CWD"
+	)
+
+	unsetModelEnvForTest(t, requestOnlyKey)
+	for _, background := range []bool{false, true} {
+		req := RunCommandRequest{
+			Command:    "pwd",
+			Cwd:        "$" + requestOnlyKey,
+			Background: background,
+			Envs:       map[string]string{requestOnlyKey: t.TempDir()},
+		}
+		require.NoError(t, req.Validate())
+	}
+
+	processFile := filepath.Join(t.TempDir(), "process-file")
+	require.NoError(t, os.WriteFile(processFile, []byte("x"), 0o600))
+	t.Setenv(overrideKey, processFile)
+	req := RunCommandRequest{
+		Command: "pwd",
+		Cwd:     "$" + overrideKey,
+		Envs:    map[string]string{overrideKey: t.TempDir()},
+	}
+	require.NoError(t, req.Validate())
+
+	unsetModelEnvForTest(t, missingKey)
+	req = RunCommandRequest{Command: "pwd", Cwd: "$" + missingKey}
+	err := req.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "undefined environment variables")
+
+	nonexistent := filepath.Join(t.TempDir(), "missing")
+	req = RunCommandRequest{
+		Command: "pwd",
+		Cwd:     "$TARGET",
+		Envs:    map[string]string{"TARGET": nonexistent},
+	}
+	err = req.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "does not exist")
+
+	req.Envs["TARGET"] = processFile
+	err = req.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not a directory")
+}
+
+func unsetModelEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	previous, existed := os.LookupEnv(key)
+	require.NoError(t, os.Unsetenv(key))
+	t.Cleanup(func() {
+		if existed {
+			require.NoError(t, os.Setenv(key, previous))
+			return
+		}
+		require.NoError(t, os.Unsetenv(key))
+	})
+}
+
+func ptr32(v uint32) *uint32 { return &v }
+
+func TestRunCommandRequestValidateUidGid(t *testing.T) {
+	req := RunCommandRequest{Command: "id", Uid: ptr32(1000)}
+	require.NoError(t, req.Validate(), "expected success with uid only")
+
+	req = RunCommandRequest{Command: "id", Uid: ptr32(1000), Gid: ptr32(1000)}
+	require.NoError(t, req.Validate(), "expected success with uid and gid")
+
+	req = RunCommandRequest{Command: "id", Gid: ptr32(1000)}
+	require.Error(t, req.Validate(), "expected validation error when gid is set without uid")
+}
+
+func TestServerStreamEventToJSON(t *testing.T) {
+	event := ServerStreamEvent{
+		Type:           StreamEventTypeStdout,
+		Text:           "hello",
+		ExecutionCount: 3,
+	}
+
+	data := event.ToJSON()
+	var decoded ServerStreamEvent
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	require.Equal(t, event.Type, decoded.Type)
+	require.Equal(t, event.Text, decoded.Text)
+	require.Equal(t, event.ExecutionCount, decoded.ExecutionCount)
+}
+
+func TestServerStreamEventSummary(t *testing.T) {
+	longText := strings.Repeat("a", 120)
+	tests := []struct {
+		name     string
+		event    ServerStreamEvent
+		contains []string
+	}{
+		{
+			name: "basic stdout",
+			event: ServerStreamEvent{
+				Type:           StreamEventTypeStdout,
+				Text:           "hello",
+				ExecutionCount: 2,
+			},
+			contains: []string{"type=stdout", "text=hello"},
+		},
+		{
+			name: "truncated text and error",
+			event: ServerStreamEvent{
+				Type:  StreamEventTypeError,
+				Text:  longText,
+				Error: &execute.ErrorOutput{EName: "ValueError", EValue: "boom"},
+			},
+			contains: []string{
+				"type=error",
+				"text=" + strings.Repeat("a", 100) + "...",
+				"error=ValueError: boom",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			summary := tt.event.Summary()
+			for _, want := range tt.contains {
+				require.Containsf(t, summary, want, "summary missing %q", want)
+			}
+		})
+	}
+}
+
+func TestRunCommandArgvValidation(t *testing.T) {
+	for _, body := range []string{`{}`, `{"command":"echo", "argv":["tool"]}`, `{"command":"", "argv":["tool"]}`, `{"argv":[]}`, `{"argv":null}`, `{"argv":[""]}`, `{"argv":["tool",null]}`, `{"argv":["tool","\u0000"]}`} {
+		var req RunCommandRequest
+		err := json.Unmarshal([]byte(body), &req)
+		if err == nil {
+			err = req.Validate()
+		}
+		require.Error(t, err, body)
+	}
+	var req RunCommandRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"argv":["tool","","$HOME"]}`), &req))
+	require.NoError(t, req.Validate())
+}
+
+func TestCommandAndSessionCwdUseTheirOwnEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing")
+	t.Setenv("ARGV_DIR", missing)
+	envFile := filepath.Join(t.TempDir(), "envs")
+	require.NoError(t, os.WriteFile(envFile, []byte("ARGV_DIR="+dir+"\n"), 0600))
+	t.Setenv("EXECD_ENVS", envFile)
+	for _, req := range []RunCommandRequest{{Command: "pwd"}, {Argv: []string{"tool"}}} {
+		req.Cwd = "$ARGV_DIR"
+		require.NoError(t, req.Validate())
+		req.Envs = map[string]string{"ARGV_DIR": missing}
+		require.Error(t, req.Validate())
+	}
+	// Session cwd validation is deferred to the runtime layer, which resolves
+	// against the target session's environment (EXECD_ENVS file values and
+	// variables exported in earlier runs), not the daemon environment. See
+	// Controller.ValidateBashSessionCwd.
+	session := RunInSessionRequest{Command: "pwd", Cwd: "$ARGV_DIR"}
+	require.NoError(t, session.Validate())
+}
