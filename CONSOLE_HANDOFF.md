@@ -1,11 +1,21 @@
-# ALFRED console continuation: refinement 02
+# ALFRED console implementation lane
 
-27 September 2026. The owner requested implementation of the slim-rail, single-executive-panel visual direction, an exact component architecture, a build brief and a next-builder prompt.
+**Operational and executive intelligence.** The owner-selected React, React Three Fiber and custom GLSL console lives in `console/` and is now merged into `main` through PR #13. Start new console work from current main, not the old feature branch.
 
-Continue branch `feat/alfred-console-refinement-2026-09-27`. Base is merged main `03e946fc3fb6fe0b540abe5ff52204de6f0f99ed`. PR #13 has already merged; older statements that main lacks the application are historical. Refresh current remote heads before integrating concurrent work.
+Read `BUILD_START_HERE.md`, `AGENTS.md`, `SESSION_HANDOFF.md`, `docs/PRODUCT_POSITIONING.md`, `console/README.md`, `console/AGENTS.md` and `console/docs/BUILDER_HANDOFF.md`. Older console delivery receipts and branch instructions describe their original pre-merge checkpoint; this handoff records the owner-authorised consolidation on 27 September 2026.
 
-Read `console/docs/COMPONENT_ARCHITECTURE.md`, `console/docs/BUILD_BRIEF.md` and `console/docs/NEXT_BUILDER.md`, then the latest refinement delivery receipt. Root SESSION_HANDOFF.md remains the brain/memory handoff. Do not overwrite it with UI history.
+The existing Python core and backend-connected `web/` application are preserved. The console contains a functional interactive frontend but deliberately uses fictional, disconnected fixtures. The next console integration is an authenticated adapter to the real backend's scoped source, reviewed-memory and action projections. Fixture review receipts do not grant live action authority.
 
-The existing React/TypeScript/R3F console is evolved, not restarted. The rail overlays without resizing the renderer, promotional copy is removed, the executive surface is consolidated, explicit relationship mode is separate from decorative field rendering, and time-driven brightness is removed. See actual test evidence for what was validated; do not infer flicker-free hardware performance from source alone.
+Preserve the true-black, graphite, ivory and sparse-amber direction, interactive shader sphere, provenance inspection, keyboard controls and accessibility/reduced-motion work. Do not replace it with a stock dashboard, a static image or a new Obsidian note-app clone. The internal Obsidian name is a console codename, not a completed Obsidian application integration.
 
-No brain, microphone, real account or server approval is connected in the demo. The Python core and existing web application remain unchanged. `ConsoleReadPort` is a proposed integration contract, not an existing endpoint. No merge, deployment or force-push is authorised by this handoff.
+Use a focused PR to main and run the unified build, including console typecheck/build, unit and real browser checks. Do not force-push or deploy without authorisation. Main consolidation does not mean the console is wired to the real intelligence, nor that a model, microphone, account or device has been connected.
+
+## Refinement 02: focused PR #15
+
+The subsequent owner-requested interface refinement is on `feat/alfred-console-refinement-2026-09-27`, started from then-current main `03e946fc3fb6fe0b540abe5ff52204de6f0f99ed`. Current main advanced during that work; preserve its consolidation, source library and brain instructions rather than resetting them to the UI branch's original base. This file retains the newer main handoff above.
+
+Read `console/docs/COMPONENT_ARCHITECTURE.md`, `console/docs/BUILD_BRIEF.md`, `console/docs/NEXT_BUILDER.md` and the latest refinement delivery receipt. Root SESSION_HANDOFF.md remains the brain handoff.
+
+The refinement implements the small logo in a narrow expanding icon rail, one executive surface, no slogan block, stable record layout and an explicit relationship-only mode. It removes time-driven shader brightness and avoids ordinary UI-induced canvas remounts. Consult actual rendering evidence before asserting physical-device flicker or performance results.
+
+The console is still a disconnected demonstration. ConsoleReadPort is a proposed typed integration boundary, not an implemented HTTP client. The next builder should preserve this presentation and connect the authorised read-only projection first, then conversation and exact action/result flows. No automatic merge or deployment is implied.
