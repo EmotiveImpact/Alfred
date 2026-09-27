@@ -2,23 +2,368 @@
   "schema_version": 1,
   "updated_on": "2026-09-27",
   "scope": "planning-only",
-  "baseline_commit": "73a255a10cb43f55a14aaf45165800bd17e60553",
+  "baseline_commit": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed",
   "runtime_changes": false,
   "programme_issue": 11,
-  "private_pilot_requires": ["M02", "M05"],
-  "documents": ["README.md", "AGENTS.md", "SESSION_HANDOFF.md", "docs/PRD.md", "docs/PRODUCT_BRIEF.md", "docs/ARCHITECTURE.md", "docs/MEMORY_ARCHITECTURE.md", "docs/OBSIDIAN_INTEGRATION.md", "docs/ROADMAP.md", "docs/BUILD_PLAN.md", "docs/MEMORY_SECURITY.md", "docs/adr/MEMORY-001.md", "research/MEMORY_LANDSCAPE_2026-09-27.md"],
+  "private_pilot_requires": [
+    "M02",
+    "M05"
+  ],
+  "documents": [
+    "README.md",
+    "AGENTS.md",
+    "SESSION_HANDOFF.md",
+    "docs/PRD.md",
+    "docs/PRODUCT_BRIEF.md",
+    "docs/ARCHITECTURE.md",
+    "docs/MEMORY_ARCHITECTURE.md",
+    "docs/OBSIDIAN_INTEGRATION.md",
+    "docs/ROADMAP.md",
+    "docs/BUILD_PLAN.md",
+    "docs/MEMORY_SECURITY.md",
+    "docs/adr/MEMORY-001.md",
+    "research/MEMORY_LANDSCAPE_2026-09-27.md",
+    "BUILD_START_HERE.md",
+    "docs/PRODUCT_POSITIONING.md",
+    "docs/CONSOLIDATION_2026-09-27.md",
+    "third_party/library/README.md"
+  ],
   "jobs": [
-    {"id":"M01","title":"Selected vault identity and compatible read pipeline","status":"planned","depends_on":[],"requirements":["MEM-001","MEM-002","MEM-003","MEM-012"],"candidates":["obsidian-api","obsidian-rest"],"targets":["alfred/knowledge.py"],"acceptance":["Obsidian closed: selected files still index without writes","Rename, duplicate IDs, aliases and supported anchors preserve or explicitly reject identity","Excluded folders, unsafe paths, partial saves and lost sources fail honestly"]},
-    {"id":"M02","title":"Person/device identity and source/capability grants","status":"planned","depends_on":[],"requirements":["SYS-001","MEM-009"],"candidates":["openfga","opa"],"targets":["alfred/local.py","alfred/desk_http.py"],"acceptance":["Credential rotation and explicit person linking do not merge distinct users","Permission filtering happens before ranking, traversal and egress","Mid-request revocation prevents disallowed result persistence/display"]},
-    {"id":"M03","title":"Reviewed-memory context bridge","status":"planned","depends_on":["M01"],"requirements":["MEM-003","MEM-004","MEM-006","MEM-007","MEM-016","INT-001"],"candidates":["graphiti"],"targets":["alfred/reviewed_memory.py","alfred/grounded.py","alfred/conversation.py"],"acceptance":["Relevant accepted statements enter bounded context with exact original support and review basis","Disputed, expired, invalidated and conflicting statements are withheld or explicitly qualified","Namesakes, late records and changed ownership preserve distinct identities and history"]},
-    {"id":"M04","title":"Explicit capture and approved inbox writes","status":"planned","depends_on":["M01","M02","M03"],"requirements":["MEM-004","MEM-005","MEM-011","ACT-001"],"candidates":["obsidian-api","basic-memory","mem0"],"targets":["alfred/reviewed_memory.py","alfred/conversation.py","alfred/local.py"],"acceptance":["Remember-this previews editable scope, memory type, source and retention","Exact path/content/precondition approval is separate from reading or recalling","Concurrent changes, restart and duplicate requests never silently overwrite human notes"]},
-    {"id":"M05","title":"Correction, deletion, encryption and restore lifecycle","status":"planned","depends_on":["M02","M03"],"requirements":["MEM-010","MEM-012","MEM-013","SYS-002"],"candidates":["restic"],"targets":["alfred/reviewed_memory.py","alfred/conversation.py","alfred/knowledge.py"],"acceptance":["Deletion/revocation removes or blocks all current dependent projections with a receipt","Temporary unavailability is distinguished from deletion","Restored backups reapply tombstones/grants; residual retention and key custody are explicit"]},
-    {"id":"M06","title":"Lexical baseline and deterministic retrieval evaluation","status":"planned","depends_on":["M01","M03"],"requirements":["MEM-008","INT-002"],"candidates":["sqlite-vec","pgvector","longmemeval","longmemeval-v2","locomo"],"targets":["alfred/grounded.py","tests/test_grounded.py"],"acceptance":["Compare current ranking with FTS5 on identical invented support-labelled queries","Report recall, irrelevant context, latency and permission leakage separately","Keep answer keys outside request context; no new model experiment implied"]},
-    {"id":"M07","title":"One optional temporal/semantic adapter decision","status":"planned","depends_on":["M02","M05","M06"],"requirements":["MEM-007","MEM-008","MEM-009","INT-001","INT-002"],"candidates":["graphiti","cognee","mem0","basic-memory","lightrag","graphrag"],"targets":["docs/adr/MEMORY-001.md"],"acceptance":["Pin chosen implementation, dependencies, model/service terms and egress settings before adoption","Provenance, review status and deletion survive an adapter round-trip","Reject complexity without measured benefit; do not reroute the blocked model operation"]},
-    {"id":"M08","title":"Structured attachment ingestion","status":"planned","depends_on":["M01","M02","M05"],"requirements":["MEM-001","MEM-003","MEM-010"],"candidates":["docling"],"targets":["alfred/knowledge.py"],"acceptance":["Supported documents retain page/block provenance and deterministic parser version","Tables/layout require quality checks; unsupported files remain explicit","No embedded code runs and removal invalidates derived indexes"]},
-    {"id":"M09","title":"Explicit vault sync and local host lifecycle","status":"planned","depends_on":["M01","M02","M05"],"requirements":["MEM-014","RUN-001"],"candidates":["obsidian-headless","restic"],"targets":["alfred/desk.py","docs/OBSIDIAN_INTEGRATION.md"],"acceptance":["One deliberate sync client per device, tested conflicts and exclusions","Live SQLite ledger is not synced as ordinary vault files","Offline/reconnect, stop, restore and last-confirmed source status remain visible"]},
-    {"id":"M10","title":"Commitment and procedure-aware attention","status":"planned","depends_on":["M03","M05"],"requirements":["MEM-004","MEM-015","ATT-001"],"candidates":["langgraph","letta-code","maps-guide"],"targets":["alfred/pulse.py","alfred/conversation.py"],"acceptance":["Reviewed commitments can nominate reminders or proposals with explicit reasons","No retrieved procedure text executes or expands capability grants","Routine budgets, silence/interrupt choices, pause and actual outcomes are inspectable"]},
-    {"id":"M11","title":"One official account workflow","status":"planned","depends_on":["M02","M05"],"requirements":["CON-001","ACT-001","MEM-003"],"candidates":["nango"],"targets":["alfred/local.py","docs/SECURITY_AND_DATA.md"],"acceptance":["Consented read-only test account keeps canonical source IDs and freshness","Optional later harmless write uses exact approval and capability-specific reconciliation","OAuth refresh/revocation never expose connector secrets to a model or public repo"]},
-    {"id":"M12","title":"Voice, truthful console graph and specialist contracts","status":"planned","depends_on":["M02","M03","M05"],"requirements":["VOI-001","UX-001","OPS-001","MEM-016","RUN-001"],"candidates":["obsidian-api"],"targets":["web/index.html","docs/ARCHITECTURE.md"],"acceptance":["Preserve concurrent console work and display actual scoped graph/review states","Visible push-to-talk distinguishes generated, played and acknowledged audio","Read actual ENDSTATE/Noir/device contracts; no simulation-to-observation or readiness claims"]}
-  ]
+    {
+      "id": "M01",
+      "title": "Selected vault identity and compatible read pipeline",
+      "status": "planned",
+      "depends_on": [],
+      "requirements": [
+        "MEM-001",
+        "MEM-002",
+        "MEM-003",
+        "MEM-012"
+      ],
+      "candidates": [
+        "obsidian-api",
+        "obsidian-rest"
+      ],
+      "targets": [
+        "alfred/knowledge.py"
+      ],
+      "acceptance": [
+        "Obsidian closed: selected files still index without writes",
+        "Rename, duplicate IDs, aliases and supported anchors preserve or explicitly reject identity",
+        "Excluded folders, unsafe paths, partial saves and lost sources fail honestly"
+      ]
+    },
+    {
+      "id": "M02",
+      "title": "Person/device identity and source/capability grants",
+      "status": "planned",
+      "depends_on": [],
+      "requirements": [
+        "SYS-001",
+        "MEM-009"
+      ],
+      "candidates": [
+        "openfga",
+        "opa"
+      ],
+      "targets": [
+        "alfred/local.py",
+        "alfred/desk_http.py"
+      ],
+      "acceptance": [
+        "Credential rotation and explicit person linking do not merge distinct users",
+        "Permission filtering happens before ranking, traversal and egress",
+        "Mid-request revocation prevents disallowed result persistence/display"
+      ]
+    },
+    {
+      "id": "M03",
+      "title": "Reviewed-memory context bridge",
+      "status": "planned",
+      "depends_on": [
+        "M01"
+      ],
+      "requirements": [
+        "MEM-003",
+        "MEM-004",
+        "MEM-006",
+        "MEM-007",
+        "MEM-016",
+        "INT-001"
+      ],
+      "candidates": [
+        "graphiti"
+      ],
+      "targets": [
+        "alfred/reviewed_memory.py",
+        "alfred/grounded.py",
+        "alfred/conversation.py"
+      ],
+      "acceptance": [
+        "Relevant accepted statements enter bounded context with exact original support and review basis",
+        "Disputed, expired, invalidated and conflicting statements are withheld or explicitly qualified",
+        "Namesakes, late records and changed ownership preserve distinct identities and history"
+      ]
+    },
+    {
+      "id": "M04",
+      "title": "Explicit capture and approved inbox writes",
+      "status": "planned",
+      "depends_on": [
+        "M01",
+        "M02",
+        "M03"
+      ],
+      "requirements": [
+        "MEM-004",
+        "MEM-005",
+        "MEM-011",
+        "ACT-001"
+      ],
+      "candidates": [
+        "obsidian-api",
+        "basic-memory",
+        "mem0"
+      ],
+      "targets": [
+        "alfred/reviewed_memory.py",
+        "alfred/conversation.py",
+        "alfred/local.py"
+      ],
+      "acceptance": [
+        "Remember-this previews editable scope, memory type, source and retention",
+        "Exact path/content/precondition approval is separate from reading or recalling",
+        "Concurrent changes, restart and duplicate requests never silently overwrite human notes"
+      ]
+    },
+    {
+      "id": "M05",
+      "title": "Correction, deletion, encryption and restore lifecycle",
+      "status": "planned",
+      "depends_on": [
+        "M02",
+        "M03"
+      ],
+      "requirements": [
+        "MEM-010",
+        "MEM-012",
+        "MEM-013",
+        "SYS-002"
+      ],
+      "candidates": [
+        "restic"
+      ],
+      "targets": [
+        "alfred/reviewed_memory.py",
+        "alfred/conversation.py",
+        "alfred/knowledge.py"
+      ],
+      "acceptance": [
+        "Deletion/revocation removes or blocks all current dependent projections with a receipt",
+        "Temporary unavailability is distinguished from deletion",
+        "Restored backups reapply tombstones/grants; residual retention and key custody are explicit"
+      ]
+    },
+    {
+      "id": "M06",
+      "title": "Lexical baseline and deterministic retrieval evaluation",
+      "status": "planned",
+      "depends_on": [
+        "M01",
+        "M03"
+      ],
+      "requirements": [
+        "MEM-008",
+        "INT-002"
+      ],
+      "candidates": [
+        "sqlite-vec",
+        "pgvector",
+        "longmemeval",
+        "longmemeval-v2",
+        "locomo"
+      ],
+      "targets": [
+        "alfred/grounded.py",
+        "tests/test_grounded.py"
+      ],
+      "acceptance": [
+        "Compare current ranking with FTS5 on identical invented support-labelled queries",
+        "Report recall, irrelevant context, latency and permission leakage separately",
+        "Keep answer keys outside request context; no new model experiment implied"
+      ]
+    },
+    {
+      "id": "M07",
+      "title": "One optional temporal/semantic adapter decision",
+      "status": "planned",
+      "depends_on": [
+        "M02",
+        "M05",
+        "M06"
+      ],
+      "requirements": [
+        "MEM-007",
+        "MEM-008",
+        "MEM-009",
+        "INT-001",
+        "INT-002"
+      ],
+      "candidates": [
+        "graphiti",
+        "cognee",
+        "mem0",
+        "basic-memory",
+        "lightrag",
+        "graphrag"
+      ],
+      "targets": [
+        "docs/adr/MEMORY-001.md"
+      ],
+      "acceptance": [
+        "Pin chosen implementation, dependencies, model/service terms and egress settings before adoption",
+        "Provenance, review status and deletion survive an adapter round-trip",
+        "Reject complexity without measured benefit; do not reroute the blocked model operation"
+      ]
+    },
+    {
+      "id": "M08",
+      "title": "Structured attachment ingestion",
+      "status": "planned",
+      "depends_on": [
+        "M01",
+        "M02",
+        "M05"
+      ],
+      "requirements": [
+        "MEM-001",
+        "MEM-003",
+        "MEM-010"
+      ],
+      "candidates": [
+        "docling"
+      ],
+      "targets": [
+        "alfred/knowledge.py"
+      ],
+      "acceptance": [
+        "Supported documents retain page/block provenance and deterministic parser version",
+        "Tables/layout require quality checks; unsupported files remain explicit",
+        "No embedded code runs and removal invalidates derived indexes"
+      ]
+    },
+    {
+      "id": "M09",
+      "title": "Explicit vault sync and local host lifecycle",
+      "status": "planned",
+      "depends_on": [
+        "M01",
+        "M02",
+        "M05"
+      ],
+      "requirements": [
+        "MEM-014",
+        "RUN-001"
+      ],
+      "candidates": [
+        "obsidian-headless",
+        "restic"
+      ],
+      "targets": [
+        "alfred/desk.py",
+        "docs/OBSIDIAN_INTEGRATION.md"
+      ],
+      "acceptance": [
+        "One deliberate sync client per device, tested conflicts and exclusions",
+        "Live SQLite ledger is not synced as ordinary vault files",
+        "Offline/reconnect, stop, restore and last-confirmed source status remain visible"
+      ]
+    },
+    {
+      "id": "M10",
+      "title": "Commitment and procedure-aware attention",
+      "status": "planned",
+      "depends_on": [
+        "M03",
+        "M05"
+      ],
+      "requirements": [
+        "MEM-004",
+        "MEM-015",
+        "ATT-001"
+      ],
+      "candidates": [
+        "langgraph",
+        "letta-code",
+        "maps-guide"
+      ],
+      "targets": [
+        "alfred/pulse.py",
+        "alfred/conversation.py"
+      ],
+      "acceptance": [
+        "Reviewed commitments can nominate reminders or proposals with explicit reasons",
+        "No retrieved procedure text executes or expands capability grants",
+        "Routine budgets, silence/interrupt choices, pause and actual outcomes are inspectable"
+      ]
+    },
+    {
+      "id": "M11",
+      "title": "One official account workflow",
+      "status": "planned",
+      "depends_on": [
+        "M02",
+        "M05"
+      ],
+      "requirements": [
+        "CON-001",
+        "ACT-001",
+        "MEM-003"
+      ],
+      "candidates": [
+        "nango"
+      ],
+      "targets": [
+        "alfred/local.py",
+        "docs/SECURITY_AND_DATA.md"
+      ],
+      "acceptance": [
+        "Consented read-only test account keeps canonical source IDs and freshness",
+        "Optional later harmless write uses exact approval and capability-specific reconciliation",
+        "OAuth refresh/revocation never expose connector secrets to a model or public repo"
+      ]
+    },
+    {
+      "id": "M12",
+      "title": "Voice, truthful console graph and specialist contracts",
+      "status": "planned",
+      "depends_on": [
+        "M02",
+        "M03",
+        "M05"
+      ],
+      "requirements": [
+        "VOI-001",
+        "UX-001",
+        "OPS-001",
+        "MEM-016",
+        "RUN-001"
+      ],
+      "candidates": [
+        "obsidian-api"
+      ],
+      "targets": [
+        "web/index.html",
+        "docs/ARCHITECTURE.md"
+      ],
+      "acceptance": [
+        "Preserve concurrent console work and display actual scoped graph/review states",
+        "Visible push-to-talk distinguishes generated, played and acknowledged audio",
+        "Read actual ENDSTATE/Noir/device contracts; no simulation-to-observation or readiness claims"
+      ]
+    }
+  ],
+  "product_category": "operational and executive intelligence",
+  "integration_branch": "main",
+  "previous_baseline_commit": "73a255a10cb43f55a14aaf45165800bd17e60553"
 }

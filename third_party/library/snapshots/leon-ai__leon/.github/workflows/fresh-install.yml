@@ -1,0 +1,63 @@
+name: Fresh installation
+
+on:
+  schedule:
+    # Space the three weekly runs exactly 56 hours apart (UTC).
+    - cron: '17 4 * * 1'
+    - cron: '17 12 * * 3'
+    - cron: '17 20 * * 5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fresh-install-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fresh-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      # Scheduled workflows are loaded from the default branch, but Leon's
+      # integration work lands on develop before it reaches a release branch.
+      - name: Check out Leon
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
+
+      - name: Read Node.js version
+        id: versions
+        shell: bash
+        run: |
+          echo "node=$(jq -r '.node' bin/node/versions.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Use Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+          package-manager-cache: false
+
+      - name: Install latest pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+          run_install: false
+
+      - name: Test installation and DeepSeek inferences
+        env:
+          LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
+          LEON_FRESH_INSTALL_LOG_PATH: /tmp/leon-fresh-install.log
+          LEON_HOME: ${{ runner.temp }}/leon-fresh-install
+        run: node scripts/ci/test-fresh-install.js
+
+      - name: Upload installer log on failure
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fresh-install-log
+          path: /tmp/leon-fresh-install.log
+          if-no-files-found: ignore
+          retention-days: 7

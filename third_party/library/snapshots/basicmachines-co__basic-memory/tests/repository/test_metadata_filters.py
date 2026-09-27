@@ -1,0 +1,149 @@
+"""Tests for structured metadata filter parsing helpers."""
+
+from datetime import date
+
+import pytest
+
+from basic_memory.repository.metadata_filters import (
+    ParsedMetadataFilter,
+    _is_numeric_collection,
+    _is_numeric_value,
+    build_postgres_json_path,
+    build_sqlite_json_path,
+    parse_metadata_filters,
+)
+
+
+def test_parse_simple_equality():
+    parsed = parse_metadata_filters({"status": "in-progress"})
+    assert parsed == [ParsedMetadataFilter(["status"], "eq", "in-progress")]
+
+
+def test_parse_contains_list():
+    parsed = parse_metadata_filters({"tags": ["security", "oauth"]})
+    assert parsed == [ParsedMetadataFilter(["tags"], "contains", ["security", "oauth"])]
+
+
+def test_parse_in_operator():
+    parsed = parse_metadata_filters({"priority": {"$in": ["high", "critical"]}})
+    assert parsed == [ParsedMetadataFilter(["priority"], "in", ["high", "critical"])]
+
+
+def test_parse_comparison_numeric():
+    parsed = parse_metadata_filters({"schema.confidence": {"$gt": 0.7}})
+    assert parsed == [ParsedMetadataFilter(["schema", "confidence"], "gt", 0.7, "numeric")]
+
+
+def test_parse_between_numeric():
+    parsed = parse_metadata_filters({"score": {"$between": [0.3, 0.6]}})
+    assert parsed == [ParsedMetadataFilter(["score"], "between", [0.3, 0.6], "numeric")]
+
+
+def test_parse_between_text():
+    parsed = parse_metadata_filters({"window": {"$between": ["2024-01-01", "2024-12-31"]}})
+    assert parsed == [
+        ParsedMetadataFilter(["window"], "between", ["2024-01-01", "2024-12-31"], "text")
+    ]
+
+
+def test_parse_normalizes_scalar_types():
+    parsed = parse_metadata_filters({"flag": True, "created": date(2025, 1, 10), "ratio": 0.5})
+    values = {f.path_parts[0]: f.value for f in parsed}
+    assert values["flag"] == "True"
+    assert values["created"] == "2025-01-10"
+    assert values["ratio"] == "0.5"
+
+
+def test_parse_null_equality_is_an_is_null_clause():
+    """A None value is not equality: `= NULL` is never true in SQL.
+
+    The op is distinct so both dialects have to make a deliberate choice about
+    it — an is-null filter that fell through to the equality branch would report
+    a confident zero for every note in the project.
+    """
+    parsed = parse_metadata_filters({"owner": None})
+    assert parsed == [ParsedMetadataFilter(["owner"], "is_null", None)]
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"score": {"$gt": None}},
+        {"score": {"$lte": None}},
+        {"priority": {"$in": ["high", None]}},
+        {"score": {"$between": [None, 0.8]}},
+        {"tags": ["security", None]},
+    ],
+)
+def test_null_refused_outside_equality(filters):
+    """Every operator but equality compares against its value, and a comparison
+    with NULL is never true — so a null bound is refused rather than answering
+    zero rows for a query it cannot express."""
+    with pytest.raises(ValueError, match="null is not supported by"):
+        parse_metadata_filters(filters)
+
+
+_TOO_LARGE_FOR_FLOAT = 10**400
+
+
+@pytest.mark.parametrize(
+    "filters",
+    [
+        {"score": {"$gt": _TOO_LARGE_FOR_FLOAT}},
+        {"score": {"$lte": -_TOO_LARGE_FOR_FLOAT}},
+        {"score": {"$between": [0, _TOO_LARGE_FOR_FLOAT]}},
+        # The same magnitude spelled as a numeric string. float() does not raise
+        # for this one — it answers inf — so it reached the SQL bound intact.
+        {"score": {"$gte": "9" * 400}},
+        {"score": {"$between": ["0", "9" * 400]}},
+    ],
+)
+def test_oversized_numeric_bound_is_a_filter_error(filters):
+    """REGRESSION: an unrepresentable bound was a server error, or worse, silent.
+
+    json.loads keeps a 400-digit literal as a finite Python int, so it passed
+    _is_numeric_value and every check before it, then reached float() — which
+    raises OverflowError. OverflowError is not a ValueError, and ValueError is
+    the only thing the search router translates, so the request became a 500 for
+    what is a filter typo. The string spelling of the same magnitude did not
+    raise at all: float() answers it with inf, making the bound infinite so the
+    comparison matched every note or none, silently.
+    """
+    with pytest.raises(ValueError, match="not a finite number"):
+        parse_metadata_filters(filters)
+
+
+def test_oversized_numeric_refusal_names_the_key():
+    """Worded like this module's other filter errors: which key, and what is wrong."""
+    with pytest.raises(ValueError) as excinfo:
+        parse_metadata_filters({"schema.confidence": {"$gt": _TOO_LARGE_FOR_FLOAT}})
+
+    assert "numeric metadata filter value for 'schema.confidence'" in str(excinfo.value)
+
+
+def test_invalid_filter_key():
+    with pytest.raises(ValueError):
+        parse_metadata_filters({"bad key": "value"})
+
+
+def test_invalid_operator():
+    with pytest.raises(ValueError):
+        parse_metadata_filters({"priority": {"$nope": "high"}})
+
+
+def test_empty_list_rejected():
+    with pytest.raises(ValueError):
+        parse_metadata_filters({"tags": []})
+
+
+def test_numeric_helpers():
+    assert _is_numeric_value("1.5")
+    assert _is_numeric_value(2)
+    assert not _is_numeric_value("not-a-number")
+    assert _is_numeric_collection(["1", 2, 3.5])
+    assert not _is_numeric_collection(["1", "nope"])
+
+
+def test_build_json_paths():
+    assert build_sqlite_json_path(["schema", "confidence"]) == '$."schema"."confidence"'
+    assert build_postgres_json_path(["schema", "confidence"]) == "{schema,confidence}"

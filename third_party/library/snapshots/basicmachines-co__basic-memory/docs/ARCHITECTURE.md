@@ -1,0 +1,460 @@
+# Basic Memory Architecture
+
+This document describes the architectural patterns and composition structure of Basic Memory.
+
+## Overview
+
+Basic Memory is a local-first knowledge management system with three entrypoints:
+- **API** - FastAPI REST server for HTTP access
+- **MCP** - Model Context Protocol server for LLM integration
+- **CLI** - Typer command-line interface
+
+Each entrypoint uses a **composition root** pattern to manage configuration and dependencies.
+
+## Composition Roots
+
+### What is a Composition Root?
+
+A composition root is the single place in an application where dependencies are wired together. In Basic Memory, each entrypoint has its own composition root that:
+
+1. Reads configuration from `ConfigManager`
+2. Resolves runtime mode (local/test)
+3. Creates and provides dependencies to downstream code
+
+**Key principle**: Only composition roots read global configuration. All other modules receive configuration explicitly.
+
+### Container Structure
+
+Each entrypoint has a container dataclass in its package:
+
+```
+src/basic_memory/
+├── api/
+│   └── container.py      # ApiContainer
+├── mcp/
+│   └── container.py      # McpContainer
+├── cli/
+│   └── container.py      # CliContainer
+└── runtime/
+    └── mode.py           # RuntimeMode enum and resolver
+```
+
+### Container Pattern
+
+All containers follow the same structure:
+
+```python
+@dataclass
+class Container:
+    config: BasicMemoryConfig
+    mode: RuntimeMode
+
+    @classmethod
+    def create(cls) -> "Container":
+        """Create container by reading ConfigManager."""
+        config = ConfigManager().config
+        mode = resolve_runtime_mode(is_test_env=config.is_test_env)
+        return cls(config=config, mode=mode)
+
+    @property
+    def some_computed_property(self) -> bool:
+        """Derived values based on config and mode."""
+        return self.mode.is_local and self.config.some_setting
+
+# Module-level singleton
+_container: Container | None = None
+
+def get_container() -> Container:
+    if _container is None:
+        raise RuntimeError("Container not initialized")
+    return _container
+
+def set_container(container: Container) -> None:
+    global _container
+    _container = container
+```
+
+### Runtime Mode Resolution
+
+The `RuntimeMode` enum centralizes mode detection:
+
+```python
+class RuntimeMode(Enum):
+    LOCAL = "local"
+    CLOUD = "cloud"
+    TEST = "test"
+
+    @property
+    def is_cloud(self) -> bool:
+        return self == RuntimeMode.CLOUD
+
+    @property
+    def is_local(self) -> bool:
+        return self == RuntimeMode.LOCAL
+
+    @property
+    def is_test(self) -> bool:
+        return self == RuntimeMode.TEST
+```
+
+Resolution follows this precedence in local app flows: **TEST > LOCAL**
+
+```python
+def resolve_runtime_mode(is_test_env: bool) -> RuntimeMode:
+    if is_test_env:
+        return RuntimeMode.TEST
+    return RuntimeMode.LOCAL
+```
+
+**Note**: `RuntimeMode` determines global behavior (e.g., whether to start file sync).
+Per-project routing is orthogonal: individual projects can be set to `cloud` mode via `ProjectMode`,
+which affects client routing in `get_client(project_name=...)` without changing global runtime mode.
+`RuntimeMode.CLOUD` may remain for compatibility, but standard local runtime resolution does not select it.
+
+## Dependencies Package
+
+### Structure
+
+The `deps/` package provides FastAPI dependencies organized by feature:
+
+```
+src/basic_memory/deps/
+├── __init__.py       # Re-exports for backwards compatibility
+├── config.py         # Configuration access
+├── db.py             # Database/session management
+├── projects.py       # Project resolution
+├── repositories.py   # Data access layer
+├── services.py       # Business logic layer
+└── importers.py      # Import functionality
+```
+
+### Usage in Routers
+
+Projects are addressed by external UUID in the URL path; there is one provider
+per service (the name-based v1 and integer-id `_v2` tiers were removed, #1109):
+
+```python
+from basic_memory.deps import EntityServiceV2ExternalDep, ProjectConfigV2ExternalDep
+
+@router.get("/entities/{entity_id}")
+async def get_entity(
+    entity_id: str,
+    entity_service: EntityServiceV2ExternalDep,
+    project: ProjectConfigV2ExternalDep,
+):
+    return await entity_service.get_by_external_id(entity_id)
+```
+
+### Config Injection
+
+`get_app_config` resolves config from the composition root, never from a
+`ConfigManager()` read of its own:
+
+1. API requests read the container the lifespan stored on `app.state`.
+2. Requests served without a lifespan (the CLI/MCP local ASGI flow) fall back to
+   `api.container.resolve_container()`, which returns the installed container or
+   creates a fresh one — the `ConfigManager` read stays inside
+   `ApiContainer.create()`.
+
+Tests inject config by overriding the provider:
+`app.dependency_overrides[get_app_config] = lambda: app_config`.
+
+## Runtime Package Boundaries
+
+Accepted-note orchestration is shared by local and hosted runtimes. Its dependencies flow in one
+direction:
+
+```
+schemas and runtime values
+    ↓
+repositories
+    ↓
+portable services and indexing workflows
+    ↓
+local or hosted composition roots and adapters
+```
+
+- `repository/` owns explicit-session persistence operations and persisted row values, including
+  accepted-note search rows and vector cleanup. It must not import `indexing/` workflows.
+- `services/` owns runtime-neutral note preparation, note-content reads and writes, and delete
+  operations. These modules receive storage and repository capabilities explicitly.
+- `indexing/` owns portable mutation, reconciliation, materialization, and project-index workflows.
+- `index/` contains the local runtime's concrete adapters and composition helpers. Shared contracts
+  such as project-index requests and scheduler capabilities live in neutral modules within this
+  package; hosted code must not depend on `Local*` implementations.
+
+Accepted Markdown create, replace, and edit operations cross one public persistence boundary:
+`persist_accepted_note_snapshot`. That operation writes the entity snapshot, `NoteContent`, graph
+rows, and entity search row inside the caller's transaction. Move intentionally uses the narrower
+`persist_accepted_note_move` operation because changing a path must not replace observations or
+relations.
+
+## MCP Tools Architecture
+
+### Typed API Clients
+
+MCP tools communicate with the API through typed clients that encapsulate HTTP paths and response validation:
+
+```
+src/basic_memory/mcp/clients/
+├── __init__.py       # Re-exports all clients
+├── base.py           # BaseClient with common logic
+├── knowledge.py      # KnowledgeClient - entity CRUD
+├── search.py         # SearchClient - search operations
+├── memory.py         # MemoryClient - context building
+├── directory.py      # DirectoryClient - directory listing
+├── resource.py       # ResourceClient - resource reading
+└── project.py        # ProjectClient - project management
+```
+
+### Client Pattern
+
+Each client encapsulates API paths and validates responses:
+
+```python
+class KnowledgeClient(BaseClient):
+    """Client for knowledge/entity operations."""
+
+    async def resolve_entity(self, identifier: str) -> int:
+        """Resolve identifier to entity ID."""
+        response = await call_get(
+            self.http_client,
+            f"{self._base_path}/resolve/{identifier}",
+        )
+        return int(response.text)
+
+    async def get_entity(self, entity_id: int) -> EntityResponse:
+        """Get entity by ID."""
+        response = await call_get(
+            self.http_client,
+            f"{self._base_path}/entities/{entity_id}",
+        )
+        return EntityResponse.model_validate(response.json())
+```
+
+### Tool → Client → API Flow
+
+```
+MCP Tool (thin adapter)
+    ↓
+Typed Client (encapsulates paths, validates responses)
+    ↓
+HTTP API (FastAPI router)
+    ↓
+Service Layer (business logic)
+    ↓
+Repository Layer (data access)
+```
+
+Example tool using typed client:
+
+```python
+@mcp.tool()
+async def search_notes(
+    query: str,
+    project: str | None = None,
+    metadata_filters: dict | None = None,
+    tags: list[str] | None = None,
+    status: str | None = None,
+) -> SearchResponse:
+    async with get_project_client(project, context) as (client, active_project):
+        # Import client inside function to avoid circular imports
+        from basic_memory.mcp.clients import SearchClient
+        from basic_memory.schemas.search import SearchQuery
+
+        search_query = SearchQuery(
+            text=query,
+            metadata_filters=metadata_filters,
+            tags=tags,
+            status=status,
+        )
+        search_client = SearchClient(client, active_project.external_id)
+        return await search_client.search(search_query.model_dump())
+```
+
+### Per-Project Client Routing
+
+`get_project_client()` from `mcp/project_context.py` is an async context manager that:
+1. Resolves the project name from config (no network call)
+2. Creates the correctly-routed client based on the project's mode (local ASGI or cloud HTTP with API key)
+3. Validates the project via the API
+4. Yields `(client, active_project)` tuple
+
+This solves the bootstrap problem: you need the project name to choose the right client (local vs cloud), but you need the client to validate the project exists.
+
+```python
+from basic_memory.mcp.project_context import get_project_client
+
+async with get_project_client(project, context) as (client, active_project):
+    # client is routed based on project's mode (local or cloud)
+    # active_project is validated via the API
+    ...
+```
+
+## Watch Coordination
+
+The `WatchCoordinator` (`index/watch_coordinator.py`) owns the local event-index
+watcher lifecycle. The API composition root creates it
+(`ApiContainer.create_watch_coordinator()`), the lifespan starts and stops it, and
+`should_watch`/`skip_reason` come from the container's runtime-mode logic — watching
+is skipped in test and cloud modes and when `index_changes` is disabled.
+
+```python
+@dataclass
+class WatchCoordinator:
+    """Coordinate local event-index watcher lifecycle across entrypoints."""
+
+    config: BasicMemoryConfig
+    should_watch: bool = True
+    skip_reason: str | None = None
+```
+
+## Project Resolution
+
+### ProjectResolver
+
+Unified project selection across all entrypoints:
+
+```python
+class ProjectResolver:
+    """Resolves which project to use based on context."""
+
+    def resolve(
+        self,
+        explicit_project: str | None = None,
+    ) -> ResolvedProject:
+        """Resolve project using three-tier hierarchy:
+        1. Explicit project parameter
+        2. Default project from config
+        3. Single available project
+        """
+```
+
+### Resolution Modes
+
+```python
+class ResolutionMode(Enum):
+    EXPLICIT = "explicit"           # User specified project
+    DEFAULT = "default"             # Using configured default
+    SINGLE_PROJECT = "single"       # Only one project exists
+    FALLBACK = "fallback"           # Using first available
+```
+
+## Testing Patterns
+
+### Container Testing
+
+Each container has corresponding tests:
+
+```
+tests/
+├── api/test_api_container.py
+├── mcp/test_mcp_container.py
+└── cli/test_cli_container.py
+```
+
+Tests verify:
+- Container creation from config
+- Runtime mode properties
+- Container accessor functions (get/set)
+
+### Mocking Typed Clients
+
+When testing MCP tools, mock at the client level:
+
+```python
+def test_search_notes(monkeypatch):
+    import basic_memory.mcp.clients as clients_mod
+
+    class MockSearchClient:
+        async def search(self, query):
+            return SearchResponse(results=[...])
+
+    monkeypatch.setattr(clients_mod, "SearchClient", MockSearchClient)
+```
+
+## Design Principles
+
+### 1. Explicit Dependencies
+
+Modules receive configuration explicitly rather than reading globals:
+
+```python
+# Good - explicit injection
+async def sync_files(config: BasicMemoryConfig):
+    ...
+
+# Avoid - hidden global access
+async def sync_files():
+    config = ConfigManager().config  # Hidden coupling
+```
+
+### 2. Single Responsibility
+
+Each layer has a clear responsibility:
+- **Containers**: Wire dependencies
+- **Clients**: Encapsulate HTTP communication
+- **Services**: Business logic
+- **Repositories**: Data access
+- **Tools/Routers**: Thin adapters
+
+### 3. Deferred Imports
+
+To avoid circular imports, typed clients are imported inside functions:
+
+```python
+async def my_tool():
+    async with get_client() as client:
+        # Import here to avoid circular dependency
+        from basic_memory.mcp.clients import KnowledgeClient
+
+        knowledge_client = KnowledgeClient(client, project_id)
+```
+
+### 4. Shims Are Transitional
+
+When refactoring, a re-export shim may bridge a move for downstream callers — but
+shims are traps for readers once callers migrate, so they must be deleted promptly
+(the 2026-07 post-seam cleanup removed `deps.py`, `basic_memory.cloud`, and
+`create_client()`, #1107). A shim ships with its removal plan:
+
+```python
+"""
+DEPRECATED: Import from basic_memory.new_location instead.
+Delete this shim once <downstream repo/release> has migrated.
+"""
+
+from basic_memory.new_location import *
+```
+
+## File Organization
+
+```
+src/basic_memory/
+├── api/
+│   ├── container.py          # API composition root
+│   ├── app.py                # FastAPI app + lifespan
+│   └── v2/routers/           # v2 routers (the only public API surface)
+├── mcp/
+│   ├── container.py          # MCP composition root
+│   ├── clients/              # Typed API clients
+│   ├── tools/                # MCP tool definitions
+│   └── server.py             # MCP server setup
+├── cli/
+│   ├── container.py          # CLI composition root
+│   ├── app.py                # Typer app
+│   └── commands/             # CLI command groups
+├── deps/
+│   ├── config.py             # Config dependencies
+│   ├── db.py                 # Database dependencies
+│   ├── projects.py           # Project dependencies
+│   ├── repositories.py       # Repository dependencies
+│   ├── services.py           # Service dependencies
+│   └── importers.py          # Importer dependencies
+├── index/                    # Local runtime adapters + WatchCoordinator
+├── indexing/                 # Portable indexing runners and planners
+├── picoschema/               # Picoschema parsing, resolution, validation, inference, and drift
+├── runtime/                  # RuntimeMode + runtime Protocol contracts
+├── project_resolver.py       # Unified project selection
+└── config.py                 # Configuration management
+```

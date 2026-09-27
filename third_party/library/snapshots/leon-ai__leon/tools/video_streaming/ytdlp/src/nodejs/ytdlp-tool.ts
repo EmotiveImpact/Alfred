@@ -1,0 +1,837 @@
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, renameSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
+import { basename, dirname, extname, join } from 'node:path'
+
+import { Tool, type ProgressCallback } from '@sdk/base-tool'
+import { ToolkitConfig } from '@sdk/toolkit-config'
+
+const DEFAULT_SETTINGS: Record<string, unknown> = {}
+const REQUIRED_SETTINGS: string[] = []
+const DOWNLOAD_DESTINATION_PATTERN = /Destination:\s+(.+)$/
+const ALREADY_DOWNLOADED_PATTERN =
+  /\[download\]\s+(.+)\s+has already been downloaded/
+const MERGED_FILE_PATTERN = /\[Merger\]\s+Merging formats into\s+"(.+)"$/
+const MOVED_FILE_PATTERN = /\[MoveFiles\]\s+Moving file\s+".+"\s+to\s+"(.+)"$/
+const SUBTITLE_DESTINATION_PATTERN =
+  /Writing (?:video subtitles|video automatic captions) to:\s+(.+)$/
+const DOWNLOAD_PROGRESS_PATTERN =
+  /\[download\]\s+(\d+\.?\d*)%\s+of\s+(?:~?\s*)([\d.]+\w+)\s+at\s+([\d.]+\w+\/s)\s+ETA\s+([\d:]+)/
+const YTDLP_EXT_TEMPLATE = '%(ext)s'
+const YTDLP_TITLE_TEMPLATE = '%(title)s'
+const YTDLP_PLAYLIST_INDEX_TEMPLATE = '%(playlist_index)s'
+const SUBTITLE_FORMAT = 'srt/best'
+const SUBTITLE_CONVERT_FORMAT = 'srt'
+const TRANSCRIPT_PAGE_CHARS = 16_000
+const TRANSCRIPT_CACHE_MAX_AGE_MS = 86_400_000
+const TRANSCRIPT_METADATA_FIELDS = ['id', 'webpage_url', 'title', 'channel', 'uploader', 'duration'] as const
+const SUBTITLE_BLOCK_SEPARATOR = /\r?\n\s*\r?\n/
+const SUBTITLE_TAG_PATTERN = /<[^>]*>/g
+const SUBTITLE_VOICE_PATTERN = /<v\s+([^>]+)>/g
+const IGNORED_MEDIA_OUTPUT_EXTENSIONS = new Set([
+  '.part',
+  '.ytdl',
+  '.tmp',
+  '.temp',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.json'
+])
+const LANGUAGE_CODE_SEPARATOR = ','
+const SUBTITLE_OUTPUT_TYPE = 'subtitle'
+const TYPED_OUTPUT_SEPARATOR = ':'
+const SUBTITLE_METADATA_LANGUAGE_FIELDS = [
+  'language',
+  'language_code',
+  'original_language'
+]
+const IGNORED_SUBTITLE_LANGUAGE_CODES = new Set(['live_chat'])
+const VIDEO_METADATA_FIELDS = [
+  'id', 'webpage_url', 'title', 'description', 'duration', 'chapters',
+  'channel', 'uploader', 'upload_date', 'language', 'availability',
+  'track', 'artist', 'artists', 'album', 'release_date'
+] as const
+
+interface OutputTarget {
+  directoryPath: string
+  outputTemplate: string
+  predictedFilePath?: string
+}
+
+interface VideoMetadata extends Record<string, unknown> {
+  language?: unknown
+  language_code?: unknown
+  original_language?: unknown
+  subtitles?: unknown
+  automatic_captions?: unknown
+}
+
+export default class YtdlpTool extends Tool {
+  private static readonly TOOLKIT = 'video_streaming'
+  private readonly config: ReturnType<typeof ToolkitConfig.load>
+
+  constructor() {
+    super()
+    // Load configuration from central toolkits directory
+    // Use class name for tool config name
+    this.config = ToolkitConfig.load(YtdlpTool.TOOLKIT, this.toolName)
+    const toolSettings = ToolkitConfig.loadToolSettings(
+      YtdlpTool.TOOLKIT,
+      this.toolName,
+      DEFAULT_SETTINGS
+    )
+    this.settings = toolSettings
+    this.requiredSettings = REQUIRED_SETTINGS
+    this.checkRequiredSettings(this.toolName)
+  }
+
+  get toolName(): string {
+    return 'ytdlp'
+  }
+
+  get toolkit(): string {
+    return YtdlpTool.TOOLKIT
+  }
+
+  get description(): string {
+    return this.config['description']
+  }
+
+  private getConfigArgs(): string[] {
+    const configPath = join(this.getToolDir(import.meta.url), 'yt-dlp.conf')
+    return ['--config-locations', configPath]
+  }
+
+  /**
+   * Resolves media output using yt-dlp filename templates.
+   */
+  private static resolveMediaOutputTarget(
+    outputPath: string,
+    expectedExtension?: string
+  ): OutputTarget {
+    const extension = extname(outputPath)
+    const looksLikeFile = extension !== ''
+    const existingFileLikeDirectory =
+      looksLikeFile && existsSync(outputPath) && statSync(outputPath).isDirectory()
+
+    if (!looksLikeFile) {
+      return {
+        directoryPath: outputPath,
+        outputTemplate: join(
+          outputPath,
+          `${YTDLP_TITLE_TEMPLATE}.${YTDLP_EXT_TEMPLATE}`
+        )
+      }
+    }
+
+    const stem = basename(outputPath, extension)
+    const directoryPath = existingFileLikeDirectory ? outputPath : dirname(outputPath)
+    const outputTemplate = join(directoryPath, `${stem}.${YTDLP_EXT_TEMPLATE}`)
+    const predictedFilePath = expectedExtension
+      ? join(directoryPath, `${stem}.${expectedExtension}`)
+      : undefined
+
+    return { directoryPath, outputTemplate, predictedFilePath }
+  }
+
+  /**
+   * Resolves subtitle output using yt-dlp's typed output template.
+   */
+  private static resolveSubtitleOutputTarget(
+    outputPath: string,
+    languageCode: string
+  ): OutputTarget {
+    const extension = extname(outputPath)
+    const looksLikeFile = extension !== ''
+    const primaryLanguageCode = this.getPrimaryLanguageCode(languageCode)
+    const existingFileLikeDirectory =
+      looksLikeFile && existsSync(outputPath) && statSync(outputPath).isDirectory()
+
+    if (!looksLikeFile) {
+      return {
+        directoryPath: outputPath,
+        outputTemplate: join(
+          outputPath,
+          `${YTDLP_TITLE_TEMPLATE}.${YTDLP_EXT_TEMPLATE}`
+        )
+      }
+    }
+
+    const requestedStem = basename(outputPath, extension)
+    const stem = this.stripSubtitleLanguageSuffix(
+      requestedStem,
+      primaryLanguageCode
+    )
+    const directoryPath = existingFileLikeDirectory ? outputPath : dirname(outputPath)
+
+    return {
+      directoryPath,
+      outputTemplate: join(directoryPath, `${stem}.${YTDLP_EXT_TEMPLATE}`),
+      predictedFilePath: join(
+        directoryPath,
+        `${stem}.${primaryLanguageCode}.${SUBTITLE_CONVERT_FORMAT}`
+      )
+    }
+  }
+
+  /**
+   * Returns the first language code when yt-dlp receives a language list.
+   */
+  private static getPrimaryLanguageCode(languageCode: string): string {
+    return languageCode.split(LANGUAGE_CODE_SEPARATOR)[0]?.trim() || languageCode
+  }
+
+  /**
+   * Removes a trailing subtitle language suffix from a requested file stem.
+   */
+  private static stripSubtitleLanguageSuffix(
+    stem: string,
+    languageCode: string
+  ): string {
+    const suffix = `.${languageCode}`
+    return stem.endsWith(suffix) ? stem.slice(0, -suffix.length) : stem
+  }
+
+  /**
+   * Builds a typed yt-dlp output template, e.g. "subtitle:path.%(ext)s".
+   */
+  private static buildTypedOutputTemplate(type: string, template: string): string {
+    return `${type}${TYPED_OUTPUT_SEPARATOR}${template}`
+  }
+
+  /**
+   * Parses file paths reported by yt-dlp.
+   */
+  private static parseOutputFilePath(output: string): string | null {
+    let parsedPath: string | null = null
+
+    for (const line of output.split('\n')) {
+      const match =
+        line.match(DOWNLOAD_DESTINATION_PATTERN) ||
+        line.match(ALREADY_DOWNLOADED_PATTERN) ||
+        line.match(MERGED_FILE_PATTERN) ||
+        line.match(MOVED_FILE_PATTERN) ||
+        line.match(SUBTITLE_DESTINATION_PATTERN)
+
+      if (match?.[1]) {
+        parsedPath = match[1].trim()
+      }
+    }
+
+    return parsedPath
+  }
+
+  private static asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null
+    }
+
+    return value as Record<string, unknown>
+  }
+
+  private static getMetadataLanguageCodes(value: unknown): string[] {
+    const record = this.asRecord(value)
+    if (!record) {
+      return []
+    }
+
+    return Object.keys(record)
+      .map((languageCode) => languageCode.trim())
+      .filter((languageCode) =>
+        Boolean(languageCode) &&
+        !IGNORED_SUBTITLE_LANGUAGE_CODES.has(languageCode)
+      )
+  }
+
+  private static getVideoLanguageCandidates(metadata: VideoMetadata): string[] {
+    const languageCodes = SUBTITLE_METADATA_LANGUAGE_FIELDS
+      .map((field) => metadata[field as keyof VideoMetadata])
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+
+    return [...new Set(languageCodes)]
+  }
+
+  private static selectMatchingLanguage(
+    requestedLanguageCode: string,
+    availableLanguageCodes: string[]
+  ): string | null {
+    const normalizedRequested = requestedLanguageCode.trim().toLowerCase()
+    if (!normalizedRequested) {
+      return null
+    }
+
+    return (
+      availableLanguageCodes.find((languageCode) => {
+        const normalizedLanguageCode = languageCode.toLowerCase()
+        return (
+          normalizedLanguageCode === normalizedRequested ||
+          normalizedLanguageCode.startsWith(`${normalizedRequested}-`) ||
+          normalizedRequested.startsWith(`${normalizedLanguageCode}-`)
+        )
+      }) || null
+    )
+  }
+
+  private static selectSubtitleLanguage(
+    metadata: VideoMetadata,
+    requestedLanguageCode?: string
+  ): string {
+    const subtitleLanguageCodes = this.getMetadataLanguageCodes(
+      metadata.subtitles
+    )
+    const automaticCaptionLanguageCodes = this.getMetadataLanguageCodes(
+      metadata.automatic_captions
+    )
+    const requested = requestedLanguageCode?.trim()
+
+    if (requested) {
+      const matchingLanguageCode =
+        this.selectMatchingLanguage(requested, subtitleLanguageCodes) ||
+        this.selectMatchingLanguage(requested, automaticCaptionLanguageCodes)
+
+      if (matchingLanguageCode) {
+        return matchingLanguageCode
+      }
+
+      const availableLanguageCodes = [
+        ...new Set([
+          ...subtitleLanguageCodes,
+          ...automaticCaptionLanguageCodes
+        ])
+      ]
+
+      throw new Error(
+        `Requested subtitle language "${requested}" is not available. ` +
+          `Available languages: ${availableLanguageCodes.join(', ') || 'none'}.`
+      )
+    }
+
+    for (const languageCode of this.getVideoLanguageCandidates(metadata)) {
+      const matchingLanguageCode =
+        this.selectMatchingLanguage(languageCode, subtitleLanguageCodes) ||
+        this.selectMatchingLanguage(languageCode, automaticCaptionLanguageCodes)
+
+      if (matchingLanguageCode) {
+        return matchingLanguageCode
+      }
+    }
+
+    if (subtitleLanguageCodes.length > 0) {
+      return subtitleLanguageCodes[0]!
+    }
+
+    if (automaticCaptionLanguageCodes.length > 0) {
+      return automaticCaptionLanguageCodes[0]!
+    }
+
+    throw new Error(
+      'No subtitles or automatic captions are available for this video.'
+    )
+  }
+
+  /**
+   * Finds the newest file created or updated in the output directory.
+   */
+  private static findNewestOutputFile(
+    directoryPath: string,
+    startedAtMs?: number,
+    fileNameSuffix?: string
+  ): string | null {
+    if (!existsSync(directoryPath) || !statSync(directoryPath).isDirectory()) {
+      return null
+    }
+
+    const minModifiedTime = startedAtMs ? startedAtMs - 2_000 : 0
+    let newestPath: string | null = null
+    let newestModifiedTime = 0
+
+    for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
+      if (!entry.isFile()) {
+        continue
+      }
+
+      if (fileNameSuffix && !entry.name.endsWith(fileNameSuffix)) {
+        continue
+      }
+
+      const candidatePath = join(directoryPath, entry.name)
+      if (IGNORED_MEDIA_OUTPUT_EXTENSIONS.has(extname(candidatePath))) {
+        continue
+      }
+
+      const stats = statSync(candidatePath)
+
+      if (stats.mtimeMs < minModifiedTime) {
+        continue
+      }
+
+      if (stats.mtimeMs >= newestModifiedTime) {
+        newestPath = candidatePath
+        newestModifiedTime = stats.mtimeMs
+      }
+    }
+
+    return newestPath
+  }
+
+  /**
+   * Resolves a media path from yt-dlp output or a deterministic file target.
+   */
+  private static resolveDownloadedMediaPath(
+    output: string,
+    target: OutputTarget,
+    startedAtMs?: number
+  ): string {
+    if (target.predictedFilePath && existsSync(target.predictedFilePath)) {
+      return target.predictedFilePath
+    }
+
+    const parsedPath = this.parseOutputFilePath(output)
+
+    if (parsedPath && existsSync(parsedPath)) {
+      return parsedPath
+    }
+
+    const newestOutputFile = this.findNewestOutputFile(
+      target.directoryPath,
+      startedAtMs
+    )
+
+    if (newestOutputFile) {
+      return newestOutputFile
+    }
+
+    if (parsedPath) {
+      return parsedPath
+    }
+
+    throw new Error('yt-dlp completed but no output file path could be resolved')
+  }
+
+  /**
+   * Resolves a subtitle path and ensures a subtitle file was created.
+   */
+  private static resolveDownloadedSubtitlePath(
+    output: string,
+    target: OutputTarget,
+    languageCode: string,
+    startedAtMs: number
+  ): string {
+    const parsedPath = this.parseOutputFilePath(output)
+
+    for (const candidate of [target.predictedFilePath, parsedPath]) {
+      if (candidate && existsSync(candidate) && statSync(candidate).isFile()) {
+        return candidate
+      }
+    }
+
+    // Directory output templates do not provide a deterministic filename.
+    const subtitleFileSuffix = `.${this.getPrimaryLanguageCode(languageCode)}.${SUBTITLE_CONVERT_FORMAT}`
+    const newestSubtitleFile = this.findNewestOutputFile(
+      target.directoryPath,
+      startedAtMs,
+      subtitleFileSuffix
+    )
+
+    if (newestSubtitleFile) {
+      return newestSubtitleFile
+    }
+
+    throw new Error('yt-dlp completed but no subtitle file was created')
+  }
+
+  /**
+   * Loads one video's metadata for inspection or subtitle language selection.
+   */
+  private async fetchVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
+    const output = await this.executeCommand({
+      binaryName: 'yt-dlp',
+      // Simulation prevents sidecar writes too; bound extraction for playlist-only URLs.
+      args: [...this.getConfigArgs(), '--dump-single-json', '--skip-download',
+        '--simulate', '--no-cache-dir', '--no-playlist', '--playlist-end', '1', '--', videoUrl],
+      options: { sync: true }
+    })
+
+    const metadata: unknown = JSON.parse(output.trim())
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) || 'entries' in metadata) {
+      throw new Error('Expected metadata for a single video; provide a video URL, not a playlist URL.')
+    }
+    return metadata as VideoMetadata
+  }
+
+  /**
+   * Returns source-provided video metadata without downloading media.
+   */
+  async getVideoMetadata(videoUrl: string): Promise<Record<string, unknown>> {
+    const metadata = await this.fetchVideoMetadata(videoUrl)
+    // Exclude large format lists, request headers and temporary media URLs.
+    return Object.fromEntries(VIDEO_METADATA_FIELDS
+      .filter((field) => metadata[field] != null)
+      .map((field) => [field, metadata[field]]))
+  }
+
+  /**
+   * Downloads a single video from the provided URL.
+   * @param videoUrl The URL of the video to download.
+   * @param outputPath The directory where the video will be saved.
+   * @returns A promise that resolves with the file path of the downloaded video.
+   */
+  async downloadVideo(videoUrl: string, outputPath: string): Promise<string> {
+    try {
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
+      mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
+
+      const result = await this.executeCommand({
+        binaryName: 'yt-dlp',
+        args: [...this.getConfigArgs(), videoUrl, '-o', target.outputTemplate],
+        options: { sync: true }
+      })
+
+      return YtdlpTool.resolveDownloadedMediaPath(
+        result,
+        target,
+        commandStartedAtMs
+      )
+    } catch (error: unknown) {
+      throw new Error(`Video download failed: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * Downloads the audio track from a video and saves it as an audio file.
+   * @param videoUrl The URL of the video.
+   * @param outputPath The directory to save the audio file in.
+   * @param audioFormat The desired audio format (e.g., 'mp3', 'm4a', 'wav').
+   * @returns A promise that resolves with the file path of the extracted audio.
+   */
+  async downloadAudioOnly(
+    videoUrl: string,
+    outputPath: string,
+    audioFormat: string
+  ): Promise<string> {
+    try {
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath, audioFormat)
+      mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
+
+      const result = await this.executeCommand({
+        binaryName: 'yt-dlp',
+        args: [
+          ...this.getConfigArgs(),
+          videoUrl,
+          '-x',
+          '--audio-format',
+          audioFormat,
+          '-o',
+          target.outputTemplate
+        ],
+        options: { sync: true }
+      })
+
+      return YtdlpTool.resolveDownloadedMediaPath(
+        result,
+        target,
+        commandStartedAtMs
+      )
+    } catch (error: unknown) {
+      throw new Error(`Audio download failed: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * Downloads all videos from a given playlist URL.
+   * @param playlistUrl The URL of the playlist.
+   * @param outputPath The directory where the playlist videos will be saved.
+   * @returns A promise that resolves with the path to the directory containing the downloaded videos.
+   */
+  async downloadPlaylist(
+    playlistUrl: string,
+    outputPath: string
+  ): Promise<string> {
+    try {
+      // Ensure output directory exists
+      mkdirSync(outputPath, { recursive: true })
+
+      // Run yt-dlp for playlist
+      const outputTemplate = join(
+        outputPath,
+        `${YTDLP_PLAYLIST_INDEX_TEMPLATE} - ${YTDLP_TITLE_TEMPLATE}.${YTDLP_EXT_TEMPLATE}`
+      )
+      await this.executeCommand({
+        binaryName: 'yt-dlp',
+        args: [...this.getConfigArgs(), playlistUrl, '-o', outputTemplate],
+        options: { sync: true }
+      })
+
+      return outputPath
+    } catch (error: unknown) {
+      throw new Error(`Playlist download failed: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * Downloads a video in a specific quality or resolution.
+   * @param videoUrl The URL of the video to download.
+   * @param outputPath The directory where the video will be saved.
+   * @param quality The desired quality string (e.g., 'best', '720p', '1080p').
+   * @param onProgress The callback function for progress reporting.
+   * @returns A promise that resolves with the file path of the downloaded video.
+   */
+  async downloadVideoByQuality(
+    videoUrl: string,
+    outputPath: string,
+    quality: string,
+    onProgress?: ProgressCallback
+  ): Promise<string> {
+    try {
+      // Convert quality to yt-dlp format
+      let formatSelector: string
+      if (quality === 'best') {
+        formatSelector = 'best'
+      } else if (quality === 'worst') {
+        formatSelector = 'worst'
+      } else if (quality.endsWith('p')) {
+        // For resolution like 720p, 1080p
+        const height = quality.slice(0, -1)
+        formatSelector = `best[height<=${height}]`
+      } else {
+        formatSelector = quality
+      }
+
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
+      mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
+      let downloadedFilePath = ''
+
+      const result = await this.executeCommand({
+        binaryName: 'yt-dlp',
+        args: [
+          ...this.getConfigArgs(),
+          videoUrl,
+          '-f',
+          formatSelector,
+          '-o',
+          target.outputTemplate,
+          '--newline'
+        ],
+        options: { sync: false },
+        onProgress,
+        onOutput: (output, isError) => {
+          const lines = output.split('\n')
+
+          for (const line of lines) {
+            // Parse download progress
+            if (!isError && line.includes('[download]')) {
+              const progressMatch = line.match(DOWNLOAD_PROGRESS_PATTERN)
+              if (
+                progressMatch &&
+                progressMatch[1] &&
+                progressMatch[2] &&
+                progressMatch[3] &&
+                progressMatch[4] &&
+                onProgress
+              ) {
+                onProgress({
+                  percentage: parseFloat(progressMatch[1]),
+                  size: progressMatch[2],
+                  speed: progressMatch[3],
+                  eta: progressMatch[4],
+                  status: 'downloading'
+                })
+              }
+            }
+
+            const pathMatch = YtdlpTool.parseOutputFilePath(line)
+            if (pathMatch) {
+              downloadedFilePath = pathMatch
+            }
+
+            // Check for download completion
+            if (!isError && line.includes('[download] 100%') && onProgress) {
+              onProgress({
+                percentage: 100,
+                status: 'completed'
+              })
+            }
+          }
+        }
+      })
+
+      return YtdlpTool.resolveDownloadedMediaPath(
+        [downloadedFilePath, result].filter(Boolean).join('\n'),
+        target,
+        commandStartedAtMs
+      )
+    } catch (error: unknown) {
+      throw new Error(
+        `Quality-specific video download failed: ${(error as Error).message}`
+      )
+    }
+  }
+
+  /**
+   * Downloads the subtitles for a video.
+   * @param videoUrl The URL of the video.
+   * @param outputPath The directory to save the subtitle file in.
+   * @param languageCode Optional language code for the desired subtitles (e.g., 'en', 'fr').
+   * @returns A promise that resolves with the file path of the downloaded subtitle file.
+   */
+  async downloadSubtitles(
+    videoUrl: string,
+    outputPath: string,
+    languageCode?: string
+  ): Promise<string> {
+    return this.downloadSubtitleWithMetadata(videoUrl, outputPath,
+      await this.fetchVideoMetadata(videoUrl), languageCode)
+  }
+
+  private async downloadSubtitleWithMetadata(
+    videoUrl: string, outputPath: string, metadata: VideoMetadata, languageCode?: string
+  ): Promise<string> {
+    try {
+      const resolvedLanguageCode = YtdlpTool.selectSubtitleLanguage(
+        metadata,
+        languageCode
+      )
+      const target = YtdlpTool.resolveSubtitleOutputTarget(
+        outputPath,
+        resolvedLanguageCode
+      )
+      mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
+
+      const result = await this.executeCommand({
+        binaryName: 'yt-dlp',
+        args: [
+          ...this.getConfigArgs(),
+          videoUrl,
+          '--write-subs',
+          '--write-auto-subs',
+          '--sub-langs',
+          resolvedLanguageCode,
+          '--sub-format',
+          SUBTITLE_FORMAT,
+          '--convert-subs',
+          SUBTITLE_CONVERT_FORMAT,
+          '--skip-download',
+          '-o',
+          YtdlpTool.buildTypedOutputTemplate(
+            SUBTITLE_OUTPUT_TYPE,
+            target.outputTemplate
+          )
+        ],
+        options: { sync: true }
+      })
+
+      return YtdlpTool.resolveDownloadedSubtitlePath(
+        result,
+        target,
+        resolvedLanguageCode,
+        commandStartedAtMs
+      )
+    } catch (error: unknown) {
+      throw new Error(`Subtitle download failed: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * Reads bounded timestamped transcript pages. The profile-local cache lets
+   * subsequent tool workers continue without re-extracting/downloading captions.
+   */
+  async getTranscript(
+    videoUrl: string, languageCode?: string, startCue = 0
+  ): Promise<Record<string, unknown>> {
+    if (!Number.isSafeInteger(startCue) || startCue < 0) {
+      throw new Error('startCue must be a non-negative integer from nextCue.')
+    }
+    const key = createHash('sha256').update(JSON.stringify([videoUrl, languageCode ?? null])).digest('hex')
+    const directory = join(dirname(this.getSettingsPath()), 'transcripts', key)
+    const cachePath = join(directory, 'transcript.json')
+    let transcript: { source: Record<string, unknown>, cues: string[] }
+    if (startCue > 0 && !existsSync(cachePath)) throw new Error('Transcript cache is missing; restart from the first page.')
+    if (existsSync(cachePath) && (startCue > 0 || Date.now() - statSync(cachePath).mtimeMs < TRANSCRIPT_CACHE_MAX_AGE_MS)) {
+      transcript = JSON.parse(readFileSync(cachePath, 'utf8'))
+    } else {
+      const metadata = await this.fetchVideoMetadata(videoUrl)
+      const subtitles = await this.downloadSubtitleWithMetadata(videoUrl, join(directory, 'captions.srt'), metadata, languageCode)
+      const cues = readFileSync(subtitles, 'utf8').split(SUBTITLE_BLOCK_SEPARATOR).flatMap((block) => {
+        const lines = block.trim().split(/\r?\n/)
+        const timing = lines.findIndex((line) => line.includes(' --> '))
+        if (timing < 0) return []
+        const text = lines.slice(timing + 1).join(' ')
+          .replace(SUBTITLE_VOICE_PATTERN, '$1: ').replace(SUBTITLE_TAG_PATTERN, '').trim()
+        return text ? [`[${lines[timing]!.split(' --> ')[0]}] ${text}`] : []
+      })
+      if (!cues.length) throw new Error('No readable subtitle cues were returned.')
+      transcript = {
+        source: Object.fromEntries(TRANSCRIPT_METADATA_FIELDS.filter((field) => metadata[field] != null).map((field) => [field, metadata[field]])),
+        cues
+      }
+      const temporary = `${cachePath}.${randomUUID()}.tmp`
+      writeFileSync(temporary, JSON.stringify(transcript), { mode: 0o600 })
+      renameSync(temporary, cachePath)
+    }
+    if (startCue > transcript.cues.length) throw new Error('startCue exceeds the transcript length.')
+    const page: string[] = []
+    let nextCue = startCue
+    let chars = 0
+    while (nextCue < transcript.cues.length) {
+      const cue = transcript.cues[nextCue]!
+      if (cue.length > TRANSCRIPT_PAGE_CHARS) throw new Error('Subtitle cue exceeds the transcript page limit; inspect the subtitle file instead.')
+      if (chars + cue.length + 1 > TRANSCRIPT_PAGE_CHARS) break
+      page.push(cue)
+      chars += cue.length + 1
+      nextCue++
+    }
+    return {
+      source: transcript.source, videoUrl, startCue,
+      text: page.join('\n'), totalCues: transcript.cues.length,
+      nextCue: nextCue < transcript.cues.length ? nextCue : null,
+      complete: nextCue === transcript.cues.length
+    }
+  }
+
+  /**
+   * Downloads a video and embeds its thumbnail as cover art.
+   * @param videoUrl The URL of the video.
+   * @param outputPath The directory where the video will be saved.
+   * @returns A promise that resolves with the file path of the video with the embedded thumbnail.
+   */
+  async downloadVideoWithThumbnail(
+    videoUrl: string,
+    outputPath: string
+  ): Promise<string> {
+    try {
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
+      mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
+
+      const result = await this.executeCommand({
+        binaryName: 'yt-dlp',
+        args: [
+          ...this.getConfigArgs(),
+          videoUrl,
+          '--embed-thumbnail',
+          '--write-thumbnail',
+          '-o',
+          target.outputTemplate
+        ],
+        options: { sync: true }
+      })
+
+      return YtdlpTool.resolveDownloadedMediaPath(
+        result,
+        target,
+        commandStartedAtMs
+      )
+    } catch (error: unknown) {
+      throw new Error(
+        `Video with thumbnail download failed: ${(error as Error).message}`
+      )
+    }
+  }
+}

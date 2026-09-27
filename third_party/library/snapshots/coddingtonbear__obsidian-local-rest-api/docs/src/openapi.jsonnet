@@ -1,0 +1,1325 @@
+local Copy = import 'lib/copy.jsonnet';
+local Delete = import 'lib/delete.jsonnet';
+local Get = import 'lib/get.jsonnet';
+local Move = import 'lib/move.jsonnet';
+local Patch = import 'lib/patch.jsonnet';
+local Post = import 'lib/post.jsonnet';
+local Put = import 'lib/put.jsonnet';
+
+local ParamPath = import 'lib/path.param.jsonnet';
+
+local TargetingShared = importstr 'lib/descriptions/targeting.md';
+local GetShared = TargetingShared + '\n' + importstr 'lib/descriptions/get-shared.md';
+local PostShared = TargetingShared + '\n' + importstr 'lib/descriptions/post-shared.md';
+local PutShared = TargetingShared + '\n' + importstr 'lib/descriptions/put-shared.md';
+local PatchDescription(fileRef) =
+  'Modifies ' + fileRef + ' with a single structured instruction: an operation applied to a scope of a target — a heading, block reference, or frontmatter field within that document.\n\n' + Patch.description;
+
+// Signed-URL query parameters, accepted on GET and PUT /vault/{filename} while the
+// "Enable signed URLs" setting is on. Together they stand in for the bearer header.
+local SignedUrlParams = [
+  {
+    name: 'sig',
+    'in': 'query',
+    required: false,
+    description: 'Signature of a signed URL, minted by the MCP `vault_get_download_url` / `vault_get_upload_url` / `events_get_listener_url` tools or by `POST /events/{emitter}/{event}/`. Together with `exp` and `n`, authenticates this one request without an `Authorization` header. Only honoured while signed URLs are enabled in the plugin settings.',
+    schema: { type: 'string' },
+  },
+  {
+    name: 'exp',
+    'in': 'query',
+    required: false,
+    description: 'Expiry of a signed URL as Unix seconds; part of what `sig` signs.',
+    schema: { type: 'integer' },
+  },
+  {
+    name: 'n',
+    'in': 'query',
+    required: false,
+    description: 'Random per-link nonce, minted with the URL and part of what `sig` signs. Required whenever `sig` and `exp` are given: a signed request without it cannot verify. It exists so that two links minted for the same path within the same second are distinct -- `exp` has one-second granularity, so without it they would be byte-identical, and spending one would spend the other.',
+    schema: { type: 'string' },
+  },
+];
+local DownloadParam = {
+  name: 'download',
+  'in': 'query',
+  required: false,
+  description: 'On a signed-URL request, `1` asks for `Content-Disposition: attachment` (a download) instead of the `inline` disposition signed links are otherwise served with. Ignored on API-key requests, which are always served as attachments.',
+  schema: { type: 'string', enum: ['1'] },
+};
+
+local ContentLocationHeader = {
+  'Content-Location': {
+    description: 'Vault-relative path of the file that was acted on, e.g. `notes/file.md`. Each path component is percent-encoded on its own -- non-ASCII characters, and reserved characters such as `#`, `?` and `,` that would otherwise be read as a fragment, a query or a header-list separator -- so the value can be pasted straight back into a request URL.',
+    schema: { type: 'string', example: 'notes/file.md' },
+  },
+};
+local WithContentLocation(codes) = {
+  // `headers+:` rather than `headers:`: an operation's own response headers
+  // (`Markdown-Patch-Warnings`, say) must survive this being mixed in.
+  responses+: { [c]+: { headers+: ContentLocationHeader } for c in codes },
+};
+
+// `/vault/{filename}` only reports a Content-Location when the URL had to be
+// resolved -- a path that embeds a `/heading`, `/block` or `/frontmatter`
+// target is ambiguous with a file literally named that, and only the server
+// knows which way it went. A URL that names the file outright reports nothing.
+local ResolvedContentLocationHeader = {
+  'Content-Location': {
+    description: 'Vault-relative path of the file the URL resolved to, e.g. `notes/file.md`. Each path component is percent-encoded on its own -- non-ASCII characters, and reserved characters such as `#`, `?` and `,` that would otherwise be read as a fragment, a query or a header-list separator -- so the value can be pasted straight back into a request URL. Sent only when the URL embedded a target (`/heading/...`, `/block/...`, `/frontmatter/...`), since that is the case where the file the request acted on is not evident from the URL alone; absent on a whole-file request.',
+    required: false,
+    schema: { type: 'string', example: 'notes/file.md' },
+  },
+};
+local WithResolvedContentLocation(codes) = {
+  // `headers+:` rather than `headers:`: an operation's own response headers
+  // (`Markdown-Patch-Warnings`, say) must survive this being mixed in.
+  responses+: { [c]+: { headers+: ResolvedContentLocationHeader } for c in codes },
+};
+
+
+std.manifestYamlDoc(
+  {
+    openapi: '3.2.0',
+    info: {
+      title: 'Local REST API for Obsidian',
+      description: importstr 'lib/descriptions/info.md',
+      version: '1.0',
+    },
+    // Standalone documentation pages, rendered as sidebar articles by our
+    // customized Stoplight Elements bundle (Bump.sh's x-topics convention).
+    'x-topics': [
+      {
+        title: 'Migrating from 1.x to 2.x',
+        content: importstr 'lib/descriptions/migration-2.0.md',
+      },
+    ],
+    servers: [
+      {
+        url: 'https://{host}:{port}',
+        description: 'HTTPS (Secure Mode)',
+        variables: {
+          port: {
+            default: '27124',
+            description: 'HTTPS port',
+          },
+          host: {
+            default: '127.0.0.1',
+            description: 'Binding host',
+          },
+        },
+      },
+      {
+        url: 'http://{host}:{port}',
+        description: 'HTTP (Insecure Mode)',
+        variables: {
+          port: {
+            default: '27123',
+            description: 'HTTP port',
+          },
+          host: {
+            default: '127.0.0.1',
+            description: 'Binding host',
+          },
+        },
+      },
+    ],
+    components: {
+      securitySchemes: {
+        apiKeyAuth: {
+          description: 'Find your API Key in your Obsidian settings\nin the "Local REST API" section under "Plugins".\n',
+          type: 'http',
+          scheme: 'bearer',
+        },
+      },
+      schemas: {
+        NoteJson: {
+          type: 'object',
+          required: [
+            'tags',
+            'frontmatter',
+            'stat',
+            'path',
+            'content',
+            'links',
+            'backlinks',
+            'unresolvedLinks',
+          ],
+          properties: {
+            tags: {
+              type: 'array',
+              items: {
+                type: 'string',
+              },
+            },
+            frontmatter: {
+              type: 'object',
+            },
+            stat: {
+              type: 'object',
+              required: [
+                'ctime',
+                'mtime',
+                'size',
+              ],
+              properties: {
+                ctime: {
+                  type: 'number',
+                },
+                mtime: {
+                  type: 'number',
+                },
+                size: {
+                  type: 'number',
+                },
+              },
+            },
+            path: {
+              type: 'string',
+            },
+            content: {
+              type: 'string',
+            },
+            links: {
+              type: 'array',
+              description: 'Vault-relative paths of files this file links to.',
+              items: {
+                type: 'string',
+              },
+            },
+            backlinks: {
+              type: 'array',
+              description: 'Vault-relative paths of files that link to this file.',
+              items: {
+                type: 'string',
+              },
+            },
+            unresolvedLinks: {
+              type: 'array',
+              description: 'Link text found in this file that does not resolve to an existing vault file.',
+              items: {
+                type: 'string',
+              },
+            },
+          },
+        },
+        Error: {
+          type: 'object',
+          properties: {
+            message: {
+              type: 'string',
+              description: 'Message describing the error.',
+              example: 'A brief description of the error.',
+            },
+            errorCode: {
+              type: 'number',
+              description: 'A 5-digit error code uniquely identifying this particular type of error.\n',
+              example: 40149,
+            },
+          },
+        },
+        HeadingAddress: {
+          description: |||
+            A heading address: the path of heading texts from the top level down
+            to the target. Use `null` or `[]` for the document root.
+          |||,
+          oneOf: [
+            { type: 'array', items: { type: 'string' } },
+            { type: 'null' },
+          ],
+        },
+        HeadingTree: {
+          type: 'object',
+          description: |||
+            The document's headings nested by containment: each heading's text
+            maps to a HeadingTree of its child headings, and a leaf heading maps
+            to `{}`. Nesting carries no heading level — a level skipped in the
+            source leaves no hole. To target a heading, use the path of keys from
+            the top level down to it as a HeadingAddress.
+
+            A repeated sibling heading appears once, but its children are not
+            lost: they merge into that one key, because a heading is addressed by
+            its whole path rather than its name. Given `## Log / ### Monday`
+            followed by `## Log / ### Tuesday`, the tree is
+            `{"Log": {"Monday": {}, "Tuesday": {}}}` and both are separately
+            addressable. Only sections that share an entire path are one address,
+            and that address resolves to the first in document order. The tree
+            therefore lists exactly the headings you can target.
+          |||,
+          additionalProperties: { '$ref': '#/components/schemas/HeadingTree' },
+          example: { Overview: { Details: {} }, Appendix: {} },
+        },
+        // Generated from markdown-patch-2's published Zod schema by
+        // scripts/gen-patch-schema.mjs (run via `npm run build-docs`), so the
+        // REST docs, the MCP tool input, and the engine's validation are one
+        // definition. Edit the Zod schema, not this component.
+        PatchInstruction: import 'lib/patchInstruction.schema.json',
+      },
+    },
+    security: [
+      {
+        apiKeyAuth: [],
+      },
+    ],
+    tags: [
+      { name: 'Vault Files' },
+      { name: 'Active File' },
+      { name: 'Vault Directories' },
+      { name: 'Search' },
+      { name: 'Commands' },
+      { name: 'Open' },
+      { name: 'System' },
+      { name: 'MCP' },
+    ],
+    paths: {
+      '/active/': {
+        get: Get + WithContentLocation(['200']) {
+          tags: ['Active File'],
+          summary: 'Return the content of the active file open in Obsidian.\n',
+          description: (importstr 'lib/descriptions/active-get.md') + '\n' + GetShared,
+        },
+        put: Put + WithContentLocation(['200', '204']) {
+          tags: [
+            'Active File',
+          ],
+          summary: 'Update the content of the active file open in Obsidian.\n',
+          description: PutShared,
+        },
+        post: Post + WithContentLocation(['200', '204']) {
+          tags: [
+            'Active File',
+          ],
+          summary: 'Append content to the active file open in Obsidian.\n',
+          description: (importstr 'lib/descriptions/active-post.md') + '\n' + PostShared,
+        },
+        patch: Patch + WithContentLocation(['200']) {
+          tags: [
+            'Active File',
+          ],
+          summary: 'Partially update content in the currently open note.\n',
+          description: PatchDescription('the currently-open note'),
+        },
+        delete: Delete + WithContentLocation(['204']) {
+          tags: [
+            'Active File',
+          ],
+          summary: 'Deletes the currently-active file in Obsidian.\n',
+        },
+      },
+      '/vault/{filename}': {
+        get: Get + WithResolvedContentLocation(['200']) {
+          tags: [
+            'Vault Files',
+          ],
+          summary: 'Return the content of a single file in your vault.\n',
+          description: (importstr 'lib/descriptions/vault-file-get.md') + '\n' + GetShared,
+          parameters: [ParamPath] + super.parameters + SignedUrlParams + [DownloadParam],
+        },
+        put: Put + WithResolvedContentLocation(['200']) {
+          tags: [
+            'Vault Files',
+          ],
+          summary: 'Create a new file in your vault or update the content of an existing one.\n',
+          description: 'Creates a new file in your vault or updates the content of an existing one if the specified file already exists.\n\nAny content type is accepted: a request body that is not text or JSON is stored as raw bytes, so attachments -- images, PDFs, audio -- can be uploaded here as well as notes. A body sent with no `Content-Type` at all is treated as `application/octet-stream` and stored as raw bytes, which is what RFC 9110 allows. There is no size limit beyond the request-size cap.\n\nA signed upload URL (`?sig=…&exp=…&n=…`, from the MCP `vault_get_upload_url` tool) authenticates a single whole-file `PUT` in place of the `Authorization` header; the link is consumed by the request that succeeds. A signed `PUT` stores exactly the bytes sent, whatever `Content-Type` it declares -- it is not routed through the JSON or text parsers, which would otherwise reparse and re-serialize the body. It authorizes a whole-file write only: a request that also targets part of the document, through `Target-Type`/`Target` headers or through `/heading`, `/block` or `/frontmatter` path elements, is refused.\n\n' + PutShared,
+          parameters: [ParamPath] + super.parameters + SignedUrlParams,
+        },
+        post: Post + WithResolvedContentLocation(['200']) {
+          tags: [
+            'Vault Files',
+          ],
+          summary: 'Append content to a new or existing file.\n',
+          description: (importstr 'lib/descriptions/vault-file-post.md') + '\n' + PostShared,
+          parameters: [ParamPath] + super.parameters,
+        },
+        patch: Patch + WithResolvedContentLocation(['200']) {
+          tags: [
+            'Vault Files',
+          ],
+          summary: 'Partially update content in an existing note.\n',
+          description: PatchDescription('an existing note'),
+          parameters: [ParamPath] + super.parameters,
+        },
+        additionalOperations: {
+          move: Move {
+            parameters: Move.parameters + [ParamPath],
+          },
+          copy: Copy {
+            parameters: Copy.parameters + [ParamPath],
+          },
+        },
+        delete: Delete {
+          tags: [
+            'Vault Files',
+          ],
+          summary: 'Delete a particular file in your vault.\n',
+          parameters: Delete.parameters + [ParamPath],
+        },
+      },
+      '/vault/': {
+        get: {
+          tags: [
+            'Vault Directories',
+          ],
+          summary: 'List files that exist in the root of your vault.\n',
+          description: importstr 'lib/descriptions/vault-list.md',
+          responses: {
+            '200': {
+              description: 'Success',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      files: {
+                        type: 'array',
+                        items: {
+                          type: 'string',
+                        },
+                      },
+                    },
+                  },
+                  example: {
+                    files: [
+                      'mydocument.md',
+                      'somedirectory/',
+                    ],
+                  },
+                },
+              },
+            },
+            '404': {
+              description: 'Directory does not exist',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/vault/{pathToDirectory}/': {
+        get: {
+          tags: [
+            'Vault Directories',
+          ],
+          summary: 'List files that exist in the specified directory.\n',
+          parameters: [
+            {
+              name: 'pathToDirectory',
+              'in': 'path',
+              description: 'Path to list files from (relative to your vault root).  Note that empty directories will not be returned.\n\nNote: this particular interactive tool requires that you provide an argument for this field, but the API itself will allow you to list the root folder of your vault. If you would like to try listing content in the root of your vault using this interactive tool, use the above "List files that exist in the root of your vault" form above.\n',
+              required: true,
+              schema: {
+                type: 'string',
+                format: 'path',
+              },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Success',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      files: {
+                        type: 'array',
+                        items: {
+                          type: 'string',
+                        },
+                      },
+                    },
+                  },
+                  example: {
+                    files: [
+                      'mydocument.md',
+                      'somedirectory/',
+                    ],
+                  },
+                },
+              },
+            },
+            '404': {
+              description: 'Directory does not exist',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/tags/': {
+        get: {
+          tags: [
+            'Tags',
+          ],
+          summary: 'Get a list of all tags with metadata.\n',
+          description: 'Returns all tags found across all files in the vault, drawn from both inline (`#tag`) and frontmatter tag syntax. Each tag is returned without the `#` prefix. Hierarchical tags (e.g. `work/tasks`) also contribute a count to every parent prefix (e.g. `work`), mirroring how Obsidian displays tag counts in its sidebar.\n',
+          responses: {
+            '200': {
+              description: 'A list of tags with their usage counts.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      tags: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            name: {
+                              type: 'string',
+                              description: 'Tag name without the leading `#`.',
+                            },
+                            count: {
+                              type: 'number',
+                              description: 'Number of times this tag is used across the vault.',
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  example: {
+                    tags: [
+                      { name: 'project', count: 3 },
+                      { name: 'important', count: 1 },
+                      { name: 'work', count: 2 },
+                      { name: 'work/tasks', count: 2 },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/commands/': {
+        get: {
+          tags: [
+            'Commands',
+          ],
+          summary: 'Get a list of available commands.\n',
+          responses: {
+            '200': {
+              description: 'A list of available commands.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      commands: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            id: {
+                              type: 'string',
+                            },
+                            name: {
+                              type: 'string',
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                  example: {
+                    commands: [
+                      {
+                        id: 'global-search:open',
+                        name: 'Search: Search in all files',
+                      },
+                      {
+                        id: 'graph:open',
+                        name: 'Graph view: Open graph view',
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/commands/{commandId}/': {
+        post: {
+          tags: [
+            'Commands',
+          ],
+          summary: 'Execute a command.\n',
+          parameters: [
+            {
+              name: 'commandId',
+              'in': 'path',
+              description: 'The id of the command to execute',
+              required: true,
+              schema: {
+                type: 'string',
+              },
+            },
+          ],
+          responses: {
+            '204': {
+              description: 'Success',
+            },
+            '404': {
+              description: 'The command you specified does not exist.',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/search/': {
+        post: {
+          tags: [
+            'Search',
+          ],
+          summary: 'Search for documents matching a specified search query\n',
+          description: importstr 'lib/descriptions/search-post.md',
+          requestBody: {
+            required: true,
+            content: {
+              'application/vnd.olrapi.jsonlogic+json': {
+                schema: {
+                  type: 'object',
+                  externalDocs: {
+                    url: 'https://jsonlogic.com/operations.html',
+                  },
+                },
+                examples: {
+                  find_by_frontmatter_value: {
+                    summary: 'Find notes having a certain frontmatter field value.',
+                    value: '{\n  "==": [\n    {"var": "frontmatter.myField"},\n    "myValue"\n  ]\n}\n',
+                  },
+                  find_by_frontmatter_url_glob: {
+                    summary: 'Find notes having URL or a matching URL glob frontmatter field.',
+                    value: '{\n  "or": [\n    {"===": [{"var": "frontmatter.url"}, "https://myurl.com/some/path/"]},\n    {"glob": [{"var": "frontmatter.url-glob"}, "https://myurl.com/some/path/"]}\n  ]\n}\n',
+                  },
+                  find_by_tag: {
+                    summary: 'Find notes having a certain tag',
+                    value: '{\n  "in": [\n    "myTag",\n    {"var": "tags"}\n  ]\n}\n',
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Success',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: [
+                        'filename',
+                        'result',
+                      ],
+                      properties: {
+                        filename: {
+                          type: 'string',
+                          description: 'Path to the matching file',
+                        },
+                        result: {
+                          oneOf: [
+                            {
+                              type: 'string',
+                            },
+                            {
+                              type: 'number',
+                            },
+                            {
+                              type: 'array',
+                              items: {},
+                            },
+                            {
+                              type: 'object',
+                            },
+                            {
+                              type: 'boolean',
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '400': {
+              description: 'Bad request.  Make sure you have specified an acceptable\nContent-Type for your search query.\n',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/search/simple/': {
+        post: {
+          tags: [
+            'Search',
+          ],
+          summary: 'Search for documents matching a specified text query\n',
+          parameters: [
+            {
+              name: 'query',
+              'in': 'query',
+              description: 'Your search query',
+              required: true,
+              schema: {
+                type: 'string',
+              },
+            },
+            {
+              name: 'contextLength',
+              'in': 'query',
+              description: 'How much context to return around the matching string',
+              required: false,
+              schema: {
+                type: 'number',
+                default: 100,
+              },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Success',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        filename: {
+                          type: 'string',
+                          description: 'Path to the matching file',
+                        },
+                        score: {
+                          type: 'number',
+                        },
+                        matches: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            required: [
+                              'match',
+                              'context',
+                            ],
+                            properties: {
+                              match: {
+                                type: 'object',
+                                required: [
+                                  'start',
+                                  'end',
+                                ],
+                                properties: {
+                                  start: {
+                                    type: 'number',
+                                  },
+                                  end: {
+                                    type: 'number',
+                                  },
+                                },
+                              },
+                              context: {
+                                type: 'string',
+                              },
+                            },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/events/{emitter}/{event}/': {
+        parameters: [
+          {
+            name: 'emitter',
+            'in': 'path',
+            required: true,
+            description: "The Obsidian object whose event to follow (`vault`, `metadataCache`, `workspace`), or the plugin id of an extension that registered events.",
+            schema: { type: 'string' },
+          },
+          {
+            name: 'event',
+            'in': 'path',
+            required: true,
+            description: "The event's name, one of those listed for the emitter: Obsidian's own name for a built-in emitter, or the name the extension registered it under.",
+            schema: { type: 'string' },
+          },
+        ],
+        post: {
+          tags: ['Events'],
+          summary: 'Subscribe to an Obsidian event as a Server-Sent Events stream\n',
+          description: importstr 'lib/descriptions/events.md',
+          parameters: [
+            {
+              name: 'ttl',
+              'in': 'query',
+              required: false,
+              description: "How long the stream URL stays valid, in seconds; clamped to 10-86400. Defaults to the plugin's signed-URL lifetime.",
+              schema: { type: 'integer' },
+            },
+          ],
+          requestBody: {
+            required: false,
+            content: {
+              'application/vnd.olrapi.jsonlogic+json': {
+                schema: {
+                  type: 'object',
+                  externalDocs: { url: 'https://jsonlogic.com/operations.html' },
+                },
+                examples: {
+                  notes_in_folder: {
+                    summary: 'Only files under journal/.',
+                    value: '{"glob": ["journal/*", {"var": "path"}]}\n',
+                  },
+                  frontmatter_value: {
+                    summary: 'Only notes whose status is done (use with metadataCache/changed).',
+                    value: '{"==": [{"var": "file.frontmatter.status"}, "done"]}\n',
+                  },
+                },
+              },
+              'application/json': {
+                schema: { type: 'object' },
+              },
+            },
+          },
+          responses: {
+            '201': {
+              description: 'Subscription registered.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    required: ['id', 'emitter', 'event', 'url', 'signed', 'expiresAt'],
+                    properties: {
+                      id: { type: 'string', description: 'The subscription id.' },
+                      emitter: { type: 'string' },
+                      event: { type: 'string' },
+                      url: {
+                        type: 'string',
+                        description: 'The stream to open with GET. Signed when signed URLs are enabled.',
+                      },
+                      signed: {
+                        type: 'boolean',
+                        description: 'Whether `url` carries a signature, or needs the API key.',
+                      },
+                      expiresAt: {
+                        type: 'string',
+                        format: 'date-time',
+                        description: 'After this, the stream can no longer be opened; one already open stays open.',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '400': {
+              description: 'No event named (`/events/` or `/events/{emitter}/`), a filter JsonLogic cannot evaluate, or a body that is not JSON.',
+              content: { 'application/json': { schema: { '$ref': '#/components/schemas/Error' } } },
+            },
+            '404': {
+              description: 'The emitter or event cannot be streamed. The body lists what can, as `supportedEvents`.',
+              content: { 'application/json': { schema: { '$ref': '#/components/schemas/Error' } } },
+            },
+            '503': {
+              description: 'Too many subscriptions exist.',
+              content: { 'application/json': { schema: { '$ref': '#/components/schemas/Error' } } },
+            },
+          },
+        },
+      },
+      '/events/{emitter}/{event}/{subscriptionId}/': {
+        get: {
+          tags: ['Events'],
+          summary: 'Open the Server-Sent Events stream of a subscription\n',
+          description: |||
+            Streams the subscription's events as `text/event-stream`, with a keep-alive comment every 15 seconds, until the client disconnects or the plugin reloads. See `POST /events/{emitter}/{event}/` for what each message carries.
+
+            Authenticates with the API key, or with the `sig`, `exp` and `n` parameters of the URL that registering the subscription returned. A stream opened before the subscription expires stays open after it.
+          |||,
+          parameters: [
+            {
+              name: 'emitter',
+              'in': 'path',
+              required: true,
+              schema: { type: 'string' },
+            },
+            { name: 'event', 'in': 'path', required: true, schema: { type: 'string' } },
+            {
+              name: 'subscriptionId',
+              'in': 'path',
+              required: true,
+              description: 'The `id` returned when the subscription was registered.',
+              schema: { type: 'string' },
+            },
+          ] + SignedUrlParams,
+          responses: {
+            '200': {
+              description: 'The event stream.',
+              content: {
+                'text/event-stream': {
+                  schema: { type: 'string' },
+                  example: 'event: modify\nid: 3f9a1c2e-7\ndata: {"emitter":"vault","event":"modify","path":"journal/today.md","isFolder":false,"file":{"path":"journal/today.md","tags":[],"frontmatter":{},"stat":{"ctime":1705276800000,"mtime":1705363200000,"size":1024},"links":[],"backlinks":[],"unresolvedLinks":[]}}\n\n',
+                },
+              },
+            },
+            '401': {
+              description: 'No API key, and no valid signature for this subscription.',
+              content: { 'application/json': { schema: { '$ref': '#/components/schemas/Error' } } },
+            },
+            '404': {
+              description: 'No such subscription for this emitter and event, or it has expired.',
+              content: { 'application/json': { schema: { '$ref': '#/components/schemas/Error' } } },
+            },
+            '503': {
+              description: 'Too many streams are open.',
+              content: { 'application/json': { schema: { '$ref': '#/components/schemas/Error' } } },
+            },
+          },
+        },
+      },
+      '/open/{filename}': {
+        post: {
+          tags: [
+            'Open',
+          ],
+          summary: 'Open the specified document in the Obsidian user interface.\n',
+          description: 'Note: Obsidian will create a new document at the path you have\nspecified if such a document did not already exist.\n',
+          parameters: [
+            {
+              name: 'filename',
+              'in': 'path',
+              description: 'Path to the file to return (relative to your vault root).\n',
+              required: true,
+              schema: {
+                type: 'string',
+                format: 'path',
+              },
+            },
+            {
+              name: 'newLeaf',
+              'in': 'query',
+              description: 'Open this as a new leaf?',
+              required: false,
+              schema: {
+                type: 'boolean',
+              },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Success',
+            },
+          },
+        },
+      },
+      '/': {
+        get: {
+          tags: [
+            'System',
+          ],
+          summary: 'Returns basic details about the server.\n',
+          description: 'Returns basic details about the server as well as your authentication status.\n\nThis is the only API request that does *not* require authentication.\n',
+          responses: {
+            '200': {
+              description: 'Success',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: {
+                        type: 'string',
+                        description: "'OK'",
+                      },
+                      versions: {
+                        type: 'object',
+                        properties: {
+                          obsidian: {
+                            type: 'string',
+                            description: 'Obsidian plugin API version',
+                          },
+                          'self': {
+                            type: 'string',
+                            description: 'Plugin version.',
+                          },
+                        },
+                      },
+                      service: {
+                        type: 'string',
+                        description: "'Obsidian Local REST API'",
+                      },
+                      authenticated: {
+                        type: 'boolean',
+                        description: 'Is your current request authenticated?',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/openapi.yaml': {
+        get: {
+          tags: [
+            'System',
+          ],
+          summary: 'Returns OpenAPI YAML document describing the capabilities of this API.\n',
+          description: "Includes the routes of any installed extension plugin that describes them. Each path an extension contributes carries an `x-obsidian-extension` field naming that extension's plugin ID.\n",
+          responses: {
+            '200': {
+              description: 'Success',
+            },
+          },
+        },
+      },
+      '/openapi.json': {
+        get: {
+          tags: [
+            'System',
+          ],
+          summary: 'Returns the OpenAPI document describing the capabilities of this API, as JSON.\n',
+          description: 'The same document as `/openapi.yaml`, including the routes that extension plugins describe.\n',
+          responses: {
+            '200': {
+              description: 'Success',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/mcp/': {
+        get: {
+          tags: ['MCP'],
+          summary: 'Open a server-sent events stream for an existing sessionful MCP session.\n',
+          description: 'Opens a long-lived SSE stream so the server can push messages to the client for an existing session. Requires the session ID returned by the `initialize` response. This is a session operation of the sessionful protocol revisions (`2024-10-07` through `2025-11-25`); the `2026-07-28` revision removed it, and clients on that revision open a `subscriptions/listen` stream over POST instead.\n',
+          parameters: [
+            {
+              name: 'Mcp-Session-Id',
+              'in': 'header',
+              description: 'Session ID returned by the server on initialization.',
+              required: true,
+              schema: {
+                type: 'string',
+              },
+            },
+            {
+              name: 'MCP-Protocol-Version',
+              'in': 'header',
+              description: 'MCP protocol version negotiated during initialization (e.g. `2025-06-18`). Unrecognised values are rejected with 400.',
+              required: false,
+              schema: {
+                type: 'string',
+              },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'SSE stream opened. The server pushes JSON-RPC messages as server-sent events.',
+              content: {
+                'text/event-stream': {
+                  schema: {
+                    type: 'string',
+                  },
+                },
+              },
+            },
+            '400': {
+              description: 'Unsupported MCP-Protocol-Version.',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+            '404': {
+              description: 'Session not found.',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+            '401': {
+              description: 'API key required.',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          tags: ['MCP'],
+          summary: 'Send a JSON-RPC 2.0 message to the MCP server.\n',
+          description: importstr 'lib/descriptions/mcp.md',
+          parameters: [
+            {
+              name: 'Mcp-Session-Id',
+              'in': 'header',
+              description: 'Session ID returned by the server on initialization. A session operation of the sessionful protocol revisions (`2024-10-07` through `2025-11-25`): omit it for the initial `initialize` request, send it on every later request of that session, and expect 404 if the session has ended. The `2026-07-28` revision has no sessions — the header is neither issued nor read there.',
+              required: false,
+              schema: {
+                type: 'string',
+              },
+            },
+            {
+              name: 'MCP-Protocol-Version',
+              'in': 'header',
+              description: 'Protocol revision this request speaks. Required on every request on the `2026-07-28` revision, where it must match `params._meta["io.modelcontextprotocol/protocolVersion"]`; on the sessionful revisions it carries the version negotiated during `initialize` (e.g. `2025-06-18`). Unrecognised values are rejected with 400.',
+              required: false,
+              schema: {
+                type: 'string',
+              },
+            },
+            {
+              name: 'Mcp-Method',
+              'in': 'header',
+              description: 'The JSON-RPC method named in the request body. Required on `2026-07-28` requests; a value that disagrees with the body is rejected with 400 and JSON-RPC error `-32020`.',
+              required: false,
+              schema: {
+                type: 'string',
+              },
+            },
+            {
+              name: 'Mcp-Name',
+              'in': 'header',
+              description: 'The primary subject named in the request body — `params.name` for `tools/call` and `prompts/get`, `params.uri` for `resources/read`. Required on `2026-07-28` requests that carry one; a value that disagrees with the body is rejected with 400 and JSON-RPC error `-32020`.',
+              required: false,
+              schema: {
+                type: 'string',
+              },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  description: 'A JSON-RPC 2.0 request message.',
+                  required: ['jsonrpc', 'method'],
+                  properties: {
+                    jsonrpc: {
+                      type: 'string',
+                      enum: ['2.0'],
+                      description: 'JSON-RPC version. Must be "2.0".',
+                    },
+                    id: {
+                      oneOf: [{ type: 'string' }, { type: 'number' }],
+                      description: 'Request identifier. Include for calls that expect a response; omit for notifications.',
+                    },
+                    method: {
+                      type: 'string',
+                      description: 'MCP method to invoke.',
+                      enum: [
+                        'server/discover',
+                        'initialize',
+                        'tools/list',
+                        'tools/call',
+                        'resources/list',
+                        'resources/read',
+                        'prompts/list',
+                        'prompts/get',
+                        'ping',
+                      ],
+                    },
+                    params: {
+                      type: 'object',
+                      description: 'Method-specific parameters.',
+                    },
+                  },
+                },
+                examples: {
+                  discover: {
+                    summary: 'Discover the supported protocol revisions and capabilities (2026-07-28)',
+                    value: {
+                      jsonrpc: '2.0',
+                      id: 1,
+                      method: 'server/discover',
+                      params: {
+                        _meta: {
+                          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                          'io.modelcontextprotocol/clientInfo': { name: 'my-client', version: '1.0.0' },
+                          'io.modelcontextprotocol/clientCapabilities': {},
+                        },
+                      },
+                    },
+                  },
+                  list_tools: {
+                    summary: 'List all available MCP tools (2026-07-28)',
+                    value: {
+                      jsonrpc: '2.0',
+                      id: 2,
+                      method: 'tools/list',
+                      params: {
+                        _meta: {
+                          'io.modelcontextprotocol/protocolVersion': '2026-07-28',
+                          'io.modelcontextprotocol/clientInfo': { name: 'my-client', version: '1.0.0' },
+                          'io.modelcontextprotocol/clientCapabilities': {},
+                        },
+                      },
+                    },
+                  },
+                  call_vault_read: {
+                    summary: 'Read a vault file (tools/call)',
+                    value: {
+                      jsonrpc: '2.0',
+                      id: 2,
+                      method: 'tools/call',
+                      params: {
+                        name: 'vault_read',
+                        arguments: {
+                          path: 'path/to/note.md',
+                        },
+                      },
+                    },
+                  },
+                  call_vault_patch: {
+                    summary: 'Patch a heading in a vault file (tools/call)',
+                    value: {
+                      jsonrpc: '2.0',
+                      id: 3,
+                      method: 'tools/call',
+                      params: {
+                        name: 'vault_patch',
+                        arguments: {
+                          path: 'path/to/note.md',
+                          targetType: 'heading',
+                          target: ['My Section'],
+                          operation: 'append',
+                          content: 'New line of content\n',
+                        },
+                      },
+                    },
+                  },
+                  read_openapi_resource: {
+                    summary: 'Read the OpenAPI spec resource (resources/read)',
+                    value: {
+                      jsonrpc: '2.0',
+                      id: 4,
+                      method: 'resources/read',
+                      params: {
+                        uri: 'obsidian://local-rest-api/openapi.yaml',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Message handled. The body is either a single JSON-RPC response (`application/json`) or a server-sent event stream carrying request-scoped notifications followed by the response (`text/event-stream`); notifications are answered with `202 Accepted` and no body. On a sessionful-revision `initialize` the `Mcp-Session-Id` response header carries the new session ID; `2026-07-28` requests are served without one.',
+              headers: {
+                'Mcp-Session-Id': {
+                  description: 'Session ID assigned by the server. Present only on a sessionful-revision `initialize` response.',
+                  schema: {
+                    type: 'string',
+                  },
+                },
+              },
+            },
+            '400': {
+              description: 'Unsupported `MCP-Protocol-Version`, or — on the `2026-07-28` revision — a JSON-RPC error response carrying `-32020` (headers disagree with the body), `-32022` (unsupported protocol version), or `-32602` (malformed `_meta` envelope).',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+            '401': {
+              description: 'API key required.',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+            '404': {
+              description: 'Session not found. The `Mcp-Session-Id` header names a session that has ended; hand-shake again with `initialize`.',
+              content: {
+                'application/json': {
+                  schema: {
+                    '$ref': '#/components/schemas/Error',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      '/obsidian-local-rest-api.crt': {
+        get: {
+          tags: [
+            'System',
+          ],
+          summary: 'Returns the certificate to trust in order to connect to this API.\n',
+          description: |||
+            Returns, in PEM format, the certificate authority that signed the certificate the HTTPS server presents; import this as a trusted authority in your OS, browser, or HTTP client to connect without certificate warnings.
+
+            The authority carries a critical `nameConstraints` extension permitting only `127.0.0.1`, `localhost`, the configured binding host, and the configured subject alternative names, so trusting it grants it no authority over other hostnames.
+
+            Installations still running certificate material generated before the plugin began issuing a separate certificate authority return their single self-signed certificate instead. The authenticated `GET /` response's `certificateInfo.regenerateReason` reports `ca-used-as-leaf` in that case.
+          |||,
+          responses: {
+            '200': {
+              description: 'Success',
+            },
+          },
+        },
+      },
+    },
+  },
+  quote_keys=false,
+  indent_array_in_object=true,
+)

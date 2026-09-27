@@ -1,0 +1,246 @@
+import express from "express";
+import { z } from "zod";
+import type { ToolAnnotations } from "@modelcontextprotocol/server";
+import { BUILT_IN_ROUTES } from "./constants";
+import { McpHandler } from "./mcpHandler";
+import type { OpenApiSpec } from "./openApiSpec";
+import type {
+  LocalRestApiPublicApi,
+  McpPromptDefinition,
+  McpResourceDefinition,
+  McpResourceTemplateDefinition,
+  McpToolDefinition,
+  OpenApiDescription,
+  StreamableEventDefinition,
+} from "./publicApi";
+import type { VaultSubresourceRegistry } from "./vaultSubresources";
+
+// The public surface — the interface and ApiVersionUnsupportedError — lives in
+// ./publicApi, which is what the generated publicApi.d.ts is emitted from. Re-exported
+// here so internal callers keep importing them from the module that implements them.
+export { ApiVersionUnsupportedError } from "./publicApi";
+export type { LocalRestApiPublicApi, StreamableEventDefinition } from "./publicApi";
+
+/**
+ * A route an extension has registered, as reported by {@link
+ * LocalRestApiPublicApiImpl.getRoutes}.
+ *
+ * Deliberately declared here rather than in ./publicApi: it describes the host's own
+ * bookkeeping, which only `GET /` consumes, so publishing it would freeze this shape
+ * into the extension contract for no one's benefit.
+ */
+export interface RegisteredRoute {
+  path: string;
+  authenticated: boolean;
+}
+
+export default class LocalRestApiPublicApiImpl implements LocalRestApiPublicApi {
+  public readonly apiVersion = 5;
+  private router: express.Router;
+  private publicRouter: express.Router;
+  private mcpHandler: McpHandler;
+  private vaultSubresources: VaultSubresourceRegistry;
+  private openApiSpec: OpenApiSpec;
+  private pluginId: string;
+  private onUnregister: () => void;
+  private addEvent: (event: string, definition: StreamableEventDefinition) => void;
+  private unregistered = false;
+  private registeredRoutes: RegisteredRoute[] = [];
+  // One per MCP tool, resource, resource template, and prompt, all undone by unregister().
+  private mcpCleanups: (() => void)[] = [];
+  private registeredMcpTools: string[] = [];
+  private registeredSubresources: { name: string; router: express.Router }[] = [];
+  private openApiCleanups: (() => void)[] = [];
+
+  constructor(
+    router: express.Router,
+    publicRouter: express.Router,
+    mcpHandler: McpHandler,
+    vaultSubresources: VaultSubresourceRegistry,
+    openApiSpec: OpenApiSpec,
+    pluginId: string,
+    onUnregister: () => void,
+    addEvent: (event: string, definition: StreamableEventDefinition) => void = () => {
+      throw new Error("Streamable events are not available.");
+    },
+  ) {
+    this.router = router;
+    this.publicRouter = publicRouter;
+    this.mcpHandler = mcpHandler;
+    this.vaultSubresources = vaultSubresources;
+    this.openApiSpec = openApiSpec;
+    this.pluginId = pluginId;
+    this.onUnregister = onUnregister;
+    this.addEvent = addEvent;
+    this.unregistered = false;
+  }
+
+  private assertRegistered(): void {
+    if (this.unregistered) {
+      throw new Error(
+        "Routes cannot be added after API extension has been unregistered."
+      );
+    }
+  }
+
+  /**
+   * Host-only: the routes registered through this handle, for the `GET /` response.
+   * Not part of {@link LocalRestApiPublicApi} — see `HostOnlyMembers` below.
+   *
+   * Returns a copy. Handing back the live array would let any caller reorder or empty
+   * the registration bookkeeping this instance relies on.
+   */
+  public getRoutes(): RegisteredRoute[] {
+    return [...this.registeredRoutes];
+  }
+
+  /** Adds an authenticated route to the request handler. */
+  public addRoute(path: string): express.IRoute {
+    this.assertRegistered();
+    this.registeredRoutes.push({ path, authenticated: true });
+    return this.router.route(path);
+  }
+
+  /** Adds an unauthenticated route to the request handler. */
+  public addPublicRoute(path: string): express.IRoute {
+    this.assertRegistered();
+    if (BUILT_IN_ROUTES.includes(path)) {
+      throw new Error(
+        `Cannot register a public route at "${path}" — this path is reserved by Obsidian Local REST API.`
+      );
+    }
+    this.registeredRoutes.push({ path, authenticated: false });
+    return this.publicRouter.route(path);
+  }
+
+  /** Adds a sub-resource under every note; see ./publicApi for the contract. */
+  public addVaultSubresource(name: string): express.Router {
+    this.assertRegistered();
+    const router = express.Router();
+    this.vaultSubresources.register(name, router);
+    this.registeredSubresources.push({ name, router });
+    this.registeredRoutes.push({ path: `/vault/{path}/${name}/`, authenticated: true });
+    return router;
+  }
+
+  /** Registers an MCP tool that will be available to MCP clients. */
+  public addMcpTool(
+    name: string,
+    description: string,
+    schema: Record<string, z.ZodTypeAny>,
+    callback: (args: Record<string, unknown>) => Promise<unknown>,
+    annotations?: ToolAnnotations,
+  ): void;
+  public addMcpTool(definition: McpToolDefinition): void;
+  public addMcpTool(
+    nameOrDefinition: string | McpToolDefinition,
+    description?: string,
+    schema?: Record<string, z.ZodTypeAny>,
+    callback?: (args: Record<string, unknown>) => Promise<unknown>,
+    annotations?: ToolAnnotations,
+  ): void {
+    this.assertRegistered();
+    if (typeof nameOrDefinition !== "string") {
+      this.mcpCleanups.push(this.mcpHandler.registerToolDefinition(nameOrDefinition));
+      this.registeredMcpTools.push(nameOrDefinition.name);
+      return;
+    }
+    // Only reachable from plain JavaScript: the overloads make these required.
+    if (description === undefined || schema === undefined || callback === undefined) {
+      throw new TypeError(
+        "addMcpTool(name, description, schema, callback) requires all four arguments.",
+      );
+    }
+    this.mcpCleanups.push(
+      this.mcpHandler.registerTool(nameOrDefinition, description, schema, callback, annotations),
+    );
+    this.registeredMcpTools.push(nameOrDefinition);
+  }
+
+  /** Registers an MCP resource at a fixed URI. */
+  public addMcpResource(definition: McpResourceDefinition): void {
+    this.assertRegistered();
+    this.mcpCleanups.push(this.mcpHandler.registerResource(definition));
+  }
+
+  /** Registers a family of MCP resources addressed by a URI template. */
+  public addMcpResourceTemplate(definition: McpResourceTemplateDefinition): void {
+    this.assertRegistered();
+    this.mcpCleanups.push(this.mcpHandler.registerResourceTemplate(definition));
+  }
+
+  /** Registers an MCP prompt. */
+  public addMcpPrompt(definition: McpPromptDefinition): void {
+    this.assertRegistered();
+    this.mcpCleanups.push(this.mcpHandler.registerPrompt(definition));
+  }
+
+  /** Makes one of the extension's events streamable; see the interface for the contract. */
+  public addStreamableEvent(event: string, definition: StreamableEventDefinition): void {
+    this.assertRegistered();
+    this.addEvent(event, definition);
+  }
+
+  /** Host-only counterpart to {@link getRoutes}, returning a copy for the same reason. */
+  public getMcpTools(): string[] {
+    return [...this.registeredMcpTools];
+  }
+
+  /** Documents this extension's routes in the published OpenAPI spec. */
+  public addOpenApiDescription(description: OpenApiDescription): void {
+    this.assertRegistered();
+    this.openApiCleanups.push(this.openApiSpec.add(this.pluginId, description));
+  }
+
+  public unregister(): void {
+    for (const cleanup of this.mcpCleanups) {
+      cleanup();
+    }
+    for (const { name, router } of this.registeredSubresources) {
+      this.vaultSubresources.unregister(name, router);
+    }
+    for (const cleanup of this.openApiCleanups) {
+      cleanup();
+    }
+    this.openApiCleanups = [];
+    this.onUnregister();
+    this.unregistered = true;
+  }
+}
+
+/** Resolves to `T` only when `T` is `never`; any other type is a compile error. */
+type AssertNever<T extends never> = T;
+
+/**
+ * Members that are public on the class because the host calls them across module
+ * boundaries, but that are deliberately *not* promised to extensions.
+ *
+ * TypeScript has no visibility level for "public to this codebase, private to our
+ * consumers", so the distinction has to be written down. Anything named here is exempt
+ * from the completeness check below; everything else must appear in
+ * {@link LocalRestApiPublicApi}.
+ */
+type HostOnlyMembers = "getRoutes" | "getMcpTools";
+
+/**
+ * Compile-time guard that every public member is a deliberate choice.
+ *
+ * The `implements` clause above already fails the build when the class drops something
+ * the interface promises. This catches the opposite drift: a public member added to the
+ * class that neither ./publicApi nor HostOnlyMembers accounts for. Adding a public
+ * method here without classifying it breaks `npm run typecheck`.
+ *
+ * The classification matters more than it looks. Before HostOnlyMembers existed, the
+ * only way to satisfy this guard was to declare the member in ./publicApi — so the
+ * guard, meant to keep the published surface honest, actively pushed host-internal
+ * methods into the extension contract. `getRoutes` and `getMcpTools` reached the
+ * published types that way; both are called only by the `GET /` handler.
+ *
+ * Exported only so it counts as used; it has no runtime representation.
+ */
+export type PublicSurfaceIsComplete = AssertNever<
+  Exclude<
+    keyof LocalRestApiPublicApiImpl,
+    keyof LocalRestApiPublicApi | HostOnlyMembers
+  >
+>;

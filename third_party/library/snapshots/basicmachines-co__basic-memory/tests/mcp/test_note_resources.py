@@ -1,0 +1,400 @@
+"""Tests for notes as MCP resources (memory://{project}/{path*})."""
+
+from __future__ import annotations
+
+from importlib import import_module
+from types import SimpleNamespace
+
+import pytest
+from fastmcp import Client
+from fastmcp.exceptions import ResourceError, ToolError
+
+import basic_memory.mcp.resources.notes as notes_module
+from basic_memory.mcp.project_context import DetectedProjectRoute
+from basic_memory.mcp.resources.notes import NOTE_TEMPLATE, note_resource
+from basic_memory.mcp.server import mcp
+from basic_memory.mcp.tools import write_note
+
+
+async def _read(uri: str) -> str:
+    # A real client session: resources/read through the server injects a live
+    # Context, exactly as production does (mcp.read_resource alone would not).
+    async with Client(mcp) as session:
+        contents = await session.read_resource(uri)
+    text = getattr(contents[0], "text", None)
+    assert isinstance(text, str)
+    return text
+
+
+@pytest.mark.asyncio
+async def test_note_template_is_registered() -> None:
+    templates = {str(template.uri_template) for template in await mcp.list_resource_templates()}
+
+    assert NOTE_TEMPLATE in templates
+
+
+@pytest.mark.asyncio
+async def test_note_reads_as_raw_markdown(app, test_project) -> None:
+    await write_note(
+        title="Resource Read Test",
+        directory="specs",
+        content="# Resource Read Test\n\n- [design] notes are resources #mcp\n",
+        project=test_project.name,
+    )
+
+    text = await _read(f"memory://{test_project.permalink}/specs/resource-read-test")
+
+    assert text.startswith("---\n")  # the raw file, frontmatter included
+    assert "- [design] notes are resources #mcp" in text
+
+
+@pytest.mark.asyncio
+async def test_unknown_note_and_unknown_project_raise_resource_errors(app, test_project) -> None:
+    with pytest.raises(ResourceError, match="No note 'test-project/nope/missing'"):
+        await note_resource(project=test_project.name, path="nope/missing")
+    # An unknown first segment falls back to the default project (unprefixed
+    # permalinks) and reports the full identifier as missing there.
+    with pytest.raises(ResourceError, match="No note"):
+        await note_resource(project="no-such-project-anywhere", path="anything")
+
+
+@pytest.mark.asyncio
+async def test_unprefixed_permalink_reads_in_default_project(app, test_project) -> None:
+    # With permalinks_include_project=False (or legacy notes) the URI's first
+    # segment is a directory, not a project; routing must fall back to the
+    # active/default project with the whole path as the identifier.
+    await write_note(
+        title="Roadmap",
+        directory="docs",
+        content="# Roadmap\n\nUnprefixed permalink read.\n",
+        project=test_project.name,
+    )
+
+    text = await _read("memory://docs/roadmap")
+
+    assert "Unprefixed permalink read." in text
+
+
+@pytest.mark.asyncio
+async def test_project_route_not_found_is_not_a_note_miss(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A stale configured project (backend answers 'Project not found') must
+    # surface the route failure — never claim the note itself is missing.
+    def broken_route(project, context=None, project_id=None):
+        raise ToolError("Project not found: docs")
+
+    monkeypatch.setattr(notes_module, "get_project_client", broken_route)
+    with pytest.raises(ResourceError, match="Project not found") as excinfo:
+        await note_resource(project=test_project.name, path="anything")
+    assert not isinstance(excinfo.value, notes_module.NoteNotFoundError)
+
+
+@pytest.mark.asyncio
+async def test_non_404_failures_keep_their_cause(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def failing_resolve(client, url, json=None):
+        raise ToolError("Authentication required: You need to authenticate to access 'x'")
+
+    monkeypatch.setattr(notes_module, "call_post", failing_resolve)
+    with pytest.raises(ResourceError, match="Authentication required"):
+        await note_resource(project=test_project.name, path="anything")
+
+
+@pytest.mark.asyncio
+async def test_routing_errors_surface_their_cause(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def constrained(client, identifier, project, context):
+        raise ValueError("Project is constrained to 'other'")
+
+    monkeypatch.setattr(notes_module, "resolve_project_and_path", constrained)
+    with pytest.raises(ResourceError, match="constrained"):
+        await note_resource(project=test_project.name, path="anything")
+
+
+@pytest.mark.asyncio
+async def test_man_namespace_stays_the_manual(app) -> None:
+    # Which template a server matches first is not guaranteed, so the notes
+    # handler must answer memory://man/... exactly as the manual would.
+    direct = await note_resource(project="man", path="search-notes(3)")
+    served = await _read("memory://man/search-notes(3)")
+
+    assert direct.startswith("---\ntitle: search-notes(3)\n")
+    assert served == direct
+
+
+@pytest.mark.asyncio
+async def test_client_is_opened_for_the_uris_own_project(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A cloud-mode project needs its own transport; the client must be routed for
+    # the URI's project when it is configured, and for the default when it is not.
+    routes: list[str | None] = []
+    real_get_project_client = notes_module.get_project_client
+
+    def recording_get_project_client(project, context=None, project_id=None):
+        routes.append(project)
+        return real_get_project_client(project, context, project_id=project_id)
+
+    monkeypatch.setattr(notes_module, "get_project_client", recording_get_project_client)
+
+    await write_note(
+        title="Routed",
+        directory="specs",
+        content="# Routed\n",
+        project=test_project.name,
+    )
+    await _read(f"memory://{test_project.permalink}/specs/routed")
+    # A note exists, so this also proves strict resolution: the miss stays a
+    # miss instead of fuzzy-matching the existing note the way tools would.
+    with pytest.raises(ResourceError, match="No note"):
+        await note_resource(project="docs", path="missing-note")
+
+    assert routes[0] == test_project.name  # configured segment → its own client
+    assert routes[1] is None  # unconfigured segment → default client, path fallback
+
+
+@pytest.mark.asyncio
+async def test_a_project_named_man_is_reachable_behind_the_manual(
+    app, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The manual answers first, but nothing reserves the name: when no page
+    # matches, the URI falls through to a note in a project really named man.
+    async def note_read(identifier, context):
+        assert identifier == "man/guides/setup"
+        return "note content from the man project"
+
+    monkeypatch.setattr(notes_module, "read_note_markdown", note_read)
+    assert await note_resource(project="man", path="guides/setup") == (
+        "note content from the man project"
+    )
+
+    async def note_miss(identifier, context):
+        raise notes_module.NoteNotFoundError("No note")
+
+    monkeypatch.setattr(notes_module, "read_note_markdown", note_miss)
+    with pytest.raises(ResourceError, match="read memory://man for the index"):
+        await note_resource(project="man", path="guides/setup")
+
+    async def note_error(identifier, context):
+        raise ResourceError("Authentication required: x")
+
+    # An operational note failure keeps its cause instead of the manual's hint.
+    monkeypatch.setattr(notes_module, "read_note_markdown", note_error)
+    with pytest.raises(ResourceError, match="Authentication required"):
+        await note_resource(project="man", path="guides/setup")
+
+
+@pytest.mark.asyncio
+async def test_project_info_template_still_answers_info_uris(app, test_project) -> None:
+    # The three-segment info URI overlaps the notes template; pin that reading it
+    # through a real session yields project info rather than a missing-note error.
+    content = await _read(f"memory://local/{test_project.permalink}/info")
+
+    assert test_project.name in content
+
+
+@pytest.mark.asyncio
+async def test_info_shaped_uris_delegate_to_project_info(app, test_project) -> None:
+    # Insurance for the other tie outcome: if this template ever wins the
+    # {ws}/{proj}/info shape, the reader still gets project info.
+    direct = await note_resource(project="local", path=f"{test_project.permalink}/info")
+
+    assert test_project.name in direct
+
+
+@pytest.mark.asyncio
+async def test_note_actually_named_info_still_reads(app, test_project) -> None:
+    await write_note(
+        title="Info",
+        directory="sub",
+        content="# Info\n\nA note that happens to be called info.\n",
+        project=test_project.name,
+    )
+
+    # Direct: the delegation routes through project_info, which falls back to
+    # the note when no such workspace/project pair exists.
+    direct = await note_resource(project=test_project.name, path="sub/info")
+    # Served: whichever template wins the 3-segment /info shape, the canonical
+    # extensionless permalink reads — and so does the file path.
+    served = await _read(f"memory://{test_project.permalink}/sub/info")
+    served_md = await _read(f"memory://{test_project.permalink}/sub/info.md")
+
+    assert "A note that happens to be called info." in direct
+    assert "A note that happens to be called info." in served
+    assert "A note that happens to be called info." in served_md
+
+
+@pytest.mark.asyncio
+async def test_workspace_qualified_uris_route_through_their_project(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # memory://personal/main/docs/report: the canonical prefix detection names
+    # the workspace-qualified route, and the client must be opened for it —
+    # with its failures surfacing, not falling back to the default project.
+    async def detected(identifier, config, context=None):
+        assert identifier == "memory://personal/main/docs/report"
+        return DetectedProjectRoute(project="personal/main")
+
+    monkeypatch.setattr(notes_module, "detect_project_from_memory_url_prefix", detected)
+    routes: list[str | None] = []
+    real_get_project_client = notes_module.get_project_client
+
+    def recording(project, context=None, project_id=None):
+        routes.append(project)
+        return real_get_project_client(project, context, project_id=project_id)
+
+    monkeypatch.setattr(notes_module, "get_project_client", recording)
+    with pytest.raises(ResourceError):
+        await note_resource(project="personal", path="main/docs/report")
+
+    assert routes == ["personal/main"]
+
+
+@pytest.mark.asyncio
+async def test_workspace_routes_survive_disabled_project_prefixes(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # permalinks_include_project=False drops only local project-name collisions;
+    # cloud permalinks stay workspace-qualified regardless of the flag, so a
+    # detected workspace route must still open that route's client.
+    class StubConfig:
+        permalinks_include_project = False
+        projects = {test_project.name: test_project.path}
+
+    class StubConfigManager:
+        config = StubConfig()
+
+    monkeypatch.setattr(notes_module, "ConfigManager", StubConfigManager)
+
+    async def detected(identifier, config, context=None):
+        return DetectedProjectRoute(project="team-paul/main")
+
+    monkeypatch.setattr(notes_module, "detect_project_from_memory_url_prefix", detected)
+    routes: list[str | None] = []
+    real_get_project_client = notes_module.get_project_client
+
+    def recording(project, context=None, project_id=None):
+        routes.append(project)
+        return real_get_project_client(project, context, project_id=project_id)
+
+    monkeypatch.setattr(notes_module, "get_project_client", recording)
+    with pytest.raises(ResourceError):
+        await note_resource(project="team-paul", path="main/team/note")
+
+    assert routes == ["team-paul/main"]
+
+
+@pytest.mark.asyncio
+async def test_unprefixed_permalinks_ignore_project_name_collisions(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # With permalinks_include_project=False, memory://docs/roadmap is the note
+    # docs/roadmap in the active project even when a project named docs exists.
+    class StubConfig:
+        permalinks_include_project = False
+        projects = {"docs": "/nowhere", test_project.name: test_project.path}
+
+    class StubConfigManager:
+        config = StubConfig()
+
+    monkeypatch.setattr(notes_module, "ConfigManager", StubConfigManager)
+    routes: list[str | None] = []
+    real_get_project_client = notes_module.get_project_client
+
+    def recording(project, context=None, project_id=None):
+        routes.append(project)
+        return real_get_project_client(project, context, project_id=project_id)
+
+    monkeypatch.setattr(notes_module, "get_project_client", recording)
+    await write_note(
+        title="Roadmap",
+        directory="docs",
+        content="# Roadmap\n\nActive project wins.\n",
+        project=test_project.name,
+    )
+
+    text = await note_resource(project="docs", path="roadmap")
+
+    assert "Active project wins." in text
+    assert routes == [None]  # no pre-routing to the colliding project name
+
+
+@pytest.mark.asyncio
+async def test_info_fallback_keeps_operational_note_failures(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def note_error(identifier, context):
+        raise ResourceError("Authentication required: x")
+
+    monkeypatch.setattr(notes_module, "read_note_markdown", note_error)
+    with pytest.raises(ResourceError, match="Authentication required"):
+        await notes_module.project_info(workspace="nowhere", project="also-nowhere")
+
+
+@pytest.mark.asyncio
+async def test_info_uri_that_is_neither_project_nor_note_reports_the_route(
+    app, test_project
+) -> None:
+    with pytest.raises(ResourceError):
+        await notes_module.project_info(workspace="nowhere", project="also-nowhere")
+
+
+@pytest.mark.asyncio
+async def test_binary_content_is_steered_to_read_content(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await write_note(
+        title="Binary Decoy",
+        directory="specs",
+        content="# Binary Decoy\n",
+        project=test_project.name,
+    )
+
+    async def fake_call_get(client, url):
+        return SimpleNamespace(headers={"content-type": "image/png"}, text="")
+
+    monkeypatch.setattr(notes_module, "call_get", fake_call_get)
+
+    with pytest.raises(ResourceError, match="use the read_content tool"):
+        await note_resource(project=test_project.name, path="specs/binary-decoy")
+
+
+@pytest.mark.asyncio
+async def test_info_fallback_runs_when_forced_local_reports_project_not_found(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Forced-local transports surface an unknown compound route as ToolError
+    # ("Project not found"), not ValueError — the note fallback must still run.
+    await write_note(
+        title="Info",
+        directory="sub",
+        content="# Info\n\nStill readable under forced-local routing.\n",
+        project=test_project.name,
+    )
+    project_info_module = import_module("basic_memory.mcp.resources.project_info")
+
+    def missing_route(project, context=None, project_id=None):
+        raise ToolError(f"Project not found: {project}")
+
+    monkeypatch.setattr(project_info_module, "get_project_client", missing_route)
+
+    text = await notes_module.project_info(workspace=test_project.name, project="sub")
+
+    assert "Still readable under forced-local routing." in text
+
+
+@pytest.mark.asyncio
+async def test_info_route_tool_errors_that_are_not_misses_propagate(
+    app, test_project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    project_info_module = import_module("basic_memory.mcp.resources.project_info")
+
+    def broken_route(project, context=None, project_id=None):
+        raise ToolError("Authentication required: x")
+
+    monkeypatch.setattr(project_info_module, "get_project_client", broken_route)
+    with pytest.raises(ToolError, match="Authentication required"):
+        await notes_module.project_info(workspace=test_project.name, project="sub")

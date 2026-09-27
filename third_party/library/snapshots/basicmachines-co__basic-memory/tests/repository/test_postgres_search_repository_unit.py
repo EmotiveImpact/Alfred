@@ -1,0 +1,639 @@
+"""Unit tests for PostgresSearchRepository pure-Python helpers.
+
+These tests exercise methods that do not require a real Postgres connection,
+covering utility functions, formatting helpers, and constructor paths that
+are difficult to reach in integration tests.
+"""
+
+import hashlib
+from contextlib import asynccontextmanager
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+import basic_memory.repository.search_repository_base as search_repository_base_module
+from basic_memory.config import BasicMemoryConfig, DatabaseBackend
+from basic_memory.repository.pgvector_index import PgVectorIndex
+from basic_memory.repository.postgres_search_query import prepare_search_term
+from basic_memory.repository.postgres_search_repository import PostgresSearchRepository
+from basic_memory.repository.search_repository_base import (
+    VectorChunkState,
+    _PreparedEntityVectorSync,
+)
+from basic_memory.repository.semantic_errors import (
+    SemanticDependenciesMissingError,
+    SemanticSearchDisabledError,
+    SemanticVectorIndexExtensionError,
+)
+from basic_memory.repository.semantic_vector_sync import PendingEmbeddingJob
+
+
+@pytest.fixture(autouse=True)
+def _skip_vector_deferral_writes(monkeypatch):
+    """These tests mock session_maker, so the deferral write has nothing to talk to.
+
+    `sync_entity_vectors_batch` records which entities it deferred, which needs a
+    real session; the doubles here patch `scoped_session` only for the paths they
+    exercise. The write itself is covered against a database in
+    tests/services/test_project_readiness.py.
+    """
+
+    async def _noop(self, **_kwargs) -> None:
+        return None
+
+    monkeypatch.setattr(PostgresSearchRepository, "record_entity_vector_deferrals", _noop)
+
+
+# --- Helpers ---------------------------------------------------------------
+
+
+class StubEmbeddingProvider:
+    """Deterministic stub for unit tests."""
+
+    model_name = "stub"
+    dimensions = 4
+
+    async def embed_query(self, text: str) -> list[float]:
+        return [0.0] * 4
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [[0.0] * 4 for _ in texts]
+
+
+def _pending_job(entity_id: int, row_id: int, chunk_text: str) -> PendingEmbeddingJob:
+    return PendingEmbeddingJob(
+        entity_id=entity_id,
+        chunk_row_id=row_id,
+        chunk_key=f"entity:{entity_id}:0",
+        chunk_text=chunk_text,
+        source_hash=hashlib.sha256(chunk_text.encode("utf-8")).hexdigest(),
+    )
+
+
+def _make_repo(
+    *,
+    semantic_enabled: bool = False,
+    embedding_provider=None,
+    semantic_postgres_prepare_concurrency: int = 4,
+) -> PostgresSearchRepository:
+    """Build a PostgresSearchRepository with a no-op session maker."""
+    session_maker = MagicMock()
+    app_config = BasicMemoryConfig(
+        env="test",
+        projects={"test-project": "/tmp/test"},
+        default_project="test-project",
+        database_backend=DatabaseBackend.POSTGRES,
+        semantic_search_enabled=semantic_enabled,
+        semantic_postgres_prepare_concurrency=semantic_postgres_prepare_concurrency,
+    )
+    return PostgresSearchRepository(
+        session_maker,
+        project_id=1,
+        app_config=app_config,
+        embedding_provider=embedding_provider,
+    )
+
+
+# --- PgVectorIndex vector literal formatting ------------------------------
+
+
+class TestFormatPgvectorLiteral:
+    """Cover the pgvector adapter's wire-format helper."""
+
+    def test_empty_vector(self):
+        assert PgVectorIndex._format_vector([]) == "[]"
+
+    def test_single_value(self):
+        result = PgVectorIndex._format_vector([1.0])
+        assert result == "[1]"
+
+    def test_multiple_values(self):
+        result = PgVectorIndex._format_vector([0.1, 0.2, 0.3])
+        assert result.startswith("[")
+        assert result.endswith("]")
+        parts = result.strip("[]").split(",")
+        assert len(parts) == 3
+
+    def test_high_precision(self):
+        """Verify that 12-significant-digit formatting is used."""
+        result = PgVectorIndex._format_vector([1.23456789012345])
+        assert "1.23456789012" in result
+
+    def test_integers_formatted_without_trailing_zeros(self):
+        result = PgVectorIndex._format_vector([1.0, 2.0, 3.0])
+        assert result == "[1,2,3]"
+
+    def test_negative_values(self):
+        result = PgVectorIndex._format_vector([-0.5, 0.5])
+        assert "-0.5" in result
+        assert "0.5" in result
+
+
+# --- _timestamp_now_expr tests (line 500) ----------------------------------
+
+
+class TestTimestampNowExpr:
+    """Cover PostgresSearchRepository._timestamp_now_expr."""
+
+    def test_returns_now(self):
+        repo = _make_repo()
+        assert repo._timestamp_now_expr() == "NOW()"
+
+
+# --- Constructor auto-creates embedding provider (line 60) -----------------
+
+
+class TestConstructorAutoProvider:
+    """Cover the branch where embedding_provider is auto-created from config."""
+
+    def test_auto_creates_embedding_provider_when_enabled(self):
+        session_maker = MagicMock()
+        app_config = BasicMemoryConfig(
+            env="test",
+            projects={"test-project": "/tmp/test"},
+            default_project="test-project",
+            database_backend=DatabaseBackend.POSTGRES,
+            semantic_search_enabled=True,
+        )
+        stub = StubEmbeddingProvider()
+        with patch(
+            "basic_memory.repository.postgres_search_repository.create_embedding_provider",
+            return_value=stub,
+        ) as mock_factory:
+            repo = PostgresSearchRepository(session_maker, project_id=1, app_config=app_config)
+            mock_factory.assert_called_once_with(app_config)
+            assert repo._embedding_provider is stub
+            assert repo._vector_dimensions == stub.dimensions
+
+
+# --- _ensure_vector_tables guard (lines 259-260) --------------------------
+
+
+class TestEnsureVectorTablesGuard:
+    """Cover _ensure_vector_tables early-exit when disabled or already done."""
+
+    @pytest.mark.asyncio
+    async def test_raises_when_semantic_disabled(self):
+        repo = _make_repo(semantic_enabled=False)
+        with pytest.raises(SemanticSearchDisabledError):
+            await repo._ensure_vector_tables()
+
+    @pytest.mark.asyncio
+    async def test_raises_when_no_embedding_provider(self):
+        # Start with semantic enabled + a stub, then remove the provider
+        # to simulate the "extras not installed" state post-construction
+        repo = _make_repo(
+            semantic_enabled=True,
+            embedding_provider=StubEmbeddingProvider(),
+        )
+        repo._embedding_provider = None
+        with pytest.raises(SemanticDependenciesMissingError):
+            await repo._ensure_vector_tables()
+
+    @pytest.mark.asyncio
+    async def test_skips_when_already_initialized(self):
+        """Should short-circuit when _vector_tables_initialized is True."""
+        repo = _make_repo(
+            semantic_enabled=True,
+            embedding_provider=StubEmbeddingProvider(),
+        )
+        repo._vector_tables_initialized = True
+        # Should return immediately without touching DB
+        await repo._ensure_vector_tables()
+        assert repo._vector_tables_initialized is True
+
+
+class TestEnsureVectorTablesSchemaBootstrapping:
+    """Guard the runtime setup path against inline schema migration drift."""
+
+    @pytest.mark.asyncio
+    async def test_initialization_never_alters_chunk_table_schema(self, monkeypatch):
+        repo = _make_repo(
+            semantic_enabled=True,
+            embedding_provider=StubEmbeddingProvider(),
+        )
+        session = AsyncMock()
+
+        @asynccontextmanager
+        async def fake_scoped_session(session_maker):
+            yield session
+
+        monkeypatch.setattr(
+            "basic_memory.repository.postgres_search_repository.db.scoped_session",
+            fake_scoped_session,
+        )
+        missing_table = MagicMock()
+        missing_table.fetchone.return_value = None
+        pgvector_version = MagicMock()
+        pgvector_version.scalar_one.return_value = "0.8.0"
+        session.execute.side_effect = [
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            pgvector_version,
+            missing_table,
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        ]
+
+        await repo._ensure_vector_tables()
+
+        executed_sql = [str(call.args[0]) for call in session.execute.await_args_list]
+
+        assert any("CREATE TABLE IF NOT EXISTS search_vector_chunks" in sql for sql in executed_sql)
+        assert any(
+            "CREATE TABLE IF NOT EXISTS search_vector_embeddings" in sql for sql in executed_sql
+        )
+        assert not any("ALTER TABLE search_vector_chunks" in sql for sql in executed_sql)
+        assert session.commit.await_count == 2
+        assert repo._vector_tables_initialized is True
+
+
+# --- _run_vector_query empty embedding (line 395-396) ----------------------
+
+
+class TestRunVectorQueryEmpty:
+    """Cover the empty-embedding early return in _run_vector_query."""
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_for_empty_embedding(self):
+        repo = _make_repo(
+            semantic_enabled=True,
+            embedding_provider=StubEmbeddingProvider(),
+        )
+        session = AsyncMock()
+        result = await repo._semantic_search()._run_vector_query(session, [], 10)
+        assert result == []
+
+
+# --- _delete_stale_chunks placeholder construction (lines 480-487) ---------
+
+
+class TestDeleteStaleChunks:
+    """Cover _delete_stale_chunks SQL placeholder construction."""
+
+    @pytest.mark.asyncio
+    async def test_delete_stale_chunks_builds_correct_params(self):
+        repo = _make_repo()
+        session = AsyncMock()
+        stage_result = MagicMock()
+        stage_result.mappings.return_value.all.return_value = []
+        session.execute.return_value = stage_result
+        stale_ids = [10, 20, 30]
+        await repo._delete_stale_chunks(session, stale_ids, entity_id=5)
+
+        session.execute.assert_awaited_once()
+        call_args = session.execute.await_args
+        assert "RETURNING id, chunk_key, source_hash, vector_index" in str(call_args.args[0])
+        params = call_args[0][1]
+        assert params["row_id_0"] == 10
+        assert params["row_id_1"] == 20
+        assert params["row_id_2"] == 30
+        assert params["project_id"] == repo.project_id
+        assert params["entity_id"] == 5
+
+
+# --- _delete_entity_chunks (line 466) --------------------------------------
+
+
+class TestDeleteEntityChunks:
+    """Cover _delete_entity_chunks."""
+
+    @pytest.mark.asyncio
+    async def test_delete_entity_chunks_executes_sql(self):
+        repo = _make_repo()
+        session = AsyncMock()
+        stage_result = MagicMock()
+        stage_result.mappings.return_value.all.return_value = []
+        session.execute.return_value = stage_result
+        await repo._delete_entity_chunks(session, entity_id=42)
+        session.execute.assert_awaited_once()
+        call_args = session.execute.await_args
+        assert "RETURNING id, chunk_key, source_hash, vector_index" in str(call_args.args[0])
+        params = call_args[0][1]
+        assert params["project_id"] == repo.project_id
+        assert params["entity_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_postgres_upsert_preserves_external_vector_ownership() -> None:
+    """Postgres must reject an adapter switch before overwriting manifest ownership."""
+    repo = _make_repo(
+        semantic_enabled=True,
+        embedding_provider=StubEmbeddingProvider(),
+    )
+    repo._semantic_vector_index_name = "recording-b"
+    session = AsyncMock()
+
+    with pytest.raises(SemanticVectorIndexExtensionError, match="recording-a"):
+        await repo._upsert_scheduled_chunk_records(
+            session,
+            entity_id=42,
+            scheduled_records=[
+                {
+                    "chunk_key": "entity:42:0",
+                    "chunk_text": "changed",
+                    "source_hash": "new-hash",
+                }
+            ],
+            existing_by_key={
+                "entity:42:0": VectorChunkState(
+                    id=7,
+                    chunk_key="entity:42:0",
+                    source_hash="old-hash",
+                    entity_fingerprint="old-fingerprint",
+                    embedding_model="stub:4:document",
+                    has_embedding=True,
+                    vector_index="recording-a",
+                    embedding_status="ready",
+                )
+            },
+            entity_fingerprint="new-fingerprint",
+            embedding_model="stub:4:document",
+        )
+
+    session.execute.assert_not_awaited()
+
+
+class TestBatchPrepareWindow:
+    """Cover the shared batched prepare window used by Postgres."""
+
+    @pytest.mark.asyncio
+    async def test_sync_entity_vectors_batch_uses_shared_prepare_transactions(self, monkeypatch):
+        repo = _make_repo(
+            semantic_enabled=True,
+            embedding_provider=StubEmbeddingProvider(),
+            semantic_postgres_prepare_concurrency=2,
+        )
+        repo._semantic_embedding_sync_batch_size = 8
+        repo._vector_tables_initialized = True
+
+        fetched_windows: list[list[int]] = []
+        upserted_entity_ids: list[int] = []
+        sessions: list[AsyncMock] = []
+        write_scope_entries = 0
+
+        async def _stub_fetch_source_rows(session, entity_ids: list[int]):
+            fetched_windows.append(list(entity_ids))
+            return {entity_id: [entity_id] for entity_id in entity_ids}
+
+        async def _stub_fetch_existing_rows(session, entity_ids: list[int]):
+            return {entity_id: [] for entity_id in entity_ids}
+
+        def _stub_build_chunk_records(source_rows):
+            entity_id = source_rows[0]
+            return [
+                {
+                    "chunk_key": f"entity:{entity_id}:0",
+                    "chunk_text": f"chunk {entity_id}",
+                    "source_hash": f"hash-{entity_id}",
+                }
+            ]
+
+        async def _stub_upsert(
+            session,
+            *,
+            entity_id: int,
+            scheduled_records,
+            existing_by_key,
+            entity_fingerprint: str,
+            embedding_model: str,
+        ):
+            upserted_entity_ids.append(entity_id)
+            return []
+
+        @asynccontextmanager
+        async def _track_write_scope():
+            nonlocal write_scope_entries
+            write_scope_entries += 1
+            yield
+
+        @asynccontextmanager
+        async def fake_scoped_session(session_maker):
+            session = AsyncMock()
+            sessions.append(session)
+            yield session
+
+        monkeypatch.setattr(repo, "_ensure_vector_tables", AsyncMock())
+        monkeypatch.setattr(
+            "basic_memory.repository.search_repository_base.db.scoped_session",
+            fake_scoped_session,
+        )
+        monkeypatch.setattr(repo, "_fetch_prepare_window_source_rows", _stub_fetch_source_rows)
+        monkeypatch.setattr(repo, "_fetch_prepare_window_existing_rows", _stub_fetch_existing_rows)
+        monkeypatch.setattr(repo, "_prepare_vector_session", AsyncMock())
+        monkeypatch.setattr(repo, "_build_chunk_records", _stub_build_chunk_records)
+        monkeypatch.setattr(repo, "_prepare_entity_write_scope", _track_write_scope)
+        monkeypatch.setattr(repo, "_upsert_scheduled_chunk_records", _stub_upsert)
+
+        result = await repo.sync_entity_vectors_batch([1, 2, 3, 4])
+
+        assert result.entities_total == 4
+        assert result.entities_synced == 4
+        assert result.entities_failed == 0
+        assert fetched_windows == [[1, 2], [3, 4]]
+        assert upserted_entity_ids == [1, 2, 3, 4]
+        assert write_scope_entries == 2
+        assert [session.commit.await_count for session in sessions] == [0, 1, 0, 1]
+
+
+@pytest.mark.asyncio
+async def test_postgres_batch_sync_tracks_prepare_and_queue_wait(monkeypatch):
+    """Postgres batch sync should separate queue wait from prepare/embed/write."""
+    repo = _make_repo(
+        semantic_enabled=True,
+        embedding_provider=StubEmbeddingProvider(),
+    )
+    repo._semantic_embedding_sync_batch_size = 2
+    repo._vector_tables_initialized = True
+
+    async def _stub_prepare_window(entity_ids: list[int]):
+        return [
+            _PreparedEntityVectorSync(
+                entity_id=entity_id,
+                sync_start=0.0,
+                source_rows_count=1,
+                embedding_jobs=[_pending_job(entity_id, 200 + entity_id, f"chunk-{entity_id}")],
+                prepare_seconds=1.0,
+            )
+            for entity_id in entity_ids
+        ]
+
+    async def _stub_flush(flush_jobs, entity_runtime, synced_entity_ids):
+        for job in flush_jobs:
+            runtime = entity_runtime[job.entity_id]
+            if job.entity_id == 1:
+                runtime.embed_seconds = 1.0
+                runtime.write_seconds = 0.5
+            else:
+                runtime.embed_seconds = 2.0
+                runtime.write_seconds = 0.5
+            runtime.remaining_jobs = 0
+            synced_entity_ids.add(job.entity_id)
+        return (3.0, 1.0)
+
+    completion_records: list[dict[str, Any]] = []
+
+    def _capture_log(**kwargs):
+        completion_records.append(kwargs)
+
+    perf_counter_values = iter([0.0, 4.0, 5.0, 6.0])
+
+    monkeypatch.setattr(repo, "_ensure_vector_tables", AsyncMock())
+    monkeypatch.setattr(repo, "_prepare_entity_vector_jobs_window", _stub_prepare_window)
+    monkeypatch.setattr(repo, "_flush_embedding_jobs", _stub_flush)
+    monkeypatch.setattr(repo, "_log_vector_sync_complete", _capture_log)
+    monkeypatch.setattr(
+        search_repository_base_module.time,
+        "perf_counter",
+        lambda: next(perf_counter_values),
+    )
+
+    result = await repo.sync_entity_vectors_batch([1, 2])
+
+    assert result.entities_total == 2
+    assert result.entities_synced == 2
+    assert result.entities_failed == 0
+    assert result.prepare_seconds_total == pytest.approx(2.0)
+    assert result.queue_wait_seconds_total == pytest.approx(3.0)
+    assert result.embed_seconds_total == pytest.approx(3.0)
+    assert result.write_seconds_total == pytest.approx(1.0)
+    assert len(completion_records) == 2
+    for record in completion_records:
+        assert record["prepare_seconds"] == pytest.approx(1.0)
+        assert record["queue_wait_seconds"] == pytest.approx(1.5)
+
+
+@pytest.mark.asyncio
+async def test_postgres_batch_sync_tracks_deferred_oversized_entities(monkeypatch):
+    """Oversized shard runs should be deferred until the last shard completes."""
+    repo = _make_repo(
+        semantic_enabled=True,
+        embedding_provider=StubEmbeddingProvider(),
+    )
+    repo._semantic_embedding_sync_batch_size = 8
+    repo._vector_tables_initialized = True
+
+    async def _stub_prepare_window(entity_ids: list[int]):
+        prepared: list[_PreparedEntityVectorSync] = []
+        for entity_id in entity_ids:
+            if entity_id == 1:
+                prepared.append(
+                    _PreparedEntityVectorSync(
+                        entity_id=entity_id,
+                        sync_start=0.0,
+                        source_rows_count=1,
+                        embedding_jobs=[
+                            _pending_job(1, 201, "chunk-1a"),
+                            _pending_job(1, 202, "chunk-1b"),
+                        ],
+                        chunks_total=5,
+                        pending_jobs_total=5,
+                        entity_complete=False,
+                        oversized_entity=True,
+                        shard_index=1,
+                        shard_count=3,
+                        remaining_jobs_after_shard=3,
+                    )
+                )
+                continue
+            prepared.append(
+                _PreparedEntityVectorSync(
+                    entity_id=entity_id,
+                    sync_start=0.0,
+                    source_rows_count=1,
+                    embedding_jobs=[_pending_job(2, 301, "chunk-2a")],
+                    chunks_total=1,
+                    pending_jobs_total=1,
+                    entity_complete=True,
+                    shard_index=1,
+                    shard_count=1,
+                    remaining_jobs_after_shard=0,
+                )
+            )
+        return prepared
+
+    async def _stub_flush(flush_jobs, entity_runtime, synced_entity_ids):
+        for job in flush_jobs:
+            runtime = entity_runtime[job.entity_id]
+            runtime.remaining_jobs -= 1
+            runtime.embed_seconds += 0.5
+            runtime.write_seconds += 0.25
+        return (1.5, 0.75)
+
+    completion_records: list[dict[str, Any]] = []
+
+    def _capture_log(**kwargs):
+        completion_records.append(kwargs)
+
+    monkeypatch.setattr(repo, "_ensure_vector_tables", AsyncMock())
+    monkeypatch.setattr(repo, "_prepare_entity_vector_jobs_window", _stub_prepare_window)
+    monkeypatch.setattr(repo, "_flush_embedding_jobs", _stub_flush)
+    monkeypatch.setattr(repo, "_log_vector_sync_complete", _capture_log)
+
+    result = await repo.sync_entity_vectors_batch([1, 2])
+
+    assert result.entities_total == 2
+    assert result.entities_synced == 1
+    assert result.entities_deferred == 1
+    assert result.entities_failed == 0
+    assert result.embedding_jobs_total == 3
+
+    deferred_record = next(record for record in completion_records if record["entity_id"] == 1)
+    assert deferred_record["entity_complete"] is False
+    assert deferred_record["oversized_entity"] is True
+    assert deferred_record["pending_jobs_total"] == 5
+    assert deferred_record["shard_count"] == 3
+    assert deferred_record["remaining_jobs_after_shard"] == 3
+
+    complete_record = next(record for record in completion_records if record["entity_id"] == 2)
+    assert complete_record["entity_complete"] is True
+    assert complete_record["oversized_entity"] is False
+
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        (
+            '"incident response" OR "database recovery"',
+            "(incident & response) | (database & recovery)",
+        ),
+        ('"cash OR check"', "(cash & OR & check)"),
+        ('foo"bar baz"', "foo & (bar & baz)"),
+        ('"foo bar"baz', "(foo & bar) & baz"),
+        ('"foo"(bar)', "(foo) & (bar)"),
+        ('(foo)"bar"', "(foo) & (bar)"),
+        ('"unbalanced quote OR recovery', "unbalanced:* & quote:* & recovery:*"),
+        ("incident AND (database recovery)", "incident & (database & recovery)"),
+        ("(incident AND response) OR recovery", "(incident & response) | recovery"),
+        ("auth-service AND token", "auth-service & token"),
+        ("auth-OR-service AND token", "auth-OR-service & token"),
+        ("config.AND.json OR file", "config.AND.json | file"),
+        ("config.json AND file", "config.json & file"),
+        ("v0.13.0b2 OR release", "v0.13.0b2 | release"),
+        ('"publishing" AND O\'Reilly', "(publishing) & 'O''Reilly'"),
+        ('"publishing" AND auth|admin', "(publishing) & auth & admin"),
+        ('"publishing" AND bar:baz', "(publishing) & bar & baz"),
+        ("C++ NOT Java", "C++ & !Java"),
+        ("C++ AND NOT Java", "C++ & !Java"),
+        ("NOT C++", "!C++"),
+        ("recovery AND", "recovery:*"),
+    ],
+)
+def test_postgres_quoted_boolean_queries_render_valid_tsquery(
+    query: str,
+    expected: str,
+) -> None:
+    """Quoted user syntax must become a complete tsquery expression before SQL."""
+    assert prepare_search_term(query) == expected
+
+
+def test_postgres_many_quoted_groups_restore_atomically() -> None:
+    """A placeholder must not rewrite the numeric prefix of a later group."""
+    query = " OR ".join(f'"term{index} word{index}"' for index in range(11))
+    expected = " | ".join(f"(term{index} & word{index})" for index in range(11))
+
+    assert prepare_search_term(query) == expected

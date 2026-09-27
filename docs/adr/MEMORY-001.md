@@ -1,5 +1,9 @@
 # MEMORY-001: optional Obsidian, first-party governed memory
 
+<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+
+**Current product category: operational and executive intelligence.** See [positioning](../PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
+
 Date: 27 September 2026.
 Status: planning decision adopted for implementation; library/provider selection remains provisional.
 Requirements: [PRD.md](../PRD.md). Detailed design: [MEMORY_ARCHITECTURE.md](../MEMORY_ARCHITECTURE.md).

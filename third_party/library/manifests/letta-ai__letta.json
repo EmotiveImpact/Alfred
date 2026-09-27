@@ -1,0 +1,80 @@
+{
+  "files": [
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "bytes": 451,
+      "sha256": "45a08f7dac5a2933a05bcce150bc07e044141e05d73df08e4a38a35e6ef8a001",
+      "git_blob_sha1": "7a167c72059c670bd5651da4c972066dd311d933"
+    },
+    {
+      "path": ".github/TRUSTED_CONTRIBUTORS",
+      "bytes": 441,
+      "sha256": "d7d0dd75015e6668665ea77447b6833bf4e618fafe3167eb184e1a9778edf0b2",
+      "git_blob_sha1": "00276ae75a1fb90c2978443de37970f61702dd08"
+    },
+    {
+      "path": ".github/workflows/issue-guard.yml",
+      "bytes": 9833,
+      "sha256": "068dcc968221ccc4c7fd3270acbbf3fd5e9b9c7234f6925c4dd2548f127b7610",
+      "git_blob_sha1": "c707b56526f96a1ab0b22f19f776a750acbd47ae"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 3236,
+      "sha256": "46feb9ee6e4ee11f2c6702daeba832998ba8d1634f3497e8cfd4ab7e83a94fff",
+      "git_blob_sha1": "b71e913f852d6f53418686a4e60024652400c390"
+    },
+    {
+      "path": "AI_POLICY.md",
+      "bytes": 3588,
+      "sha256": "40413de9c9f90304b6d949d02ad2ba7228a9f98095b59784e993f3fea84511b1",
+      "git_blob_sha1": "44dedfe0739437d9fb684821622e1dab52c7cb16"
+    },
+    {
+      "path": "CITATION.cff",
+      "bytes": 676,
+      "sha256": "e4485621d060a72ce2b77ad28c8621b6bd9c571603e562abe568a6aed1fa53c4",
+      "git_blob_sha1": "3dc6adaeb957b8e76731416a5222e621b4f5b978"
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "bytes": 398,
+      "sha256": "5cf0bbd4998d4caec41d2d146ae6b632a5f2936ecd27866a303ee2d284757cf5",
+      "git_blob_sha1": "6705ef4ae068cf4d55942fe6b7ef71a68b2dbec3"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 10759,
+      "sha256": "984c6db99fc6609803108dfc196762118662cd94b82a456dd9217583f18f3612",
+      "git_blob_sha1": "f75c3422907f55d71685ae59afdc28498cde5a40"
+    },
+    {
+      "path": "PRIVACY.md",
+      "bytes": 21160,
+      "sha256": "b9e589f20531ce097c395ed69d036fcf2b204a0a91cf4e9225484a7f08cbb091",
+      "git_blob_sha1": "0aa39cfcc7b88936fa939ed261314294e29aa680"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1574,
+      "sha256": "1d624e8fd383c1198c8d42da87b055d591a5760e19607692eb46bbbfe2a58f03",
+      "git_blob_sha1": "ebac9f5e9d8da416ca7f95987520137b2fd4fdf3"
+    },
+    {
+      "path": "SECURITY.md",
+      "bytes": 1432,
+      "sha256": "00d6a9b85c8b11453517efd0a6ea6824f2be34b5f6dafb4f558bdab884336d16",
+      "git_blob_sha1": "109871ac370c1f9b9a578117a5eafc4a629d3907"
+    },
+    {
+      "path": "TERMS.md",
+      "bytes": 7075,
+      "sha256": "2c38e2c634f8de2426eb8cc9716da294459360938807e1d15a6d9c9fa184df1f",
+      "git_blob_sha1": "a868db5ad46ae2384f5c6574e47da9520253ce61"
+    }
+  ],
+  "excluded": [],
+  "file_count": 12,
+  "bytes": 60623,
+  "archive_members": 16
+}

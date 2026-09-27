@@ -1,0 +1,210 @@
+// Copyright 2025 The OpenSandbox Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Package kernel provides functionality for managing Jupyter kernels
+package kernel
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+)
+
+type Client struct {
+	baseURL string
+
+	httpClient *http.Client
+}
+
+func NewClient(baseURL string, httpClient *http.Client) *Client {
+	return &Client{
+		baseURL:    baseURL,
+		httpClient: httpClient,
+	}
+}
+
+func (c *Client) GetKernelSpecs() (*KernelSpecs, error) {
+	url := fmt.Sprintf("%s/api/kernelspecs", c.baseURL)
+
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned error status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var specs KernelSpecs
+	if err := json.Unmarshal(body, &specs); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &specs, nil
+}
+
+func (c *Client) ListKernels() ([]*Kernel, error) {
+	url := fmt.Sprintf("%s/api/kernels", c.baseURL)
+
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned error status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var kernels []*Kernel
+	if err := json.Unmarshal(body, &kernels); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return kernels, nil
+}
+
+func (c *Client) GetKernel(kernelId string) (*Kernel, error) {
+	url := fmt.Sprintf("%s/api/kernels/%s", c.baseURL, kernelId)
+
+	resp, err := c.httpClient.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned error status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var kernel Kernel
+	if err := json.Unmarshal(body, &kernel); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &kernel, nil
+}
+
+func (c *Client) StartKernel(name string) (*Kernel, error) {
+	url := fmt.Sprintf("%s/api/kernels", c.baseURL)
+
+	reqBody := &KernelStartRequest{
+		Name: name,
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize request: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned error status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var kernel Kernel
+	if err := json.Unmarshal(body, &kernel); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &kernel, nil
+}
+
+func (c *Client) RestartKernel(kernelId string) (bool, error) {
+	url := fmt.Sprintf("%s/api/kernels/%s/restart", c.baseURL, kernelId)
+
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false, fmt.Errorf("server returned error status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var response KernelRestartResponse
+	if err := json.Unmarshal(body, &response); err != nil {
+		return false, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return response.Restarted, nil
+}
+
+func (c *Client) InterruptKernel(kernelId string) error {
+	url := fmt.Sprintf("%s/api/kernels/%s/interrupt", c.baseURL, kernelId)
+
+	req, err := http.NewRequest(http.MethodPost, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("server returned error status code: %d", resp.StatusCode)
+	}
+
+	return nil
+}

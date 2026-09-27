@@ -1,0 +1,96 @@
+{
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 1820,
+      "sha256": "de199ad775d814850e09b8c23adbb0a3973c0433f6b61cf635daef4655b49093",
+      "git_blob_sha1": "8488653f0b3cb98b2b309212d05a42c068f58089"
+    },
+    {
+      "path": ".vscode/settings.json",
+      "bytes": 47,
+      "sha256": "f3cc058274b2792b22d5a359374271c7864a2d83478a7557429289c1b2bc4942",
+      "git_blob_sha1": "5a583f42ff6edd2750414f8c5af9c214984ed0f7"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 35149,
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+      "git_blob_sha1": "f288702d2fa16d3cdf0035b15a9fcbc552cd88e7"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2728,
+      "sha256": "a5cc5a4d41b4c8c5f7a8c19affef880267d20ebc801dc0fc1cf0e4cc2dd5e347",
+      "git_blob_sha1": "385f54517aa2640903c17944e3da578b5cf96160"
+    },
+    {
+      "path": "audio/empty.txt",
+      "bytes": 39,
+      "sha256": "babef7ffd9f0b4a1fd21ba31f01911d818fdec554579ba881baaf3a30e88d2ba",
+      "git_blob_sha1": "431258fd4b5baaa51f03f1532889a03ddf7450b3"
+    },
+    {
+      "path": "conv.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "git_blob_sha1": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+    },
+    {
+      "path": "display.css",
+      "bytes": 951,
+      "sha256": "787ff410b3c4637f66c793207b2e40aed7f6362b24b2be834ad39751c5b8d4ea",
+      "git_blob_sha1": "72d659349e84dfbd36677a7918b07bb0f7b46b08"
+    },
+    {
+      "path": "display.py",
+      "bytes": 2830,
+      "sha256": "89183fed867a9808bb88e7d2e9946373ddaf43e903c7ec42f6e2df06ad15882a",
+      "git_blob_sha1": "c03d4e3862736a8bd9b44687bf596ff28ca5fe19"
+    },
+    {
+      "path": "main.py",
+      "bytes": 3860,
+      "sha256": "4881834837de9a06086dade0c989f573d0957081bc7c254aa760da1b15b823dc",
+      "git_blob_sha1": "b8a60dd86f6eb2988a7dd48c09507e9e7f5e2455"
+    },
+    {
+      "path": "record.py",
+      "bytes": 2732,
+      "sha256": "ba3e85c7660c917ef424f5231ca93723c1b1db9eff1c242875bcb9fe6435db10",
+      "git_blob_sha1": "55799a203776a85459b5e5bc54481505734f4ae3"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 140,
+      "sha256": "a4e78ba1da33ece492e75c85f3cbd5482a0058ae00a7bf045f4e100e6f92b9c3",
+      "git_blob_sha1": "874a94406a3b1d4e3df140c4f5a78021b6db8e75"
+    },
+    {
+      "path": "status.txt",
+      "bytes": 7,
+      "sha256": "6ecd66a4c8150937ee53dfb3aa5077733c64e27f2462bb9cd9d15b0247c0e199",
+      "git_blob_sha1": "49d210110bbc618bdfd43be275b703aa1f0c6be2"
+    }
+  ],
+  "excluded": [
+    {
+      "path": "media/cqb_conv.png",
+      "reason": "binary/media/model/database/archive asset",
+      "bytes": 106286
+    },
+    {
+      "path": "media/git_thumb.png",
+      "reason": "binary/media/model/database/archive asset",
+      "bytes": 118425
+    },
+    {
+      "path": "media/good_morning.png",
+      "reason": "binary/media/model/database/archive asset",
+      "bytes": 73353
+    }
+  ],
+  "file_count": 12,
+  "bytes": 50303,
+  "archive_members": 19
+}
