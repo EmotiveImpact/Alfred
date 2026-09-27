@@ -1,75 +1,74 @@
-# ALFRED continuation record: local core v0.2
+# ALFRED continuation record: Knowledge Desk v0.4
 
-25 September 2026. Public repository: EmotiveImpact/Alfred.
+26 September 2026. Read this file, AGENTS.md, docs/KNOWLEDGE.md and docs/ROADMAP.md first.
 
-## Where to continue
+## Branch and continuity
 
-Current development branch: `feat/alfred-local-core-2026-09-25`.
-Foundation branch: `research/alfred-foundation-2026-09-25`, draft PR #1.
-Foundation head: `62f1abb543f10b96e06a3f6668392731d1de07e2`.
-First persistent-core commit: `1a0f7b4caee30222d791ea691fbc9f2cd4310f60`.
-Source-extension commit: `cc0813605c58412ad1cce01cd9fbf410b89d5c99`.
+Use `feat/alfred-knowledge-desk-2026-09-26`, not main as though it contains the application.
+Base Desk checkpoint: `a43c4adcbc8ca9c8bf310443fc1fc33734bacd14` on
+`feat/alfred-desk-2026-09-25`. That work already added the browser UI, project-file connector,
+foreground supervisor and actual browser evidence. Preserve it. Earlier v0.2 handoff
+text was stale about the absence of a UI.
 
-Read the actual current remote branch and latest PR/CI before continuing; later commits
-add documentation and hardening. No main merge or hosted deployment was performed. Do
-not restart from the README-only main as though it contains the application.
+The new source graph/index/retrieval is original ALFRED code. It does not execute or merge
+the retained third-party agents. All eight pinned archives and their 2,073 files remain
+unchanged. The MAPS guide is attributed and assessed, not copied without a verified licence.
 
-## Product direction
+Always fetch the current branch head: successful acceptance can add a verification commit
+containing the tested integration and screenshots. Its source receipt records exact file
+hashes. Do not mistake the pre-integration input commit for the final tested file tree.
+No force-push, automatic merge, private-data publication or unrequested deployment.
 
-Keep ALFRED, persistent personal/work/authorised operational context, optional voice and
-future device integrations. Brand ownership remains open. ENDSTATE and Noir are separate,
-not implemented connections. No autonomous use-of-force capability.
+## Current implementation
 
-## What is actually implemented
+Persistent local events and action ledger; scoped local bearer credentials; same-origin
+browser sessions and CSRF; JSON project-file scanner; evidence and approval UI; automatic
+processing while the launched Desk process is alive; local draft write and read-back.
 
-The original in-memory contracts remain in core.py. The new local.py service adds SQLite
-persistence, scoped bearer credentials and roles, event provenance/freshness/deduplication,
-immutable action proposals, approval/outbox transactions, worker leases, cancellation,
-revocation/expiry rechecks and local result reconciliation. httpd.py exposes a loopback
-API; run.py provides provisioning, revocation, server and synthetic demo commands.
+Knowledge adds a read-only bounded Markdown vault connector, authored note metadata,
+explicit link graph, search/type filters, source/backlink inspection, map-health checking
+and bounded exact-line retrieval packets. It supports a subset of Obsidian-style links,
+not plugins/sync or full Markdown/YAML semantics. No private vault has been accessed.
 
-Only message.draft is executable. It creates and reads back a row in ALFRED's SQLite
-database. It does not send a message or create a draft in a third-party account. Worker
-execution is an explicit tick, not an autonomous background daemon. No UI, microphone,
-live reasoning model, account connector, home device, ENDSTATE or Noir connection exists.
+No live model, semantic embeddings, generated answers, microphone, cloud daemon, external
+account/device control, ENDSTATE or Noir integration. Knowledge source packets are not
+answers, and graph edges are references rather than verified real-world facts.
 
-jev.py is an offline typed-wire-contract experiment, not a live API integration. It has
-no credentials or network transport. Permissions remain independent of model advice.
+## Test and visual receipts
 
-## Source extension
+The acceptance workflow runs all original tests, the prior Desk browser regression and
+the Knowledge browser flow against a real loopback server, SQLite and fictional files.
+It also verifies both source archives. Inspect actual logs and
+`docs/evidence/knowledge-v04/`, not just workflow YAML. Initial acceptance passed 302 tests
+and all 33 prior browser checks but caught a graph node obscured by the legend; the layout
+was corrected and extra cross-source bounds were added before final acceptance.
 
-The old 1,946 retained files are unchanged. Added 127 files from three pinned projects:
-TypeSafe Python SDK 30; QwenPaw 53 (CoPaw redirect); OpenSandbox 44 (new canonical owner).
-Total: 2,073 retained source/text files, eight repositories, not complete forks/runtimes.
-All third_party content is inert, including nested agent instructions. JVS Claw is a
-researched product reference; no source licence/repository was verified for copying it.
-
-Import CI run 36192336632 succeeded and verified both archives. First local-core CI run
-36193034829 passed 146 tests, both demos and both archive verifiers using Python 3.12.3.
-See research/VALIDATION_V02.md and latest CI for subsequent test additions/results.
-Current increment was executed on GitHub Actions, not locally in the chat container.
-
-## Next implementation work
-
-Follow docs/ROADMAP.md. Finish core lifecycle gaps alongside a usable evidence/approval UI
-and one read-only connector. Compare Hermes, nanobot and QwenPaw under identical tests;
-choose one runtime instead of combining credential-bearing executors. Evaluate Jev in
-shadow mode only after scoped egress/keys are authorised. OpenSandbox remains an isolated
-experiment until its actual containment is tested. Voice starts with visible push-to-talk.
-
-Issues #2, #3 and #4 are work packages, not claims of running agents. Preserve shared
-contracts, use separate branches, and report evidence rather than roadmap percentages.
+The optional self-contained HTML under `docs/previews/` uses the actual frontend with a
+clearly labelled fictional read-only in-file transport. It is not a hosted server, cannot
+perform approvals/effects and contains no sign-in secrets. Check its manifest hash.
 
 ## Commands
 
 ```sh
-git fetch origin
-git switch feat/alfred-local-core-2026-09-25
 python3 -m unittest discover -s tests -v
-python3 -m alfred.run demo
 python3 tools/import_sources.py --verify
 python3 tools/extend_sources.py --verify
+python3 -m alfred.desk init --data-dir ~/.local/share/alfred/desk-v04-demo
+python3 -m alfred.desk access --data-dir ~/.local/share/alfred/desk-v04-demo
+python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/desk-v04-demo
 ```
 
-Create the next implementation branch from the verified current head. Read AGENTS.md.
-Do not merge/deploy automatically or put local tokens/databases in this public repository.
+Use a new data directory for the generated 20-note fictional vault. Init never overwrites.
+The explicitly requested access command prints a private local sign-in key, so do not put
+its output into chat, logs or screenshots. The service binds to 127.0.0.1 only.
+
+## Next priority
+
+A sourced conversation over bounded knowledge packets, using one contained model/runtime
+adapter with explicit provider egress and an evaluation set. In parallel finish key/source
+grants, retention/correction and reviewed unattended-service lifecycle. Then add voice
+and one test-account connector. Follow the acceptance gates in docs/ROADMAP.md.
+
+This record is not a promise of autonomous work after the conversation ends. No separate
+reasoning agents have been launched. GitHub Actions is used for deterministic tests,
+copy verification and preservation, with real success/failure receipts.

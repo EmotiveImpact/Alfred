@@ -1,168 +1,111 @@
-# ALFRED execution roadmap v0.2
+# ALFRED execution roadmap, Knowledge Desk v0.4
 
-25 September 2026. This roadmap supersedes the status claims in the foundation build plan,
-while retaining its product direction. Milestones are acceptance gates, not time estimates.
+26 September 2026. Acceptance gates, not delivery-time promises or a claim of completion.
 
-## Objective
+## Current source of truth
 
-Build one persistent personal intelligence that understands authorised context, identifies
-useful changes and follows through on approved work. The first usable product must deliver
-that loop, not simply display a dramatic dashboard or wrap another agent in a new name.
+Working branch: `feat/alfred-knowledge-desk-2026-09-26`.
+Based on the actual Desk checkpoint `a43c4adcbc8ca9c8bf310443fc1fc33734bacd14`, which already
+contained a browser interface, a local file connector and supervised automatic draft
+execution. Older handoff text describing a backend without a UI was stale.
 
-The target remains personal, work, home and authorised operational assistance. Start with
-a founder/producer's project: briefing, changed information, an exact next action, approval
-and an honest result. Use synthetic operational scenarios to test the same contracts.
+Preserve the earlier research and the 2,073 retained upstream files across eight pins.
+They remain inert reference selections, not eight integrated runtimes. Main is not
+silently merged, and no external deployment is part of this increment.
 
-## Current position
+## Delivered product slices
 
-| Workstream | Actual state | What remains |
+| Slice | Implemented | Boundary |
 |---|---|---|
-| Research and source preservation | Original 18-repository review plus Jev SDK, QwenPaw and OpenSandbox; 2,073 retained files from eight pins | Controlled runtime comparisons, full dependency/model/asset licence checks |
-| Persistent core | Runnable local SQLite event/action service, bearer lookup and static roles | Mature identity/key lifecycle, retention, source corrections and observability |
-| Approved effects | Local message.draft row, durable queue, result read-back and crash reconciliation | First separately approved external connector and its own idempotency strategy |
-| Jev | Offline typed request/response experiment | Authenticated transport, authorised egress, shadow evaluation and measured benefit |
-| Interface | CLI and loopback JSON API | Evidence/approval web UI, accessible interaction and device pairing |
-| Reasoning and voice | Not connected | One contained runtime, one provider, one voice pipeline |
-| Home/field/ENDSTATE/Noir | Target architecture and synthetic contracts | Actual API review, test deployments and separate operational acceptance |
+| Core | Persistent local SQLite events/actions, scoped bearer checks, approval binding, outbox and result reconciliation | Local development only, not a mature identity or multi-tenant platform |
+| Desk | Sign-in, briefing, evidence, acknowledgement, approvals, activity, sources and pause/resume | JSON sample project source; verified local draft, not external delivery |
+| Knowledge | Read-only Markdown index, explicit reference graph, search, type filters, backlinks, source text and hashes | Not full Obsidian compatibility or a semantic world model |
+| Retrieval | Bounded source packets with exact note lines/revisions/hashes | Keyword retrieval; no generated answer or model call |
+| Automatic local work | Supervisor scans while the launched process lives and executes only approved local drafts | Not a cloud daemon, chat background task or cross-device scheduler |
+| Evidence | Existing regression tests plus new knowledge/backend/browser acceptance | Check committed receipts and Actions for actual counts and outcomes |
 
-No overall percentage is assigned: a passed database test is not equivalent to usable
-voice, effective reasoning or field reliability. This is a local engineering alpha.
+## Next 1: one grounded conversation over these sources
 
-## Milestone 1: complete the local foundation
+The next customer-visible leap is not another repository collection. Add a contained,
+replaceable reasoning adapter that receives the authorised source packet and answers
+with citations. Keep its data egress explicit and opt-in. Store selected model/version,
+source hashes, bounded usage and request/result status without logging secrets.
 
-**Delivered in this increment:** committed SQLite schema, persisted source events,
-server-resolved scope/role, token expiry/revocation, exact-parameter approvals,
-transactional outbox insertion, single-claim leases, one idempotent local draft effect,
-actual read-back proof, explicit uncertain outcomes, real HTTP tests and process-exit tests.
+Acceptance: answerable and unanswerable questions; source update/deletion; conflicting
+notes; no source in another workspace; prompt injection in retrieved notes; provider
+outage; no fabricated citations; no automatic authority from model text. The system must
+be able to say the source does not establish the answer.
 
-**Still required before a wider pilot:** separate person/device identity from credentials;
-rotate keys without orphaning historical actions; per-capability grants instead of one
-static role rule; immutable/auditable policy versions; source corrections and revocations;
-retention/deletion/export; snapshot/backup recovery; health/backpressure and paging.
-Uncertain actions need a deliberate reviewed recovery interface, not automatic resend.
+Compare Hermes, nanobot and QwenPaw against identical fixtures and permissions. Select
+one runtime only after results; do not give several executors overlapping credentials.
+Jev remains a possible advisory relevance component, not a permission authority. No live
+benchmark or provider connection is claimed yet. Existing issue #3 is the coordination point.
 
-Acceptance: restart and crash tests continue to pass; revoked access cannot return data
-or create effects; identity rotation preserves appropriate records; lost leases cannot
-commit under stale authority; deletion/retention behaves as documented; errors are visible.
+## Next 2: reliable memory lifecycle and private operation
 
-Scope owner: Track A, issue #2. Do not introduce a public deployment as part of this gate.
+Add mature device pairing/key rotation, source-specific grants, configurable retention,
+export, correction and complete derived-data deletion accounting. Separate note identity
+from path changes with explicit, reviewed identity metadata rather than guessing names.
+Introduce an authenticated change feed and consistent revision indicators for every view.
 
-## Milestone 2: the first usable Alfred desktop experience
+Acceptance: revoke without restart, lost device, changed vault root, renamed files,
+crash/rebuild, concurrent edits, stale evidence, quota/backpressure and backup restoration.
+Evaluate application encryption with established tools before using sensitive notes.
+Existing issue #2 remains open because these identity/lifecycle gaps are not complete.
 
-Build a small interface over the authenticated service: current briefing, changes inbox,
-evidence detail, exact approval card, action history, source health and explicit pause.
-The existing API rejects browser Origin requests; a reviewed session/CSRF/Origin design
-must replace that restriction rather than disabling it indiscriminately.
+## Next 3: scheduled routines with bounded authority
 
-Add ONE read-only calendar or project-document connector on an explicitly authorised
-test account. Preserve source identity, observation time, revision, link and deletion.
-Do not ingest every account or historical message as a shortcut to personalisation.
+Turn the foreground supervisor into a deliberately installed service only when requested.
+Add a routine registry with owning node, schedule/timezone, allowed sources/actions,
+maximum run time, budget, concurrency and durable execution record. Deduplicate due work
+across restarts. Start with map health and a sourced daily briefing, not arbitrary scripts.
 
-Acceptance: a tester selects a workspace, sees current information, receives a relevant
-change, examines its source, approves a local draft and sees the result after restart.
-A reader cannot approve; another workspace cannot see the content. All examples remain
-synthetic until real-account use and data retention are explicitly authorised.
+Acceptance: crash during a run, duplicate scheduler instances, clock change, overlapping
+runs, missing provider, revoked source and pause. This is the useful extension of MAPS's
+Pulse idea. The current map checker is a command, not an already installed nightly job.
 
-This is the next customer-visible increment, developed alongside the remaining core
-lifecycle work. Do not postpone all usability until the entire end-state architecture exists.
+## Next 4: voice without losing the source and action discipline
 
-## Milestone 3: one reasoning runtime, evaluated fairly
+Add visible push-to-talk to the shared session, then measure barge-in, actual playback,
+acknowledgement and reconnection. Evaluate one transport, LiveKit provisionally with
+Pipecat as an alternative. Keep speech provider replaceable. Review plugin/model/voice
+licences separately and measure real hardware power/latency before ambient claims.
 
-Compare Hermes, nanobot and QwenPaw using identical synthetic scenarios, model budgets,
-connector mocks and ALFRED authority contracts. Keep OpenClaw as a gateway reference unless
-specific evidence justifies changing the candidate set. Choose ONE primary runtime.
+Acceptance: generated versus heard text, interruption during approval, provider loss,
+noise, duplicate turns and zero repeated side effects after reconnect. Microphone is
+currently disabled. Existing issue #4 is the coordination point.
 
-A runtime receives scoped evidence and returns a bounded typed proposal. It does not
-receive the credentials that would allow it to bypass ALFRED's connector gate. Set tool
-count, run duration, token budget, filesystem and egress limits. Persist model/prompt/runtime
-versions in evaluation records. Default to official service APIs rather than browser control.
+## Next 5: one official account connector and a narrow external effect
 
-Use a separate disposable environment to evaluate OpenSandbox for model/agent/browser
-workloads. Test denied filesystem paths, network destinations, mounts, escape attempts,
-TTL/termination and restart cleanup. No host Docker socket or personal credential mount.
-Do not equate the word sandbox or a container process with demonstrated isolation.
+Use an authorised test account and official API. Start read-only; then a reversible low-risk
+write with exact parameter approval. Store capability-specific receipts and reconcile
+ambiguous timeouts. Extend the same evidence UI rather than invent a separate action loop.
 
-Acceptance: common briefing/change/action tasks, malicious retrieved instructions,
-wrong-workspace requests, changed approvals, cancellation, timeout and provider failure
-are evaluated with actual outputs. Publish failed cases and adoption/rejection reasoning.
-The SDKs/fixtures in this repository do not constitute that benchmark.
+Acceptance: fresh versus stale data, upstream deletions, rate limits, revocation, unknown
+outcomes, duplicate retries and privacy boundaries. The local draft's tested read-back
+semantics do not prove exactly-once execution for an external service.
 
-Scope owner: Track B, issue #3, coordinated with Track A's contract changes.
+## Next 6: home/local devices and controlled team contexts
 
-## Milestone 4: useful intelligence without unnecessary interruptions
+Evaluate a read-only Home Assistant bridge and a minimal explicit offline capability set.
+Keep different device/source credentials separate. Add team/workspace membership with real
+authorisation checks before shared knowledge. Prove deployment isolation rather than
+calling a workspace label a security boundary.
 
-Add objective-aware relevance classification in shadow mode: log a model's suggested route
-without letting it control notifications or actions. Compare Jev with a simple deterministic
-baseline and the selected general model. Jev's typed decisions might reduce overhead, but
-no latency, cost or quality advantage is assumed before measurement.
+## Next 7: specialist engines and operational exercises
 
-Measure missed relevant changes, unnecessary alerts, decision agreement, uncertainty,
-latency and total cost on the same held-out scenarios. Keep critical deterministic rules
-and permission checks independent. A high model confidence must never become authorisation
-or proof that a statement is factually true.
+Read the actual ENDSTATE and Noir interfaces before implementing an adapter. ENDSTATE
+remains a separate analysis engine; its output must retain assumptions and remain labelled
+as analysis/simulation. No current integration is inferred from a document link or graph edge.
 
-Acceptance: explicit scoped egress, revocable provider credentials, bounded context,
-versioned model selection, failure fallback and evidence of better user outcomes. Only then
-promote limited low-risk relevance routing beyond shadow mode. No live Jev call is enabled
-by the current wire-contract experiment.
+Use fictional replay first, then independently reviewed non-critical exercises. No
+unrestricted security control, covert recording or autonomous use-of-force authority.
+Field reliability, alarm behaviour and safety need their own acceptance programme.
 
-## Milestone 5: voice and one real low-risk connector
+## Definition of the first usable personal intelligence
 
-Use one voice transport, with LiveKit provisionally and Pipecat as a comparison option.
-Voice/text share one session. Start with deliberate push-to-talk, visible microphone state,
-no persistent raw audio and on-screen approval. Generated, played and acknowledged speech
-are different states. Interrupting speech does not undo a dispatched action.
-
-Introduce one reversible low-risk external effect on a test account. Define that service's
-idempotency key, receipt and verification semantics. A local SQLite draft is not evidence
-that email delivery or physical state verification is already solved.
-
-Acceptance: real audio interruption/reconnect/noise tests on named hardware; exact approval
-of destination/content; no duplicate effect after uncertain timeout; manual fallback; clear
-source/provider loss. Publish latency components and device resource measurements.
-
-Scope owner: Track C, issue #4 for voice, with Track A owning action semantics.
-
-## Milestone 6: personal continuity, devices and controlled team use
-
-Add editable source-linked memory with correction/deletion and separate personal/work/client
-vault policies. Evaluate a read-only Home Assistant bridge before harmless reversible device
-commands. Add an encrypted, bounded offline cache and explicit source freshness status.
-
-Native phone/headset background behaviour needs actual platform, microphone, battery,
-thermal and connectivity experiments. A browser demo is not an always-on mobile product.
-Team workspaces receive role-appropriate shared information, not everyone's private memory.
-
-Acceptance: inspectable memory, deletion of derived indexes, revocation during disconnection,
-reconnect reconciliation, source freshness display, bounded queues and measured hardware
-behaviour. Choose a sustainable deployment model from the evidence, not assumed cloud cost.
-
-## Milestone 7: operational and specialist integrations
-
-Keep expanding synthetic briefing revision, missing acknowledgement, contradictory report,
-source loss and team-role tests. Read actual ENDSTATE/Noir APIs, identity models and current
-capabilities before implementing any adapter. Neither repository was modified here.
-
-ENDSTATE remains a separate analysis engine, not an observer. Its assumptions/simulations
-must remain labelled. Preserve Noir's distinction between device receipt and human
-acknowledgement. Begin only with supervised non-critical exercises; any safety-reliant
-field deployment needs a separate security, privacy and operational acceptance process.
-No autonomous use-of-force capability or unrestricted control over security systems.
-
-## Parallel execution rules
-
-Track A builds the durable product substrate and usable evidence loop. Track B measures
-existing runtimes and sandbox options in isolation. Track C builds voice against the agreed
-session contract. Each uses a separate branch and small PR, with exact source pins and
-actual test output. Work packages are not claims that autonomous agents are running.
-
-Changes to context, action, approval and result contracts require coordinated review.
-No shared credential pool across independent agent loops. Preserve upstream archives.
-No force pushes, silent merging, automatic production deployment or unrequested live data.
-
-## Definition of success for the next demonstrable release
-
-A user can open Alfred, select an authorised project, ask what changed, inspect the evidence,
-review a proposed response and approve a limited action. Alfred retains the state after a
-restart, reports uncertainty instead of inventing success, and lets the user pause or revoke
-access. Prove this small complete experience before expanding the integration count.
+A person can ask about their authorised project, receive a sourced answer, notice a
+meaningful change, inspect the evidence, approve an exact action and see an honest result
+that survives interruption. They can correct memory, pause work and revoke access. The
+current release supplies the local workspace and knowledge substrate; live reasoning,
+voice and external execution remain the next build stages.

@@ -1,0 +1,51 @@
+{
+  "tested_commit": "590970bbb51c062cc842f9ce3902bb33b255d82b",
+  "workflow_run": "36196322215",
+  "data": "synthetic only",
+  "files": {
+    "alfred/desk.py": {
+      "sha256": "7406f6aab45a7197e3a8ae5d5c9849a9771ed2fe8a2d75ee7bd4495cf0363d1f",
+      "git_blob": "aff607f38026fa327d919547244fc055d8be46e6"
+    },
+    "alfred/desk_http.py": {
+      "sha256": "3a1453c6e7a426198a2a029e71ef953a24daa1f849c06b5cf7b8502cd89175be",
+      "git_blob": "02733d8abb35a754cddda13d9504c37fadc1fe8d"
+    },
+    "alfred/desk_runtime.py": {
+      "sha256": "5d0047157990181acc9a755c6f12e3c1042e5e34d9fad1fe0294b5ae570317e6",
+      "git_blob": "e7eedefe6c49295e1bf9d53861c80e2b09cad652"
+    },
+    "alfred/desk_store.py": {
+      "sha256": "5d6f971b449b28858174692bd33a9ebef44f0b5dc4250ebd5e8253958ff9613a",
+      "git_blob": "ef441e8f39285e56f39d876fbfa4ec49d71238d4"
+    },
+    "web/index.html": {
+      "sha256": "b89a8c4e4706a876932f3f5348db48c6cbd75bb0df4b1153694d573b69bba68e",
+      "git_blob": "b75de7d02c867e2b92c18800ec26d00d0b00e4c3"
+    },
+    "web/app.css": {
+      "sha256": "90a098ab05ef0f95b6ee1c06a1311e8cdca8693f0d3c55a81169b70a724c7f80",
+      "git_blob": "b890a037d5d03d807c97d72fb16d5480dffcc91f"
+    },
+    "web/app.js": {
+      "sha256": "e66d4721d8439fe7a8ae057f0caecaac3f2ce37aec94bde41dc2665d2253730a",
+      "git_blob": "798868699f1e9ae922d9edbd52e4ba3381e83fc0"
+    },
+    "tests/test_desk.py": {
+      "sha256": "512b41a8a0bbb84ad920252fbb1a68edea7e915c137751376923f8a14ec4b875",
+      "git_blob": "03057464ed3bbab754b6da89108463e163e6d01d"
+    },
+    "tests/test_desk_http.py": {
+      "sha256": "7f72515f048db2d145fc356ffd7ef46201312f8dc5c3dae2c12e1019aa4309b9",
+      "git_blob": "1b8cc1dd9078caab060a0b04bec810dc198b89fe"
+    },
+    "tools/check_desk_browser.py": {
+      "sha256": "5fad2450557bb070b8c0301e43882bc10d2375a72c4421da4afbbe8d442ac31e",
+      "git_blob": "ea5dc23fadf125f373c2d15b63564934b57ce612"
+    },
+    "alfred/local.py": {
+      "sha256": "f5621de0f5d114c29311d95d01c1caa62ce61ddbb4886aac14a49515f4c364f1",
+      "git_blob": "d74a9cb89ff4883ffabb9838ec9959ad58c430f5"
+    }
+  }
+}
