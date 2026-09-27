@@ -6,6 +6,7 @@ import {type KnowledgeRecord,type Relationship} from '../domain/model';
 import {type GraphMode} from '../domain/projection';
 import {Shell,ParticleField,Lattice,OrbitLines,EvidenceLinks,RecordNodes} from './layers';
 import {RenderPipeline} from './RenderPipeline';
+import {cameraDistanceForViewport,SPHERE_CAMERA_FOV} from './camera';
 export interface SphereProps{records:KnowledgeRecord[];relationships:Relationship[];selected:string|null;onSelect:(id:string)=>void;paused:boolean;reducedMotion:boolean;quality:'high'|'balanced';onStatus:(status:string)=>void;mode:GraphMode;resetEpoch:number;}
 class SceneBoundary extends Component<{children:ReactNode;fallback:ReactNode;onError:()=>void},{failed:boolean}>{
   state={failed:false};static getDerivedStateFromError(){return{failed:true};}
@@ -20,8 +21,8 @@ function GraphScene(props:SphereProps&{moving:boolean;onHover:(text:string|null)
     return()=>{c.removeEventListener('change',change);c.dispose();};
   },[camera,gl,invalidate,props.reducedMotion]);
   useEffect(()=>{
-    const aspect=size.width/Math.max(size.height,1),distance=Math.max(4.0,3.2/aspect);
-    camera.position.set(0,0,distance);camera.lookAt(0,0,0);camera.updateProjectionMatrix();controls.current?.update();
+    const distance=cameraDistanceForViewport(size.width,size.height);
+    camera.position.set(0,0,distance);camera.lookAt(0,0,0);camera.updateProjectionMatrix();controls.current?.update();controls.current?.saveState();
     if(group.current)group.current.rotation.set(0,0,0);invalidate();
   },[camera,size.width,size.height,props.resetEpoch,invalidate]);
   useEffect(()=>{if(props.mode==='relationships'&&group.current){group.current.rotation.set(0,0,0);controls.current?.reset();invalidate();}},[props.mode,invalidate]);
@@ -51,7 +52,7 @@ function KnowledgeSphereImpl(props:SphereProps){
   const fallback=<div className="graphics-fallback" role="status"><h3>Graphics unavailable.</h3><p>Browse your records below.<br/>The workspace remains usable.</p>{failed&&<button onClick={()=>{setFailed(false);setAttempt(n=>n+1);}}>Retry graphics</button>}</div>;
   const moving=!props.paused&&!props.reducedMotion&&!hidden&&!lost&&props.mode==='field';
   return <div className="sphere-canvas" aria-label="Three-dimensional knowledge view">
-    {!available?fallback:<SceneBoundary key={attempt} fallback={fallback} onError={onError}><Canvas camera={{position:[0,0,4],fov:34,near:.1,far:30}} dpr={1} frameloop={moving?'always':'demand'} gl={{antialias:true,alpha:false,powerPreference:'high-performance'}} onCreated={onCreated} fallback={fallback}><GraphScene {...props} moving={moving} onHover={setHover}/></Canvas></SceneBoundary>}
+    {!available?fallback:<SceneBoundary key={attempt} fallback={fallback} onError={onError}><Canvas camera={{position:[0,0,4],fov:SPHERE_CAMERA_FOV,near:.1,far:30}} dpr={1} frameloop={moving?'always':'demand'} gl={{antialias:true,alpha:false,powerPreference:'high-performance'}} onCreated={onCreated} fallback={fallback}><GraphScene {...props} moving={moving} onHover={setHover}/></Canvas></SceneBoundary>}
     {hover&&!lost&&<div className="node-tooltip" role="status">{hover}</div>}
     {lost&&<div className="graphics-status" role="status">Graphics paused. Waiting for context recovery. Record browsing remains available.</div>}
   </div>;
