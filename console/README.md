@@ -19,9 +19,9 @@ Use Node 22.12+ and npm 11.20.0 with the existing lock. Development and preview 
 ```sh
 npm run build
 npm test
+npm run standalone
 npx playwright install chromium
 npm run test:browser
-npm run standalone
 ```
 
 ## What changed

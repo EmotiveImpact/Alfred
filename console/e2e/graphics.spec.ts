@@ -4,6 +4,8 @@ import {writeFileSync} from 'node:fs';
 import {recordPosition} from '../src/domain/projection';
 import {createDemoSnapshot} from '../src/domain/fixtures';
 import {luminance} from './png';
+// Begin outside the rail: an initial pointer at (0,0) is itself a hover input.
+test.beforeEach(async({page})=>{await page.mouse.move(1600,10);});
 test('a real record mesh opens the right provenance',async({page})=>{
   await page.goto('/');await expect(page.locator('canvas')).toHaveAttribute('data-render-frame',/\d+/);await page.getByRole('button',{name:'Pause sphere motion',exact:true}).click();await page.getByRole('button',{name:'Reset graph view'}).click();await page.waitForTimeout(300);
   const box=await page.locator('canvas').boundingBox();if(!box)throw new Error('No canvas');
