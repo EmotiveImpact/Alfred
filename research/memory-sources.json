@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-09-27",
+  "purpose": "Research register, NOT an installation lock, complete licence audit or runtime endorsement",
+  "upstream_code_executed": false,
+  "new_upstream_files_copied": 0,
+  "pinned_reviews": [
+    {"id":"graphiti","repository":"getzep/graphiti","commit":"ba4a9cb32495b6864160616f8dfa2b898f4a500c","licence_observed":"Apache-2.0","licence_file":"LICENSE","licence_blob":"5feb0d9d299a1107adfa8331306b13cc0eff2d78","licence_scope":"root header lines 1-26","source_review":{"path":"graphiti_core/edges.py","blob":"28c170355e02a569b60c5e070f019572889ace82","lines":[1,220]},"decision":"first temporal adapter candidate, not adopted"},
+    {"id":"basic-memory","repository":"basicmachines-co/basic-memory","commit":"22d31e96e2defa465d3703620a537c9125e7d364","licence_observed":"AGPL-3.0","licence_file":"LICENSE","licence_blob":"0ad25db4bd1d86c452db3f9602ccdbe172438f52","licence_scope":"root header lines 1-22","decision":"reference/interoperability pending deliberate licensing decision"},
+    {"id":"obsidian-headless","repository":"obsidianmd/obsidian-headless","commit":"0d0ec4364bfde6c715c539cf3555ff8272bb7a58","licence_observed":"UNLICENSED package declaration","licence_file":"package.json","licence_blob":"edbe0fe63c85bb70f85bb35b16d3c831e56d29cd","licence_scope":"complete package declaration, not a grant to vendor","decision":"optional separately configured official service client"},
+    {"id":"cognee","repository":"topoteretes/cognee","commit":"eb90d03740755f5252b8b12cce91fd09970f2d81","licence_observed":"Apache-2.0","licence_file":"LICENSE","licence_blob":"fd57f68790eb9919fc622902caf31f831f9c4e8f","licence_scope":"root header lines 1-18","decision":"alternative ingestion/recall candidate, not adopted"},
+    {"id":"mem0","repository":"mem0ai/mem0","commit":"94c3fe9f238f3dbf29c9ce98643bd71eb13077cd","licence_observed":"Apache-2.0","licence_file":"LICENSE","licence_blob":"d20d5102c3cf97ecbee54afd65893de4a11d26fe","licence_scope":"root header lines 1-16","decision":"optional preference extraction comparison, not adopted"}
+  ],
+  "documentation_reviews": [
+    {"id":"obsidian-api","repository":"obsidianmd/obsidian-api"},
+    {"id":"obsidian-rest","repository":"coddingtonbear/obsidian-local-rest-api"},
+    {"id":"letta-code","repository":"letta-ai/letta-code"},
+    {"id":"sqlite-vec","repository":"asg017/sqlite-vec"},
+    {"id":"pgvector","repository":"pgvector/pgvector"},
+    {"id":"lightrag","repository":"HKUDS/LightRAG"},
+    {"id":"graphrag","repository":"microsoft/graphrag"},
+    {"id":"docling","repository":"docling-project/docling"},
+    {"id":"longmemeval","repository":"xiaowu0162/LongMemEval"},
+    {"id":"longmemeval-v2","repository":"xiaowu0162/LongMemEval-V2"},
+    {"id":"locomo","repository":"snap-research/locomo"},
+    {"id":"langgraph","repository":"langchain-ai/langgraph"},
+    {"id":"openfga","repository":"openfga/openfga"},
+    {"id":"opa","repository":"open-policy-agent/opa"},
+    {"id":"nango","repository":"NangoHQ/nango"},
+    {"id":"restic","repository":"restic/restic"},
+    {"id":"maps-guide","repository":"pavrus117/ai-os-maps-guide"}
+  ],
+  "documentation_review_limit":"No commit/dependency pin or full licence review for these entries; re-inspect before adoption. See dated landscape for observed terms and caveats.",
+  "official_documents": [
+    "https://obsidian.md/help/data-storage",
+    "https://obsidian.md/help/Plugins/Graph+view",
+    "https://obsidian.md/cli",
+    "https://obsidian.md/help/sync/headless",
+    "https://obsidian.md/help/Extending+Obsidian/Plugin+security",
+    "https://obsidian.md/license",
+    "https://docs.obsidian.md/Plugins/Vault",
+    "https://www.sqlite.org/fts5.html"
+  ]
+}

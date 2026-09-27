@@ -1,182 +1,77 @@
-# ALFRED architecture v0.1
+# ALFRED architecture and current system boundaries
 
-Status: proposed architecture; only the small offline contracts in alfred/ are implemented.
+Updated 27 September 2026. Current requirements: [PRD.md](PRD.md). Memory specification: [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md). The original architecture is preserved in [archive/ARCHITECTURE-v01.md](archive/ARCHITECTURE-v01.md).
 
-## 1. Own the control layer; replace the model and runtime
+## One personal intelligence, not one omnipotent model
 
-The model proposes. ALFRED assembles authorised context. An independent policy service
-decides. A connector executes. A ledger records what was attempted and what evidence
-supports the outcome. None of these roles should disappear into one enormous prompt.
+The model proposes. ALFRED assembles authorised context. Independently enforced policy authorises. Connectors execute. A durable ledger records intent, receipt and supported outcome. Replaceable voice, reasoning, extraction and retrieval components fit inside this boundary; they do not independently acquire every account credential.
 
 ```text
-User / paired device
-        |
-Session API and voice/text interface
-        |
-ALFRED context + attention + conversation coordinator
-        |                     |
-Evidence store            Model / agent adapter
-        |                     |
-Event ingress          typed action proposal only
-        |                     |
-Authenticated source    Authority + approval service
-                              |
-                        durable action outbox
-                              |
-                         connector gateway
-                              |
-                     receipt + result reconciliation
+Person / paired devices / optional Obsidian editor
+                    |
+             ALFRED console + sessions
+                    |
+          context and attention coordinator
+            /                       \
+  governed memory gateway      reasoning/runtime adapter
+            |                       |
+   sources, claims, indexes     typed action proposal
+                                    |
+                          authority and exact approval
+                                    |
+                        durable outbox + connector host
+                                    |
+                         receipt / result / audit ledger
 ```
 
-Begin as a modular Python service plus a browser interface, a local database and isolated
-connector/runtime workers. This is a deployment proposal, not a mandate to implement all
-modules as network services. Separate hostile workloads with actual process/container
-boundaries; a Python class or workspace field is not a security boundary.
+## Implemented baseline
 
-## 2. Runtime selection
+The first-party Python service persists local data in SQLite and exposes an authenticated loopback browser interface. `KnowledgeStore` builds on the local service; conversation workers and fixed Pulse routines share the existing local host lifecycle. Markdown/project sources are read-only. The only action effect is an approved draft in ALFRED's own database, not an external message.
 
-Use one runtime behind a narrow adapter for the first integration experiment. Hermes is
-a provisional first candidate because its documented memory, skills and gateway features
-align with continuity, and the inspected Jarvis HUD shows a related session/voice pattern.
-Compare nanobot as the smaller architectural baseline. Retain OpenClaw gateway/security
-material as another reference, not as a second overlapping authority system.
+Manual reviewed statements are stored separately from the authored note graph and have provenance/review/conflict/invalidity rules. They are not yet automatically included in model context. Model mode is optional and tool-free; current evidence rejection rules are limited heuristics. No general agent framework from the source archive has been fully integrated.
 
-Do not combine three independent schedulers, memory stores and tool executors with the
-same credentials. A runtime adapter receives redacted scoped context and returns typed
-proposals, not a root shell. Its subprocess must not possess the connector credentials
-needed to bypass ALFRED policy. Runtime choice is gated on actual sandbox and failure tests.
-See research/LANDSCAPE.md for evidence and caveats.
+The newer `console/` toolchain is preserved alongside `web/`. Do not infer a completed visual implementation, note-app integration or deployment from its existence. This planning revision changes no application or UI source.
 
-## 3. Data and event contracts
+## Memory integration decision
 
-Proposed persisted envelope: schema version, event ID, source ID, authenticated principal,
-workspace/session, subject and kind, observation time, receipt time, expiry, evidence
-basis, source reference/content hash, correction/replacement links and correlation ID.
-The current prototype implements only a subset: inspect Evidence rather than assuming
-this whole schema exists.
+Markdown is a human knowledge surface, not an action database. Retain original source references for imported account/document data. Keep working episodes, accepted semantic statements, preferences, commitments and procedures distinct. Use the existing review and authority store as the source of truth for status; graph/vector engines provide rebuildable projections and proposed extraction.
 
-Separate facts/events from materialised current state. Keep source observation time when
-messages arrive late. Equal timestamps with conflicting reports require reconciliation.
-Clock skew must be measured and handled explicitly; freshness is not time-since-download.
-Deduplicate by scoped identity plus payload identity, not a globally reused message ID.
-Bound queues, payloads, replay state and retention. A full queue must produce health
-telemetry and backpressure rather than silent loss or an unbounded memory allocation.
+The proposed memory gateway is the only context route for conversation, attention and later ENDSTATE requests. It filters permissions before ranking and graph traversal, preserves source and review basis, enforces a context budget and rechecks grants/revisions before output. Interfaces and lifecycle are detailed in [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md).
 
-Prototype storage is in-memory. Next: SQLite for a single local node with transactional
-outbox and schema migrations. Use Postgres when multiple concurrent users/nodes require
-it; evaluate row-level policies plus independent service checks. Do not claim workspace
-labels alone deliver tenant isolation. Add full-text retrieval first; introduce vector
-retrieval only when it improves measured tasks. No separate graph database is required
-to represent initial entities/relationships in relational tables.
+## Storage and deployment
 
-## 4. Ingress and attention
+Start with the existing modular local service, SQLite and a measured FTS5 lexical projection. Add vectors or a graph engine only after the contract and evaluation gate. Do not deploy a fleet of microservices to prove the first personal workflow. PostgreSQL/pgvector is a later concurrency/deployment option, not a mandatory replacement now.
 
-Connectors verify their upstream transport, normalise observations and preserve provenance.
-Ingested text, tool descriptions, email bodies and web content are data, not instructions.
-First run deterministic scope/freshness/duplicate/health checks. Then compare the event
-with authorised objectives, responsibility and user-approved notification rules. A model
-may classify low-risk relevance within a fixed budget; unknown or conflicting evidence
-is routed for review rather than inflated into certainty.
+Personal, company and operational/client scopes require explicit identity, grants, key custody, retention and egress policy. Credential IDs are not a mature paired-person/device system. Database labels or graph group IDs do not enforce all isolation requirements. Separate hostile workloads at a real process/filesystem/network boundary.
 
-Speech, display, digest, suppress and reject are different outcomes. Every route has a
-reason. Generated speech, successful playback and human acknowledgement are separate
-records. Reserve critical operational alerting for tested systems and explicit rules;
-ALFRED v0.1 is not an emergency alarm.
+The application is not yet encrypted at application level and is not approved for sensitive operational data. Vault sync is independent of the live SQLite ledger. Backups must have separate retention and restore procedures that reapply current revocations/deletion tombstones.
 
-## 5. Authority and execution
+## Candidate components, not installed dependencies
 
-Proposed action: immutable actor, workspace, capability, target, exact parameters,
-preconditions, expiry, idempotency key and approval hash. The authenticated device/session
-is bound outside model output. A capability registry specifies schema, effects, allowed
-principals, data egress, rate/budget constraints and verification strategy.
+Obsidian filesystem vault: primary authoring/reading interoperability. Optional official plugin/CLI/headless clients have separate permissions and lifecycle.
 
-Approve only the exact proposal. Recheck grant, expiry and preconditions at dispatch.
-A changed recipient, amount or parameter invalidates previous approval. The action
-outbox and result ledger must be committed transactionally. Retries require a documented
-idempotency strategy for that external service, not a universal 'exactly once' claim.
-After an ambiguous timeout query status where supported; do not blindly repeat a side
-effect. Some effects are irreversible. Cancellation stops future work, not completed work.
+Graphiti: first narrow temporal projection/extraction candidate. Cognee: alternative ingestion/recall pipeline. Mem0: preference extraction comparison. None can silently decide truth, invalidate accepted ALFRED history or alter authority. Basic Memory is a reference/interoperability candidate pending current AGPL terms.
 
-Receipt means acceptance/delivery. Verification means capability-specific evidence of
-the result. A read-back from the same device is not independent physical confirmation.
-For a lock, 'device reports locked' is more accurate than 'the house is safe'. Some
-capabilities can never support a strong verified state; preserve unknown/partial states.
+Hermes, nanobot and QwenPaw remain runtime candidates from the earlier programme. LiveKit/Pipecat remain voice transport candidates. Jev remains an advisory classification component, not a truth or authorisation service. OpenSandbox remains an execution-containment candidate. New memory research does not install or promote any of these.
 
-## 6. Interfaces and voice
+OpenFGA/OPA may inform finer authorisation. Nango may inform OAuth/connectors subject to edition/licence review. Prefer one official read-only connector first rather than adopting a universal integration platform without a tested need. References and limitations: [research landscape](../research/MEMORY_LANDSCAPE_2026-09-27.md).
 
-First prove text + push-to-talk. Candidate transport: LiveKit Agents, with Pipecat a
-comparison option, not a parallel production dependency. Keep the voice transport,
-turn detection, speech model, conversation session and tool execution separable.
-OpenAI Realtime is one possible speech/model adapter, not ALFRED's identity or sole route.
-Official reference: https://developers.openai.com/api/docs/guides/realtime
+## Actions and long-running work
 
-Maintain turn IDs, cancellation generations, input/output audio buffers, playback offsets,
-acknowledgement and reconnect state. Do not store a response as heard when barge-in stopped
-playback. Do not auto-cancel or repeat an already dispatched action when voice disconnects.
-Never grant authority solely from an overheard command or a voice likeness.
+Preserve exact proposal parameters, actor/workspace, expiry, source preconditions and approval fingerprints. Recheck before dispatch. An ambiguous timeout or interruption is not an invitation to repeat an irreversible effect. Receipt, supported result and human acknowledgement are separate records.
 
-Long-lived edge agents need an appropriate process host. A static site or request/response
-function alone does not provide a continuously running microphone/event service. A desktop
-or home node can host local processing; native mobile background behaviour must be proven
-on actual devices. Android microphone foreground services have permission and background
-start restrictions: https://developer.android.com/develop/background-work/services/fgs/service-types
-No iOS/Android always-on battery or entitlement guarantee is made here.
+'Create note' will be a new capability, not a bypass through the memory API. File/database coordination needs a journal and explicit reconciliation; it is not one atomic transaction. Begin with user-reviewed new inbox notes.
 
-## 7. Local/cloud split
+Pulse currently has fixed local reports and explicit interval opt-in. Models, arbitrary scripts and external account writes are not routine payloads. A later attention engine may nominate useful work but cannot silently expand its own capabilities. The host must be running; this task installs no daemon or remote worker.
 
-Local node: visible capture control, optional wake detection, bounded ephemeral audio,
-paired-device identity, encrypted cache, source health and a small approved offline
-capability set. Cloud: optional heavier reasoning, scoped retrieval and synchronisation.
-The deployment must be useful and honest when cloud access disappears, not silently
-continue presenting stale cached information as live.
+## Voice, devices, team and specialist engines
 
-Explicit listening does not imply recording retention or cloud upload. Those are separate
-permissions. Define provider egress per workspace and exclude credentials from model
-context. Local inference can reduce egress but is not automatically fast, secure or free;
-measure CPU, memory, power, accuracy and thermal behaviour on the target device.
+Voice must share session and permissions with text. Capture, recording retention and cloud upload are separate permissions. Generated, played and acknowledged audio require distinct states; stopping speech does not undo a dispatched action. Start visible push-to-talk and named-device tests before always-available modes.
 
-## 8. Device and service integration
+Future Home Assistant, account and device adapters expose narrow capabilities with source freshness. ENDSTATE receives scoped evidence and returns analysis with assumptions, never a fabricated observation. Noir integration must follow its actual authenticated API and acknowledgement semantics. No such integration is claimed here. Operational scenarios remain simulated/non-critical first, with no autonomous use-of-force authority.
 
-Use official APIs before browser control. Home Assistant is a candidate device gateway,
-not a reason to duplicate thousands of device integrations. Begin with read-only state
-and one harmless reversible action in a test environment. Its WebSocket API supports
-state/event interaction: https://developers.home-assistant.io/docs/api/websocket/
+## Observability and changes
 
-MCP is an interoperability mechanism, not a trust guarantee. ALFRED still validates
-server identity, tool schema, effects, destination and grants. Do not pass upstream
-credentials through indiscriminately; respect audience and consent boundaries. Reference:
-https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices
+Record evidence age, route reasons, queues, retries, revisions, token budgets and actual outcomes without retaining secrets or default raw private transcripts. Provide inspect, pause, revoke, export and forget controls. Measure latency, recall, abstention and failures on named configurations.
 
-## 9. ENDSTATE, Noir and teams
-
-ENDSTATE remains an independent analysis/planning engine and 8BALL remains a separate
-client. Proposed request includes objective, assumptions, scoped evidence and constraints;
-proposed response includes alternatives, dependencies, uncertainty and citations. This
-is not an existing API contract. Analyse actual engine capabilities before implementing.
-Simulation output is never promoted to a live observation.
-
-Noir is an adjacent Black State engineering project, not an established live operational
-record service in this delivery. Future integration must read its actual API/auth/version
-and preserve its receipt versus operator-acknowledgement semantics. No other repository
-was changed for ALFRED.
-
-Team cooperation uses a role-limited shared workspace plus separate personal workspaces.
-The UI can feel like one Alfred per person without giving every instance unrestricted
-access to all team data. Multi-tenant deployments require separate credential and runtime
-boundaries, not merely prompts. OpenClaw itself documents its one-trust-boundary design:
-https://docs.openclaw.ai/gateway/security
-
-## 10. Observability, costs and upgrades
-
-Record route reasons, evidence age, action-state changes, latency components, queue depth,
-retries and connection state without default raw transcripts or secrets. Redaction is
-not a substitute for data minimisation. Provide pause, revoke, export and health controls.
-
-Cost model to measure: processed speech duration + model input/output tokens + generated
-speech + storage/egress + continuously running compute. Apply session/workspace budgets,
-maximum tool depth, timeouts and provider failover policies. No current price assumptions
-or cost savings have been benchmarked in this branch.
-
-Pin deployments and adapter schemas, test upgrades against saved synthetic scenarios,
-review licence changes and support rollback. Preserve the original source snapshot while
-placing reviewed modifications outside quarantine with explicit attribution.
+Preserve the previous blocked live-model-comparison restriction. Documentation and deterministic contract tests are separate from model experiments. Upstream source quarantine remains inert; no nested prompt, script or AGENTS file can change this task's authority. Each dependency adoption needs its own code/model/service/licence/egress review.

@@ -1,0 +1,36 @@
+name: ALFRED memory planning checks
+on:
+  push:
+    branches: [research/alfred-memory-system-2026-09-27]
+    paths: [docs/**, plans/**, research/memory-sources.json, research/MEMORY_LANDSCAPE_2026-09-27.md, README.md, AGENTS.md, SESSION_HANDOFF.md, tools/check_memory_plan.py, .github/workflows/memory-plan-checks.yml]
+permissions:
+  contents: read
+jobs:
+  planning-and-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate plans without external services or model calls
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/alfred-memory-planning
+          python3 tools/check_memory_plan.py --self-test 2>&1 | tee /tmp/alfred-memory-planning/plan-tests.txt
+          python3 tools/check_memory_plan.py | tee /tmp/alfred-memory-planning/plan-report.json
+      - name: Regress unchanged local application and verify inert archives
+        run: |
+          set -euo pipefail
+          python3 --version | tee /tmp/alfred-memory-planning/python.txt
+          python3 -m unittest discover -s tests -v 2>&1 | tee /tmp/alfred-memory-planning/application-tests.txt
+          python3 tools/import_sources.py --verify | tee /tmp/alfred-memory-planning/archive-original.txt
+          python3 tools/extend_sources.py --verify | tee /tmp/alfred-memory-planning/archive-extension.txt
+      - name: Preserve actual check results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-memory-planning-validation
+          path: /tmp/alfred-memory-planning
+          retention-days: 7
+          if-no-files-found: warn
