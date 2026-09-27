@@ -1,47 +1,37 @@
-# ALFRED continuation: governed-memory planning revision
+# ALFRED unified build handoff
 
-27 September 2026. Start with AGENTS.md, docs/PRD.md, docs/ROADMAP.md and plans/memory-backlog.json.
+27 September 2026. Product category: **operational and executive intelligence**.
 
-## Source checkpoint
+## Start from main
 
-Planning branch: research/alfred-memory-system-2026-09-27.
-Base commit: 73a255a10cb43f55a14aaf45165800bd17e60553 on feat/alfred-obsidian-console-2026-09-27.
-Base tree: a7b21f02338036a7c1b96aed5e87262133cae27a.
-This is one console-toolchain commit ahead of v0.8 22e64567f69508928b164d55c578834abcb404e8. It preserves the full local application. Refresh refs and compare concurrent console work before continuing. No automatic merge/main update or deployment.
+All nine previously stacked PRs were merged into main in dependency order: #1, #5, #6, #7, #8, #9, #10, #13, #12. The combined baseline is `03e946fc3fb6fe0b540abe5ff52204de6f0f99ed`; current main may include the subsequent source-library and documentation consolidation. Refresh main before branching. Do not use an older research branch as the current product.
 
-## User request addressed
+Read BUILD_START_HERE.md, AGENTS.md, docs/PRODUCT_POSITIONING.md, docs/PRD.md, docs/ROADMAP.md and plans/memory-backlog.json. Current source availability is in third_party/library/README.md and CATALOGUE.json. Historical source locks and receipts remain separately intact.
 
-Research Obsidian plus deeper memory and useful repositories, update product/build plans across ALFRED, and publish them. The conclusion is optional Obsidian/Markdown authoring plus ALFRED-owned evidence, reviews, authority and lifecycle. Do not require Obsidian to be open for selected-folder reading. Do not confuse the console's internal name with an integrated note application.
+## What is actually combined
 
-## Delivered by this revision
+The v0.8 Python/SQLite backend, functioning web/ interface, tests and all prior handoffs/evidence are present together with the later React/Three.js/GLSL console and its separate handoff. The console is no longer merely a package skeleton. Its interactive frontend works with fictional fixtures; an authenticated backend adapter is still missing. Preserve both interfaces until that connection has real browser-to-server acceptance.
 
-Current canonical PRD; updated architecture/product brief/roadmap/work packages; detailed memory architecture, Obsidian interoperability and privacy/deletion specification; architecture decision; 22-repository research map with five exact commit/licence/package observations; 12 dependency-linked future jobs; deterministic plan consistency checker. Superseded briefs/plans are archived without deleting their history.
+The broader library covers all 42 researched upstream repositories through copied source-text snapshots or explicit pinned reference-only records. Exact copied counts, revisions, licence observations and per-file omissions are in the current catalogue. Historical focused archives contain 2,309 files and overlap with the broad library; do not claim summed counts are unique code.
 
-This revision changes no alfred/, web/ or console/ runtime source and no third_party/ files. No new library, model, private vault, account or service was installed or connected. The new validation is about plan/source-link consistency plus regression tests of unchanged code, not completion of the memory programme.
+No upstream application, skill, workflow or model was executed during preservation. No third-party memory/runtime library was adopted merely by copying it. Obsidian Headless remains a pinned external-client reference because a redistribution grant was not established. Preserve the distinction between UNLICENSED and Unlicense.
 
-## What already works at v0.8
+## Current product capabilities
 
-Local persistence, credential-scoped access, read-only project/Markdown scanning, explicit note graph, source questions, bounded saved conversations, manual reviewed entities/statements, exact local-draft approvals, fixed Pulse reports and controlled report-history pruning. Optional tool-free local model exists with a small real v0.7 experiment and documented failures. No production brain selected.
+Local persistence and authenticated browser sessions; read-only Markdown/project source scanning; authored note graph; exact source excerpts; bounded saved conversations and optional tool-free local model queue; manually reviewed entities/statements with source invalidation/conflict/supersession; exact local-draft approvals; fixed Pulse reports and bounded history pruning.
 
-Reviewed memory is not yet automatically conversation context. The current scanner is not complete Obsidian compatibility. Note write-back, mature person/device identity, fine-grained grants, application encryption, full deletion/restore accounting and actual external connectors remain unfinished.
+No dependable production brain selected. Reviewed claims are not automatically inserted into conversational context. No external account/device, voice, ENDSTATE or Noir integration. No application-level encryption or mature paired-person/device identity. Only local drafts and local report/review metadata can be written. Host must remain running; no deployed daemon or cross-device runtime sync.
 
-## Immediate implementation work
+## Next implementation sequence
 
-M01: selected-vault compatibility and stable identity/rename/collision fixtures.
-M03: bounded reviewed-memory context bridge, first on synthetic data, retaining source/review/validity/conflict and access checks.
-M02 in parallel: mature person/device identity and per-source/capability grants. M02 and M05 are release gates for private-data pilot.
-Then M04 explicit capture and separately approved inbox writes; M05 correction/deletion/restore; M06 measured lexical baseline. M07 graph/vector engines are optional, not a reason to block the useful local loop.
+M01 selected-vault identity/compatibility and M03 reviewed-memory context bridge, initially using synthetic data. M02 person/device/source permissions proceeds alongside them. Connect the premium console to actual authenticated read-only projections without changing the authority system. Then M04 explicit memory capture and exact approved inbox writing; M05 complete correction/deletion/restore; M06 lexical retrieval baseline.
 
-Graphiti is the first temporal adapter candidate; Cognee is an alternative; Mem0 may help preference extraction. Basic Memory is a strong architectural reference but current AGPL terms must not be mistaken for MIT. Official headless package is UNLICENSED; use only as a deliberately configured service client under appropriate terms, not a silent fork.
+Graphiti is a temporal-memory candidate; Cognee an alternative pipeline; Mem0 a preference component. Use the copied relevant source to inspect rather than re-research from nothing. Do not activate several competing memory authorities. Licences, source egress, dependency risks and actual interoperability still need adoption decisions. Memory private-pilot gates M02/M05 remain unfinished.
 
-## Preserve these boundaries
+Executive intelligence includes priorities, decision briefs, planning, commitments and follow-up. Operational intelligence includes current state, change awareness, coordination and traceable authorised outcomes. Personal usefulness and personal/company/client boundaries remain fundamental. Emotive Impact versus Black State corporate ownership is not resolved by this wording change.
 
-No source content or graph edge grants tool permissions. No automatic names-only entity merging. No blind file overwrite or live SQLite/WAL file sync. A sync receipt is not remote-device execution. Temporary unavailability is not deletion. A restored backup must not resurrect forgotten current memory. Separate generated claims, source reports, observations, receipts and human acknowledgements.
+## Verification and limitations
 
-Preserve the approved premium console direction and parallel UI work. Do not restore an admin-dashboard default or claim the current source already matches the target. This task is research/planning, not another design pass.
+The consolidation workflow rechecks the existing core, source manifests, plan consistency and console build/browser behavior against the combined source. Consult its actual finished run and docs/CONSOLIDATION_2026-09-27.md, not inherited green counts from earlier PRs. Historical receipts remain historical. Source preservation is not runtime integration, security certification, deployment or safety-critical readiness.
 
-The previously blocked live-model-comparison operation remains unexecuted and must not be rerouted. No new model benchmark is claimed. No microphone, account/device, ENDSTATE or Noir integration, daemon, cross-device runtime sync or safety-critical deployment was added.
-
-## Verification
-
-Run the plan checker/self-tests, the existing first-party unit suite and both source archive verifiers. Inspect the actual planning PR/Actions receipt for current results. Do not inherit counts as proof for modified code. Use the current PR head, not a remembered branch, and publish normal files plus exact commit and limitations.
+The previously blocked live-model-comparison operation must not be retried or rerouted. No new model inference is part of this work. Keep private data out of this public repo. Work on a short-lived branch from current main, publish tested normal source and update the handoff with evidence.

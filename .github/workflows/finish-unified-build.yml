@@ -1,0 +1,63 @@
+name: Finalise ALFRED unified source and documents
+on:
+  push:
+    branches: [chore/alfred-unified-build-2026-09-27]
+    paths: [tools/complete_licence_reviews.py, tools/finalise_unified_docs.py, .github/workflows/finish-unified-build.yml]
+permissions:
+  contents: write
+concurrency:
+  group: alfred-source-library-preservation
+  cancel-in-progress: false
+jobs:
+  finalise:
+    if: github.repository == 'EmotiveImpact/Alfred'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Complete exact manually inspected source grants
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/complete_licence_reviews.py
+      - name: Reconcile current product documents without changing runtime source
+        run: python3 tools/finalise_unified_docs.py
+      - name: Check the combined plans, core and inert source archives
+        run: |
+          set -euo pipefail
+          python3 tools/test_source_library.py
+          python3 tools/check_memory_plan.py --self-test
+          python3 tools/check_memory_plan.py
+          python3 -m unittest discover -s tests -v
+          python3 tools/build_source_library.py --verify
+          python3 tools/import_sources.py --verify
+          python3 tools/extend_sources.py --verify
+      - name: Publish only tested source-library and authored-document changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'ALFRED consolidation'
+          git config user.email 'alfred-consolidation@users.noreply.github.com'
+          git config core.autocrlf false
+          git add -f third_party/library
+          git add docs/PRD.md docs/PRODUCT_BRIEF.md docs/ARCHITECTURE.md docs/MEMORY_ARCHITECTURE.md docs/OBSIDIAN_INTEGRATION.md docs/ROADMAP.md docs/BUILD_PLAN.md docs/MEMORY_SECURITY.md docs/adr/MEMORY-001.md docs/CONSOLIDATION_2026-09-27.md docs/evidence/unified-2026-09-27/document-changes.json plans/memory-backlog.json research/memory-sources.json third_party/BUILD_REFERENCE_SHELF.md
+          if ! git diff --cached --quiet; then
+            git commit --quiet -m 'build: complete upstream references and reconcile operational executive intelligence baseline'
+            AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/chore/alfred-unified-build-2026-09-27
+          fi
+      - name: Preserve catalogue and normal authored documents
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-unified-documents
+          path: |
+            docs/CONSOLIDATION_2026-09-27.md
+            docs/evidence/unified-2026-09-27
+            third_party/library/CATALOGUE.json
+            third_party/library/README.md
+          retention-days: 7
+          if-no-files-found: warn

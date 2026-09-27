@@ -1,0 +1,113 @@
+name: ALFRED unified build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: alfred-unified-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  core-and-sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check retained ancestry, plans, first-party core and source bytes
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/alfred-unified-core
+          git rev-parse HEAD | tee /tmp/alfred-unified-core/TESTED_COMMIT.txt
+          for commit in 62f1abb543f10b96e06a3f6668392731d1de07e2 7514c5ef751f488fb754452929cc301dc597c106 554949273be84d9b420ce11201e2489a77948648 af10f961665962a42d2d78f00864edb9c267db26 f5a3be2f093ae38a669de6f07ff1c9609c175ba2 e0a0ef973d20d3f60606423ab2035d9f9df9e68f 22e64567f69508928b164d55c578834abcb404e8 1c589092b309cb976a77cbf774776a3d42b045ed 7179af2858d27a4672de409b3675a44ec9f88b5d; do
+            git merge-base --is-ancestor "$commit" HEAD
+            printf '%s preserved\n' "$commit" >> /tmp/alfred-unified-core/ancestry.txt
+          done
+          python3 --version | tee /tmp/alfred-unified-core/python.txt
+          python3 tools/test_source_library.py 2>&1 | tee /tmp/alfred-unified-core/archive-tests.txt
+          python3 tools/check_memory_plan.py --self-test 2>&1 | tee /tmp/alfred-unified-core/plan-tests.txt
+          python3 tools/check_memory_plan.py | tee /tmp/alfred-unified-core/plan-report.json
+          python3 -m unittest discover -s tests -v 2>&1 | tee /tmp/alfred-unified-core/application-tests.txt
+          python3 tools/build_source_library.py --verify | tee /tmp/alfred-unified-core/library.txt
+          python3 tools/import_sources.py --verify | tee /tmp/alfred-unified-core/original-archive.txt
+          python3 tools/extend_sources.py --verify | tee /tmp/alfred-unified-core/extension-archive.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: alfred-unified-core
+          path: /tmp/alfred-unified-core
+          retention-days: 7
+  backend-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Isolated first-party browser testing tools
+        run: |
+          python3 -m venv /tmp/alfred-browser
+          /tmp/alfred-browser/bin/pip install 'playwright==1.57.0' 'Pillow==11.3.0'
+          if command -v google-chrome >/dev/null; then
+            echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            /tmp/alfred-browser/bin/python -m playwright install --with-deps chromium
+          fi
+      - name: Exercise the existing real local backend and web workflows
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/alfred-unified-browser
+          git rev-parse HEAD > /tmp/alfred-unified-browser/TESTED_COMMIT.txt
+          ALFRED_BROWSER_OUTPUT=/tmp/alfred-unified-browser/desk /tmp/alfred-browser/bin/python tools/check_desk_browser.py
+          ALFRED_KNOWLEDGE_OUTPUT=/tmp/alfred-unified-browser/knowledge /tmp/alfred-browser/bin/python tools/check_knowledge_browser.py
+          ALFRED_GROUNDED_OUTPUT=/tmp/alfred-unified-browser/ask /tmp/alfred-browser/bin/python tools/check_grounded_browser.py
+          ALFRED_OS_OUTPUT=/tmp/alfred-unified-browser/os /tmp/alfred-browser/bin/python tools/check_os_browser.py
+          ALFRED_CONVERSATION_OUTPUT=/tmp/alfred-unified-browser/conversation /tmp/alfred-browser/bin/python tools/check_conversation_browser.py
+          /tmp/alfred-browser/bin/python tools/check_memory_browser.py
+          cp -r docs/evidence/memory-v08 /tmp/alfred-unified-browser/memory
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: alfred-unified-backend-browser
+          path: /tmp/alfred-unified-browser
+          retention-days: 7
+  console:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install the existing console's locked dependencies, never the source library
+        working-directory: console
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.20.0
+          npm ci
+          mkdir -p evidence
+          npm --version > evidence/npm-version.txt
+          git rev-parse HEAD > evidence/TESTED_COMMIT.txt
+          npm ls --depth=0 > evidence/dependency-versions.txt
+          npm audit --json > evidence/dependency-audit.json || true
+      - name: Typecheck, build and test the preserved premium console
+        working-directory: console
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee evidence/build.txt
+          npm test 2>&1 | tee evidence/unit-tests.txt
+          node tools/standalone.mjs
+          npx playwright install --with-deps chromium
+          npm run test:browser 2>&1 | tee evidence/browser-tests.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: alfred-unified-console
+          path: console/evidence
+          retention-days: 7
