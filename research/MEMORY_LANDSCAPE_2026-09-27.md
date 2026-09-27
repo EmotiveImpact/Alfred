@@ -2,7 +2,7 @@
 
 Research date: 27 September 2026. Scope: 22 public repository references and official implementation documentation, mapped to ALFRED's actual v0.8 gaps. This is a targeted source/documentation review, not an exhaustive market census, full code audit or comparative runtime benchmark.
 
-Five candidates have exact commit and licence/package-declaration records in [memory-sources.json](memory-sources.json). Other rows are documentation-level references and require fresh source/licence/dependency review before adoption. No candidate was installed, executed, copied wholesale or added as an ALFRED runtime dependency in this work. The existing eight-project, 2,073-file inert archive is unchanged.
+Eight memory candidates have exact commit and licence/package-declaration records in [memory-sources.json](memory-sources.json). Seven of those, plus the three earlier extension candidates, now have focused inert source selections in [the build-reference shelf](../third_party/BUILD_REFERENCE_SHELF.md). Obsidian Headless is pinned but deliberately not copied because its inspected package declares UNLICENSED. Other rows are documentation-level references and require fresh source/licence/dependency review before adoption. No candidate was installed or executed. The repository now retains 2,309 exact source files across 15 pinned snapshots; these are focused research selections, not complete forks or ALFRED runtime dependencies.
 
 ## Recommendation
 
@@ -67,7 +67,7 @@ Official Obsidian CLI and Headless Sync solve different problems. The CLI contro
 
 At Graphiti commit `ba4a9cb32495b6864160616f8dfa2b898f4a500c`, `graphiti_core/edges.py` lines 1-220 were inspected. The common edge model includes UUIDs, a group/partition ID and source/target identifiers. Viewed retrieval/deletion methods are database operations, not ALFRED caller-authorisation contracts. This is not a discovered vulnerability or a full security audit; it is a reason not to equate a library partition ID with our security boundary. Temporal capabilities elsewhere are documented upstream, not exhaustively code-audited here.
 
-Basic Memory, Cognee, Mem0 and Obsidian Headless were reviewed at documentation plus pinned licence/package level. Do not imply every file was read or that executable compatibility was tested.
+Focused Basic Memory, Cognee and Mem0 source selections are now preserved inert for build-time inspection, alongside Graphiti, Obsidian API, sqlite-vec and Docling. Obsidian Headless remains pinned research only and is not copied. Preserving source does not mean every file was closely reviewed or that executable compatibility was tested.
 
 ## Adoption experiment and rejection criteria
 
@@ -86,3 +86,16 @@ Build next: reviewed-memory context bridge, selected-vault lifecycle/identity, e
 Evaluate later: Graphiti first temporal adapter, Cognee alternative, Mem0 preference component, sqlite-vec versus a later pgvector deployment, Docling ingestion, one runtime and one OAuth connector solution.
 
 Defer: wholesale app forks, several simultaneous memory runtimes, universal graph migration, unbounded automatic note rewriting, silent transcript retention, shared personal/client memory and assumed always-on mobile capture.
+
+
+## In-repository availability
+
+Successful source-preservation run 36286506421 retained 236 newly selected source files:
+Obsidian API 6, Graphiti 36, Cognee 42, Mem0 69, Basic Memory 39, sqlite-vec 7 and
+Docling 37. Together with the earlier Jev/QwenPaw/OpenSandbox selections, the extension
+archive is 363 files across ten pins. The original Jarvis/runtime archive remains 1,946
+files across five pins. Both verifiers passed after import; no upstream source was
+executed. Exact paths, exclusions and hashes are in third_party/EXTENSION_RECEIPT.json.
+
+This shelf exists for reproducible inspection. It does not promote any candidate to an
+approved dependency. Use the current decision/licensing notes before adapting code.
