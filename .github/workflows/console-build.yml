@@ -1,0 +1,34 @@
+name: Obsidian console build
+on:
+  push:
+    branches: [feat/alfred-obsidian-console-2026-09-27]
+    paths: ['console/**', '.github/workflows/console-build.yml']
+permissions:
+  contents: read
+jobs:
+  console:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve frontend dependencies
+        working-directory: console
+        run: |
+          if test -f package-lock.json; then npm ci; else npm install; fi
+          npm ls --depth=0 > dependency-versions.txt
+          npm audit --json > dependency-audit.json || true
+      - name: Check implemented console
+        working-directory: console
+        run: |
+          if test -f src/App.tsx; then npm run build && npm test; fi
+      - name: Frontend development transport
+        working-directory: console
+        run: tar -czf console-toolchain.tar.gz node_modules package-lock.json dependency-versions.txt dependency-audit.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: obsidian-console-toolchain
+          path: console/console-toolchain.tar.gz
+          retention-days: 3
