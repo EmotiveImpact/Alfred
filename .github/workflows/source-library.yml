@@ -1,0 +1,56 @@
+name: ALFRED source-library preservation
+on:
+  push:
+    branches: [chore/alfred-unified-build-2026-09-27]
+    paths: [tools/build_source_library.py, tools/test_source_library.py, third_party/library-request.json, .github/workflows/source-library.yml]
+permissions:
+  contents: write
+concurrency:
+  group: alfred-source-library-preservation
+  cancel-in-progress: false
+jobs:
+  preserve:
+    if: github.repository == 'EmotiveImpact/Alfred'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test the first-party archival code with invented inputs
+        run: python3 tools/test_source_library.py
+      - name: Preserve permitted public source as data, never run it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/build_source_library.py
+      - name: Verify new and historical source snapshots
+        run: |
+          set -euo pipefail
+          python3 tools/build_source_library.py --verify
+          python3 tools/import_sources.py --verify
+          python3 tools/extend_sources.py --verify
+      - name: Commit only verified library files on the integration branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name 'ALFRED source preservation'
+          git config user.email 'alfred-preservation@users.noreply.github.com'
+          git config core.autocrlf false
+          git add -f third_party/library
+          if ! git diff --cached --quiet; then
+            git commit --quiet -m 'research: preserve verified licensed upstream source library'
+            AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+            git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/chore/alfred-unified-build-2026-09-27
+          fi
+      - name: Retain catalogue and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: alfred-source-library-catalogue
+          path: |
+            third_party/library/CATALOGUE.json
+            third_party/library/README.md
+            third_party/library/manifests
+          retention-days: 7
+          if-no-files-found: warn
