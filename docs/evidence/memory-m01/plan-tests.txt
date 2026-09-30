@@ -12,6 +12,6 @@ test_unknown_status (__main__.PlanTests.test_unknown_status) ... ok
 test_valid (__main__.PlanTests.test_valid) ... ok
 
 ----------------------------------------------------------------------
-Ran 12 tests in 0.000s
+Ran 12 tests in 0.001s
 
 OK

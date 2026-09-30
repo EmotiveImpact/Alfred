@@ -10,6 +10,7 @@ test_database_inside_vault_rejected (test_memory_m01.M01Tests.test_database_insi
 test_deleted_and_recreated_path_without_id_is_distinct (test_memory_m01.M01Tests.test_deleted_and_recreated_path_without_id_is_distinct) ... ok
 test_direct_pipeline_rejects_unsafe_and_duplicate_paths_atomically (test_memory_m01.M01Tests.test_direct_pipeline_rejects_unsafe_and_duplicate_paths_atomically) ... ok
 test_duplicate_adopted_ids_withhold_source_atomically (test_memory_m01.M01Tests.test_duplicate_adopted_ids_withhold_source_atomically) ... ok
+test_edited_move_and_reused_old_path_cannot_transfer_history (test_memory_m01.M01Tests.test_edited_move_and_reused_old_path_cannot_transfer_history) ... ok
 test_edited_rename_without_proof_does_not_guess (test_memory_m01.M01Tests.test_edited_rename_without_proof_does_not_guess) ... ok
 test_encoded_hash_filename_and_heading (test_memory_m01.M01Tests.test_encoded_hash_filename_and_heading) ... ok
 test_encoded_traversal_and_malformed_unicode_are_rejected (test_memory_m01.M01Tests.test_encoded_traversal_and_malformed_unicode_are_rejected) ... ok
@@ -32,6 +33,8 @@ test_proven_rename_keeps_id_and_advances_revision (test_memory_m01.M01Tests.test
 test_read_error_distinguished_from_missing_file (test_memory_m01.M01Tests.test_read_error_distinguished_from_missing_file) ... ok
 test_removing_adopted_id_is_rejected (test_memory_m01.M01Tests.test_removing_adopted_id_is_rejected) ... ok
 test_rename_after_restart_has_catalogue_proof (test_memory_m01.M01Tests.test_rename_after_restart_has_catalogue_proof) ... ok
+test_rename_cannot_hide_removed_adopted_id (test_memory_m01.M01Tests.test_rename_cannot_hide_removed_adopted_id) ... ok
+test_renamed_note_and_reused_old_path_keep_distinct_histories (test_memory_m01.M01Tests.test_renamed_note_and_reused_old_path_keep_distinct_histories) ... ok
 test_replacement_root_after_restart_is_unavailable (test_memory_m01.M01Tests.test_replacement_root_after_restart_is_unavailable) ... ok
 test_root_folder_rename_with_explicit_selection_preserves_identity (test_memory_m01.M01Tests.test_root_folder_rename_with_explicit_selection_preserves_identity) ... ok
 test_same_external_id_in_distinct_vaults_remains_distinct (test_memory_m01.M01Tests.test_same_external_id_in_distinct_vaults_remains_distinct) ... ok
@@ -40,6 +43,7 @@ test_selected_vault_id_survives_restart_and_label_change (test_memory_m01.M01Tes
 test_selection_changes_are_explicitly_rejected (test_memory_m01.M01Tests.test_selection_changes_are_explicitly_rejected) ... ok
 test_self_anchors_and_alias_anchors (test_memory_m01.M01Tests.test_self_anchors_and_alias_anchors) ... ok
 test_temporarily_lost_root_is_not_note_deletion (test_memory_m01.M01Tests.test_temporarily_lost_root_is_not_note_deletion) ... ok
+test_two_files_swapping_paths_keep_filesystem_identities (test_memory_m01.M01Tests.test_two_files_swapping_paths_keep_filesystem_identities) ... ok
 test_unproved_copy_delete_is_explicitly_distinct (test_memory_m01.M01Tests.test_unproved_copy_delete_is_explicitly_distinct) ... ok
 test_unsafe_exclusions_and_root_traversal_rejected (test_memory_m01.M01Tests.test_unsafe_exclusions_and_root_traversal_rejected) ... ok
 test_unsafe_note_path_from_scanner_excluded (test_memory_m01.M01Tests.test_unsafe_note_path_from_scanner_excluded) ... ok
@@ -47,6 +51,6 @@ test_v1_migration_preserves_legacy_evidence_ids_and_revisions (test_memory_m01.M
 test_validated_heading_and_block_edges_have_target_provenance (test_memory_m01.M01Tests.test_validated_heading_and_block_edges_have_target_provenance) ... ok
 
 ----------------------------------------------------------------------
-Ran 47 tests in 0.591s
+Ran 51 tests in 0.707s
 
 OK

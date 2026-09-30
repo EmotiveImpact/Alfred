@@ -120,6 +120,26 @@ class M01Tests(unittest.TestCase):
         MarkdownVault(KnowledgeStore(self.root / 'db', clock=lambda:1000), self.source, self.vault).scan()
         self.assertEqual(self.node('b.md')['id'], before['id'])
 
+    def test_renamed_note_and_reused_old_path_keep_distinct_histories(self):
+        original=self.write('a.md','# A'); self.scan(); before=self.node('a.md')
+        original.rename(self.vault/'b.md'); self.write('a.md','# Replacement'); self.scan()
+        self.assertEqual(self.node('b.md')['id'],before['id'])
+        self.assertNotEqual(self.node('a.md')['id'],before['id'])
+        self.assertEqual(self.node('b.md')['revision'],before['revision']+1)
+
+    def test_two_files_swapping_paths_keep_filesystem_identities(self):
+        a=self.write('a.md','# A'); b=self.write('b.md','# B'); self.scan()
+        first,second=self.node('a.md'),self.node('b.md')
+        temporary=self.root/'swap'; a.rename(temporary); b.rename(a); temporary.rename(b); self.scan()
+        self.assertEqual(self.node('b.md')['id'],first['id'])
+        self.assertEqual(self.node('a.md')['id'],second['id'])
+
+    def test_edited_move_and_reused_old_path_cannot_transfer_history(self):
+        original=self.write('a.md','# A'); self.scan(); before=self.node('a.md')
+        original.rename(self.vault/'b.md'); self.write('b.md','# Edited'); self.write('a.md','# Replacement'); self.scan()
+        self.assertNotIn(before['id'],[n['id'] for n in self.data()['nodes']])
+        self.assertIn({'path':'b.md','code':'rename_identity_unproven'},self.data()['sources'][0]['errors'])
+
     def test_atomic_save_at_current_path_preserves_identity(self):
         self.write('a.md', '# A'); self.scan(); before = self.node('a.md')
         replacement = self.root / 'staged'; replacement.write_text('# Revised')
@@ -180,6 +200,12 @@ class M01Tests(unittest.TestCase):
         self.adopt_ids(); self.write('a.md', '---\nalfred_id: x\n---\n# A'); self.scan()
         self.write('a.md', '# A'); self.scan()
         self.assertEqual(self.scanner.health['errors'][0]['code'], 'stable_note_id_changed')
+
+    def test_rename_cannot_hide_removed_adopted_id(self):
+        self.adopt_ids(); original=self.write('a.md','---\nalfred_id: x\n---\n# A'); self.scan()
+        original.rename(self.vault/'b.md'); self.write('b.md','# A'); self.scan()
+        self.assertEqual(self.scanner.health['errors'][0]['code'],'stable_note_id_changed')
+        self.assertEqual(self.data()['nodes'],[])
 
     def test_historical_id_cannot_rebind_to_occupied_note(self):
         self.adopt_ids()

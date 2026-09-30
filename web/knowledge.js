@@ -139,6 +139,6 @@
     for(const source of d.sources){for(const e of source.errors||[])root.append(node('p','warning',(e.path?e.path+': ':'')+pretty(e.code)));}
     d.issues.slice(0,12).forEach(i=>{const row=node('div','knowledge-issue');row.append(badge(i.status,true),node('span','',i.target),button(i.path+' · line '+i.line,'text-button',()=>inspect(i.note)));root.append(row);});
     if(d.issues.length>12)root.append(node('p','status-line','First 12 issues shown. '+d.issues.length+' total in the index.'));
-    if(!d.counts.issues)root.append(node('p','accessible-note','No unresolved file references in this snapshot. Heading and block anchors are not validated.'));
+    if(!d.counts.issues)root.append(node('p','accessible-note',d.anchor_validation?'No unresolved references in this snapshot. Supported heading and block anchors are validated.':'No unresolved file references in this snapshot. Heading and block anchors are not validated.'));
   }
 })();

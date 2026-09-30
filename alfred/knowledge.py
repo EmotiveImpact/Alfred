@@ -333,27 +333,35 @@ class KnowledgeStore(DeskStore):
                 db.execute('INSERT OR IGNORE INTO knowledge_history VALUES (?,?,?,?,?,?,?,?)',
                            (scope,source,row['id'],row['revision'],row['path'],row['sha256'],row['status'],row['indexed']))
             assigned, used = [], set()
+            current_files = {tuple(n['file_identity']):n['path'] for n in notes if n.get('file_identity')}
             for n in notes:
                 external, file_key = n.get('external_id'), n.get('file_identity')
                 at_path = [r for r in prior if r['path']==n['path'] and r['status'] in {'ready','unavailable'}]
                 by_external = [r for r in prior if external is not None and r['external_id']==external]
+                if file_key and any((r['device'],r['inode'])==tuple(file_key) and r['external_id'] is not None
+                                    and r['external_id']!=external and r['status'] in {'ready','unavailable'} for r in prior):
+                    raise Fault('stable_note_id_changed')
                 if by_external:
                     row = by_external[0]
                     if row['path'] != n['path'] and row['path'].casefold() in paths:
                         raise Fault('stable_note_id_rebound')
                     if at_path and at_path[0]['id'] != row['id']: raise Fault('stable_note_id_rebound')
-                elif at_path:
+                elif file_key and any((r['device'],r['inode'])==tuple(file_key) and r['status']=='ready'
+                                      and r['sha256']==n['sha256'] and r['external_id']==external for r in prior):
+                    # Filesystem continuity takes precedence when an old path is reused.
+                    candidates = [r for r in prior if (r['device'],r['inode'])==tuple(file_key)
+                                  and r['status']=='ready' and r['sha256']==n['sha256'] and r['external_id']==external]
+                    if len(candidates)!=1: raise Fault('duplicate_stable_note_id')
+                    row = candidates[0]
+                elif at_path and current_files.get((at_path[0]['device'],at_path[0]['inode']),n['path'])==n['path']:
                     row = at_path[0]
                     if row['external_id'] != external and row['external_id'] is not None:
                         raise Fault('stable_note_id_changed')
                 else:
-                    candidates = [r for r in prior if file_key and (r['device'],r['inode'])==tuple(file_key)
-                                  and r['status']=='ready' and r['path'].casefold() not in paths
-                                  and r['sha256']==n['sha256'] and r['external_id']==external]
-                    row = candidates[0] if len(candidates)==1 else None
+                    row = None
                     # Content/name equality without filesystem or adopted-ID proof is insufficient.
-                    if row is None and any((r['sha256']==n['sha256'] or (file_key and (r['device'],r['inode'])==tuple(file_key)))
-                                           and r['path'].casefold() not in paths and r['status']=='ready' for r in prior):
+                    if row is None and any(r['status']=='ready' and ((r['sha256']==n['sha256'] and r['path'].casefold() not in paths)
+                                           or (file_key and (r['device'],r['inode'])==tuple(file_key) and r['path']!=n['path'])) for r in prior):
                         errors.append({'path':n['path'],'code':'rename_identity_unproven'})
                 identity = row['id'] if row else secrets.token_hex(12)
                 if not row and db.execute('SELECT 1 FROM knowledge_notes WHERE scope=? AND id=?', (scope,identity)).fetchone():
