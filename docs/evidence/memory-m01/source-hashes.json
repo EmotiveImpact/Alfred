@@ -1,0 +1,6 @@
+{
+  "alfred/knowledge.py": "5da044dc78229a5ba6be8eb885bb564f0e8ae83a290194505bd726f444495f7a",
+  "alfred/desk.py": "58c32896d5d966ce98dcfebab1f8dddba633f4756dd59134d3a8bc2da1f5056d",
+  "tests/test_memory_m01.py": "b5d50c7b6c08aa9d0c6b8fd1288bf3395a6d2a0820c6dd162bd372cd0680f7dd",
+  "tools/check_memory_plan.py": "cf61bb82ad63b72b8b9975561d9d4efea8a7994534db4dfe59cdecb69af4ab07"
+}

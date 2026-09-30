@@ -1,0 +1,52 @@
+test_adopted_id_supports_edited_move_and_restore (test_memory_m01.M01Tests.test_adopted_id_supports_edited_move_and_restore) ... ok
+test_alias_collision_is_ambiguous_before_anchor_resolution (test_memory_m01.M01Tests.test_alias_collision_is_ambiguous_before_anchor_resolution) ... ok
+test_atomic_save_at_current_path_preserves_identity (test_memory_m01.M01Tests.test_atomic_save_at_current_path_preserves_identity) ... ok
+test_case_colliding_paths_rejected (test_memory_m01.M01Tests.test_case_colliding_paths_rejected) ... ok
+test_changed_during_read_is_withheld (test_memory_m01.M01Tests.test_changed_during_read_is_withheld) ... ok
+test_changing_adopted_id_cannot_steal_history (test_memory_m01.M01Tests.test_changing_adopted_id_cannot_steal_history) ... ok
+test_closed_app_read_never_writes_vault (test_memory_m01.M01Tests.test_closed_app_read_never_writes_vault) ... ok
+test_copy_is_not_a_rename (test_memory_m01.M01Tests.test_copy_is_not_a_rename) ... ok
+test_database_inside_vault_rejected (test_memory_m01.M01Tests.test_database_inside_vault_rejected) ... ok
+test_deleted_and_recreated_path_without_id_is_distinct (test_memory_m01.M01Tests.test_deleted_and_recreated_path_without_id_is_distinct) ... ok
+test_direct_pipeline_rejects_unsafe_and_duplicate_paths_atomically (test_memory_m01.M01Tests.test_direct_pipeline_rejects_unsafe_and_duplicate_paths_atomically) ... ok
+test_duplicate_adopted_ids_withhold_source_atomically (test_memory_m01.M01Tests.test_duplicate_adopted_ids_withhold_source_atomically) ... ok
+test_edited_rename_without_proof_does_not_guess (test_memory_m01.M01Tests.test_edited_rename_without_proof_does_not_guess) ... ok
+test_encoded_hash_filename_and_heading (test_memory_m01.M01Tests.test_encoded_hash_filename_and_heading) ... ok
+test_encoded_traversal_and_malformed_unicode_are_rejected (test_memory_m01.M01Tests.test_encoded_traversal_and_malformed_unicode_are_rejected) ... ok
+test_explicit_exclusion_withholds_subtree (test_memory_m01.M01Tests.test_explicit_exclusion_withholds_subtree) ... ok
+test_failed_scan_keeps_last_complete_snapshot_timestamp (test_memory_m01.M01Tests.test_failed_scan_keeps_last_complete_snapshot_timestamp) ... ok
+test_fenced_commented_inline_and_frontmatter_anchors_are_not_evidence (test_memory_m01.M01Tests.test_fenced_commented_inline_and_frontmatter_anchors_are_not_evidence) ... ok
+test_file_replaced_during_read_fails_scan (test_memory_m01.M01Tests.test_file_replaced_during_read_fails_scan) ... ok
+test_frontmatter_id_requires_adoption (test_memory_m01.M01Tests.test_frontmatter_id_requires_adoption) ... ok
+test_historical_id_cannot_rebind_to_occupied_note (test_memory_m01.M01Tests.test_historical_id_cannot_rebind_to_occupied_note) ... ok
+test_incomplete_code_and_comments_fail_honestly (test_memory_m01.M01Tests.test_incomplete_code_and_comments_fail_honestly) ... ok
+test_invalid_adopted_id_withholds_note (test_memory_m01.M01Tests.test_invalid_adopted_id_withholds_note) ... ok
+test_invalid_duplicate_and_unsupported_anchors_never_become_file_edges (test_memory_m01.M01Tests.test_invalid_duplicate_and_unsupported_anchors_never_become_file_edges) ... ok
+test_lost_source_cannot_support_reviewed_claim (test_memory_m01.M01Tests.test_lost_source_cannot_support_reviewed_claim) ... ok
+test_mid_scan_content_change_invalidates_whole_snapshot (test_memory_m01.M01Tests.test_mid_scan_content_change_invalidates_whole_snapshot) ... ok
+test_mid_scan_source_revocation_never_exposes_content (test_memory_m01.M01Tests.test_mid_scan_source_revocation_never_exposes_content) ... ok
+test_missing_selection_visible_before_first_scan (test_memory_m01.M01Tests.test_missing_selection_visible_before_first_scan) ... ok
+test_partial_frontmatter_withholds_prior_body_as_unavailable (test_memory_m01.M01Tests.test_partial_frontmatter_withholds_prior_body_as_unavailable) ... ok
+test_projection_rebuild_preserves_ids_history_revisions (test_memory_m01.M01Tests.test_projection_rebuild_preserves_ids_history_revisions) ... ok
+test_proven_rename_keeps_id_and_advances_revision (test_memory_m01.M01Tests.test_proven_rename_keeps_id_and_advances_revision) ... ok
+test_read_error_distinguished_from_missing_file (test_memory_m01.M01Tests.test_read_error_distinguished_from_missing_file) ... ok
+test_removing_adopted_id_is_rejected (test_memory_m01.M01Tests.test_removing_adopted_id_is_rejected) ... ok
+test_rename_after_restart_has_catalogue_proof (test_memory_m01.M01Tests.test_rename_after_restart_has_catalogue_proof) ... ok
+test_replacement_root_after_restart_is_unavailable (test_memory_m01.M01Tests.test_replacement_root_after_restart_is_unavailable) ... ok
+test_root_folder_rename_with_explicit_selection_preserves_identity (test_memory_m01.M01Tests.test_root_folder_rename_with_explicit_selection_preserves_identity) ... ok
+test_same_external_id_in_distinct_vaults_remains_distinct (test_memory_m01.M01Tests.test_same_external_id_in_distinct_vaults_remains_distinct) ... ok
+test_selected_source_cannot_bypass_catalogue_binding (test_memory_m01.M01Tests.test_selected_source_cannot_bypass_catalogue_binding) ... ok
+test_selected_vault_id_survives_restart_and_label_change (test_memory_m01.M01Tests.test_selected_vault_id_survives_restart_and_label_change) ... ok
+test_selection_changes_are_explicitly_rejected (test_memory_m01.M01Tests.test_selection_changes_are_explicitly_rejected) ... ok
+test_self_anchors_and_alias_anchors (test_memory_m01.M01Tests.test_self_anchors_and_alias_anchors) ... ok
+test_temporarily_lost_root_is_not_note_deletion (test_memory_m01.M01Tests.test_temporarily_lost_root_is_not_note_deletion) ... ok
+test_unproved_copy_delete_is_explicitly_distinct (test_memory_m01.M01Tests.test_unproved_copy_delete_is_explicitly_distinct) ... ok
+test_unsafe_exclusions_and_root_traversal_rejected (test_memory_m01.M01Tests.test_unsafe_exclusions_and_root_traversal_rejected) ... ok
+test_unsafe_note_path_from_scanner_excluded (test_memory_m01.M01Tests.test_unsafe_note_path_from_scanner_excluded) ... ok
+test_v1_migration_preserves_legacy_evidence_ids_and_revisions (test_memory_m01.M01Tests.test_v1_migration_preserves_legacy_evidence_ids_and_revisions) ... ok
+test_validated_heading_and_block_edges_have_target_provenance (test_memory_m01.M01Tests.test_validated_heading_and_block_edges_have_target_provenance) ... ok
+
+----------------------------------------------------------------------
+Ran 47 tests in 0.591s
+
+OK

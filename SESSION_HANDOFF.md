@@ -35,3 +35,9 @@ Executive intelligence includes priorities, decision briefs, planning, commitmen
 The consolidation workflow rechecks the existing core, source manifests, plan consistency and console build/browser behavior against the combined source. Consult its actual finished run and docs/CONSOLIDATION_2026-09-27.md, not inherited green counts from earlier PRs. Historical receipts remain historical. Source preservation is not runtime integration, security certification, deployment or safety-critical readiness.
 
 The previously blocked live-model-comparison operation must not be retried or rerouted. No new model inference is part of this work. Keep private data out of this public repo. Work on a short-lived branch from current main, publish tested normal source and update the handoff with evidence.
+
+## M01 review handoff, 30 September 2026
+
+This branch starts at current main `8398c7437cb0ef1386d8dc4ff1f9e92fb2557ca2`, preserving the consolidated application, source library and console. The only concurrent open PR found at the start was console refinement #15; it is not incorporated or modified here. M01 implements selected-vault/catalogue identity, conservative rename/revision continuity, opt-in `alfred_id`, alias/supported-anchor validation, exclusions and honest read/source failures. Read [the M01 receipt](docs/evidence/memory-m01/RECEIPT.md) and [the updated read contract](docs/OBSIDIAN_INTEGRATION.md).
+
+The branch is for draft PR review, not a main merge or deployment. M02-M12 and issue #11 remain unfinished. Do not treat M01 as native Obsidian acceptance, fine-grained grants, private-vault readiness, safe writes, restored-backup deletion accounting or console integration. Existing reviewed-source/action validity checks remain in force; path/revision changes invalidate earlier source bindings conservatively.

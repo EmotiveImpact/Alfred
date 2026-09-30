@@ -36,6 +36,10 @@ The v0.7 small-model experiment has documented relevance, abstention and conflic
 
 The newer React/TypeScript/Three.js console is now present in main. Its fictional fixtures are not real backend data. Preserve this functional frontend and the existing backend-connected web interface while implementing their authenticated adapter. The internal Obsidian console name is not an Obsidian note-app integration.
 
+## M01 implementation checkpoint, 30 September 2026
+
+The bounded selected-vault/read slice is implemented on a draft review branch from current main. [M01 acceptance and limits](evidence/memory-m01/RECEIPT.md) and the [read contract](OBSIDIAN_INTEGRATION.md) record catalogue identity, conservative rename/revision continuity, opt-in IDs, validated supported anchors, exclusions and availability. This advances MEM-001/002/003/012 for Markdown without claiming complete sync, deletion/restore, native Obsidian, private-vault or model-context acceptance. M02-M12 remain planned.
+
 ## First complete personal-memory experience
 
 1. The user selects an allowed local vault/project and can inspect what will be indexed. Obsidian is optional.
