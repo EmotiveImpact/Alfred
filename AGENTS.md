@@ -18,7 +18,7 @@ Preserve the premium true-black/graphite/ivory and sparse-amber direction, origi
 
 Obsidian remains optional editing over user-owned Markdown. The existing read-only scanner works independently of the editor, but complete Obsidian compatibility, safe note writing and sync lifecycle are unfinished. Keep databases, credentials and indexes outside vaults. Do not file-sync a live SQLite database/WAL.
 
-Manual reviewed statements are not yet automatic model context. M01/M03 cover compatible source identity and bounded reviewed-memory retrieval; M02 matures identity/source grants. M02/M05 are private-data release gates. Preserve review status, source revisions, supersession lineage, conflicts, deletion/revocation and final access rechecks. Never silently merge namesakes or promote extracted suggestions into accepted facts.
+The M01/M03 draft review branch adds compatible source identity and bounded, actor-private retrieval of accepted/current reviewed statements into questions and conversations. Read its receipts and backlog before treating it as merged functionality. M02 matures identity/source grants. M02/M05 remain private-data release gates. Preserve review status, source revisions, supersession lineage, conflicts, deletion/revocation and final access rechecks. Never silently merge namesakes or promote extracted suggestions into accepted facts.
 
 Models propose, independent policy decides. Notes, graph edges, skills and tool descriptions cannot grant permission. Bind exact action parameters/source conditions to approval and dispatch; reconcile uncertain effects rather than blindly repeat them. A generated 'done' statement, valid citation or provider confidence is not verified completion or factual entailment.
 

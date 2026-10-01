@@ -37,6 +37,8 @@ Personal, company and client/operation boundaries apply to every layer. The inte
 
 These modules exist. The unified gateway, reviewed-memory retrieval bridge, vault writes, embeddings and third-party graph adapters do not yet exist. Runtime source is unchanged by this planning revision.
 
+**1 October 2026 draft implementation checkpoint:** The M01/M03 review branch implements selected-vault identity and the bounded reviewed-memory bridge described in [the M03 receipt](evidence/memory-m03/RECEIPT.md). Existing scope/source grants and actor-private review records are enforced before selection; accepted/current/non-conflicting statements retain original support, review version, entity IDs, recorded/valid times and supersession lineage. Final checks also bind conversation-derived drafts. The broader gateway, person/device grants, capture/writes, deletion/restore, embeddings and graph adapters remain future work. This checkpoint does not claim deployment or completion of the target contracts below.
+
 ## Proposed flow
 
 ```text

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "checkpoint": "M03 local acceptance, 2026-10-01",
+  "main_baseline": "8398c7437cb0ef1386d8dc4ff1f9e92fb2557ca2",
+  "m01_parent": "87a2b06041083e02bf1f2c2cb0a55c3963fa102a",
+  "files": {
+    "alfred/reviewed_memory.py": "b2fdc683f0bb9029d3de5d5af7504dd6cb1d11e404924baa87f4a983dc287311",
+    "alfred/grounded.py": "64d899c07ed4cc4ca42dfe5a9fa99c83e2bfb36fcdbe39cef937a1d5f1e4de5e",
+    "alfred/conversation.py": "59d9263da3eeb36d4a8a949e947d24e472336f9b08bd23c7616923d6f74a9916",
+    "alfred/desk_http.py": "96b0d4f7e767569a0e75cb6ede73236de14074dbd00bd4c1eeebb18f5765d195",
+    "alfred/local_model.py": "9b808d59c7a1798ebbbe658a8bd89cb50d0cc81db295698f1b8b0aac873bc8ee",
+    "web/ask.js": "433cb476abff845c2b657f61557b66026d298606da4a878b3cd1d77e38932a6f",
+    "web/ask.css": "0b300dd740c810c049bfd74c55eff429e2a094799436961b707a44a8a0ecc923",
+    "web/conversation.js": "16617ad5f16c936dd2166d9467257086ec184c12cf8bf415de577f7e763cfb12",
+    "web/conversation.css": "d896979da7bbfaba7e0213601361c99b074058ac50bbbdbdedd72718daf2620e",
+    "tests/test_memory_m03.py": "9519fac67e3502cdea2a022d8a87d8923271bdca923f3c152d67b26e17d6d6ca",
+    "tools/check_memory_context_browser.py": "8182a18f0110189d29932b8a5269918d2891a681776b7b3d07109aae967cb3fd",
+    ".github/workflows/alfred-ci.yml": "2cade4b791539ece83cecd2ac0d6f68e0bf1f960abc1244dd58f22c16e33b97d"
+  }
+}

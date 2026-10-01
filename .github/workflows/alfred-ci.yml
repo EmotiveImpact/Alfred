@@ -69,6 +69,7 @@ jobs:
           ALFRED_CONVERSATION_OUTPUT=/tmp/alfred-unified-browser/conversation /tmp/alfred-browser/bin/python tools/check_conversation_browser.py
           /tmp/alfred-browser/bin/python tools/check_memory_browser.py
           cp -r docs/evidence/memory-v08 /tmp/alfred-unified-browser/memory
+          ALFRED_M03_OUTPUT=/tmp/alfred-unified-browser/memory-context /tmp/alfred-browser/bin/python tools/check_memory_context_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

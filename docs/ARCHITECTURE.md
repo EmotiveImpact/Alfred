@@ -34,6 +34,8 @@ The first-party Python service persists local data in SQLite and exposes an auth
 
 Manual reviewed statements are stored separately from the authored note graph and have provenance/review/conflict/invalidity rules. They are not yet automatically included in model context. Model mode is optional and tool-free; current evidence rejection rules are limited heuristics. No general agent framework from the source archive has been fully integrated.
 
+The M01/M03 draft review branch extends that baseline with a bounded, actor-private reviewed-memory bridge. Only accepted/current/relevant/non-conflicting statements enter context; their exact original support shares the existing source budget. Namesakes retain distinct IDs and block model use pending clarification. Review/source/temporal/conflict bindings are rechecked at model egress, return, conversation persistence/display and separate draft approval/dispatch. Saved conversations reconstruct current values from review bindings rather than copying them. This is not a main merge, fine-grained grants, deletion/restore accounting or a graph-engine adoption. See [M03 evidence](evidence/memory-m03/RECEIPT.md).
+
 The functional React/Three.js `console/` implementation is preserved alongside `web/`. The console runs fictional fixture interactions; do not infer a live backend, note-app integration or deployment from the merge. This planning revision changes no application or UI source.
 
 ## Memory integration decision
