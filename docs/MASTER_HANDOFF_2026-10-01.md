@@ -122,11 +122,21 @@ honestly. Passing legacy tests or fixture providers does not establish productio
 security, reasoning quality, native hardware, real audio or external-account
 acceptance.
 
-The existing user limits remain: **do not merge main or start private-vault
-deployment**. No private account, notes, audio, device effects or background
-service were connected or installed. No model inference/download/benchmark was
-performed. The previously blocked live-model comparison must not be rerouted.
-No third-party source archive or concurrent console implementation was changed.
+The opening handoff prompt contained **do not merge main or start private-vault
+deployment**. At approximately 02:20 British time on 1 October, the owner said
+this was not a restriction they intended and challenged its repeated attribution
+to them. Do not carry it forward as an unquestioned permanent owner policy.
+The current publish/handoff request did not instruct a merge or deployment;
+neither was performed. Review and integration of completed work is the next
+decision, not an indefinite draft-only development policy.
+
+Private-vault deployment means connecting real personal/company Markdown notes
+and running ALFRED against them; it is distinct from publishing source code.
+M02/M05 private-data acceptance remains technically unfinished. No private
+account, notes, audio, device effects or background service were connected or
+installed. No model inference/download/benchmark was performed. The previously
+blocked live-model comparison must not be rerouted. No third-party source archive
+or concurrent console implementation was changed.
 
 ## Next work for the master conversation
 
