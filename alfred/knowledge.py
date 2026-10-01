@@ -409,12 +409,14 @@ class KnowledgeStore(DeskStore):
             db.execute('UPDATE knowledge_sources SET status=\'unavailable\',errors=?,checked=? WHERE scope=? AND source=?',
                        (json.dumps([{'code':code}]),self.now(),p['scope'],p['id']))
 
-    def knowledge(self, bearer, query='', kind=''):
+    def knowledge(self, bearer, query='', kind='', *, purpose='read'):
         safe_text(query, 160)
         if kind and kind not in KINDS: raise Fault('invalid_note_kind')
         with self.transaction() as db:
             p = self.authenticate(db,bearer,{'owner','reader'}); scope = p['scope']
+            from .policy import permitted
             sources = [dict(r) for r in db.execute('SELECT s.* FROM knowledge_sources s JOIN credentials c ON c.id=s.source AND c.scope=s.scope WHERE s.scope=? AND c.revoked=0 AND c.expires>?', (scope,self.now()))]
+            sources = [s for s in sources if permitted(db,p,s['source'],self.now(),purpose)]
             permitted = {s['source'] for s in sources if s['status'] in {'ready','attention'}}
             notes = [dict(r) for r in db.execute('SELECT * FROM knowledge_notes WHERE scope=? AND status=\'ready\' ORDER BY path COLLATE NOCASE,id', (scope,)) if r['source'] in permitted]
             if len(notes)>MAX_NOTES:
@@ -466,12 +468,13 @@ class KnowledgeStore(DeskStore):
                     'counts':{'notes':len(notes),'matches':len(selected),'links':len(links),'issues':len(issues)},
                     'live_ai':False,'read_only':True,'content_egress':False,'anchor_validation':True,'anchor_support':'ATX plain-text headings and single-line trailing block IDs'}
 
-    def knowledge_note(self,bearer,identity):
+    def knowledge_note(self,bearer,identity, *, purpose='read'):
         if not re.fullmatch(r'[0-9a-f]{24}',identity): raise Fault('invalid_note_id')
         with self.connection() as db:
             p=self.authenticate(db,bearer,{'owner','reader'})
             row=db.execute('SELECT n.* FROM knowledge_notes n JOIN credentials c ON c.id=n.source AND c.scope=n.scope JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source WHERE n.scope=? AND n.id=? AND n.status=\'ready\' AND c.revoked=0 AND c.expires>? AND s.status IN (\'ready\',\'attention\')', (p['scope'],identity,self.now())).fetchone()
-            if not row: raise Fault('note_not_available',404)
+            from .policy import permitted
+            if not row or not permitted(db,p,row['source'],self.now(),purpose): raise Fault('note_not_available',404)
             return {k:row[k] for k in ('id','path','title','kind','body','sha256','revision','modified','indexed')} | {'basis':'authored_note_not_verified_fact'}
 
 

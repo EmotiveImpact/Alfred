@@ -35,9 +35,9 @@ TTL = 86400
 MAX_SESSIONS, MAX_TURNS = 24, 40
 
 
-def refs_current_db(db, scope, refs, now):
+def refs_current_db(db, scope, refs, now, principal=None):
     """Check source authority/revisions in the SAME transaction as action approval."""
-    return bool(refs) and sources_current_db(db,scope,refs,now)
+    return bool(refs) and sources_current_db(db,scope,refs,now,principal)
 
 
 def knowledge_action_current(store, db, row):
@@ -53,7 +53,8 @@ def knowledge_action_current(store, db, row):
     # Historical rows are plain source lists; new receipts also bind the exact
     # review versions and original support without copying statement values.
     refs=binding if type(binding) is list else binding['sources']
-    if not active or not refs_current_db(db,row['scope'],refs,store.now()):return False
+    p={'scope':row['scope'],'id':row['actor']}
+    if not active or not refs_current_db(db,row['scope'],refs,store.now(),p):return False
     if type(binding) is list:return True
     p={'scope':row['scope'],'id':row['actor']}
     current=context_current_db(db,p,binding['memory'],store.now())
@@ -204,7 +205,7 @@ class ConversationService:
             for item in history:previous_terms.extend(question_terms(item['question']))
             prefix=' '.join(dict.fromkeys(previous_terms))[:min(180,max(0,499-len(question)))]
             contextual=(prefix+' '+question).strip() if prefix else question
-            packet=retrieve(self.store,bearer,contextual);packet['question']=question
+            packet=retrieve(self.store,bearer,contextual,purpose='model' if current['mode']=='local_model' else 'read');packet['question']=question
             packet['conversation_questions']=[h['question'] for h in history]
             packet['retrieval_question']=contextual
             result={'packet':packet,'claims':[],'mode':current['mode'],'model_used':False,'model':None,
