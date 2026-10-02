@@ -1,10 +1,11 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {DeskClient,DeskError} from '../integration/deskClient';
+import {type SupportReport} from '../integration/answerSupport';
 /** Shapes returned by the existing conversation service (alfred/conversation.py). */
 export interface Evidence{source_id:string;note_id:string;title:string;path:string;kind:string;sha256:string;revision:number;start_line:number;end_line:number;excerpt:string;retrieved_via:string;basis:string}
 export interface MemoryStatement{claim_id:string;subject:{id:string;kind:string;name:string};predicate:string;object:{id:string;kind:string;name:string}|null;value:string|null;support:{source_id:string;note_id:string;start_line:number;end_line:number};basis:string}
 export interface ModelClaim{text:string;citations:{source_id:string;start_line:number;end_line:number}[]}
-export interface TurnResult{status:string;mode:string;model_used:boolean;model:string|null;claims:ModelClaim[];packet:{question:string;evidence:Evidence[];memory:MemoryStatement[];memory_ambiguities:{name:string;kind:string;entity_ids:string[]}[];focus:{record_id:string;label:string|null;available?:boolean}|null}}
+export interface TurnResult{status:string;mode:string;model_used:boolean;model:string|null;claims:ModelClaim[];support?:SupportReport;packet:{question:string;evidence:Evidence[];memory:MemoryStatement[];memory_ambiguities:{name:string;kind:string;entity_ids:string[]}[];focus:{record_id:string;label:string|null;available?:boolean}|null}}
 export interface Turn{id:string;ordinal:number;question:string;mode:string;follow_up:number;state:string;focus:string|null;result:TurnResult|null}
 interface SessionView{id:string;turns:Turn[]}
 export type AskState=

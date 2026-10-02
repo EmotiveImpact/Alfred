@@ -16,7 +16,7 @@ served by that server and driven in Chromium 141 (SwiftShader).
 | `python3 -m unittest discover -s tests` | 699 pass (includes 16 projection and 12 focus tests) |
 | `npm run build` and `npm test` in `console/` | build passes; 79 unit tests pass |
 | `npx playwright test` (offline demo) | 29 of 29 pass, unchanged behaviour |
-| `tools/check_console_connected_browser.py` | 92 of 92 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs, device pairing, whole-source removal, sync conflict copies and export connectors); [report](browser-report.json) |
+| `tools/check_console_connected_browser.py` | 94 of 94 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs, device pairing, whole-source removal, sync conflict copies, export connectors and answer support); [report](browser-report.json) |
 | Existing seven backend browser scripts | all pass |
 
 The 43 checks include: sign-in through the real session; graph counts equal to the
@@ -49,7 +49,7 @@ errors.
 [server unreachable](connected-unreachable.png), [bounded jobs](connected-jobs.png),
 [pairing a device](connected-pairing.png), [device list](connected-devices.png),
 [source removed](connected-source-removed.png), [sync conflict](connected-sync-conflict.png),
-[export connectors](connected-connectors.png).
+[export connectors](connected-connectors.png), [answer support](connected-answer-support.png).
 Captured from the running console, not generated.
 
 ## Bounded jobs (added after the Stage A and B commit)
@@ -97,3 +97,10 @@ beside its original. The imported event is labelled as an unchecked export repor
 than an authored note. The access panel shows the connector, its freshness and item count,
 and an Import switch for that source in place of inbox writing. Removing the vault source
 then leaves the connector's two records.
+
+## Answer support (added later on 2 October)
+
+Each answer now shows "What supports this answer": word coverage, excerpt and note counts,
+withheld reviewed statements by reason, and whether a model was used, with its limits. A
+question about a word the synthetic vault does not contain names that word as not found.
+Details and the evaluation with denominators: [INT-002 receipt](../int-002/RECEIPT.md).

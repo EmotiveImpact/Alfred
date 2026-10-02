@@ -95,6 +95,14 @@ from it, and returns a receipt that the console summarises. The person's files a
 touched. Answers withdrawn this way, or by forgetting a statement, end with a plain message
 instead of waiting.
 
+## What supports an answer
+
+Each answer carries the server's support report (INT-002): which of the question's words
+appear in what is shown and which do not, excerpt and note counts, reviewed statements
+used and withheld by reason, skipped sources, follow-up context and model review findings.
+It is quiet when everything is covered and uses sparse amber when something is missing. It
+states its limits and never claims truth, entailment or completeness.
+
 ## Sync conflicts and export connectors
 
 A note with a sync conflict copy beside it shows the copy, the tool that made it and plain
@@ -161,5 +169,5 @@ device or GPU certification.
   routing and mode detection. `console/tests/jobs.test.ts` (8): job event merging, result
   reading, wording and command routing. `console/tests/pairing.test.ts` (2): pairing
   redemption and its in-memory CSRF token.
-- `tools/check_console_connected_browser.py` (92 checks): real Chromium against the
+- `tools/check_console_connected_browser.py` (94 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

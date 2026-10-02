@@ -622,18 +622,22 @@
    "owner": "unassigned",
    "decision": "accepted",
    "implementation": "partial",
-   "integration": "isolated",
+   "integration": "backend_connected",
    "merge": "main_partial_branch_extended",
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_retrieval_evaluation.py",
-    "docs/evidence/memory-m06/RECEIPT.md"
+    "docs/evidence/memory-m06/RECEIPT.md",
+    "tests/test_answer_support.py",
+    "tests/test_answer_evaluation.py",
+    "tools/evaluate_answers.py",
+    "docs/evidence/int-002/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Literal evidence checks only. The blocked live-model comparison remains blocked and is not rerouted. A deterministic retrieval-support evaluation now exists (M06); answer-level evaluation does not."
+   "notes": "Literal evidence checks plus a per-answer support report (word coverage, withheld reviewed statements by reason, skipped sources, follow-up context, model review findings) shown beside every console answer, and a deterministic source-mode evaluation with denominators and published failed cases. The blocked live-model comparison remains blocked and is not rerouted; no semantic or model-quality evaluation exists."
   },
   {
    "id": "ACT-001",

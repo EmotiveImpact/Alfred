@@ -1,5 +1,5 @@
 {
-  "passed": 92,
+  "passed": 94,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -22,6 +22,8 @@
     "forgetting is recorded with a receipt",
     "unfocused question uses the whole permitted workspace",
     "missing model is reported explicitly",
+    "each answer states what supports it, as counts and word coverage, never truth",
+    "words the sources do not contain are named, not glossed over",
     "authored note and reviewed entity with the same name stay separate",
     "selecting a project changes the next question",
     "answer exposes source path, lines and basis",
@@ -97,7 +99,6 @@
   "browser_console": [
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
-    "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
     "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",

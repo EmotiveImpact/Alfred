@@ -229,6 +229,8 @@ class ConversationService:
                 result.update(model_used=True,model=self.provider.model,status='model_interpretation' if result['claims'] else 'model_abstained',
                               usage=getattr(self.provider,'last_usage',None))
                 if result['evidence_review']['status']=='withheld_for_review':result['status']='model_needs_review'
+            from .answer_support import assess
+            result['support']=assess(packet,result,question_terms(question))
             result['elapsed_ms']=round((time.monotonic()-started)*1000)
             if self.stop_event.is_set():raise Fault('conversation_worker_stopped')
             with self.store.transaction() as db:

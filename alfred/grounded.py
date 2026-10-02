@@ -123,8 +123,18 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
     if focus_kind=='entity' and focus_id not in entities:
         raise Fault('focus_not_available',409)
     memory_ranked=[]
+    withheld={}
     for c in snapshot['claims']:
-        if not c['usable'] or c['subject_id'] not in entities or (c['object_id'] and c['object_id'] not in entities):continue
+        if not c['usable'] and c['subject_id'] in entities:
+            # Counted, never shown: relevant reviewed statements this answer may not use, and why (INT-002).
+            reason=('conflicting' if c.get('conflicts') else 'disputed' if c['state']=='disputed'
+                    else 'not_currently_available' if c.get('withheld') else 'needs_fresh_review' if c['state']=='invalidated'
+                    else 'outside_valid_period' if c['state']=='accepted' else 'awaiting_review' if c['state']=='proposed' else None)
+            # Relevant only when the question names the statement's subject, not merely its predicate.
+            subject=entities[c['subject_id']]['name'].casefold()
+            if reason and any(t in subject for t in terms):withheld[reason]=withheld.get(reason,0)+1
+            continue
+        if c['subject_id'] not in entities or (c['object_id'] and c['object_id'] not in entities):continue
         subject=entities[c['subject_id']]
         other=entities[c['object_id']]['name'] if c['object_id'] else c['value']
         searchable=(subject['name']+' '+c['predicate'].replace('_',' ')+' '+(other or '')).casefold()
@@ -179,7 +189,7 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
     return {'question': question.strip(), 'scope': graph['scope'], 'indexed_at': graph['now'], 'focus': selected,
             'purpose':purpose, 'ranking':ranking,
             'terms': terms, 'evidence': evidence, 'skipped': skipped[:32],
-            'memory':memory, 'memory_ambiguities':ambiguities,
+            'memory':memory, 'memory_ambiguities':ambiguities, 'memory_withheld':dict(sorted(withheld.items())),
             'memory_basis':'user_reviewed_statements_not_verified_facts', 'authority_granted':False,
             'retrieval': 'bounded_reviewed_memory_plus_keywords_and_explicit_one_hop_links', 'indexed_snapshot_only': True,
             'limits': {'sources': MAX_SOURCES, 'excerpt_characters': MAX_CHARACTERS,

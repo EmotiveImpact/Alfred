@@ -107,3 +107,11 @@ button.access-chip:hover:not(:disabled){border-color:#d7b37566}
 .connector-state.stale_snapshot,.connector-state.source_unavailable{border-color:#d7b37555;color:var(--amber)}
 .connector-meta{flex-basis:100%}
 .connector-list code{font-size:11px;color:#c9cfcd}
+/* What supports this answer: quiet when complete, sparse amber when something is missing. */
+.answer-support{margin-top:12px;padding:12px 14px;border:1px solid var(--edge-strong);border-radius:10px;background:#07090a}
+.answer-support.attention{border-color:#d7b37545}
+.answer-support h3{display:flex;align-items:center;gap:6px;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:#aeb7b5;font-weight:500;margin:0 0 6px}
+.answer-support.attention h3 svg{color:var(--amber)}
+.answer-support p{margin:0 0 6px;font-size:12px;color:#d9dedc}
+.answer-support ul{margin:0 0 6px;padding-left:16px;font-size:11px;line-height:1.7;color:#b9c2c2}
+.answer-support small{font-size:10px;line-height:1.6;color:var(--quiet)}
