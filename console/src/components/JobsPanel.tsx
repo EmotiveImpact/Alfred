@@ -25,6 +25,7 @@ export function JobsPanel(){
       {readable&&<div className="job-result" aria-label="Job result"><dl className="detail-list">{readable.lines.map(l=><div key={l.label}><dt>{l.label}</dt><dd>{l.value}</dd></div>)}</dl>
         {readable.selected.length>0&&<ol className="source-lines" aria-label="Extracted lines">{readable.selected.map((line,i)=><li key={i}>{line}</li>)}</ol>}
         <p className="dialog-note">{readable.basis} The stored bytes match their SHA-256; the content was not independently verified. Served from the {f.result?.served_from==='cache'?'local cache':'database record'}.</p></div>}
+      {f.job?.result_removed&&<p className="dialog-note" role="status">Its result was removed with its source. The job record remains.</p>}
       {f.resultError&&<p className="dialog-note" role="status">{f.resultError}</p>}
       {owner&&f.job&&!f.job.finished&&f.job.state!=='cancel_requested'&&<button className="text-button" disabled={j.busy} onClick={()=>void j.cancel(f.id)}>Cancel this job</button>}
     </section>}

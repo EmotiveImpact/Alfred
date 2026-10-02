@@ -340,13 +340,14 @@
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_memory_lifecycle.py",
-    "docs/evidence/memory-m05/RECEIPT.md"
+    "docs/evidence/memory-m05/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source deletion receipts pending."
+   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided."
   },
   {
    "id": "MEM-011",

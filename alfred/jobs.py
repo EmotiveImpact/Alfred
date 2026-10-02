@@ -209,7 +209,8 @@ class JobCoordinator:
         if row['result_artefact']:
             artefact = db.execute('SELECT sha256,size,media_type FROM artefacts WHERE scope=? AND sha256=?',
                                   (row['scope'], row['result_artefact'])).fetchone()
-            result = dict(artefact) | {'basis': 'worker_claim_bytes_match_sha256_content_not_verified'}
+            # A result can be deleted later with its source (M05); the job record stays.
+            result = dict(artefact) | {'basis': 'worker_claim_bytes_match_sha256_content_not_verified'} if artefact else None
         last = db.execute('SELECT coalesce(max(sequence),0) FROM job_events WHERE job_id=?', (row['id'],)).fetchone()[0]
         return {'id': row['id'], 'scope': row['scope'], 'actor': row['actor'], 'kind': row['kind'],
                 'parameters': json.loads(row['parameters']), 'inputs': json.loads(row['inputs']),
@@ -219,6 +220,7 @@ class JobCoordinator:
                 'lease_owner': row['lease_owner'], 'lease_until': row['lease_until'],
                 'started_at': row['started'], 'cancel_requested': bool(row['cancel_requested']),
                 'created_at': row['created'], 'updated_at': row['updated'], 'result': result,
+                'result_removed': bool(row['result_artefact']) and result is None,
                 'last_sequence': last, 'finished': row['state'] in FINISHED,
                 'needs_reconciliation': row['state'] == 'effect_unknown'}
 
@@ -887,7 +889,12 @@ class LocalSubprocessBackend(WorkerBackend):
                     break
                 run.total += len(chunk)
                 if run.total > self.output_limit:
-                    run.stop('output_too_large')
+                    # Oversized output is refused even if the process has already exited;
+                    # otherwise a fast child would leave a truncated result behind.
+                    with run.lock:
+                        if run.reason is None:
+                            run.reason = 'output_too_large'
+                    _kill(run.process)
                     break
                 run.chunks.append(chunk)
         except (OSError, ValueError):
@@ -1220,6 +1227,15 @@ class BoundedCache:
         self._check(sha256)
         with self._transaction() as db:
             db.execute('DELETE FROM pins WHERE sha256=?', (sha256,))
+
+    def discard(self, sha256) -> bool:
+        """Remove one entry now, pinned or not, because its content was deleted (M05)."""
+        self._check(sha256)
+        with self._transaction() as db:
+            present = db.execute('SELECT 1 FROM entries WHERE sha256=?', (sha256,)).fetchone() is not None
+            db.execute('DELETE FROM pins WHERE sha256=?', (sha256,))
+            self._drop(db, sha256)
+            return present
 
     def pins(self) -> list:
         with self._connect() as db:

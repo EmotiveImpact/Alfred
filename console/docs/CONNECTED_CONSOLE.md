@@ -87,6 +87,14 @@ signs in as the same person with no more authority than the offering device. Dev
 listed per person and can be revoked from any other device of that person. See the M02
 receipt for the rules.
 
+## Removing a source
+
+An owner can remove a whole source from the source inspector after explicit consent. The
+server journals the removal, deletes the source's indexed content and everything derived
+from it, and returns a receipt that the console summarises. The person's files are never
+touched. Answers withdrawn this way, or by forgetting a statement, end with a plain message
+instead of waiting.
+
 ## Not provided by this increment
 
 Priorities, recommendations and milestone progress now come from executive records
@@ -104,5 +112,5 @@ device or GPU certification.
   routing and mode detection. `console/tests/jobs.test.ts` (8): job event merging, result
   reading, wording and command routing. `console/tests/pairing.test.ts` (2): pairing
   redemption and its in-memory CSRF token.
-- `tools/check_console_connected_browser.py` (81 checks): real Chromium against the
+- `tools/check_console_connected_browser.py` (85 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

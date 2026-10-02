@@ -1,5 +1,5 @@
 {
-  "passed": 81,
+  "passed": 85,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -79,6 +79,10 @@
     "redeeming an invitation grants exactly what it names to the person who redeems it",
     "a read grant makes the job history for that source visible",
     "a reader can inspect the note but cannot submit jobs",
+    "removing a source needs explicit consent",
+    "removing a source clears its records from the console with a receipt",
+    "the person's own files are untouched",
+    "the removal is journalled for restore",
     "no Content Security Policy violations",
     "no requests leave the loopback origin",
     "no uncaught page errors"
@@ -87,7 +91,7 @@
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
-    "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
   ],

@@ -27,6 +27,22 @@ function ForgetControl({label,path,body,confirm}:{label:string;path:string;body:
   }catch(e){setError(e instanceof DeskError&&e.code==='memory_review_changed'?'This statement changed. Reopen it and try again.':'It could not be forgotten.');}finally{setBusy(false);}};
   return <div className="forget-confirm" role="group" aria-label="Confirm forget"><p className="dialog-note">{confirm}</p>{error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy} onClick={run}>Confirm forget</button><button className="text-button" onClick={()=>setAsking(false)}>Keep</button></div></div>;
 }
+/** Removes a whole source from ALFRED: its indexed text and everything derived from it. Never the person's files. */
+function RemoveSource({source,label}:{source:string;label:string}){
+  const c=useConsole(),[asking,setAsking]=useState(false),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  if(c.live.session?.role!=='owner')return null;
+  if(!asking)return <button className="text-button forget-button" onClick={()=>setAsking(true)}>Remove this source from ALFRED</button>;
+  const run=async()=>{setBusy(true);setError('');try{
+    // Removing a source changes access; this is the person's own change, so keep its receipt in view.
+    c.expectAccessChange();
+    const r=await c.live.client.post<{notes_removed:number;reviewed_statements_invalidated:number;conversation_answers_withdrawn:number;pending_actions_cancelled:string[];job_results_deleted:string[]}>(`/desk/sources/${encodeURIComponent(source)}/forget`,{confirm:source});
+    c.setNotice(`Source removed: ${r.notes_removed} notes, ${r.reviewed_statements_invalidated} reviewed statement(s) invalidated, ${r.conversation_answers_withdrawn} answer(s) withdrawn, ${r.pending_actions_cancelled.length} draft(s) cancelled, ${r.job_results_deleted.length} job result(s) deleted. Your files were not touched.`);
+    setAsking(false);c.dispatch({type:'select',id:null});void c.live.refresh();
+  }catch(e){setError(e instanceof DeskError&&e.code==='source_not_available'?'This source is no longer available.':'It could not be removed.');}finally{setBusy(false);}};
+  return <div className="forget-confirm" role="group" aria-label="Confirm source removal"><p className="dialog-note">Removes {label} from ALFRED: its indexed text, links and history, every answer and draft built on it, and job results derived from it. Reviewed statements that relied on it are invalidated. ALFRED stops reading it. Your own files are not touched, and this is not secure erasure.</p>
+    <label className="consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>I want to remove this source and everything derived from it.</span></label>
+    {error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy||!consent} onClick={run}>Remove source</button><button className="text-button" onClick={()=>{setAsking(false);setConsent(false);}}>Keep</button></div></div>;
+}
 function ConnectedProvenance({detail}:{detail:RecordDetail}){
   const c=useConsole(),{selectRecord}=c;
   if(detail.type==='note'){
@@ -43,7 +59,7 @@ function ConnectedProvenance({detail}:{detail:RecordDetail}){
       {detail.support&&(detail.support.state==='current'?<><blockquote>{detail.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord('note:'+detail.support!.note_id)}>{detail.support.title}, {detail.support.start_line===detail.support.end_line?`line ${detail.support.start_line}`:`lines ${detail.support.start_line}–${detail.support.end_line}`}</button></>
         :<p className="dialog-note">The cited lines have {detail.support.state==='changed'?'changed since this record was written':'become unavailable'}. The record is kept; check it against the current source.</p>)}</section>;
   }
-  if(detail.type==='source')return <section className="inspector-section"><h3>Source status</h3><dl className="detail-list"><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Checked</dt><dd>{new Date(detail.checkedAt).toLocaleString('en-GB')}</dd></div><div><dt>Notes</dt><dd>{detail.notes}</dd></div><div><dt>Issues</dt><dd>{detail.issues.length}</dd></div></dl>{detail.issues.slice(0,4).map((issue,i)=><p className="dialog-note" key={i}>{issue.code}{issue.path?` · ${issue.path}`:''}</p>)}</section>;
+  if(detail.type==='source')return <section className="inspector-section"><h3>Source status</h3><dl className="detail-list"><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Checked</dt><dd>{new Date(detail.checkedAt).toLocaleString('en-GB')}</dd></div><div><dt>Notes</dt><dd>{detail.notes}</dd></div><div><dt>Issues</dt><dd>{detail.issues.length}</dd></div></dl>{detail.issues.slice(0,4).map((issue,i)=><p className="dialog-note" key={i}>{issue.code}{issue.path?` · ${issue.path}`:''}</p>)}<RemoveSource source={detail.id.slice('source:'.length)} label={detail.label}/></section>;
   return <section className="inspector-section"><h3>Reviewed statements</h3>{detail.sameNameEntities.length>0&&<p className="dialog-note">{detail.sameNameEntities.length} other record{detail.sameNameEntities.length>1?'s share':' shares'} this name. They are kept separate.</p>}
     {detail.statements.length?detail.statements.map(s=><div className={`statement ${s.usable?'usable':'withheld'}`} key={s.id}><p><strong>{s.predicate.replaceAll('_',' ')}</strong> {s.value??s.object?.name??''}</p><small>{statementLabel(s)}</small>
       {s.support?<><blockquote>{s.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord(s.support!.noteId)}>{s.support.title}, {s.support.startLine===s.support.endLine?`line ${s.support.startLine}`:`lines ${s.support.startLine}–${s.support.endLine}`}</button></>:s.state!=='forgotten'&&<p className="dialog-note">Original support is not currently available.</p>}

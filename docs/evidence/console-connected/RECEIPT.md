@@ -16,7 +16,7 @@ served by that server and driven in Chromium 141 (SwiftShader).
 | `python3 -m unittest discover -s tests` | 699 pass (includes 16 projection and 12 focus tests) |
 | `npm run build` and `npm test` in `console/` | build passes; 79 unit tests pass |
 | `npx playwright test` (offline demo) | 29 of 29 pass, unchanged behaviour |
-| `tools/check_console_connected_browser.py` | 81 of 81 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs and device pairing); [report](browser-report.json) |
+| `tools/check_console_connected_browser.py` | 85 of 85 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs, device pairing and whole-source removal); [report](browser-report.json) |
 | Existing seven backend browser scripts | all pass |
 
 The 43 checks include: sign-in through the real session; graph counts equal to the
@@ -47,7 +47,8 @@ errors.
 [Desktop](connected-desktop.png), [reviewed memory inspector](connected-reviewed.png),
 [Ask with project context](connected-ask.png), [390 px](connected-390.png),
 [server unreachable](connected-unreachable.png), [bounded jobs](connected-jobs.png),
-[pairing a device](connected-pairing.png), [device list](connected-devices.png).
+[pairing a device](connected-pairing.png), [device list](connected-devices.png),
+[source removed](connected-source-removed.png).
 Captured from the running console, not generated.
 
 ## Bounded jobs (added after the Stage A and B commit)
@@ -76,3 +77,11 @@ once, must confirm it has kept the key before continuing, and then reads with th
 person's grants; the key is no longer on the page afterwards. The owner sees the device in
 their own list and revokes it; the second context returns to sign-in with no records,
 while the owner's session stays connected. Backend rules and tests: the M02 receipt.
+
+## Whole-source removal (added later on 2 October)
+
+In a second, fresh synthetic workspace (so the flow above is unaffected), the owner opens the
+source in the inspector, asks to remove it, must tick explicit consent, and confirms. The
+receipt summary appears, the view drops to zero records, the synthetic files on disk are
+still there, and the removal is in the lifecycle journal. The first page is closed before
+this scenario so that two software-rendered scenes do not compete for the CPU.

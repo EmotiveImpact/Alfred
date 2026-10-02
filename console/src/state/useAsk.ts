@@ -12,7 +12,8 @@ export type AskState=
   |{status:'waiting';question:string;focusLabel:string|null}
   |{status:'done';question:string;focusLabel:string|null;turn:Turn;sessionId:string}
   |{status:'error';question:string;focusLabel:string|null;message:string};
-const FINAL=new Set(['completed','source_changed','focus_unavailable','failed','interrupted']);
+// Withdrawn answers are final too: forgetting or removing a source never leaves a question waiting.
+const FINAL=new Set(['completed','source_changed','focus_unavailable','failed','interrupted','memory_forgotten','source_forgotten']);
 const ERRORS:Record<string,string>={local_model_not_configured:'No local model is configured. Ask in source mode.',model_workspace_not_authorised:'This access key may not send content to the local model.',conversation_processing_paused:'ALFRED is paused. Resume it to ask questions.',conversation_rate_limited:'Too many questions in the last minute. Try again shortly.',conversation_queue_full:'ALFRED is busy. Try again shortly.',conversation_busy:'The previous question is still being answered.',question_required:'Ask a slightly longer question.',question_too_complex:'Shorten the question.',invalid_focus:'The selected record cannot be used as context.'};
 function requestId(){const c=globalThis.crypto;return 'console-'+(c?.randomUUID?c.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36));}
 const wait=(ms:number,signal:AbortSignal)=>new Promise<void>((resolve,reject)=>{const t=setTimeout(resolve,ms);signal.addEventListener('abort',()=>{clearTimeout(t);reject(new DOMException('aborted','AbortError'));},{once:true});});

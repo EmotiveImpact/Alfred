@@ -5,7 +5,7 @@
 export type JobState='queued'|'leased'|'running'|'cancel_requested'|'succeeded'|'failed'|'cancelled'|'effect_unknown'|'reconciled';
 export interface JobInput{type:'note'|'artefact';id?:string;source?:string;revision?:number;sha256?:string}
 export interface JobView{id:string;kind:string;state:JobState;reason:string|null;attempt:number;max_attempts:number;created_at:number;updated_at:number;
-  inputs:JobInput[];result:{sha256:string;size:number;media_type:string;basis:string}|null;last_sequence:number;finished:boolean;cancel_requested:boolean;needs_reconciliation:boolean;side_effect_free:boolean}
+  inputs:JobInput[];result:{sha256:string;size:number;media_type:string;basis:string}|null;result_removed?:boolean;last_sequence:number;finished:boolean;cancel_requested:boolean;needs_reconciliation:boolean;side_effect_free:boolean}
 export interface JobEvent{sequence:number;kind:string;detail:Record<string,unknown>;at:number}
 export interface JobEvents{job:string;state:JobState;finished:boolean;events:JobEvent[];next_cursor:number;more:boolean}
 export interface JobArtefact{sha256:string;size:number;media_type:string;job_id:string;created_at:number;text?:string;served_from:string}

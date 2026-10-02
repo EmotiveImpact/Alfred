@@ -44,8 +44,37 @@ revived) when the source returns under a new revision.
 - `tools/check_console_connected_browser.py`: forgetting from the inspector in a real browser.
 - Full suite: 713 tests pass.
 
+## Whole-source removal (added later on 2 October)
+
+An owner can remove a whole source from ALFRED: `POST /desk/sources/{id}/forget` with the
+source ID typed back as confirmation, or "Remove this source from ALFRED" in the console
+inspector for a source, which asks for explicit consent. `alfred/lifecycle.py`
+(`forget_source`) journals `source_forgotten` first, then in one transaction:
+
+- revokes the source credential, so nothing can index or report under it again;
+- deletes its indexed notes, links, identities, revision history, anchors, vault binding
+  and source record, leaving tombstones that keep a hash of each path, not the name;
+- invalidates every reviewed statement supported by any of its notes, current or past,
+  removing their values (there is no revival if the folder is added again later);
+- withdraws saved answers that cited its notes, as evidence, reviewed support or focus;
+- cancels undecided drafts bound to its notes or evidence and pending inbox notes for it,
+  and lists completed drafts as not undone;
+- redacts the summaries of evidence events it reported and the titles of its documents;
+- deletes job results derived from it, from the database and from the local job cache.
+  The job record stays visible to its submitter, marked as having had its result removed.
+
+The receipt counts each of these and says what remains: the person's own files (ALFRED never
+reads, edits or deletes them for this), identifiers and hashes in audit and job records,
+invalidated statements without values until forgotten, older backups (a restore replays the
+removal), completed drafts, and SQLite free pages. Secure erasure is not claimed.
+
+Evidence: `tests/test_memory_lifecycle.py` (`SourceForgetTests`, which also reruns the earlier
+lifecycle tests, plus an HTTP test with typed confirmation, CSRF and owner checks) and the
+source-removal scenario at the end of `tools/check_console_connected_browser.py`
+([screenshot](../console-connected/connected-source-removed.png)).
+
 ## Not done
 
 Application-level encryption of the database and backups, key custody and recovery keys
-(SYS-002, owner decision). Receipts for whole-source deletion. Scheduled backup rotation.
+(SYS-002, owner decision). Scheduled backup rotation.
 Restore of a backup taken on another machine. Private data remains gated by M02 and M05.

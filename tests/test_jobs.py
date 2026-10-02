@@ -466,6 +466,18 @@ class BackendTests(Base):
         view = self.run_one(LocalSubprocessBackend(output_limit=64))
         self.assertEqual((view['state'], view['reason']), ('failed', 'output_too_large'))
 
+    def test_output_limit_holds_when_the_child_has_already_exited(self):
+        # Under load the reader can see oversized output only after the child exits.
+        import io
+        from alfred.jobs import _Run
+        class Exited:
+            stdout = io.BufferedReader(io.BytesIO(b'x' * 200))
+            returncode = 0
+            def poll(self): return 0
+        run = _Run(Exited(), self.root)
+        LocalSubprocessBackend(output_limit=64)._read_output(run)
+        self.assertEqual(run.reason, 'output_too_large')
+
     def test_child_reports_its_own_validation_error(self):
         backend = LocalSubprocessBackend(wall_clock=10)
         backend.submit('direct.1', 'summarise_lines', {'max_lines': 0}, [])

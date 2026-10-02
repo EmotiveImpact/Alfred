@@ -5,7 +5,7 @@ import {DeskError} from '../integration/deskClient';
 import {type Evidence,type Turn} from '../state/useAsk';
 import {RememberForm} from './RememberForm';
 const VIA:Record<string,string>={selected_record:'Selected record',keyword_match:'Matched your words',explicit_link_from_match:'Linked from a match',reviewed_statement_support:'Supports a reviewed statement'};
-const STATE_MESSAGE:Record<string,string>={source_changed:'A source changed after this answer. It was withdrawn rather than shown stale.',focus_unavailable:'The selected record is no longer available, so nothing was retrieved for it.',failed:'ALFRED could not complete this question. Nothing was invented.',interrupted:'ALFRED restarted before answering. Ask again.'};
+const STATE_MESSAGE:Record<string,string>={source_changed:'A source changed after this answer. It was withdrawn rather than shown stale.',focus_unavailable:'The selected record is no longer available, so nothing was retrieved for it.',failed:'ALFRED could not complete this question. Nothing was invented.',interrupted:'ALFRED restarted before answering. Ask again.',memory_forgotten:'A reviewed statement this answer used was forgotten, so the answer was withdrawn.',source_forgotten:'A source this answer used was removed from ALFRED, so the answer was withdrawn.'};
 function lines(e:Evidence){return e.start_line===e.end_line?`line ${e.start_line}`:`lines ${e.start_line}–${e.end_line}`;}
 function DraftProposal({turn,sessionId}:{turn:Turn;sessionId:string}){
   const c=useConsole(),[text,setText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');

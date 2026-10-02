@@ -167,6 +167,91 @@ class LifecycleTests(unittest.TestCase):
             lifecycle.backup(self.store, self.reader, self.root / 'backups')
 
 
+class SourceForgetTests(LifecycleTests):
+    """Removing a whole source: its content and everything derived from it, with a receipt."""
+
+    def answer_and_job(self):
+        from alfred.jobs import BoundedCache, JobCoordinator, JobWorker, LocalSubprocessBackend
+        service = ConversationService(self.store, None, 'work'); self.addCleanup(service.stop)
+        sid = service.create(self.owner, {'title': 'Atlas'})['id']
+        service.submit(self.owner, sid, {'question': 'What is the Atlas status?', 'mode': 'sources', 'follow_up': False, 'request_id': 'q1', 'after': 0})
+        service.process_one()
+        turn = service.view(self.owner, sid)['turns'][0]
+        draft = service.propose_draft(self.owner, sid, {'turn_id': turn['id'], 'text': 'Atlas update.', 'request_id': 'draft-1'})
+        cache = BoundedCache(self.root / 'job-cache', 1 << 20)
+        jobs = JobCoordinator(self.store, cache=cache)
+        jobs.enrol_worker(self.owner, 'local-1', 'Local worker', ['summarise_lines'])
+        job = jobs.submit(self.owner, {'idempotency_key': 'j1', 'kind': 'summarise_lines', 'parameters': {'max_lines': 2},
+                                       'inputs': [{'note': self.note()['id']}], 'side_effect_free': True})
+        JobWorker(jobs, LocalSubprocessBackend(wall_clock=10), self.owner, 'local-1').run_once()
+        result = jobs.view(self.owner, job['id'])['result']['sha256']
+        jobs.artefact(self.owner, result)  # Mirrors the result into the cache.
+        return service, sid, draft, jobs, cache, job, result
+
+    def test_forgetting_a_source_removes_its_content_and_dependants(self):
+        service, sid, draft, jobs, cache, job, result = self.answer_and_job()
+        self.assertTrue(cache.contains(result))
+        receipt = lifecycle.forget_source(self.store, self.owner, 'source', cache=cache)
+        self.assertEqual((receipt['kind'], receipt['notes_removed'], receipt['reviewed_statements_invalidated']), ('source_forgotten', 1, 2))
+        self.assertEqual((receipt['conversation_answers_withdrawn'], receipt['pending_actions_cancelled']), (1, [draft['id']]))
+        self.assertEqual((receipt['job_results_deleted'], receipt['cached_results_removed']), ([result], 1))
+        self.assertFalse(receipt['secure_erasure'])
+        self.assertTrue(receipt['remains'][0].startswith('Your own files'))
+        # The person's file is untouched; ALFRED holds none of its content.
+        self.assertEqual((self.vault / 'Atlas.md').read_text(), '# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\n')
+        self.assertEqual(self.store.knowledge(self.owner)['nodes'], [])
+        with self.store.connection() as db:
+            for table in ('knowledge_notes', 'knowledge_history', 'knowledge_refs', 'knowledge_sources'):
+                self.assertEqual(db.execute(f"SELECT count(*) FROM {table} WHERE source='source'").fetchone()[0], 0, table)
+            self.assertNotIn('awaiting review', str([tuple(r) for r in db.execute('SELECT * FROM memory_claims')]))
+        self.assertEqual({(c['state'], c['value']) for c in self.memory.view(self.owner)['claims']}, {('invalidated', None)})
+        self.assertEqual(service.view(self.owner, sid)['turns'][0]['state'], 'source_forgotten')
+        self.assertEqual(self.store.desk_state(self.owner)['actions'][0]['state'], 'cancelled')
+        self.assertFalse(cache.contains(result))
+        with self.assertRaises(Fault):
+            jobs.artefact(self.owner, result)
+        self.assertIsNone(jobs.view(self.owner, job['id'])['result'])  # The submitter keeps the job record only.
+        # The source cannot index again, and repeating the removal changes nothing.
+        try:
+            self.scanner.scan()
+        except Fault:
+            pass
+        with self.store.connection() as db:
+            self.assertEqual(db.execute("SELECT count(*) FROM knowledge_notes WHERE source='source'").fetchone()[0], 0)
+        again = lifecycle.forget_source(self.store, self.owner, 'source', cache=cache)
+        self.assertEqual((again['notes_removed'], again['reviewed_statements_invalidated']), (0, 0))
+
+    def test_adding_the_folder_again_never_revives_old_reviews(self):
+        lifecycle.forget_source(self.store, self.owner, 'source')
+        fresh = self.store.provision('work', 'source-2', 'source', ttl=100000)
+        MarkdownVault(self.store, fresh, self.vault).scan()
+        self.assertEqual(len(self.store.knowledge(self.owner)['nodes']), 1)
+        self.assertEqual({c['state'] for c in self.memory.view(self.owner)['claims']}, {'invalidated'})
+
+    def test_restore_replays_source_removal(self):
+        manifest = lifecycle.backup(self.store, self.owner, self.root / 'backups')
+        lifecycle.forget_source(self.store, self.owner, 'source')
+        lifecycle.restore(self.root / 'backups' / manifest['file'], self.db)
+        restored = KnowledgeStore(self.db, clock=lambda: self.clock[0])
+        self.assertEqual(restored.knowledge(self.owner)['nodes'], [])
+        self.assertEqual({c['state'] for c in ReviewedMemory(restored).view(self.owner)['claims']}, {'invalidated'})
+        with restored.connection() as db:
+            self.assertEqual(db.execute("SELECT revoked FROM credentials WHERE id='source'").fetchone()[0], 1)
+            self.assertEqual(db.execute("SELECT count(*) FROM knowledge_notes WHERE source='source'").fetchone()[0], 0)
+
+    def test_only_an_owner_removes_a_known_source_in_their_workspace(self):
+        for bearer, source, code in ((self.reader, 'source', 'forbidden'), (self.owner, 'nope', 'source_not_available'),
+                                     (self.owner, 'owner', 'source_not_available')):
+            with self.assertRaises(Fault) as caught:
+                lifecycle.forget_source(self.store, bearer, source)
+            self.assertEqual(caught.exception.code, code)
+        elsewhere = self.store.provision('elsewhere', 'elsewhere-source', 'source')
+        with self.assertRaises(Fault) as caught:
+            lifecycle.forget_source(self.store, self.owner, 'elsewhere-source')
+        self.assertEqual(caught.exception.code, 'source_not_available')
+        self.assertEqual(lifecycle.entries(lifecycle.journal_path(self.store)), [])
+
+
 class LifecycleHTTPTests(unittest.TestCase):
     def setUp(self):
         from alfred.desk import init_demo
@@ -203,6 +288,21 @@ class LifecycleHTTPTests(unittest.TestCase):
         self.assertEqual(self.req('/desk/memory/receipts')[1]['receipts'][0]['id'], receipt['id'])
         self.login('reader')
         self.assertEqual(self.req('/desk/memory/entities/film/forget', {})[0], 403)
+
+    def test_source_removal_over_http_needs_owner_csrf_and_typed_confirmation(self):
+        self.login('reader')
+        self.assertEqual(self.req('/desk/sources/demo-source/forget', {'confirm': 'demo-source'})[0], 403)
+        self.login('owner')
+        self.assertEqual(self.req('/desk/sources/demo-source/forget', {})[0], 400)
+        self.assertEqual(self.req('/desk/sources/demo-source/forget', {'confirm': 'other'})[1], {'error': 'confirmation_mismatch'})
+        self.assertEqual(self.req('/desk/sources/demo-source/forget', {'confirm': 'demo-source'}, csrf=False)[0], 403)
+        events_before = self.store.desk_state(self.keys['owner'])['events']
+        code, receipt, _ = self.req('/desk/sources/demo-source/forget', {'confirm': 'demo-source'})
+        self.assertEqual((code, receipt['kind'], receipt['notes_removed']), (200, 'source_forgotten', 20))
+        self.assertEqual(receipt['evidence_events_redacted'], len(events_before))
+        self.assertTrue(all(e['summary'] == lifecycle.REMOVED for e in self.store.desk_state(self.keys['owner'])['events']))
+        self.assertEqual(self.req('/desk/console/projection')[1]['counts']['notes'], 0)
+        self.assertEqual(self.req('/desk/memory/receipts')[1]['receipts'][0]['id'], receipt['id'])
 
 
 if __name__ == '__main__':
