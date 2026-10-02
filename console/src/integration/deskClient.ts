@@ -43,7 +43,7 @@ export class DeskClient implements ConsoleReadPort {
   async permittedWorkspaces(signal:AbortSignal):Promise<readonly PermittedWorkspace[]>{return (await this.call<{workspaces:PermittedWorkspace[]}>('/desk/console/workspaces',{signal})).workspaces;}
   readProjection(signal:AbortSignal){return this.call<ConnectedProjection>('/desk/console/projection',{signal});}
   inspectRecord(id:string,signal:AbortSignal){
-    if(!/^(note|entity|source):[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(id))return Promise.reject(new DeskError('not_found','record_not_available',404));
+    if(!/^(note|entity|source|exec):[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$/.test(id))return Promise.reject(new DeskError('not_found','record_not_available',404));
     return this.call<RecordDetail>('/desk/console/records/'+id,{signal});
   }
   post<T>(path:string,body:unknown,signal?:AbortSignal){return this.call<T>(path,{method:'POST',body,signal});}

@@ -95,6 +95,45 @@ from it, and returns a receipt that the console summarises. The person's files a
 touched. Answers withdrawn this way, or by forgetting a statement, end with a plain message
 instead of waiting.
 
+## Executive workflows (ATT-002, ATT-001)
+
+The executive dialog ("tasks") reads `GET /desk/executive` directly and re-reads it
+whenever the projection revision changes. Every write sends the record's exact version.
+
+| Route | Purpose |
+|---|---|
+| `POST /desk/executive/records/{id}` | Existing update, now also `responsible`, `responsible_link` and `snoozed_until`. |
+| `POST /desk/executive/records/{id}/options` | Replace a proposed decision's two to six authored options. |
+| `POST /desk/executive/records/{id}/decide` | Record the chosen option, rationale and time. Only on this explicit call. |
+| `POST /desk/executive/records/{id}/reopen` | Return a decision to proposed; the earlier choice stays in its history. |
+| `POST /desk/executive/records/{id}/progress` | An authored progress note on an open milestone. |
+| `GET /desk/executive/records/{id}/brief` | Assemble a brief for a decision, milestone or commitment. Computed, never stored. |
+
+All of them pass through the same Host, Origin, session and CSRF checks as every other
+desk route. Another person's record and an unknown one both return
+`404 executive_record_not_found`.
+
+- **Responsible** is a label the person types, optionally linked to a person record
+  they explicitly pick. The records view filters and groups by label and link together,
+  so namesakes and different spellings stay apart. A link the person can no longer see
+  shows as "Linked record not available", never as a name.
+- **Decisions** keep options in the authored order; nothing scores them. A decided
+  decision must be reopened before its options change.
+- **Briefs** say they are assembled, not advice and not model output. Each item cites
+  its record version, or note revision and lines, or reviewed statement version. The
+  brief is assembled again when the projection changes, so withdrawn material drops out.
+- **Attention** lists overdue, decision past due, due soon and stale milestone items by
+  stated rules, with an authored snooze. It is shown in the console only.
+- **Insights** are derived from the person's own records by three stated rules and
+  labelled as derived, never accepted.
+- The projection adds `executive.attention`, `attentionCount`, `snoozedCount` and
+  `derivedInsights`, a `responsible` field on executive nodes, and an
+  `executive_responsible` edge (authored basis) to an explicitly linked, visible person.
+  Executive values join `dataRevision`, so time-based attention changes reach the view.
+
+Acceptance: `tests/test_executive_workflows.py`, `console/tests/executive.test.ts` and
+`tools/check_executive_browser.py`. Receipt: `docs/evidence/executive-2/RECEIPT.md`.
+
 ## Not provided by this increment
 
 Priorities, recommendations and milestone progress now come from executive records

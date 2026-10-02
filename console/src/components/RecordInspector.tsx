@@ -5,7 +5,8 @@ import {useConsole,downloadJSON} from '../state/ConsoleProvider';
 import {type RecordDetail,type StatementDetail} from '../integration/ConsoleReadPort';
 import {type Relationship} from '../domain/model';
 import {RunJob} from './JobsPanel';
-const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',executive_link:'executive link',executive_support:'cited support',fixture:''};
+import {ExecutiveInspectorActions} from './ExecutiveWorkflows';
+const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',executive_link:'executive link',executive_support:'cited support',executive_responsible:'responsible (your link)',fixture:''};
 const ORIGIN_BADGE:Record<string,string>={authored_note:'AUTHORED NOTE · NOT A VERIFIED FACT',reviewed_entity:'REVIEWED MEMORY · YOUR JUDGEMENT',source:'SELECTED SOURCE',executive_record:'EXECUTIVE RECORD · AUTHORED BY YOU'};
 function frontmatterEnd(lines:string[]){if(lines[0]?.trim()!=='---')return 0;const end=lines.findIndex((l,i)=>i>0&&l.trim()==='---');return end<0?0:end+1;}
 function statementLabel(s:StatementDetail){
@@ -53,11 +54,12 @@ function ConnectedProvenance({detail}:{detail:RecordDetail}){
   }
   if(detail.type==='exec'){
     const project=detail.project?c.state.snapshot.records.find(r=>r.id===detail.project):undefined;
-    return <section className="inspector-section"><h3>Executive record</h3><dl className="detail-list"><div><dt>Kind</dt><dd>{detail.kind.replace('_','-')}</dd></div><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Due</dt><dd>{detail.due?`${new Date(detail.due).toLocaleDateString('en-GB')}${detail.overdue?' · overdue':''}`:'No date'}</dd></div><div><dt>Basis</dt><dd>Your authored record</dd></div></dl>
+    return <section className="inspector-section"><h3>Executive record</h3><dl className="detail-list"><div><dt>Kind</dt><dd>{detail.kind.replace('_','-')}</dd></div><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Due</dt><dd>{detail.due?`${new Date(detail.due).toLocaleDateString('en-GB')}${detail.overdue?' · overdue':''}`:'No date'}</dd></div>{detail.responsible&&<div><dt>Responsible</dt><dd>{detail.responsible}{detail.responsibleState==='unavailable'?' · link unavailable':''}</dd></div>}{detail.choice&&<div><dt>Decided</dt><dd>{detail.choice.label??'Yes'}</dd></div>}<div><dt>Basis</dt><dd>Your authored record</dd></div></dl>
       {detail.detail&&<p>{detail.detail}</p>}
       {project&&<button className="text-button" onClick={()=>selectRecord(project.id)}>Project: {project.title}</button>}
       {detail.support&&(detail.support.state==='current'?<><blockquote>{detail.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord('note:'+detail.support!.note_id)}>{detail.support.title}, {detail.support.start_line===detail.support.end_line?`line ${detail.support.start_line}`:`lines ${detail.support.start_line}–${detail.support.end_line}`}</button></>
-        :<p className="dialog-note">The cited lines have {detail.support.state==='changed'?'changed since this record was written':'become unavailable'}. The record is kept; check it against the current source.</p>)}</section>;
+        :<p className="dialog-note">The cited lines have {detail.support.state==='changed'?'changed since this record was written':'become unavailable'}. The record is kept; check it against the current source.</p>)}
+      <ExecutiveInspectorActions id={detail.id} kind={detail.kind}/></section>;
   }
   if(detail.type==='source')return <section className="inspector-section"><h3>Source status</h3><dl className="detail-list"><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Checked</dt><dd>{new Date(detail.checkedAt).toLocaleString('en-GB')}</dd></div><div><dt>Notes</dt><dd>{detail.notes}</dd></div><div><dt>Issues</dt><dd>{detail.issues.length}</dd></div></dl>{detail.issues.slice(0,4).map((issue,i)=><p className="dialog-note" key={i}>{issue.code}{issue.path?` · ${issue.path}`:''}</p>)}<RemoveSource source={detail.id.slice('source:'.length)} label={detail.label}/></section>;
   return <section className="inspector-section"><h3>Reviewed statements</h3>{detail.sameNameEntities.length>0&&<p className="dialog-note">{detail.sameNameEntities.length} other record{detail.sameNameEntities.length>1?'s share':' shares'} this name. They are kept separate.</p>}

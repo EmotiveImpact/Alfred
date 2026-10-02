@@ -445,7 +445,8 @@ class Handler(BaseHTTPRequestHandler):
                 elif mutation and re.fullmatch(r'/desk/executive/records/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', url.path):
                     result = executive.update(bearer, url.path.rsplit('/', 1)[1], body)
                 else:
-                    raise Fault('not_found', 404)
+                    from .executive_http import route as executive_route
+                    result = executive_route(executive, url.path, mutation, bearer, body)
             elif url.path == '/desk/jobs' or url.path.startswith('/desk/jobs/'):
                 result = self.jobs_route(url, mutation, bearer, body)
             elif not mutation and url.path == '/desk/console/workspaces' and not url.query:

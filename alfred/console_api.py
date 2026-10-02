@@ -215,16 +215,22 @@ def projection(server, bearer):
             summary.append(('overdue since ' if r['overdue'] else 'due ') + _iso(r['due'])[:10])
         if state and state != 'current':
             summary.append('cited support ' + state)
+        # The responsible label is the person's own text: appended after capitalising, never altered.
+        label = ' · '.join(summary).capitalize() + (' · ' + r['responsible'] if r.get('responsible') else '')
         nodes.append({'id': rid, 'label': r['title'], 'type': 'action', 'kind': r['kind'], 'category': 'operations',
                       'origin': 'executive_record', 'workspaceId': scope, 'availability': 'current',
-                      'summary': ' · '.join(summary).capitalize() + '.', 'revision': str(r['version']),
+                      'summary': label + '.', 'revision': str(r['version']),
                       'updatedAt': _iso(r['updated']), 'evidence': [], 'status': r['status'], 'due': r['due'],
-                      'supportState': state})
+                      'supportState': state, 'responsible': r.get('responsible'), 'snoozedUntil': r.get('snoozed_until')})
         mark = {'sourceId': rid, 'revision': str(r['version']), 'location': {'kind': 'record'},
                 'basis': 'authored', 'availability': 'current'}
         if r['project'] and r['project'] in projected:
             edges.append({'id': 'execlink:' + r['id'], 'from': rid, 'to': r['project'], 'layer': 'executive_link',
                           'relation': 'for_project', 'evidence': [mark]})
+        if r.get('responsible_link') and r['responsible_link'] in projected:
+            # Drawn only for a link the person picked and can still see; a label alone draws nothing.
+            edges.append({'id': 'execresp:' + r['id'], 'from': rid, 'to': r['responsible_link'], 'layer': 'executive_responsible',
+                          'relation': 'responsible', 'evidence': [mark]})
         if state == 'current' and 'note:' + r['support']['note_id'] in projected:
             edges.append({'id': 'execsupport:' + r['id'], 'from': rid, 'to': 'note:' + r['support']['note_id'],
                           'layer': 'executive_support', 'relation': 'supported_by',
@@ -239,19 +245,28 @@ def projection(server, bearer):
                  'basis': 'user_reviewed_statement_not_verified_fact'} for c in latest[:3]
                 if c['subject_id'] in entities]
     content = {'nodes': nodes, 'edges': edges, 'approvals': approvals}
+    attention = executive.get('attention') or {'items': [], 'snoozed': []}
+    derived = (executive.get('insights') or {'items': []})['items']
+    executive_view = {'priorities': [{'id': 'exec:' + r['id'], 'title': r['title'], 'status': r['status'], 'open': r['open'],
+                                      'due': r['due'], 'overdue': r['overdue'], 'rank': r['rank'], 'version': r['version'],
+                                      'origin': r['origin'], 'responsible': r.get('responsible')} for r in executive['priorities']],
+                      'prioritiesStatus': 'recorded' if executive['priorities'] else 'not_recorded',
+                      'recommendations': [{'fromRecord': x['from_record'], 'fromVersion': x['from_version'], 'title': x['title'],
+                                           'due': x['due'], 'reason': x['reason'], 'basis': x['basis']} for x in executive['recommendations']],
+                      'milestones': [{'project': m['project'], 'done': m['done'], 'total': m['total']}
+                                     for m in executive['milestone_progress'] if m['project'] in projected],
+                      'insights': insights,
+                      'milestonesStatus': 'recorded' if executive['milestone_progress'] else 'not_recorded',
+                      # Computed now by stated rules; in-app only. Time-stable values only, so the revision moves when they do.
+                      'attention': [{'recordId': 'exec:' + a['record'], 'title': a['title'], 'kind': a['kind'], 'rules': a['rules'],
+                                     'reason': a['reason'], 'due': a['due'], 'responsible': a['responsible']} for a in attention['items'][:12]],
+                      'attentionCount': len(attention['items']), 'snoozedCount': len(attention['snoozed']),
+                      'derivedInsights': [{'rule': i['rule'], 'statement': i['statement'], 'recordIds': ['exec:' + x['id'] for x in i['records']],
+                                           'basis': i['basis']} for i in derived[:6]]}
     return {'kind': 'authorised_projection', 'schemaVersion': SCHEMA_VERSION, 'workspaceId': scope,
-            'dataRevision': _digest(content)[:32], 'grantRevision': before, 'observedAt': _iso(now),
+            'dataRevision': _digest([content, executive_view])[:32], 'grantRevision': before, 'observedAt': _iso(now),
             **content,
-            'executive': {'priorities': [{'id': 'exec:' + r['id'], 'title': r['title'], 'status': r['status'], 'open': r['open'],
-                                          'due': r['due'], 'overdue': r['overdue'], 'rank': r['rank'], 'version': r['version'],
-                                          'origin': r['origin']} for r in executive['priorities']],
-                          'prioritiesStatus': 'recorded' if executive['priorities'] else 'not_recorded',
-                          'recommendations': [{'fromRecord': x['from_record'], 'fromVersion': x['from_version'], 'title': x['title'],
-                                               'due': x['due'], 'reason': x['reason'], 'basis': x['basis']} for x in executive['recommendations']],
-                          'milestones': [{'project': m['project'], 'done': m['done'], 'total': m['total']}
-                                         for m in executive['milestone_progress'] if m['project'] in projected],
-                          'insights': insights,
-                          'milestonesStatus': 'recorded' if executive['milestone_progress'] else 'not_recorded'},
+            'executive': executive_view,
             'sources': [{'id': 'source:' + s['source'], 'label': s['label'], 'status': s['status'],
                          'checkedAt': _iso(s['checked']), 'issues': len(s['errors'])} for s in sources.values()],
             'syncConflicts': [{'path': c['path'], 'originalId': 'note:' + c['original'] if c['original'] else None,
@@ -312,7 +327,11 @@ def record(server, bearer, identity):
         return {'id': identity, 'type': 'exec', 'origin': 'executive_record', 'workspaceId': p['scope'], 'label': r['title'],
                 'kind': r['kind'], 'status': r['status'], 'detail': r['detail'], 'due': _iso(r['due']) if r['due'] is not None else None,
                 'overdue': r['overdue'], 'project': r['project'], 'version': r['version'], 'origin_detail': r['origin'],
-                'support': r['support'], 'basis': r['basis'], 'grantRevision': revision, 'authorityGranted': False}
+                'support': r['support'], 'basis': r['basis'], 'grantRevision': revision, 'authorityGranted': False,
+                'responsible': r.get('responsible'), 'responsibleLink': r.get('responsible_link'),
+                'responsibleState': r.get('responsible_state'), 'responsibleName': r.get('responsible_name'),
+                'snoozedUntil': _iso(r['snoozed_until']) if r.get('snoozed_until') else None,
+                'options': r.get('options'), 'choice': r.get('choice'), 'progress': r.get('progress')}
     if memory is None:
         raise Fault('record_not_available', 404)
     reviewed = memory.view(bearer)

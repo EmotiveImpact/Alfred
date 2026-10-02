@@ -38,10 +38,12 @@ export interface ProjectionNode {
   status?:string;
   due?:number|null;
   supportState?:string|null;
+  responsible?:string|null;
+  snoozedUntil?:number|null;
 }
 export interface ProjectionEdge {
   id:string;from:string;to:string;
-  layer:'note_reference'|'reviewed_claim'|'review_support'|'executive_link'|'executive_support';
+  layer:'note_reference'|'reviewed_claim'|'review_support'|'executive_link'|'executive_support'|'executive_responsible';
   relation:string;
   evidence:EvidenceReference[];
 }
@@ -49,7 +51,9 @@ export interface ServerApproval {
   id:string;capability:string;state:string;text:string|null;path?:string|null;fingerprint:string;
   createdAt:string;expiresAt:string;evidenceCurrent:boolean;mine:boolean;effect:string;
 }
-export interface ServerPriority {id:string;title:string;status:string;open:boolean;due:number|null;overdue:boolean;rank:number|null;version:number;origin:string}
+export interface ServerPriority {id:string;title:string;status:string;open:boolean;due:number|null;overdue:boolean;rank:number|null;version:number;origin:string;responsible?:string|null}
+export interface ServerAttention {recordId:string;title:string;kind:string;rules:string[];reason:string;due:number|null;responsible:string|null}
+export interface ServerDerivedInsight {rule:string;statement:string;recordIds:string[];basis:string}
 export interface ServerRecommendation {fromRecord:string;fromVersion:number;title:string;due:number|null;reason:string;basis:string}
 export interface ServerInsight {
   entityId:string;claimId:string;predicate:string;value:string|null;objectId:string|null;
@@ -60,7 +64,8 @@ export interface ConnectedProjection {
   workspaceId:string;dataRevision:string;grantRevision:string;observedAt:string;
   nodes:ProjectionNode[];edges:ProjectionEdge[];
   approvals?:ServerApproval[];
-  executive?:{priorities:ServerPriority[];prioritiesStatus:string;recommendations?:ServerRecommendation[];milestones?:{project:string;done:number;total:number}[];insights:ServerInsight[];milestonesStatus:string};
+  executive?:{priorities:ServerPriority[];prioritiesStatus:string;recommendations?:ServerRecommendation[];milestones?:{project:string;done:number;total:number}[];insights:ServerInsight[];milestonesStatus:string;
+    attention?:ServerAttention[];attentionCount?:number;snoozedCount?:number;derivedInsights?:ServerDerivedInsight[]};
   model?:{configured:boolean;name:string|null;allowed:boolean;tools_enabled:boolean};
   counts?:Record<string,number>;
   paused?:boolean;
@@ -76,7 +81,9 @@ export interface StatementDetail {
 }
 export interface EntityDetail {id:string;type:'entity';label:string;kind:string;createdAt:string;statements:StatementDetail[];sameNameEntities:string[];basis:string}
 export interface SourceDetail {id:string;type:'source';label:string;status:string;checkedAt:string;lastCompleteScan:string|null;snapshot:string;issues:{code:string;path?:string}[];notes:number}
-export interface ExecDetail {id:string;type:'exec';label:string;kind:string;status:string;detail:string;due:string|null;overdue:boolean;project:string|null;version:number;support:{state:string;note_id:string;path?:string;title?:string;start_line:number;end_line:number;quote:string|null}|null;basis:string}
+export interface ExecDetail {id:string;type:'exec';label:string;kind:string;status:string;detail:string;due:string|null;overdue:boolean;project:string|null;version:number;support:{state:string;note_id:string;path?:string;title?:string;start_line:number;end_line:number;quote:string|null}|null;basis:string;
+  responsible?:string|null;responsibleLink?:string|null;responsibleState?:'current'|'unavailable'|null;responsibleName?:string|null;snoozedUntil?:string|null;
+  options?:{id:string;label:string}[]|null;choice?:{option:string|null;label:string|null;rationale:string|null;decided_at:number|null}|null}
 export type RecordDetail=NoteDetail|EntityDetail|SourceDetail|ExecDetail;
 export type ConnectionState =
   |{kind:'demo'}

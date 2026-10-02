@@ -146,6 +146,10 @@ jobs:
           mkdir -p /tmp/alfred-console-connected
           git rev-parse HEAD > /tmp/alfred-console-connected/TESTED_COMMIT.txt
           ALFRED_CONSOLE_OUTPUT=/tmp/alfred-console-connected /tmp/alfred-browser/bin/python tools/check_console_connected_browser.py
+      - name: Browser acceptance of executive workflows in the connected console
+        run: |
+          set -euo pipefail
+          ALFRED_EXECUTIVE_OUTPUT=/tmp/alfred-console-connected/executive /tmp/alfred-browser/bin/python tools/check_executive_browser.py
       - name: Browser acceptance of sync conflict handling in the web interface
         run: |
           set -euo pipefail

@@ -680,14 +680,18 @@
    "decision": "accepted",
    "implementation": "partial",
    "integration": "backend_connected",
-   "merge": "main_partial",
+   "merge": "main_partial_branch_extended",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_executive_workflows.py",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Fixed Pulse routines with bounded history. One stated recommendation rule (due within seven days) now feeds the executive panel; nothing becomes an obligation without acceptance."
+   "notes": "Fixed Pulse routines with bounded history. In-app attention by four stated rules (overdue, decision past due, due within seven days, milestone without progress for 14 days) with authored snooze; three derived insight rules. Nothing is delivered outside the app, attention is not yet wired into routines, and learned relevance is unmeasured."
   },
   {
    "id": "CON-001",
@@ -793,7 +797,9 @@
     "tests/test_console_api.py",
     "tools/check_console_connected_browser.py",
     "docs/evidence/console-connected/RECEIPT.md",
-    "docs/evidence/integration-2026-10-02/RECEIPT.md"
+    "docs/evidence/integration-2026-10-02/RECEIPT.md",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
@@ -850,13 +856,15 @@
     "tests/test_console_api.py",
     "tools/check_console_connected_browser.py",
     "docs/evidence/console-connected/RECEIPT.md",
-    "tests/test_console_focus.py"
+    "tests/test_console_focus.py",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "One workspace per credential, so workspace switching is exercised through grant change and revocation. Executive records are graph records linked to their project."
+   "notes": "One workspace per credential, so workspace switching is exercised through grant change and revocation. Executive records are graph records linked to their project. The inspector now loads executive record detail (the client previously refused exec: identifiers)."
   },
   {
    "id": "ATT-002",
@@ -874,20 +882,24 @@
    ],
    "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "partial",
+   "implementation": "implemented_on_branch",
    "integration": "backend_connected",
    "merge": "branch_only",
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_executive.py",
     "tools/check_console_connected_browser.py",
-    "docs/evidence/executive/RECEIPT.md"
+    "docs/evidence/executive/RECEIPT.md",
+    "tests/test_executive_workflows.py",
+    "console/tests/executive.test.ts",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Records for goals, priorities, commitments, decisions, milestones and follow-ups shared by the panel and the graph; milestone-only progress; labelled recommendations needing acceptance. Missing: responsible person, preparation briefs, decision options, cross-project insight, reminders."
+   "notes": "Authored, actor-private, version-checked records with responsible labels (optionally linked to a visible person record), decision options with explicit decide and reopen trails, deterministic preparation briefs assembled from current permitted material, in-app attention with snooze, and derived cross-project insights, in the backend and the connected console. Not built: a meeting record kind and meeting preparation, links from follow-ups to drafted actions, any delivery outside the app."
   },
   {
    "id": "RUN-002",
