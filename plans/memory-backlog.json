@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "updated_on": "2026-09-27",
-  "scope": "planning-only",
-  "baseline_commit": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed",
-  "runtime_changes": false,
+  "updated_on": "2026-10-01",
+  "scope": "implementation-tracking",
+  "baseline_commit": "8398c7437cb0ef1386d8dc4ff1f9e92fb2557ca2",
+  "runtime_changes": true,
   "programme_issue": 11,
   "private_pilot_requires": [
     "M02",
@@ -26,13 +26,15 @@
     "BUILD_START_HERE.md",
     "docs/PRODUCT_POSITIONING.md",
     "docs/CONSOLIDATION_2026-09-27.md",
-    "third_party/library/README.md"
+    "third_party/library/README.md",
+    "docs/evidence/memory-m01/RECEIPT.md",
+    "docs/evidence/memory-m03/RECEIPT.md"
   ],
   "jobs": [
     {
       "id": "M01",
       "title": "Selected vault identity and compatible read pipeline",
-      "status": "planned",
+      "status": "implemented",
       "depends_on": [],
       "requirements": [
         "MEM-001",
@@ -51,6 +53,17 @@
         "Obsidian closed: selected files still index without writes",
         "Rename, duplicate IDs, aliases and supported anchors preserve or explicitly reject identity",
         "Excluded folders, unsafe paths, partial saves and lost sources fail honestly"
+      ],
+      "delivery_status": "draft PR; not merged or deployed",
+      "evidence": [
+        "tests/test_memory_m01.py",
+        "docs/evidence/memory-m01/RECEIPT.md",
+        "docs/evidence/memory-m01/local-tests.txt"
+      ],
+      "limitations": [
+        "POSIX filesystem scanner; no native Obsidian app acceptance",
+        "Rename plus edit requires explicitly adopted alfred_id; ambiguous continuity is rejected",
+        "Credential rotation/fine-grained grants and deletion/restore remain M02/M05"
       ]
     },
     {
@@ -79,7 +92,7 @@
     {
       "id": "M03",
       "title": "Reviewed-memory context bridge",
-      "status": "planned",
+      "status": "implemented",
       "depends_on": [
         "M01"
       ],
@@ -103,6 +116,19 @@
         "Relevant accepted statements enter bounded context with exact original support and review basis",
         "Disputed, expired, invalidated and conflicting statements are withheld or explicitly qualified",
         "Namesakes, late records and changed ownership preserve distinct identities and history"
+      ],
+      "delivery_status": "draft PR; not merged or deployed",
+      "evidence": [
+        "tests/test_memory_m03.py",
+        "tools/check_memory_context_browser.py",
+        "docs/evidence/memory-m03/RECEIPT.md",
+        "docs/evidence/memory-m03/local-tests.txt"
+      ],
+      "limitations": [
+        "Existing coarse source/workspace checks and actor-private reviews; person/device grants remain M02",
+        "Current-time keywords and structural conflicts only; no semantic entailment or general historical query engine",
+        "Namesakes retain IDs and withhold model use; automatic entity resolution and disambiguation UI are not implemented",
+        "Capture/writes, deletion/restore and private-data release remain M04/M05 and M02/M05 gates"
       ]
     },
     {
@@ -365,5 +391,6 @@
   ],
   "product_category": "operational and executive intelligence",
   "integration_branch": "main",
-  "previous_baseline_commit": "73a255a10cb43f55a14aaf45165800bd17e60553"
+  "previous_baseline_commit": "73a255a10cb43f55a14aaf45165800bd17e60553",
+  "planning_baseline_commit": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed"
 }

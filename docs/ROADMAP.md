@@ -12,7 +12,13 @@ v0.8 provides local persistence, credential-scoped sessions, source retrieval, c
 
 The memory work in this revision is researched requirements and a build plan, not an implemented Obsidian connector upgrade, graph engine, account integration or new model. The v0.7 small model's known failures and the blocked v0.8 comparison remain recorded. The development stack is merged into main; no deployment has occurred.
 
+## M01 review checkpoint, 30 September 2026
+
+M01's bounded selected-vault/read slice is implemented on a draft review branch from current main. [Its receipt](evidence/memory-m01/RECEIPT.md) records synthetic acceptance and limitations. The backlog tracks this implementation separately from merge/deployment status. M02 through M12 remain planned; private-pilot gates M02/M05 are unchanged. M03 is the next dependent memory slice after M01 review. Full native Obsidian compatibility and the complete memory loop remain unfinished.
+
 ## Immediate deliverable
+
+**1 October 2026 draft checkpoint:** M03 is implemented on the M01 review branch. Accepted/current/relevant actor-private statements now enter question and conversation context with exact support and review/valid-time basis. [The receipt](evidence/memory-m03/RECEIPT.md) records bounded selection, namesake qualification, stale review checks and source-only compatibility. M02 and M04-M12 remain planned; M02/M05 private-pilot gates are unchanged. The complete memory loop and real console adapter remain unfinished.
 
 **Remember, retrieve, correct, forget.** A user selects a permitted test vault, reviews a memory, uses it in a follow-up with its original evidence, corrects it and verifies that withdrawn/stale material no longer appears. One approved inbox note can then be created and read back without overwriting human content.
 

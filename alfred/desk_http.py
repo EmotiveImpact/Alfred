@@ -261,8 +261,11 @@ class Handler(BaseHTTPRequestHandler):
                     raise Fault('use_conversation_for_model',409)
                 result = ask(store, bearer, body, self.server.local_model, self.server.supervisor.scope)
             elif mutation and url.path == '/desk/ask/check':
-                exact(body, {'references'})
-                result = check_sources(store, bearer, body['references'])
+                keys={'references'}
+                if 'memory_references' in body:keys.add('memory_references')
+                if 'memory_ambiguities' in body:keys.add('memory_ambiguities')
+                exact(body, keys)
+                result = check_sources(store, bearer, body['references'], body.get('memory_references'),body.get('memory_ambiguities'))
             elif not mutation and url.path.startswith('/desk/knowledge'):
                 result = knowledge_get(store, bearer, url)
             elif not mutation and re.fullmatch(r'/desk/evidence/[0-9]+', url.path) and not url.query:

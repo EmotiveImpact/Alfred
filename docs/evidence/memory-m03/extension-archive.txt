@@ -1,0 +1,1 @@
+Verified 363 extension source files across 10 pins; no upstream code executed.
