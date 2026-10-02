@@ -49,3 +49,6 @@
 .dialog-content{max-height:min(818px,calc(100dvh - 58px))}
 @media(max-width:700px){.dialog-content{max-height:calc(100dvh - 32px)}}
 .evidence blockquote,.ask-panel .statement blockquote{margin:8px 0 0;padding-left:14px;border-left:2px solid #a99b6970;font-size:12px;line-height:1.75;color:#a9b5b6;white-space:pre-wrap;overflow-wrap:anywhere}
+.forget-button{margin-top:8px;font-size:11px;color:#c98a6b}
+.forget-confirm{margin-top:10px;padding:10px 12px;border:1px solid #c98a6b44;border-radius:8px}
+.forget-confirm .button-row{display:flex;gap:10px;align-items:center}

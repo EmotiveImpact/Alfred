@@ -99,7 +99,8 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke'))
+    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore'))
+    parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--credential-id')
@@ -121,6 +122,26 @@ def main():
         elif args.command == 'access':
             # Explicit secret-reveal command, never used in CI logs or screenshots.
             print(load_keys(path)[args.role])
+        elif args.command == 'backup':
+            from .lifecycle import backup
+            manifest = backup(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], path / 'backups')
+            print('Backup written:', manifest['file'], 'sha256', manifest['sha256'])
+            print('It is an unencrypted SQLite copy. Keep it private.')
+        elif args.command == 'restore':
+            if not args.backup_file:
+                raise Fault('backup_file_required')
+            import fcntl
+            from .lifecycle import restore
+            fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            try:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise Fault('stop_alfred_before_restore', 409) from None
+                result = restore(args.backup_file, path / 'desk.sqlite')
+            finally:
+                os.close(fd)
+            print('Restored', result['restored_from'], '- replayed', result['journal_entries_replayed'], 'forget/revocation entries.')
         elif args.command == 'revoke':
             if not args.credential_id:
                 raise Fault('credential_id_required')

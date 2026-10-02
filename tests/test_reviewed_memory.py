@@ -135,10 +135,13 @@ class MemoryTests(unittest.TestCase):
         cid=self.propose();self.file.unlink();self.scan.scan();self.assertEqual(self.get(cid)['state'],'invalidated')
     def test_revoked_source_invalidates(self):
         cid=self.propose();self.store.revoke('source');self.assertIsNone(self.get(cid)['object_id'])
-    def test_expired_source_invalidates(self):
+    def test_expired_source_withholds_without_deleting(self):
+        # M05: an expired source credential is unavailability, not deletion.
         cid=self.propose();self.clock[0]+=100001
         with self.store.transaction() as db:db.execute("UPDATE credentials SET expires=300000 WHERE id='owner'")
-        self.assertEqual(self.get(cid)['state'],'invalidated')
+        claim=self.get(cid)
+        self.assertEqual(claim['state'],'proposed');self.assertTrue(claim['withheld'])
+        self.assertIsNone(claim['value']);self.assertIsNone(claim['source']);self.assertFalse(claim['usable'])
     def test_revoked_owner_cannot_read(self):
         self.propose();self.store.revoke('owner')
         with self.assertRaises(Fault):self.memory.view(self.owner)

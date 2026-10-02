@@ -396,6 +396,12 @@ class M01Tests(unittest.TestCase):
         memory.review(self.owner,proposal['id'],{'version':1,'decision':'accept','replaces_id':None,'replaces_version':None})
         self.vault.rename(self.root/'lost'); self.scan()
         claim=memory.view(self.owner)['claims'][0]
+        # M05: a lost source withholds the review (and its value) rather than deleting it.
+        self.assertEqual(claim['state'],'accepted'); self.assertFalse(claim['usable'])
+        self.assertTrue(claim['withheld']); self.assertIsNone(claim['value'])
+        # Its return is a new revision, so the old judgement is not silently revived.
+        (self.root/'lost').rename(self.vault); self.scan()
+        claim=memory.view(self.owner)['claims'][0]
         self.assertEqual(claim['state'],'invalidated'); self.assertFalse(claim['usable'])
 
     def test_failed_scan_keeps_last_complete_snapshot_timestamp(self):

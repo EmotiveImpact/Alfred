@@ -1,11 +1,31 @@
-import {useEffect,useRef} from 'react';
+import {useEffect,useRef,useState} from 'react';
+import {DeskError} from '../integration/deskClient';
 import {X,LinkSimple,CaretRight,DownloadSimple} from '@phosphor-icons/react';
 import {useConsole,downloadJSON} from '../state/ConsoleProvider';
-import {type RecordDetail} from '../integration/ConsoleReadPort';
+import {type RecordDetail,type StatementDetail} from '../integration/ConsoleReadPort';
 import {type Relationship} from '../domain/model';
 const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',fixture:''};
 const ORIGIN_BADGE:Record<string,string>={authored_note:'AUTHORED NOTE · NOT A VERIFIED FACT',reviewed_entity:'REVIEWED MEMORY · YOUR JUDGEMENT',source:'SELECTED SOURCE'};
 function frontmatterEnd(lines:string[]){if(lines[0]?.trim()!=='---')return 0;const end=lines.findIndex((l,i)=>i>0&&l.trim()==='---');return end<0?0:end+1;}
+function statementLabel(s:StatementDetail){
+  if(s.usable)return 'Accepted and current';
+  if(s.state==='forgotten')return 'Forgotten · value removed';
+  if(s.state==='invalidated')return 'Source changed · review needed';
+  if(s.withheld)return 'Withheld · support unavailable or not permitted';
+  if(s.conflicts.length)return 'Conflicting reviews · withheld';
+  if(!s.validNow&&s.state==='accepted')return 'Outside its valid period';
+  return s.state;
+}
+function ForgetControl({label,path,body,confirm}:{label:string;path:string;body:object;confirm:string}){
+  const c=useConsole(),[asking,setAsking]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  if(c.live.session?.role!=='owner')return null;
+  if(!asking)return <button className="text-button forget-button" onClick={()=>setAsking(true)}>{label}</button>;
+  const run=async()=>{setBusy(true);setError('');try{
+    const r=await c.live.client.post<{conversation_answers_withdrawn:number;pending_actions_cancelled:string[]}>(path,body);
+    c.setNotice(`Forgotten. ${r.conversation_answers_withdrawn} saved answer(s) withdrawn, ${r.pending_actions_cancelled.length} pending draft(s) cancelled. Not secure erasure.`);setAsking(false);void c.live.refresh();
+  }catch(e){setError(e instanceof DeskError&&e.code==='memory_review_changed'?'This statement changed. Reopen it and try again.':'It could not be forgotten.');}finally{setBusy(false);}};
+  return <div className="forget-confirm" role="group" aria-label="Confirm forget"><p className="dialog-note">{confirm}</p>{error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy} onClick={run}>Confirm forget</button><button className="text-button" onClick={()=>setAsking(false)}>Keep</button></div></div>;
+}
 function ConnectedProvenance({detail}:{detail:RecordDetail}){
   const{selectRecord}=useConsole();
   if(detail.type==='note'){
@@ -16,8 +36,10 @@ function ConnectedProvenance({detail}:{detail:RecordDetail}){
   }
   if(detail.type==='source')return <section className="inspector-section"><h3>Source status</h3><dl className="detail-list"><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Checked</dt><dd>{new Date(detail.checkedAt).toLocaleString('en-GB')}</dd></div><div><dt>Notes</dt><dd>{detail.notes}</dd></div><div><dt>Issues</dt><dd>{detail.issues.length}</dd></div></dl>{detail.issues.slice(0,4).map((issue,i)=><p className="dialog-note" key={i}>{issue.code}{issue.path?` · ${issue.path}`:''}</p>)}</section>;
   return <section className="inspector-section"><h3>Reviewed statements</h3>{detail.sameNameEntities.length>0&&<p className="dialog-note">{detail.sameNameEntities.length} other record{detail.sameNameEntities.length>1?'s share':' shares'} this name. They are kept separate.</p>}
-    {detail.statements.length?detail.statements.map(s=><div className={`statement ${s.usable?'usable':'withheld'}`} key={s.id}><p><strong>{s.predicate.replaceAll('_',' ')}</strong> {s.value??s.object?.name??''}</p><small>{s.usable?'Accepted and current':s.state==='invalidated'?'Source changed · review needed':s.conflicts.length?'Conflicting reviews · withheld':s.state}</small>
-      {s.support?<><blockquote>{s.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord(s.support!.noteId)}>{s.support.title}, {s.support.startLine===s.support.endLine?`line ${s.support.startLine}`:`lines ${s.support.startLine}–${s.support.endLine}`}</button></>:<p className="dialog-note">Original support is not currently available.</p>}</div>):<p>No statements recorded for this record.</p>}</section>;
+    {detail.statements.length?detail.statements.map(s=><div className={`statement ${s.usable?'usable':'withheld'}`} key={s.id}><p><strong>{s.predicate.replaceAll('_',' ')}</strong> {s.value??s.object?.name??''}</p><small>{statementLabel(s)}</small>
+      {s.support?<><blockquote>{s.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord(s.support!.noteId)}>{s.support.title}, {s.support.startLine===s.support.endLine?`line ${s.support.startLine}`:`lines ${s.support.startLine}–${s.support.endLine}`}</button></>:s.state!=='forgotten'&&<p className="dialog-note">Original support is not currently available.</p>}
+      {s.state!=='forgotten'&&<ForgetControl label="Forget this statement" path={`/desk/memory/claims/${s.id}/forget`} body={{version:s.version}} confirm="Removes the reviewed value from ALFRED's current records, withdraws saved answers that used it and cancels undecided drafts. Audit entries, older backups and completed drafts remain."/>}</div>):<p>No statements recorded for this record.</p>}
+    <ForgetControl label="Forget this record and its statements" path={`/desk/memory/entities/${detail.id.slice('entity:'.length)}/forget`} body={{}} confirm="Removes this record's name and every reviewed statement that mentions it from current records. A restore from an older backup replays this forget."/></section>;
 }
 function InspectorBody(){
   const{selected,relationships,records,dispatch,selectRecord,connected,detail,state}=useConsole(),heading=useRef<HTMLHeadingElement>(null);

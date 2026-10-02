@@ -193,6 +193,9 @@ class LocalCore:
             row = db.execute('SELECT * FROM credentials WHERE id=?', (credential_id,)).fetchone()
             if not row:
                 raise Fault('not_found', 404)
+            # Journalled first so restoring an older backup cannot restore this access.
+            from .lifecycle import append
+            append(self, {'kind': 'credential_revoked', 'scope': row['scope'], 'subject': credential_id, 'at': self.now()})
             db.execute('UPDATE credentials SET revoked=1 WHERE id=?', (credential_id,))
             self.log(db, row['scope'], 'local-admin', 'credential.revoked', credential_id)
 

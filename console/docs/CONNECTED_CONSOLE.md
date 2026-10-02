@@ -81,5 +81,5 @@ device or GPU certification.
   source change, revocation, same-name entities, static-path traversal and a race.
 - `console/tests/connected.test.ts` (18): mapping, reducer selection rules, command
   routing and mode detection.
-- `tools/check_console_connected_browser.py` (43 checks): real Chromium against the
+- `tools/check_console_connected_browser.py` (45 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

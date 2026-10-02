@@ -183,7 +183,7 @@
     {
       "id": "M05",
       "title": "Correction, deletion, encryption and restore lifecycle",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "M02",
         "M03"
@@ -206,6 +206,10 @@
         "Deletion/revocation removes or blocks all current dependent projections with a receipt",
         "Temporary unavailability is distinguished from deletion",
         "Restored backups reapply tombstones/grants; residual retention and key custody are explicit"
+      ],
+      "evidence": [
+        "tests/test_memory_lifecycle.py",
+        "docs/evidence/memory-m05/RECEIPT.md"
       ]
     },
     {

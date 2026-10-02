@@ -279,6 +279,13 @@ class Handler(BaseHTTPRequestHandler):
                     result = memory.propose(bearer,body)
                 elif mutation and re.fullmatch(r'/desk/memory/claims/[A-Za-z0-9_.-]+/review',url.path):
                     result = memory.review(bearer,url.path.split('/')[4],body)
+                elif mutation and re.fullmatch(r'/desk/memory/claims/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget',url.path):
+                    result = memory.forget(bearer,url.path.split('/')[4],body)
+                elif mutation and re.fullmatch(r'/desk/memory/entities/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget',url.path):
+                    result = memory.forget_entity(bearer,url.path.split('/')[4],body)
+                elif not mutation and url.path == '/desk/memory/receipts':
+                    from .lifecycle import receipts
+                    result = receipts(store,bearer)
                 else: raise Fault('not_found',404)
             elif url.path == '/desk/pulse/history' and not url.query:
                 if self.server.pulse is None: raise Fault('pulse_not_configured',409)

@@ -65,7 +65,7 @@ export interface NoteDetail {id:string;type:'note';label:string;kind:string;path
 export interface StatementDetail {
   id:string;version:number;state:string;usable:boolean;predicate:string;value:string|null;
   subject:{id:string;kind:string;name:string}|null;object:{id:string;kind:string;name:string}|null;
-  validFrom:string|null;validUntil:string|null;validNow:boolean;conflicts:string[];reviewedAt:string|null;
+  validFrom:string|null;validUntil:string|null;validNow:boolean;conflicts:string[];reviewedAt:string|null;withheld?:boolean;
   support:{noteId:string;path:string;title:string;revision:string;sha256:string;startLine:number;endLine:number;quote:string}|null;
 }
 export interface EntityDetail {id:string;type:'entity';label:string;kind:string;createdAt:string;statements:StatementDetail[];sameNameEntities:string[];basis:string}

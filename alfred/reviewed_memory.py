@@ -111,16 +111,38 @@ class ReviewedMemory:
         return {'note_id':c['note_id'], 'sha256':c['note_hash'], 'revision':c['note_revision'],
                 'start_line':c['first_line'], 'end_line':c['last_line']}
 
+    @staticmethod
+    def _support_state(db, scope, c):
+        """Why a claim's support is or is not usable, independent of who may read it.
+
+        'changed' means the supporting text was edited, renamed, deleted or came back
+        under a new revision: a durable change that needs a fresh human review. There
+        is deliberately no automatic revival across revisions.
+        'withheld' means the file is temporarily unreadable; nothing is invalidated.
+        Permission, source availability and credential state are checked separately at
+        use, so losing access withholds a review instead of destroying it, and restoring
+        access restores it while the supporting revision is unchanged.
+        """
+        n = db.execute('SELECT status,sha256,revision,body FROM knowledge_notes WHERE scope=? AND id=?',
+                       (scope, c['note_id'])).fetchone()
+        if not n or n['status'] == 'missing':
+            return 'changed'
+        if n['status'] != 'ready':
+            return 'withheld'
+        if n['sha256'] != c['note_hash'] or n['revision'] != c['note_revision']:
+            return 'changed'
+        lines = n['body'].splitlines()
+        if c['last_line'] > len(lines):
+            return 'changed'
+        quote = '\n'.join(lines[c['first_line']-1:c['last_line']])
+        return 'changed' if hashlib.sha256(quote.encode()).hexdigest() != c['quote_hash'] else 'current'
+
     def _reconcile(self, db, p):
         for row in db.execute("SELECT * FROM memory_claims WHERE scope=? AND actor=? AND state!='invalidated' AND (value IS NOT NULL OR object_id IS NOT NULL)",
                               (p['scope'], p['id'])).fetchall():
             c=dict(row)
-            try:
-                source=self._source(db,p['scope'],self._ref(c),self.store.now(),p)
-                valid=source['quote_hash']==c['quote_hash']
-            except Fault:
-                valid=False
-            if not valid:
+            state=self._support_state(db,p['scope'],c)
+            if state=='changed':
                 db.execute("UPDATE memory_claims SET state='invalidated',value=NULL,object_id=NULL,version=version+1 WHERE id=?",(c['id'],))
                 self.store.log(db,p['scope'],p['id'],'memory.invalidated',c['id'])
 
@@ -215,6 +237,46 @@ class ReviewedMemory:
             self.store.log(db,p['scope'],p['id'],'memory.'+state,c['id'])
         return self.view(bearer)
 
+    def forget(self, bearer, identity, body):
+        """Forget one reviewed statement everywhere current retrieval could use it."""
+        exact(body, {'version'})
+        if type(body['version']) is not int or body['version'] < 1:
+            raise Fault('invalid_memory_review')
+        from . import lifecycle
+        with self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            c=self._claim(db,p,identity)
+            if c['state']=='forgotten':
+                return self._receipt(db,p,'claim_forgotten',identity)
+            if c['version']!=body['version']:raise Fault('memory_review_changed',409)
+            # Intent is journalled before the database changes, so a restore replays it.
+            lifecycle.append(self.store,{'kind':'claim_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()})
+            effect=lifecycle.apply_entry(db,{'kind':'claim_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity},self.store.now())
+            return lifecycle.record(self.store,db,p,'claim_forgotten',identity,{'removed':['reviewed value','reviewed relationship'],**effect})
+
+    def forget_entity(self, bearer, identity, body):
+        """Forget an entity's name and every statement that mentions it."""
+        exact(body, set())
+        from . import lifecycle
+        with self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            if not db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],p['id'])).fetchone():
+                if db.execute('SELECT 1 FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=?',(p['scope'],p['id'],'entity_forgotten',identity)).fetchone():
+                    return self._receipt(db,p,'entity_forgotten',identity)
+                raise Fault('memory_entity_not_found',404)
+            claims=db.execute('SELECT count(*) FROM memory_claims WHERE scope=? AND actor=? AND (subject_id=? OR object_id=?) AND state!=?',
+                              (p['scope'],p['id'],identity,identity,'forgotten')).fetchone()[0]
+            lifecycle.append(self.store,{'kind':'entity_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()})
+            effect=lifecycle.apply_entry(db,{'kind':'entity_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity},self.store.now())
+            return lifecycle.record(self.store,db,p,'entity_forgotten',identity,{'removed':['entity name',f'{claims} reviewed statement(s)'],**effect})
+
+    @staticmethod
+    def _receipt(db,p,kind,subject):
+        row=db.execute('SELECT receipt FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=? ORDER BY at DESC LIMIT 1',
+                       (p['scope'],p['id'],kind,subject)).fetchone()
+        if not row:raise Fault('memory_claim_not_found',404)
+        return json.loads(row['receipt'])
+
     @classmethod
     def _claims(cls, db, p, now):
         """One currentness/conflict rule for review, retrieval and final checks."""
@@ -245,6 +307,11 @@ class ReviewedMemory:
             p=self.store.authenticate(db,bearer,{'owner','reader'});self._reconcile(db,p)
             entities=[dict(r) for r in db.execute('SELECT id,kind,name,created FROM memory_entities WHERE scope=? AND actor=? ORDER BY created,id',(p['scope'],p['id']))]
             claims=self._claims(db,p,self.store.now())
+            for c in claims:
+                # Support that is unavailable or no longer permitted is withheld, and so is
+                # what was derived from it. Restored access or availability restores both.
+                c['withheld']=c['state']!='invalidated' and c['source'] is None and (c['value'] is not None or c['object_id'] is not None)
+                if c['withheld']:c['value']=None;c['object_id']=None
             return {'entities':entities,'claims':claims,'scope':p['scope'],'actor_private':True,
                     'basis':'user_reviewed_statements_not_verified_facts','model_extraction':False,
                     'counts':{'proposed':sum(c['state']=='proposed' for c in claims),'usable':sum(c['usable'] for c in claims),

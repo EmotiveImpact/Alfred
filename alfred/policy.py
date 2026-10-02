@@ -96,6 +96,9 @@ class IdentityPolicy:
             if not revoke and not self.store.now() < expires <= min(row['expires'], self.store.now()+2592000):
                 raise Fault('invalid_grant_expiry')
             if revoke:
+                from .lifecycle import append
+                append(self.store, {'kind': 'grant_revoked', 'scope': p['scope'], 'person': p['person_id'], 'subject': source,
+                                    'capability': capability, 'at': self.store.now()})
                 db.execute('DELETE FROM source_grants WHERE scope=? AND person=? AND source=? AND capability=?',
                            (p['scope'], p['person_id'], source, capability))
             else:

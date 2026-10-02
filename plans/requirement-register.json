@@ -310,7 +310,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Strict source grants, policy epochs and model purpose from PR #17; console projection filters before counting. Enrolment/admin HTTP workflows unfinished."
+   "notes": "Strict source grants, policy epochs and model purpose from PR #17; console projection filters before counting. Enrolment/admin HTTP workflows unfinished. Losing a grant now withholds reviews and their values instead of destroying them."
   },
   {
    "id": "MEM-010",
@@ -324,18 +324,21 @@
     "SRC-PRD-0927"
    ],
    "depends_on": [],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "accepted",
    "implementation": "partial",
    "integration": "backend_connected",
-   "merge": "main_partial",
+   "merge": "main_partial_branch_extended",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_memory_lifecycle.py",
+    "docs/evidence/memory-m05/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Current-source invalidation works. Deletion receipts, tombstones and backup accounting are M05; tombstone table is only a placeholder."
+   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source deletion receipts pending."
   },
   {
    "id": "MEM-011",
@@ -530,18 +533,21 @@
     "SRC-PRD-0927"
    ],
    "depends_on": [],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_memory_lifecycle.py",
+    "docs/evidence/memory-m05/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "",
+   "notes": "Consistent backups and journal-replaying restore without resurrection are implemented. Application encryption and key custody are not.",
    "owner_decision_needed": "Key custody approach for application encryption (OS keychain versus passphrase) before private data."
   },
   {

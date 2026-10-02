@@ -1,5 +1,5 @@
 {
-  "passed": 43,
+  "passed": 45,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -18,6 +18,8 @@
     "reviewed relationship is labelled separately from authored links",
     "source change invalidates the displayed review and insight",
     "stale quote is no longer displayed",
+    "forgetting removes the value from the open inspector",
+    "forgetting is recorded with a receipt",
     "unfocused question uses the whole permitted workspace",
     "missing model is reported explicitly",
     "authored note and reviewed entity with the same name stay separate",

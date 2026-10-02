@@ -123,6 +123,20 @@ with tempfile.TemporaryDirectory() as temp:
             expect(page.locator('.insight-section')).to_contain_text('No reviewed statement yet', timeout=15000)
             check('source change invalidates the displayed review and insight')
             check('stale quote is no longer displayed', 'Fictional responsibility' not in inspector.inner_text())
+            # M05: forgetting through the console, with a server receipt.
+            film_note = note(store, keys['owner'], 'Sample film')
+            status = memory.propose(keys['owner'], {'request_id': 'r2', 'subject_id': 'film', 'predicate': 'status', 'object_id': None, 'value': 'in pre-production',
+                                                    'valid_from': None, 'valid_until': None,
+                                                    'evidence': {'note_id': film_note['id'], 'sha256': film_note['sha256'], 'revision': film_note['revision'], 'start_line': 8, 'end_line': 8}})
+            memory.review(keys['owner'], status['id'], {'version': 1, 'decision': 'accept', 'replaces_id': None, 'replaces_version': None})
+            statement = inspector.locator('.statement').filter(has_text='in pre-production')
+            expect(statement).to_be_visible(timeout=15000)
+            statement.get_by_role('button', name='Forget this statement').click()
+            inspector.get_by_role('button', name='Confirm forget').click()
+            expect(page.get_by_role('status').filter(has_text='Not secure erasure')).to_be_visible()
+            expect(inspector).to_contain_text('Forgotten · value removed', timeout=15000)
+            check('forgetting removes the value from the open inspector', 'in pre-production' not in inspector.inner_text())
+            check('forgetting is recorded with a receipt', memory.view(keys['owner'])['claims'][0]['state'] == 'forgotten')
             page.get_by_label('Close record inspector').click()
             # Stage B: the selected project is context for the next question.
             command = page.get_by_label('Command or search')

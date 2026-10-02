@@ -167,7 +167,7 @@ def projection(server, bearer):
             tally['disputed'] += 1
         if c['conflicts']:
             tally['conflicted'] += 1
-        if c['state'] in ('accepted', 'disputed', 'proposed') and not c['source']:
+        if c.get('withheld'):
             tally['unavailable'] += 1
         if not c['usable'] or 'note:' + c['source']['note_id'] not in projected:
             continue
@@ -186,7 +186,7 @@ def projection(server, bearer):
     for e in reviewed['entities']:
         tally = per_entity.get(e['id'], {'usable': 0, 'proposed': 0, 'disputed': 0, 'conflicted': 0, 'unavailable': 0})
         parts = [f"{tally['usable']} current reviewed statement{'s' if tally['usable'] != 1 else ''}"]
-        parts += [f"{v} {k}" for k, v in tally.items() if k != 'usable' and v]
+        parts += [f"{v} {'withheld' if k == 'unavailable' else k}" for k, v in tally.items() if k != 'usable' and v]
         nodes.append({'id': 'entity:' + e['id'], 'label': e['name'], 'type': ENTITY_TYPE[e['kind']], 'kind': e['kind'],
                       'category': ENTITY_CATEGORY[e['kind']], 'origin': 'reviewed_entity', 'workspaceId': scope,
                       'availability': 'current', 'summary': '; '.join(parts) + '.', 'statements': tally,
@@ -273,6 +273,7 @@ def record(server, bearer, identity):
                            'validUntil': _iso(c['valid_until']) if c['valid_until'] is not None else None,
                            'validNow': c['valid_now'], 'conflicts': c['conflicts'], 'replacesId': c['replaces_id'],
                            'reviewedAt': _iso(c['reviewed']) if c['reviewed'] else None,
+                           'withheld': bool(c.get('withheld')),
                            'support': support, 'supportAvailable': support is not None})
     e = entities[key]
     same_name = sorted(x['id'] for x in entities.values() if x['id'] != key and (x['kind'], x['name'].casefold()) == (e['kind'], e['name'].casefold()))
