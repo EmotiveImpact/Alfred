@@ -69,8 +69,9 @@ retries once.
 
 ## Not provided by this increment
 
-No priorities or milestones exist in the backend yet; the panel says so rather than
-inventing them. There is one workspace per credential. No voice, account, device or
+Priorities, recommendations and milestone progress now come from executive records
+(`alfred/executive.py`); without records the panel says so rather than inventing them.
+There is one workspace per credential. No voice, account, device or
 specialist-system connection. Software-rendered browser checks are not physical
 device or GPU certification.
 
@@ -81,5 +82,5 @@ device or GPU certification.
   source change, revocation, same-name entities, static-path traversal and a race.
 - `console/tests/connected.test.ts` (18): mapping, reducer selection rules, command
   routing and mode detection.
-- `tools/check_console_connected_browser.py` (54 checks): real Chromium against the
+- `tools/check_console_connected_browser.py` (60 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

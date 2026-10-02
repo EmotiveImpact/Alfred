@@ -25,7 +25,7 @@ ENTITY_TYPE = {'person': 'person', 'organisation': 'person', 'project': 'project
                'asset': 'resource', 'decision': 'action', 'commitment': 'action', 'event': 'note'}
 SOURCE_AVAILABILITY = {'ready': 'current', 'attention': 'attention', 'unavailable': 'unavailable'}
 MAX_APPROVALS = 40
-RECORD_ID = re.compile(r'(note|entity|source):([A-Za-z0-9][A-Za-z0-9_.-]{0,79})')
+RECORD_ID = re.compile(r'(note|entity|source|exec):([A-Za-z0-9][A-Za-z0-9_.-]{0,79})')
 
 
 def _digest(value):
@@ -102,6 +102,9 @@ def projection(server, bearer):
     scope = p['scope']
     knowledge = store.knowledge(bearer)
     reviewed = memory.view(bearer) if memory is not None else {'entities': [], 'claims': []}
+    executive_service = getattr(server, 'executive', None)
+    executive = executive_service.view(bearer) if executive_service is not None else {
+        'records': [], 'priorities': [], 'recommendations': [], 'milestone_progress': []}
     expected = {n['id']: (n['revision'], n['sha256']) for n in knowledge['nodes']}
     with store.transaction() as db:
         q = store.authenticate(db, bearer, {'owner', 'reader'})
@@ -195,6 +198,31 @@ def projection(server, bearer):
                       'category': ENTITY_CATEGORY[e['kind']], 'origin': 'reviewed_entity', 'workspaceId': scope,
                       'availability': 'current', 'summary': '; '.join(parts) + '.', 'statements': tally,
                       'revision': str(e['created']), 'updatedAt': _iso(e['created']), 'evidence': []})
+    projected = {n['id'] for n in nodes}
+    for r in executive['records']:
+        rid = 'exec:' + r['id']
+        state = r['support']['state'] if r['support'] else None
+        summary = [r['status'].replace('_', ' ')]
+        if r['due'] is not None:
+            summary.append(('overdue since ' if r['overdue'] else 'due ') + _iso(r['due'])[:10])
+        if state and state != 'current':
+            summary.append('cited support ' + state)
+        nodes.append({'id': rid, 'label': r['title'], 'type': 'action', 'kind': r['kind'], 'category': 'operations',
+                      'origin': 'executive_record', 'workspaceId': scope, 'availability': 'current',
+                      'summary': ' · '.join(summary).capitalize() + '.', 'revision': str(r['version']),
+                      'updatedAt': _iso(r['updated']), 'evidence': [], 'status': r['status'], 'due': r['due'],
+                      'supportState': state})
+        mark = {'sourceId': rid, 'revision': str(r['version']), 'location': {'kind': 'record'},
+                'basis': 'authored', 'availability': 'current'}
+        if r['project'] and r['project'] in projected:
+            edges.append({'id': 'execlink:' + r['id'], 'from': rid, 'to': r['project'], 'layer': 'executive_link',
+                          'relation': 'for_project', 'evidence': [mark]})
+        if state == 'current' and 'note:' + r['support']['note_id'] in projected:
+            edges.append({'id': 'execsupport:' + r['id'], 'from': rid, 'to': 'note:' + r['support']['note_id'],
+                          'layer': 'executive_support', 'relation': 'supported_by',
+                          'evidence': [{'sourceId': 'note:' + r['support']['note_id'], 'revision': '', 'basis': 'human_review',
+                                        'location': {'kind': 'lines', 'start': r['support']['start_line'], 'end': r['support']['end_line']},
+                                        'availability': 'current'}]})
     latest = [c for c in reviewed['claims'] if c['usable']]
     latest.sort(key=lambda c: (c['reviewed'] or 0, c['id']), reverse=True)
     insights = [{'entityId': 'entity:' + c['subject_id'], 'claimId': c['id'], 'predicate': c['predicate'],
@@ -206,8 +234,16 @@ def projection(server, bearer):
     return {'kind': 'authorised_projection', 'schemaVersion': SCHEMA_VERSION, 'workspaceId': scope,
             'dataRevision': _digest(content)[:32], 'grantRevision': before, 'observedAt': _iso(now),
             **content,
-            'executive': {'priorities': [], 'prioritiesStatus': 'not_recorded', 'insights': insights,
-                          'milestonesStatus': 'not_recorded'},
+            'executive': {'priorities': [{'id': 'exec:' + r['id'], 'title': r['title'], 'status': r['status'], 'open': r['open'],
+                                          'due': r['due'], 'overdue': r['overdue'], 'rank': r['rank'], 'version': r['version'],
+                                          'origin': r['origin']} for r in executive['priorities']],
+                          'prioritiesStatus': 'recorded' if executive['priorities'] else 'not_recorded',
+                          'recommendations': [{'fromRecord': x['from_record'], 'fromVersion': x['from_version'], 'title': x['title'],
+                                               'due': x['due'], 'reason': x['reason'], 'basis': x['basis']} for x in executive['recommendations']],
+                          'milestones': [{'project': m['project'], 'done': m['done'], 'total': m['total']}
+                                         for m in executive['milestone_progress'] if m['project'] in projected],
+                          'insights': insights,
+                          'milestonesStatus': 'recorded' if executive['milestone_progress'] else 'not_recorded'},
             'sources': [{'id': 'source:' + s['source'], 'label': s['label'], 'status': s['status'],
                          'checkedAt': _iso(s['checked']), 'issues': len(s['errors'])} for s in sources.values()],
             'counts': {'notes': len(knowledge['nodes']), 'entities': len(reviewed['entities']),
@@ -254,6 +290,16 @@ def record(server, bearer, identity):
                 'snapshot': (s['last_confirmed_snapshot'] or '')[:16], 'issues': s['errors'][:32],
                 'notes': sum(n['source'] == key for n in knowledge['nodes']), 'grantRevision': revision,
                 'authorityGranted': False}
+    if kind == 'exec':
+        service = getattr(server, 'executive', None)
+        found = [r for r in (service.view(bearer)['records'] if service else []) if r['id'] == key]
+        if not found:
+            raise Fault('record_not_available', 404)
+        r = found[0]
+        return {'id': identity, 'type': 'exec', 'origin': 'executive_record', 'workspaceId': p['scope'], 'label': r['title'],
+                'kind': r['kind'], 'status': r['status'], 'detail': r['detail'], 'due': _iso(r['due']) if r['due'] is not None else None,
+                'overdue': r['overdue'], 'project': r['project'], 'version': r['version'], 'origin_detail': r['origin'],
+                'support': r['support'], 'basis': r['basis'], 'grantRevision': revision, 'authorityGranted': False}
     if memory is None:
         raise Fault('record_not_available', 404)
     reviewed = memory.view(bearer)

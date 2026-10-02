@@ -669,7 +669,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Fixed Pulse routines with bounded history."
+   "notes": "Fixed Pulse routines with bounded history. One stated recommendation rule (due within seven days) now feeds the executive panel; nothing becomes an obligation without acceptance."
   },
   {
    "id": "CON-001",
@@ -833,7 +833,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "One workspace per credential, so workspace switching is exercised through grant change and revocation."
+   "notes": "One workspace per credential, so workspace switching is exercised through grant change and revocation. Executive records are graph records linked to their project."
   },
   {
    "id": "ATT-002",
@@ -851,16 +851,20 @@
    ],
    "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_executive.py",
+    "tools/check_console_connected_browser.py",
+    "docs/evidence/executive/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": ""
+   "notes": "Records for goals, priorities, commitments, decisions, milestones and follow-ups shared by the panel and the graph; milestone-only progress; labelled recommendations needing acceptance. Missing: responsible person, preparation briefs, decision options, cross-project insight, reminders."
   },
   {
    "id": "RUN-002",

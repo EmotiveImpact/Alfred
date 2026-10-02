@@ -60,3 +60,9 @@
 .inline-pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .remember-form .button-row{display:flex;gap:10px;align-items:center}
 .remember-form .primary-button{margin-top:0}
+.recommendation-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0 2px;border-top:1px dashed #ffffff14}
+.recommendation-row span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.recommendation-row strong{font-size:12px;font-weight:400;color:#d8d2c4}
+.recommendation-row small{font-size:10px;color:var(--quiet);letter-spacing:.3px}
+.priority-row small.overdue{color:#d9a184}
+.executive-records .task-row small{margin-left:auto;max-width:48%;text-align:right}

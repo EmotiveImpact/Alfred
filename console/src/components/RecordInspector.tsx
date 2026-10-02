@@ -4,8 +4,8 @@ import {X,LinkSimple,CaretRight,DownloadSimple} from '@phosphor-icons/react';
 import {useConsole,downloadJSON} from '../state/ConsoleProvider';
 import {type RecordDetail,type StatementDetail} from '../integration/ConsoleReadPort';
 import {type Relationship} from '../domain/model';
-const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',fixture:''};
-const ORIGIN_BADGE:Record<string,string>={authored_note:'AUTHORED NOTE · NOT A VERIFIED FACT',reviewed_entity:'REVIEWED MEMORY · YOUR JUDGEMENT',source:'SELECTED SOURCE'};
+const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',executive_link:'executive link',executive_support:'cited support',fixture:''};
+const ORIGIN_BADGE:Record<string,string>={authored_note:'AUTHORED NOTE · NOT A VERIFIED FACT',reviewed_entity:'REVIEWED MEMORY · YOUR JUDGEMENT',source:'SELECTED SOURCE',executive_record:'EXECUTIVE RECORD · AUTHORED BY YOU'};
 function frontmatterEnd(lines:string[]){if(lines[0]?.trim()!=='---')return 0;const end=lines.findIndex((l,i)=>i>0&&l.trim()==='---');return end<0?0:end+1;}
 function statementLabel(s:StatementDetail){
   if(s.usable)return 'Accepted and current';
@@ -27,12 +27,20 @@ function ForgetControl({label,path,body,confirm}:{label:string;path:string;body:
   return <div className="forget-confirm" role="group" aria-label="Confirm forget"><p className="dialog-note">{confirm}</p>{error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy} onClick={run}>Confirm forget</button><button className="text-button" onClick={()=>setAsking(false)}>Keep</button></div></div>;
 }
 function ConnectedProvenance({detail}:{detail:RecordDetail}){
-  const{selectRecord}=useConsole();
+  const c=useConsole(),{selectRecord}=c;
   if(detail.type==='note'){
     const start=frontmatterEnd(detail.lines),shown=detail.lines.slice(start,start+14);
     return <section className="inspector-section"><h3>Provenance</h3><dl className="detail-list"><div><dt>Path</dt><dd>{detail.path}</dd></div><div><dt>Revision</dt><dd>{detail.revision}</dd></div><div><dt>SHA-256</dt><dd className="hash">{detail.sha256.slice(0,16)}…</dd></div><div><dt>Basis</dt><dd>Authored text, not verified</dd></div></dl>
       <ol className="source-lines" start={start+1} aria-label="Exact source lines">{shown.map((line,i)=><li key={i}>{line||' '}</li>)}</ol>
       {detail.lines.length>start+14&&<p className="dialog-note">Showing lines {start+1} to {start+shown.length} of {detail.lines.length}{detail.truncated?' (inspection limit reached)':''}.</p>}</section>;
+  }
+  if(detail.type==='exec'){
+    const project=detail.project?c.state.snapshot.records.find(r=>r.id===detail.project):undefined;
+    return <section className="inspector-section"><h3>Executive record</h3><dl className="detail-list"><div><dt>Kind</dt><dd>{detail.kind.replace('_','-')}</dd></div><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Due</dt><dd>{detail.due?`${new Date(detail.due).toLocaleDateString('en-GB')}${detail.overdue?' · overdue':''}`:'No date'}</dd></div><div><dt>Basis</dt><dd>Your authored record</dd></div></dl>
+      {detail.detail&&<p>{detail.detail}</p>}
+      {project&&<button className="text-button" onClick={()=>selectRecord(project.id)}>Project: {project.title}</button>}
+      {detail.support&&(detail.support.state==='current'?<><blockquote>{detail.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord('note:'+detail.support!.note_id)}>{detail.support.title}, {detail.support.start_line===detail.support.end_line?`line ${detail.support.start_line}`:`lines ${detail.support.start_line}–${detail.support.end_line}`}</button></>
+        :<p className="dialog-note">The cited lines have {detail.support.state==='changed'?'changed since this record was written':'become unavailable'}. The record is kept; check it against the current source.</p>)}</section>;
   }
   if(detail.type==='source')return <section className="inspector-section"><h3>Source status</h3><dl className="detail-list"><div><dt>Status</dt><dd>{detail.status}</dd></div><div><dt>Checked</dt><dd>{new Date(detail.checkedAt).toLocaleString('en-GB')}</dd></div><div><dt>Notes</dt><dd>{detail.notes}</dd></div><div><dt>Issues</dt><dd>{detail.issues.length}</dd></div></dl>{detail.issues.slice(0,4).map((issue,i)=><p className="dialog-note" key={i}>{issue.code}{issue.path?` · ${issue.path}`:''}</p>)}</section>;
   return <section className="inspector-section"><h3>Reviewed statements</h3>{detail.sameNameEntities.length>0&&<p className="dialog-note">{detail.sameNameEntities.length} other record{detail.sameNameEntities.length>1?'s share':' shares'} this name. They are kept separate.</p>}

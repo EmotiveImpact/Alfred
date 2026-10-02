@@ -1,5 +1,5 @@
 {
-  "passed": 54,
+  "passed": 60,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -41,6 +41,12 @@
     "nothing is written before approval",
     "approved inbox note is created in the vault",
     "the new inbox note is indexed and read back as an authored note beside the reviewed record",
+    "project progress comes from recorded milestones only",
+    "a due-soon commitment is shown as a labelled recommendation, not a priority",
+    "accepting a recommendation makes it a priority the person owns",
+    "completing a priority is recorded on the server",
+    "completing a milestone updates project progress",
+    "executive records are graph records with a labelled link to their project",
     "1280px has no horizontal overflow",
     "390px has no horizontal overflow",
     "no browser storage used",

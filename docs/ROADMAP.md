@@ -31,7 +31,7 @@ The M jobs below are the bounded memory programme. The whole product also needs 
 | A | Connected console, read-only and truthful | UX-001, UX-002, MEM-016, MEM-009 | Implemented on the branch and browser-tested against synthetic data ([receipt](evidence/console-connected/RECEIPT.md)). |
 | B | Selection-aware questions on the existing queue | INT-001, UX-002, MEM-006 | Implemented on the branch; no model configured, so no reasoning quality claimed. |
 | C | Remember, retrieve, correct, forget; identity and grants; lexical baseline | MEM-004 to MEM-013, SYS-001, SYS-002 (M02 to M06) | M01, M03, M04 and M06 implemented on the branch; M05 in progress (no encryption or key custody); M02 partial. Private data stays gated by M02/M05. |
-| D | Executive records on authoritative data | ATT-002, ATT-001, ACT-001 | Not started. Needs C's provenance and invalidation rules. |
+| D | Executive records on authoritative data | ATT-002, ATT-001, ACT-001 | Partial on the branch: records shared by the panel and graph, milestone-only progress, labelled recommendations ([receipt](evidence/executive/RECEIPT.md)). |
 | E1 | Local job coordinator (research stage 0) | RUN-002, RUN-003, RUN-001, SYS-003 | Partial on the branch: durable jobs, local-subprocess worker in the host, reconnectable events, bounded cache, HTTP routes ([design and evidence](JOBS.md)). Remote stages wait for owner decisions. |
 | E2 | Files, distributed nodes, remote workers | SYS-003, RUN-002, RUN-003, MEM-014 | Research complete ([evidence](../research/INFRASTRUCTURE_2026-10-02.md)); provider decisions needed. |
 | E3 | Connectors, specialist products, voice, native packaging, release hardening | CON-001, OPS-001, OPS-002, VOI-001 | Not started; each needs real interfaces, accounts or hardware. |

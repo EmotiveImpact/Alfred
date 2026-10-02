@@ -4,19 +4,20 @@ export type Scope = 'personal' | 'work' | 'operation' | 'research' | 'systems';
 export type Category = 'people' | 'projects' | 'knowledge' | 'sources' | 'operations' | 'resources';
 export type RecordKind = 'person' | 'project' | 'note' | 'source' | 'action' | 'resource';
 /** Where a record came from. Fixtures exist only in the offline demonstration build. */
-export type RecordOrigin = 'fixture' | 'authored_note' | 'reviewed_entity' | 'source';
+export type RecordOrigin = 'fixture' | 'authored_note' | 'reviewed_entity' | 'source' | 'executive_record';
 export type Availability = 'current' | 'attention' | 'stale' | 'unavailable' | 'withdrawn';
 export interface Provenance { id: string; label: string; revision: string; basis: 'fixture' | 'authored' | 'reported' | 'observed' | 'human_review' | 'source_status'; excerpt: string; }
 /** Workspace scope is a fixture scope in the demo and a server-issued workspace ID when connected. */
-export interface KnowledgeRecord { id: string; title: string; kind: RecordKind; category: Category; scope: string; summary: string; detail: string; status: string; provenance: Provenance; origin?: RecordOrigin; availability?: Availability; path?: string; sha256?: string; sourceId?: string; inboxWritable?: boolean; }
-export type RelationshipLayer = 'fixture' | 'note_reference' | 'reviewed_claim' | 'review_support';
+export interface KnowledgeRecord { id: string; title: string; kind: RecordKind; category: Category; scope: string; summary: string; detail: string; status: string; provenance: Provenance; origin?: RecordOrigin; availability?: Availability; path?: string; sha256?: string; sourceId?: string; inboxWritable?: boolean; execKind?: string; due?: number | null; }
+export type RelationshipLayer = 'fixture' | 'note_reference' | 'reviewed_claim' | 'review_support' | 'executive_link' | 'executive_support';
 export interface Relationship { id: string; from: string; to: string; relation: string; provenanceId: string; basis: 'fixture' | 'authored' | 'human_review'; layer?: RelationshipLayer; }
-export interface Priority { id: string; title: string; scope: string; timing: string; done: boolean; }
+export interface Priority { id: string; title: string; scope: string; timing: string; done: boolean; version?: number; overdue?: boolean; origin?: string; }
 /** A demo proposal changes local state only. A server action is reviewed and approved only through the server ledger. */
 export interface Proposal { id: string; title: string; body: string; scope: string; status: 'pending' | 'reviewed' | 'declined' | 'in_progress' | 'completed' | 'closed'; effect: 'local_demo_only' | 'server_action'; revision: number; serverState?: string; fingerprint?: string; capability?: string; path?: string; evidenceCurrent?: boolean; mine?: boolean; createdAt?: string; expiresAt?: string; }
 export interface Insight { id: string; recordId: string; title: string; summary: string; reviewedAt: string; supportId: string; }
 export interface ModelState { configured: boolean; name: string | null; allowed: boolean; }
-export interface ConsoleSnapshot { schemaVersion: 1; mode: 'demo' | 'connected'; label: string; records: KnowledgeRecord[]; relationships: Relationship[]; priorities: Priority[]; proposals: Proposal[]; workspaceId?: string; dataRevision?: string; grantRevision?: string; observedAt?: string; insights?: Insight[]; model?: ModelState; }
+export interface Recommendation { fromRecord: string; fromVersion: number; title: string; reason: string; due: number | null; }
+export interface ConsoleSnapshot { schemaVersion: 1; mode: 'demo' | 'connected'; label: string; records: KnowledgeRecord[]; relationships: Relationship[]; priorities: Priority[]; proposals: Proposal[]; workspaceId?: string; dataRevision?: string; grantRevision?: string; observedAt?: string; insights?: Insight[]; model?: ModelState; recommendations?: Recommendation[]; milestones?: Record<string, {done:number;total:number}>; }
 export interface DemoReceipt { id: string; proposalId: string; revision: number; outcome: 'reviewed' | 'declined'; at: string; effect: 'local_demo_only'; }
 export interface ConsoleState { scope: string; focus: boolean; paused: boolean; reducedMotion: boolean; quality: 'balanced' | 'high'; selected: string | null; category: Category | null; snapshot: ConsoleSnapshot; receipts: DemoReceipt[]; }
 export type ConsoleAction = {type:'scope';scope:string}|{type:'projection';snapshot:ConsoleSnapshot}|{type:'select';id:string|null}|{type:'category';category:Category|null}|{type:'focus'}|{type:'pause'}|{type:'quality';quality:'balanced'|'high'}|{type:'motion';value:boolean}|{type:'priority';id:string}|{type:'review';id:string;revision:number;outcome:'reviewed'|'declined';at:string}|{type:'reset';snapshot:ConsoleSnapshot};

@@ -81,6 +81,8 @@ class DeskHTTPServer(HTTPServer):
         self.jobs = jobs
         self.local_model = local_model
         self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
+        from .executive import ExecutiveRecords
+        self.executive = ExecutiveRecords(store) if hasattr(store, 'knowledge') else None
         self.conversations = ConversationService(store, local_model, supervisor.scope) if hasattr(store, 'knowledge') else None
         self.pulse = Pulse(store, supervisor) if hasattr(store, 'knowledge') and hasattr(supervisor, 'owner') else None
         if self.pulse is not None: supervisor.pulse = self.pulse
@@ -368,6 +370,19 @@ class Handler(BaseHTTPRequestHandler):
                 if 'memory_ambiguities' in body:keys.add('memory_ambiguities')
                 exact(body, keys)
                 result = check_sources(store, bearer, body['references'], body.get('memory_references'),body.get('memory_ambiguities'))
+            elif (url.path == '/desk/executive' or url.path.startswith('/desk/executive/')) and not url.query:
+                executive = self.server.executive
+                if executive is None: raise Fault('executive_not_configured', 409)
+                if not mutation and url.path == '/desk/executive':
+                    result = executive.view(bearer)
+                elif mutation and url.path == '/desk/executive/records':
+                    result = executive.create(bearer, body)
+                elif mutation and url.path == '/desk/executive/recommendations/accept':
+                    result = executive.accept_recommendation(bearer, body)
+                elif mutation and re.fullmatch(r'/desk/executive/records/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', url.path):
+                    result = executive.update(bearer, url.path.rsplit('/', 1)[1], body)
+                else:
+                    raise Fault('not_found', 404)
             elif url.path == '/desk/jobs' or url.path.startswith('/desk/jobs/'):
                 result = self.jobs_route(url, mutation, bearer, body)
             elif not mutation and url.path == '/desk/console/workspaces' and not url.query:
