@@ -111,7 +111,7 @@ Optional flags: `--port` (1024 to 65535, default 8765), `--local-model NAME --mo
 python3 -m unittest discover -s tests            # backend, about 1,100 tests, 3 minutes
 python3 tools/check_requirement_register.py      # register consistency
 python3 tools/check_memory_plan.py               # backlog and source-shelf consistency
-cd console && npm run build && npm test          # typecheck, build, 140 unit tests
+cd console && npm run build && npm test          # typecheck, build, unit tests
 ```
 
 Browser acceptance (needs Chromium and a Python virtual environment with Playwright; the backend itself has no such dependency):

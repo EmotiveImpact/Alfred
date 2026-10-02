@@ -552,7 +552,14 @@ with tempfile.TemporaryDirectory() as temp:
                 source_inspector.get_by_role('button', name='Remove this source from ALFRED').click()
                 confirm = source_inspector.get_by_role('group', name='Confirm source removal')
                 check('removing a source needs explicit consent', confirm.get_by_role('button', name='Remove source').is_disabled())
-                confirm.get_by_label('I want to remove this source and everything derived from it.').check()
+                consent = confirm.get_by_label('I want to remove this source and everything derived from it.')
+                consent.check()
+                # The workspace changes while the person is confirming, so the console re-reads the
+                # open record; the open confirmation and its consent must survive that refresh.
+                with remover.expect_response(lambda r: '/desk/console/records/source:' in r.url, timeout=30000):
+                    equipment = home2 / 'vault' / 'notes' / 'Equipment.md'
+                    equipment.write_text(equipment.read_text() + '\nChecked again before the source was removed.\n')
+                check('a refresh while confirming keeps the open confirmation and its consent', confirm.is_visible() and consent.is_checked())
                 confirm.get_by_role('button', name='Remove source').click()
                 expect(remover.get_by_role('status').filter(has_text='Source removed: 20 notes')).to_be_visible(timeout=15000)
                 remover.screenshot(path=str(out / 'connected-source-removed.png'))

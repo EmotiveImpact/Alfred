@@ -48,6 +48,13 @@ def check(name, condition=True):
     checks.append(name)
 
 
+def open_history(statement):
+    """Opens a statement's recorded history unless it is already open. The inspector keeps what
+    the person opened through a data refresh, so a second click would close it again."""
+    if not statement.locator('details.statement-history').evaluate('d => d.open'):
+        statement.locator('summary', has_text='History and lineage').click()
+
+
 def note(store, bearer, title):
     return next(n for n in store.knowledge(bearer)['nodes'] if n['title'] == title)
 
@@ -241,7 +248,7 @@ with tempfile.TemporaryDirectory() as temp:
             expect(statement('responsible person Sample producer')).not_to_contain_text('Conflicts with')
             check('disputing from the inspector resolves the conflict for current use', claim(lead)['usable'] and claim(rival)['state'] == 'disputed')
             older = statement('status in pre-production')
-            older.locator('summary', has_text='History and lineage').click()
+            open_history(older)
             expect(older.locator('.history-list li')).to_have_count(3, timeout=15000)
             items = older.locator('.history-list li').all_inner_texts()
             check('recorded history lists each transition with time and reviewer',
@@ -318,7 +325,7 @@ with tempfile.TemporaryDirectory() as temp:
             page.get_by_role('dialog').locator('.record-row').filter(has_text='Sample film').filter(has_text='withheld').click()
             expect(inspector.locator('.statement').first).to_be_visible(timeout=15000)
             target = inspector.locator('.statement').filter(has=page.locator('.statement-temporal', has_text='Replaced by')).first
-            target.locator('summary', has_text='History and lineage').click()
+            open_history(target)
             expect(target.locator('.history-list')).to_contain_text('Support unavailable or not permitted', timeout=15000)
             check('history notes that ALFRED saw the support become unavailable, as an observation',
                   'noticed by ALFRED' in target.inner_text())
@@ -332,7 +339,7 @@ with tempfile.TemporaryDirectory() as temp:
             page.get_by_role('dialog').locator('.record-row').filter(has_text='reviewed statement').click()
             expect(statement('status in development')).to_be_visible(timeout=15000)
             older = statement('status in development')
-            older.locator('summary', has_text='History and lineage').click()
+            open_history(older)
             expect(older.locator('.history-list')).to_contain_text('Support readable again', timeout=15000)
             check('restored access restores values and records that support is readable again')
 
@@ -342,7 +349,7 @@ with tempfile.TemporaryDirectory() as temp:
             expect(page.get_by_role('status').filter(has_text='Not secure erasure')).to_be_visible()
             forgotten = inspector.locator('.statement').filter(has_text='Forgotten · value removed')
             expect(forgotten).to_have_count(1, timeout=15000)
-            forgotten.locator('summary', has_text='History and lineage').click()
+            open_history(forgotten)
             expect(forgotten.locator('.history-list li').last).to_contain_text('Forgotten', timeout=15000)
             check('the forget is recorded in history by you', 'by you' in forgotten.locator('.history-list li').last.inner_text())
             page.screenshot(path=str(out / 'temporal-forgotten.png'))

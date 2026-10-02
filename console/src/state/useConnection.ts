@@ -85,12 +85,16 @@ export function useConnection(mode:ConsoleMode,dispatch:Dispatch<ConsoleAction>,
   const retry=useCallback(()=>{if(sessionRef.current)void refresh();else void start();},[refresh,start]);
   return {client,connection,session,workspaces,refresh,retry,signIn,signOut,fail,pairDevice,continueAfterPairing:start};
 }
+/** Re-reading the record already shown keeps it in place until the new detail arrives, so an open confirmation or form in the inspector survives a refresh. Only a different record shows loading. */
+export function refreshingDetail(previous:DetailState,id:string):DetailState{
+  return previous.status==='ready'&&previous.id===id?previous:{status:'loading',id};
+}
 /** Abortable inspection of one permitted record, re-read whenever the projection changes. */
 export function useRecordDetail(client:DeskClient,enabled:boolean,id:string|null,dataRevision:string|undefined,onError:(error:unknown)=>void):DetailState{
   const[state,setState]=useState<DetailState>({status:'idle'});
   useEffect(()=>{
     if(!enabled||!id){setState({status:'idle'});return;}
-    const controller=new AbortController();setState({status:'loading',id});
+    const controller=new AbortController();setState(previous=>refreshingDetail(previous,id));
     client.inspectRecord(id,controller.signal).then(detail=>{if(!controller.signal.aborted)setState({status:'ready',id,detail});}).catch(error=>{
       if(isAbort(error))return;
       if(error instanceof DeskError&&error.kind==='not_found'){setState({status:'unavailable',id,message:'This record is no longer available to you.'});return;}
