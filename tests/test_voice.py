@@ -74,6 +74,15 @@ class VoiceTests(unittest.TestCase):
         self.assertEqual(self.req('owner', f'/desk/voice/playbacks/{playback}/report', {'outcome': 'stopped'})[1]['state'], 'stopped')
         self.assertEqual(self.req('owner', f'/desk/voice/playbacks/{playback}/acknowledge', {})[0], 409)
 
+    def test_history_lists_playbacks_newest_first_within_one_second(self):
+        # Identifiers are random, so creation order must decide between playbacks made in the same second.
+        self.login('owner')
+        moment = self.store.now()
+        self.store.now = lambda: moment
+        made = [self.generated()[1]['id'] for _ in range(6)]
+        listed = [p['id'] for p in self.req('owner', f'/desk/voice/playbacks/turn/{self.turn}')[1]['playbacks']]
+        self.assertEqual(listed, made[::-1])
+
     def test_network_voices_other_people_and_bad_input_are_refused(self):
         self.login('owner'); self.login('reader')
         self.assertEqual(self.generated(voice_local=False)[1], {'error': 'network_voice_refused'})

@@ -12,6 +12,10 @@ Format: **ID. Title** · found · fixed in commit · status.
 
 ## Fixed
 
+### B-025. Read-aloud browser check raced the server (and same-second playbacks had no stable order)
+Found 2 October 2026 on CI for PR #18 · fixed in the commit that adds this entry.
+The `console-connected` job failed at "a stopped playback is recorded as stopped and cannot be acknowledged" on a commit that only changed `.gitignore`. Two causes. First, the page shows a played or stopped state and only then reports it to the server, but the check read the database the moment the text appeared, so on a slower runner the record still held its old state. Second, playback records were ordered by creation second and then by a random identifier, so two playbacks made in the same second came back in random order and "the last record" could be the first playback. The server's own history list had the same tie. Reproduced on demand by recording each outcome 0.6 seconds late, which failed every time. The check now waits for the server record, picks the new playback by identifier and records outcomes late on purpose, so this path is exercised on every run; history and pruning order by creation second and then insertion order. New test: `tests/test_voice.py` `test_history_lists_playbacks_newest_first_within_one_second`, which fails without the change. The console's own "I heard this" cannot overtake its report today, because the desk server handles one request at a time in arrival order and the report is always sent first; a multi-threaded server would need the console to wait for the report before acknowledging.
+
 ### B-024. Playwright missing after a container restart (environment)
 Found 2 October 2026 · no commit · fixed by recreating the environment.
 The browser checks failed with `ModuleNotFoundError: No module named 'playwright'` and the console suite with "Executable doesn't exist". The scratch virtual environment at `/tmp/alfred-browser` and the Chromium path had gone with the container. Recreated the venv, installed `playwright` and pointed `CHROMIUM_PATH` and `ALFRED_CHROMIUM_PATH` at `/opt/pw-browsers/chromium`. The README now records the exact setup.

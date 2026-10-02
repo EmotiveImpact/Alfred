@@ -63,7 +63,7 @@ class VoiceLog:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
             self._turn(db, p, body['turn_id'])
             if db.execute('SELECT count(*) FROM voice_playbacks WHERE scope=? AND actor=?', (p['scope'], p['id'])).fetchone()[0] >= 500:
-                db.execute('DELETE FROM voice_playbacks WHERE id IN (SELECT id FROM voice_playbacks WHERE scope=? AND actor=? ORDER BY created LIMIT 100)',
+                db.execute('DELETE FROM voice_playbacks WHERE id IN (SELECT id FROM voice_playbacks WHERE scope=? AND actor=? ORDER BY created,rowid LIMIT 100)',
                            (p['scope'], p['id']))
             identity = 'voice-' + secrets.token_hex(10)
             db.execute('INSERT INTO voice_playbacks VALUES (?,?,?,?,?,?,?,NULL,NULL,NULL)',
@@ -110,5 +110,5 @@ class VoiceLog:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
             ident(turn_id)
             return {'playbacks': [_view(r) for r in db.execute(
-                'SELECT * FROM voice_playbacks WHERE scope=? AND actor=? AND turn_id=? ORDER BY created DESC,id LIMIT 20',
+                'SELECT * FROM voice_playbacks WHERE scope=? AND actor=? AND turn_id=? ORDER BY created DESC,rowid DESC LIMIT 20',
                 (p['scope'], p['id'], turn_id))], 'microphone': 'never_requested'}

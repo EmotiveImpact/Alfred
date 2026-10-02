@@ -6,6 +6,10 @@ headless build no on-device voice exists, so nothing may be spoken and nothing r
 The second context replaces the speech API with a scripted on-device synthesiser so that
 the generated, played, stopped and acknowledged states can be exercised. That is not an
 audio or hardware test. No microphone is requested in either. Requires `npm run build`.
+
+The page shows a played or stopped state first and reports it to the server afterwards, so
+the server here records each outcome late on purpose and the check waits for the record:
+it never depends on the report arriving before the page updates.
 """
 import json
 import os
@@ -13,6 +17,7 @@ from pathlib import Path
 import sys
 import tempfile
 import threading
+import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from alfred.desk import init_demo
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor
@@ -52,11 +57,27 @@ with tempfile.TemporaryDirectory() as temp:
     sup = KnowledgeSupervisor(store, keys['owner'], keys['source'], home / 'project', vault=home / 'vault', interval=.2)
     sup.cycle(); sup.start()
     server = DeskHTTPServer(store, sup, port=0, console_dist=DIST)
+    report_now = server.voice.report
+
+    def report_late(*args, **kwargs):
+        time.sleep(.6)  # A slow machine: the page has already moved on when this is written.
+        return report_now(*args, **kwargs)
+    server.voice.report = report_late
     thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True); thread.start()
 
     def records():
         with store.connection() as db:
-            return [dict(r) for r in db.execute('SELECT * FROM voice_playbacks ORDER BY created,id')]
+            # Creation order: identifiers are random, so they cannot break a tie within one second.
+            return [dict(r) for r in db.execute('SELECT * FROM voice_playbacks ORDER BY created,rowid')]
+
+    def settled(condition, timeout=10.0):
+        """True once the server's records satisfy the condition; the report is sent after the page updates."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if condition():
+                return True
+            time.sleep(.05)
+        return condition()
 
     def open_answer(context):
         page = context.new_page()
@@ -101,19 +122,22 @@ with tempfile.TemporaryDirectory() as temp:
             spoken = page.evaluate('window.__spoken')
             check('exactly the text shown is the text spoken', spoken == [shown] and shown.startswith('You asked: What still needs confirming?'))
             check('the spoken text says it is the notes read aloud, not a generated answer', shown.endswith('not a generated answer.'))
-            check('played is recorded as a device report, not as heard', [r['outcome'] for r in records()] == ['ended'] and records()[0]['acknowledged'] is None)
+            check('played is recorded as a device report, not as heard',
+                  settled(lambda: [r['outcome'] for r in records()] == ['ended']) and records()[0]['acknowledged'] is None)
             page.screenshot(path=str(out / 'voice-played.png'))
             ask.get_by_role('button', name='I heard this').click()
             expect(ask.get_by_role('status').filter(has_text='You confirmed that you heard it')).to_be_visible(timeout=10000)
             check('acknowledgement is a separate, explicit record', records()[0]['acknowledged'] is not None)
             check('the server holds a hash and length, never the spoken text', shown not in json.dumps(records()) and records()[0]['characters'] == len(shown))
             page.evaluate('window.__holdPlayback = true')
+            earlier = {r['id'] for r in records()}
             ask.get_by_role('button', name='Read again').click()
             expect(ask.get_by_role('status').filter(has_text='Playing on this device')).to_be_visible(timeout=10000)
             ask.get_by_role('button', name='Stop').click()
             expect(ask.get_by_role('status').filter(has_text='stopped before the end')).to_be_visible(timeout=10000)
             check('a stopped playback is recorded as stopped and cannot be acknowledged',
-                  records()[-1]['outcome'] == 'stopped' and ask.get_by_role('button', name='I heard this').count() == 0)
+                  settled(lambda: [r['outcome'] for r in records() if r['id'] not in earlier] == ['stopped'])
+                  and ask.get_by_role('button', name='I heard this').count() == 0)
             page.keyboard.press('Escape')
             page.get_by_role('button', name='Voice connection information').click()
             check('the voice dialog says nothing is listening', 'No microphone permission is ever requested' in page.get_by_role('dialog').inner_text())
