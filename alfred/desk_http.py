@@ -424,6 +424,10 @@ class Handler(BaseHTTPRequestHandler):
                 result = console_api.projection(self.server, bearer)
             elif not mutation and url.path.startswith('/desk/console/records/') and not url.query:
                 result = console_api.record(self.server, bearer, url.path[len('/desk/console/records/'):])
+            elif not mutation and url.path == '/desk/connectors' and not url.query:
+                # Read-only status. Creating and importing stay offline commands.
+                from .connectors import status as connector_status
+                result = connector_status(store, bearer)
             elif not mutation and url.path.startswith('/desk/knowledge'):
                 result = knowledge_get(store, bearer, url)
             elif not mutation and re.fullmatch(r'/desk/evidence/[0-9]+', url.path) and not url.query:

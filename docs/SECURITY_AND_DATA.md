@@ -53,6 +53,12 @@ to intended audiences; do not expose provider secrets to models, browser JavaScr
 untrusted agent processes. MCP does not remove these obligations. Reference:
 https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices
 
+The first connector slice (CON-001, on a review branch) reads only export files the owner
+selects: no token, network or polling, nothing written at the origin, least-access read
+scopes, an explicit `connector.read` grant to import, and per-instance source keys kept in
+the private data directory outside every vault. See [connectors](CONNECTORS.md). No live
+account connector exists.
+
 Official API first. Browser control has a separate logged-in session threat model and
 requires its own allowlist, sandbox, download/upload restrictions and approval path.
 Do not install third-party skills merely because a model recommends them.
