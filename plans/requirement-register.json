@@ -751,7 +751,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "No ENDSTATE, Noir or other specialist interface has been made available to this build."
+   "notes": "Not started. The OPS-002 contract now exists for future read-only specialist adapters, but no ENDSTATE, Noir or other specialist interface has been made available, and role-limited team workspaces wait on M02 identity and grants."
   },
   {
    "id": "UX-001",
@@ -975,18 +975,22 @@
     "SRC-MANDATE-1002"
    ],
    "depends_on": [],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "proposal",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_capability_contract.py",
+    "docs/CAPABILITY_CONTRACT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Contract can be drafted; each adapter needs the real product interface, which is not available to this build."
+   "notes": "Contract version 1 (manifest and observation validation, simulation and assessment labelling, per-product source credential, actions declared but never enabled) feeds the existing evidence pipeline through a clearly fictional simulation adapter. No real product adapter: no ENDSTATE, 8BALL, Noir/Black State, Loc8 or God's Eye interface has been made available.",
+   "owner_decision_needed": "Accept or amend the contract; supply each product's real interface and terms before any adapter is written."
   }
  ]
 }
