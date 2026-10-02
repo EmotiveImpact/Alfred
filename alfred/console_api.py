@@ -121,13 +121,17 @@ def projection(server, bearer):
         for row in db.execute('SELECT * FROM actions WHERE scope=? ORDER BY created DESC,id DESC LIMIT ?', (scope, MAX_APPROVALS)):
             view = store.action_view(row)
             text = view['parameters'].get('text') if isinstance(view['parameters'], dict) else None
+            path = view['parameters'].get('path') if isinstance(view['parameters'], dict) else None
             approvals.append({'id': view['id'], 'capability': view['capability'], 'state': view['state'],
-                              'text': text if isinstance(text, str) else None,
+                              'text': text if isinstance(text, str) else None, 'path': path if isinstance(path, str) else None,
                               'fingerprint': view['fingerprint'], 'createdAt': _iso(row['created']),
                               'expiresAt': _iso(view['expires_at']), 'evidenceCurrent': bool(store.evidence_valid(db, row)),
                               'mine': row['actor'] == p['id'], 'effect': view['effect']})
     nodes, edges = [], []
     sources = {s['source']: s for s in knowledge['sources']}
+    with store.transaction() as db:
+        q = store.authenticate(db, bearer, {'owner', 'reader'})
+        writable = {s for s in sources if q['role'] == 'owner' and permitted(db, q, s, store.now(), 'inbox.write')}
     for s in knowledge['sources']:
         nodes.append({'id': 'source:' + s['source'], 'label': s['label'], 'type': 'source', 'kind': 'vault',
                       'category': 'sources', 'origin': 'source', 'workspaceId': scope,
@@ -136,7 +140,7 @@ def projection(server, bearer):
                                   'attention': 'Selected source, scanned with reported issues.',
                                   'unavailable': 'Selected source is currently unavailable.'}.get(s['status'], 'Source state unknown.'),
                       'revision': (s['last_confirmed_snapshot'] or '')[:16], 'updatedAt': _iso(s['checked']),
-                      'evidence': [], 'issues': len(s['errors'])})
+                      'evidence': [], 'issues': len(s['errors']), 'inboxWritable': s['source'] in writable})
     for n in knowledge['nodes']:
         nodes.append({'id': 'note:' + n['id'], 'label': n['title'], 'type': NOTE_TYPE.get(n['kind'], 'note'),
                       'kind': n['kind'], 'category': NOTE_CATEGORY[n['kind']], 'origin': 'authored_note',

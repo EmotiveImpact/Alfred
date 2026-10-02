@@ -16,6 +16,7 @@ from alfred.desk import init_demo
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.desk_http import DeskHTTPServer
 from alfred.reviewed_memory import ReviewedMemory
+from alfred.policy import IdentityPolicy
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -207,6 +208,58 @@ with tempfile.TemporaryDirectory() as temp:
             check('approved action is executed and verified by the existing outbox', store.desk_state(keys['owner'])['actions'][0]['state'] == 'verified')
             expect(page.locator('.approval-row')).to_have_count(0, timeout=15000)
             check('approvals list reflects the server result')
+            # M04: remember this, review it, then an approved create-only inbox note.
+            policy = IdentityPolicy(store)
+            for capability in ('read', 'inbox.write'):
+                policy.grant(keys['owner'], 'demo-source', capability, store.now() + 3600, policy.view(keys['owner'])['epoch'])
+            expect(page.locator('.toast')).to_contain_text('Access changed', timeout=15000)
+            check('a grant change is announced and rebuilds the view')
+            command.fill('When is the camera collection confirmed?'); command.press('Enter')
+            ask = page.get_by_role('dialog')
+            equipment = ask.locator('.evidence').filter(has_text='Equipment check')
+            expect(equipment).to_be_visible(timeout=15000)
+            equipment.get_by_role('button', name='Remember this…').click()
+            form = ask.get_by_label('Remember this', exact=True)
+            form.get_by_label('Record').select_option('new')
+            form.get_by_label('Name').fill('Camera collection')
+            form.get_by_label('Kind').select_option('commitment')
+            form.get_by_label('Statement').select_option('status')
+            form.get_by_label('Value').fill('needs confirmation')
+            form.get_by_label('Memory type').select_option('commitment')
+            form.get_by_label('Retention').select_option(label='90 days')
+            form.get_by_role('button', name='Preview proposal').click()
+            preview = ask.get_by_label('Remember this preview')
+            expect(preview).to_contain_text('Forgotten after', timeout=15000)
+            page.screenshot(path=str(out / 'connected-remember.png'))
+            check('remember previews workspace, type, source and retention', all(x in preview.inner_text() for x in ('demo-production', 'commitment', 'notes/Equipment.md')))
+            check('a captured proposal is not usable before review', not any(c['usable'] for c in memory.view(keys['owner'])['claims'] if c.get('memory_type') == 'commitment'))
+            preview.get_by_role('button', name='Accept as my reviewed statement').click()
+            expect(preview).to_contain_text('Accepted as your reviewed statement')
+            check('accepting makes the captured statement usable', any(c['usable'] for c in memory.view(keys['owner'])['claims'] if c.get('memory_type') == 'commitment'))
+            preview.locator('summary').click()
+            preview.get_by_label('Inbox note name').fill('Camera collection.md')
+            preview.get_by_role('button', name='Propose inbox note').click()
+            expect(page.get_by_role('status').filter(has_text='Inbox note proposed')).to_be_visible()
+            target = home / 'vault' / 'ALFRED' / 'Inbox' / 'Camera collection.md'
+            check('nothing is written before approval', not target.exists())
+            ask.get_by_label('Close panel').click()
+            row = page.locator('.approval-row').filter(has_text='Inbox note · Camera collection.md')
+            expect(row).to_be_visible(timeout=15000)
+            row.get_by_role('button', name='Review Inbox note · Camera collection.md').click()
+            dialog = page.get_by_role('dialog')
+            expect(dialog).to_contain_text('ALFRED/Inbox/Camera collection.md')
+            dialog.get_by_text('I approve creating this exact file with this exact text.').click()
+            dialog.get_by_role('button', name='Approve exact text').click()
+            deadline = time.time() + 15
+            while time.time() < deadline and not target.exists():
+                time.sleep(.2)
+            check('approved inbox note is created in the vault', target.exists() and 'needs confirmation' in target.read_text())
+            expect(page.locator('.approval-row')).to_have_count(0, timeout=15000)
+            page.get_by_label('Search workspace', exact=True).click()
+            page.get_by_label('Search records').fill('Camera collection')
+            expect(page.get_by_role('dialog').locator('.record-row').filter(has_text='Camera collection')).to_have_count(2, timeout=15000)
+            check('the new inbox note is indexed and read back as an authored note beside the reviewed record')
+            page.keyboard.press('Escape')
             # Laptop and mobile layouts.
             for width, height in ((1280, 800), (390, 844)):
                 page.set_viewport_size({'width': width, 'height': height}); page.wait_for_timeout(600)
@@ -215,15 +268,8 @@ with tempfile.TemporaryDirectory() as temp:
             page.set_viewport_size({'width': 1648, 'height': 928})
             check('no browser storage used', page.evaluate('localStorage.length===0&&sessionStorage.length===0'))
             check('no access key rendered', keys['owner'] not in page.content())
-            # Revocation clears everything without a reload.
-            page.get_by_role('button', name='Explore projects').click()
-            store.revoke('demo-owner')
-            expect(page.get_by_role('heading', name='Sign in to ALFRED')).to_be_visible(timeout=15000)
-            check('revocation returns to sign-in and closes open dialogs', page.get_by_role('dialog').count() == 0)
-            check('revocation clears every record', '0 records' in page.locator('.graph-view-label').inner_text() and 'Sample film' not in page.locator('body').inner_text())
             # Server loss keeps the last confirmed view labelled, never fixtures.
-            page.get_by_label('Access key').fill(keys['reader']); page.get_by_role('button', name='Sign in').click()
-            expect(page.locator('.connection-state')).to_have_text('Connected')
+            port = server.server_port
             server.shutdown(); server.server_close()
             page.wait_for_timeout(9500)
             expect(page.locator('.connection-state')).to_have_text('Unreachable', timeout=10000)
@@ -232,6 +278,24 @@ with tempfile.TemporaryDirectory() as temp:
             check('server loss is shown as unreachable with last confirmation time')
             check('server loss never substitutes fixtures', 'Velvet Accademy' not in page.locator('body').inner_text())
             page.screenshot(path=str(out / 'connected-unreachable.png'))
+            # A restarted server keeps no in-memory sessions, so the console asks to sign in again.
+            server = DeskHTTPServer(store, sup, port=port, console_dist=DIST)
+            thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True); thread.start()
+            expect(page.get_by_role('heading', name='Sign in to ALFRED')).to_be_visible(timeout=20000)
+            check('a restarted server requires a new sign-in and clears the stale view', '0 records' in page.locator('.graph-view-label').inner_text())
+            page.get_by_label('Access key').fill(keys['owner']); page.get_by_role('button', name='Sign in').click()
+            expect(page.locator('.connection-state')).to_have_text('Connected')
+            # Revocation clears everything without a reload.
+            page.get_by_role('button', name='Explore projects').click()
+            store.revoke('demo-owner')
+            expect(page.get_by_role('heading', name='Sign in to ALFRED')).to_be_visible(timeout=15000)
+            check('revocation returns to sign-in and closes open dialogs', page.get_by_role('dialog').count() == 0)
+            check('revocation clears every record', '0 records' in page.locator('.graph-view-label').inner_text() and 'Sample film' not in page.locator('body').inner_text())
+            # Under strict grants another person sees nothing until granted. Counts leak nothing.
+            page.get_by_label('Access key').fill(keys['reader']); page.get_by_role('button', name='Sign in').click()
+            expect(page.locator('.connection-state')).to_have_text('Connected')
+            expect(page.locator('.graph-view-label')).to_contain_text('0 records')
+            check('a person without grants sees no records, names or counts', 'Sample film' not in page.locator('body').inner_text())
             csp = [m for m in console_messages if 'Content Security Policy' in m or 'Refused to' in m]
             check('no Content Security Policy violations', not csp)
             check('no requests leave the loopback origin', not foreign)

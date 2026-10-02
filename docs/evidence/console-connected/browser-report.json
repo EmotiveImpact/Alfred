@@ -1,5 +1,5 @@
 {
-  "passed": 45,
+  "passed": 54,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -34,15 +34,24 @@
     "approval requires explicit consent",
     "approved action is executed and verified by the existing outbox",
     "approvals list reflects the server result",
+    "a grant change is announced and rebuilds the view",
+    "remember previews workspace, type, source and retention",
+    "a captured proposal is not usable before review",
+    "accepting makes the captured statement usable",
+    "nothing is written before approval",
+    "approved inbox note is created in the vault",
+    "the new inbox note is indexed and read back as an authored note beside the reviewed record",
     "1280px has no horizontal overflow",
     "390px has no horizontal overflow",
     "no browser storage used",
     "no access key rendered",
-    "revocation returns to sign-in and closes open dialogs",
-    "revocation clears every record",
     "command caption no longer claims a live connection",
     "server loss is shown as unreachable with last confirmation time",
     "server loss never substitutes fixtures",
+    "a restarted server requires a new sign-in and clears the stale view",
+    "revocation returns to sign-in and closes open dialogs",
+    "revocation clears every record",
+    "a person without grants sees no records, names or counts",
     "no Content Security Policy violations",
     "no requests leave the loopback origin",
     "no uncaught page errors"
@@ -50,8 +59,10 @@
   "browser_console": [
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
+    "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
-    "error: Failed to load resource: net::ERR_CONNECTION_REFUSED"
+    "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
   ],
   "page_errors": [],
   "inputs": "synthetic Markdown vault only",

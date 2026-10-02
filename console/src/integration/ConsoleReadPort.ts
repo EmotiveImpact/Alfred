@@ -34,6 +34,7 @@ export interface ProjectionNode {
   evidence:EvidenceReference[];
   reviewState?:'proposed'|'accepted'|'disputed'|'superseded'|'withdrawn';
   statements?:{usable:number;proposed:number;disputed:number;conflicted:number;unavailable:number};
+  inboxWritable?:boolean;
 }
 export interface ProjectionEdge {
   id:string;from:string;to:string;
@@ -42,7 +43,7 @@ export interface ProjectionEdge {
   evidence:EvidenceReference[];
 }
 export interface ServerApproval {
-  id:string;capability:string;state:string;text:string|null;fingerprint:string;
+  id:string;capability:string;state:string;text:string|null;path?:string|null;fingerprint:string;
   createdAt:string;expiresAt:string;evidenceCurrent:boolean;mine:boolean;effect:string;
 }
 export interface ServerInsight {

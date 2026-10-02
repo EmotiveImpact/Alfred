@@ -3,6 +3,7 @@ import {ArrowRight,Crosshair,FileText,WarningCircle} from '@phosphor-icons/react
 import {useConsole} from '../state/ConsoleProvider';
 import {DeskError} from '../integration/deskClient';
 import {type Evidence,type Turn} from '../state/useAsk';
+import {RememberForm} from './RememberForm';
 const VIA:Record<string,string>={selected_record:'Selected record',keyword_match:'Matched your words',explicit_link_from_match:'Linked from a match',reviewed_statement_support:'Supports a reviewed statement'};
 const STATE_MESSAGE:Record<string,string>={source_changed:'A source changed after this answer. It was withdrawn rather than shown stale.',focus_unavailable:'The selected record is no longer available, so nothing was retrieved for it.',failed:'ALFRED could not complete this question. Nothing was invented.',interrupted:'ALFRED restarted before answering. Ask again.'};
 function lines(e:Evidence){return e.start_line===e.end_line?`line ${e.start_line}`:`lines ${e.start_line}–${e.end_line}`;}
@@ -18,7 +19,7 @@ function DraftProposal({turn,sessionId}:{turn:Turn;sessionId:string}){
     {error&&<p className="sign-in-error" role="alert">{error}</p>}<button className="secondary-button" disabled={busy||!text.trim()} onClick={propose}>Propose draft</button></details>;
 }
 export function AskPanel(){
-  const c=useConsole(),a=c.ask.state,[follow,setFollow]=useState(''),model=c.state.snapshot.model;
+  const c=useConsole(),a=c.ask.state,[follow,setFollow]=useState(''),[remembering,setRemembering]=useState<string|null>(null),model=c.state.snapshot.model;
   if(a.status==='idle')return <p className="dialog-note">Type a question in the command bar. Use “search …” to search records instead.</p>;
   const turn=a.status==='done'?a.turn:null,result=turn?.result??null,packet=result?.packet;
   return <div className="ask-panel">
@@ -36,7 +37,8 @@ export function AskPanel(){
       {packet.memory_ambiguities.length>0&&<div className="review-scope"><WarningCircle size={18}/><span>{packet.memory_ambiguities.map(x=>`${x.entity_ids.length} separate “${x.name}” records`).join('; ')}. Say which one you mean; they are never merged.</span></div>}
       <section className="ask-section"><h3>{packet.evidence.length?'Source excerpts':'No permitted source matched'}</h3>
         {packet.evidence.length?<p className="dialog-note">Exact excerpts from authored notes, not a generated answer and not verified facts.</p>:<p className="dialog-note">ALFRED does not invent an answer when nothing permitted supports one.</p>}
-        {packet.evidence.map(e=><div className="evidence" key={e.source_id}><header><span className="source-id">{e.source_id}</span><button className="text-button" onClick={()=>{c.selectRecord('note:'+e.note_id);c.setModal(null);}}><FileText size={14}/>{e.title}</button><small>{e.path} · {lines(e)} · {VIA[e.retrieved_via]??e.retrieved_via}</small></header><blockquote>{e.excerpt}</blockquote></div>)}
+        {packet.evidence.map(e=><div className="evidence" key={e.source_id}><header><span className="source-id">{e.source_id}</span><button className="text-button" onClick={()=>{c.selectRecord('note:'+e.note_id);c.setModal(null);}}><FileText size={14}/>{e.title}</button><small>{e.path} · {lines(e)} · {VIA[e.retrieved_via]??e.retrieved_via}</small></header><blockquote>{e.excerpt}</blockquote>
+          {turn&&c.live.session?.role==='owner'&&(remembering===e.source_id?<RememberForm evidence={e} turnId={turn.id} onClose={()=>setRemembering(null)}/>:<button className="text-button remember-button" onClick={()=>setRemembering(e.source_id)}>Remember this…</button>)}</div>)}
       </section>
       {turn&&c.ask.sessionId&&<DraftProposal turn={turn} sessionId={c.ask.sessionId}/>}
     </>}

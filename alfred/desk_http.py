@@ -277,6 +277,8 @@ class Handler(BaseHTTPRequestHandler):
                     result = memory.create_entity(bearer,body)
                 elif mutation and url.path == '/desk/memory/proposals':
                     result = memory.propose(bearer,body)
+                elif mutation and url.path == '/desk/memory/capture':
+                    result = memory.capture(bearer,body)
                 elif mutation and re.fullmatch(r'/desk/memory/claims/[A-Za-z0-9_.-]+/review',url.path):
                     result = memory.review(bearer,url.path.split('/')[4],body)
                 elif mutation and re.fullmatch(r'/desk/memory/claims/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget',url.path):
@@ -331,6 +333,10 @@ class Handler(BaseHTTPRequestHandler):
             elif mutation and url.path == '/desk/pause':
                 exact(body, {'paused'})
                 result = self.server.supervisor.set_paused(bearer, body['paused'])
+            elif mutation and url.path == '/desk/inbox/proposals':
+                if not hasattr(store, 'vault_writers'): raise Fault('knowledge_not_configured', 409)
+                from .inbox import propose as propose_inbox
+                result = propose_inbox(store, bearer, body)
             elif mutation and url.path == '/desk/proposals':
                 result = store.propose_from_evidence(bearer, body)
             elif mutation and re.fullmatch(r'/desk/evidence/[0-9]+/acknowledge', url.path):

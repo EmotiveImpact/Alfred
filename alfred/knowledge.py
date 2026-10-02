@@ -14,7 +14,7 @@ import re
 import stat
 import secrets
 from urllib.parse import unquote, urlsplit
-from .local import Fault
+from .local import Fault, canonical
 from .desk_store import DeskStore
 from .desk_runtime import Supervisor
 
@@ -260,6 +260,8 @@ def resolve_target(origin, target, syntax, notes):
 class KnowledgeStore(DeskStore):
     def __init__(self, path, **kwargs):
         super().__init__(path, **kwargs)
+        # In-process handles for approved inbox writes; the database never stores vault paths.
+        self.vault_writers = {}
         with self.connection() as db:
             exists = db.execute("SELECT 1 FROM sqlite_master WHERE name='knowledge_meta'").fetchone()
             versions = [r[0] for r in db.execute('SELECT version FROM knowledge_meta')] if exists else [2]
@@ -298,10 +300,66 @@ class KnowledgeStore(DeskStore):
             return vault_id
 
     def evidence_valid(self, db, row):
+        from . import inbox
+        if row['capability'] == inbox.CAPABILITY:
+            return inbox.current(self, db, row)
         if super().evidence_valid(db, row):
             return True
         from .conversation import knowledge_action_current
         return knowledge_action_current(self, db, row)
+
+    def valid_origin(self, db, row):
+        from . import inbox
+        if row['capability'] != inbox.CAPABILITY:
+            return super().valid_origin(db, row)
+        paused = db.execute('SELECT paused FROM desk_settings WHERE scope=?', (row['scope'],)).fetchone()
+        return not (paused and paused[0]) and row['expires'] > self.now() and inbox.current(self, db, row)
+
+    def action_view(self, row):
+        from . import inbox
+        view = super().action_view(row)
+        if row['capability'] == inbox.CAPABILITY:
+            view['effect'] = 'vault_inbox_note_create_only_not_sent'
+        return view
+
+    def execute_local(self, bearer, job):
+        from . import inbox
+        with self.connection() as db:
+            kind = db.execute('SELECT capability FROM actions WHERE scope=? AND id=?', (job['scope'], job['id'])).fetchone()
+        if not kind or kind['capability'] != inbox.CAPABILITY:
+            return super().execute_local(bearer, job)
+        with self.transaction() as db:
+            p, row = self.leased(db, bearer, job)
+            row = dict(row)
+        outcome = inbox.execute(self, row)
+        with self.transaction() as db:
+            if outcome in ('created', 'exists_same'):
+                self.log(db, row['scope'], p['id'], 'connector.inbox_receipt', row['id'])
+                return
+            # Nothing was written by this action. Record why, and never retry over a human file.
+            proof = canonical({'type': 'vault_inbox_refused', 'reason': outcome, 'sent': False})
+            db.execute("UPDATE actions SET state='failed',proof=? WHERE scope=? AND id=? AND state='executing'", (proof, row['scope'], row['id']))
+            db.execute("UPDATE outbox SET state='done' WHERE scope=? AND action_id=?", (row['scope'], row['id']))
+            self.log(db, row['scope'], p['id'], 'action.inbox_refused', row['id'])
+
+    def verify_draft(self, db, row):
+        from . import inbox
+        if row['capability'] != inbox.CAPABILITY:
+            return super().verify_draft(db, row)
+        proof = inbox.verify(self, row)
+        if proof is None:
+            return None
+        db.execute('UPDATE actions SET state=?,proof=? WHERE scope=? AND id=?', ('verified', canonical(proof), row['scope'], row['id']))
+        db.execute('UPDATE outbox SET state=? WHERE scope=? AND action_id=?', ('done', row['scope'], row['id']))
+        self.log(db, row['scope'], row['actor'], 'action.verified_inbox_note', row['id'])
+        return proof
+
+    def finish(self, bearer, job):
+        with self.connection() as db:
+            row = db.execute('SELECT state,proof FROM actions WHERE scope=? AND id=?', (job['scope'], job['id'])).fetchone()
+        if row and row['state'] == 'failed':
+            return {'id': job['id'], 'state': 'failed', 'proof': json.loads(row['proof'])}
+        return super().finish(bearer, job)
 
     def replace_notes(self, bearer, label, notes, errors, vault_id=None):
         if len(notes) > MAX_NOTES or sum(len(n['refs']) for n in notes) > MAX_LINKS:
@@ -506,6 +564,74 @@ class MarkdownVault:
                 self.vault_id=store.select_vault(bearer,self.label,None,self.configuration)
             store.knowledge_unavailable(bearer,code)
             self.health.update(status='unavailable',errors=[{'code':code}])
+        if hasattr(store,'vault_writers') and self.vault_id:
+            store.vault_writers[self.principal['id']]=self
+
+    def _inbox_directory(self,create):
+        from .inbox import FOLDER
+        fd=self.open_root()
+        try:
+            info=os.fstat(fd)
+            if self.identity is None or (info.st_dev,info.st_ino)!=self.identity:
+                raise Fault('vault_root_replaced')
+            for part in FOLDER:
+                if create:
+                    try: os.mkdir(part,0o700,dir_fd=fd)
+                    except FileExistsError: pass
+                nxt=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=fd)
+                os.close(fd);fd=nxt
+            return fd
+        except BaseException:
+            os.close(fd);raise
+
+    @staticmethod
+    def _read_regular(fd,name):
+        try: handle=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=fd)
+        except OSError: return None
+        try:
+            info=os.fstat(handle)
+            if not stat.S_ISREG(info.st_mode) or info.st_size>MAX_BYTES: return None
+            chunks=[]
+            while True:
+                chunk=os.read(handle,65536)
+                if not chunk: break
+                chunks.append(chunk)
+            return b''.join(chunks)
+        finally: os.close(handle)
+
+    def create_inbox_note(self,filename,data,digest):
+        """Create-only write. Never replaces an existing file, never follows a link."""
+        try: fd=self._inbox_directory(True)
+        except (OSError,Fault): return 'vault_unavailable'
+        try:
+            existing=self._read_regular(fd,filename)
+            if existing is not None:
+                return 'exists_same' if hashlib.sha256(existing).hexdigest()==digest else 'destination_exists'
+            temporary='.alfred-'+secrets.token_hex(8)+'.tmp'
+            out=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o600,dir_fd=fd)
+            try:
+                view=memoryview(data)
+                while view: view=view[os.write(out,view):]
+                os.fsync(out)
+            finally: os.close(out)
+            try:
+                # link() creates the destination atomically and fails if anything is already there.
+                os.link(temporary,filename,src_dir_fd=fd,dst_dir_fd=fd,follow_symlinks=False)
+            except FileExistsError:
+                return 'destination_exists'
+            finally:
+                os.unlink(temporary,dir_fd=fd)
+            os.fsync(fd)
+            return 'created'
+        except OSError:
+            return 'write_failed'
+        finally: os.close(fd)
+
+    def read_inbox_note(self,filename):
+        try: fd=self._inbox_directory(False)
+        except (OSError,Fault): return None
+        try: return self._read_regular(fd,filename)
+        finally: os.close(fd)
 
     @staticmethod
     def signature(info):
@@ -634,6 +760,14 @@ class KnowledgeSupervisor(Supervisor):
                 except Exception:
                     self.vault.health={'configured':True,'status':'unavailable','last_scan':self.store.now(),'errors':[{'code':'knowledge_scan_failed'}]}
             super().cycle()
+            if not self.store.paused(self.scope):
+                try:
+                    # Retention the owner chose at capture time; each expiry is a receipted forget.
+                    from .reviewed_memory import ReviewedMemory
+                    if getattr(self, 'memory', None) is None: self.memory = ReviewedMemory(self.store)
+                    self.memory.apply_retention(self.owner)
+                except Fault as exc:
+                    self.error = exc.code
             if getattr(self, 'pulse', None) is not None and not self.store.paused(self.scope):
                 try:
                     self.pulse.cycle()

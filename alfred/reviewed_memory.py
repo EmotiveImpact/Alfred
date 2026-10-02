@@ -39,7 +39,11 @@ CREATE TABLE IF NOT EXISTS memory_claims(
  reviewed INTEGER, reviewer TEXT, replaces_id TEXT,
  UNIQUE(scope,actor,request_id));
 CREATE INDEX IF NOT EXISTS memory_claims_owner ON memory_claims(scope,actor);
+CREATE TABLE IF NOT EXISTS memory_capture(
+ claim_id TEXT PRIMARY KEY REFERENCES memory_claims(id), memory_type TEXT NOT NULL,
+ retention_until INTEGER, captured_from TEXT NOT NULL, created INTEGER NOT NULL);
 '''
+MEMORY_TYPES = ('semantic', 'episodic', 'preference', 'commitment', 'procedural')
 
 
 def overlap(a, b):
@@ -164,7 +168,38 @@ class ReviewedMemory:
             self.store.log(db,p['scope'],p['id'],'memory.entity_created',body['id'])
         return {'id':body['id'],'reused':False}
 
-    def propose(self, bearer, body):
+    def capture(self, bearer, body):
+        """'Remember this': an editable proposal with type and retention. Never auto-accepted."""
+        keys={'request_id','subject_id','predicate','object_id','value','valid_from','valid_until','evidence'}
+        exact(body, keys|{'memory_type','retention_days','captured_from'})
+        if body['memory_type'] not in MEMORY_TYPES:raise Fault('invalid_memory_type')
+        days=body['retention_days']
+        if days is not None and (type(days) is not int or not 1<=days<=3650):raise Fault('invalid_retention')
+        origin=body['captured_from']
+        if type(origin) is not dict or set(origin)-{'turn_id','note_id'} or not all(type(v) is str and len(v)<=80 for v in origin.values()):
+            raise Fault('invalid_capture_origin')
+        made=self.propose(bearer,{k:body[k] for k in keys},capture={'memory_type':body['memory_type'],'retention_days':days,'captured_from':origin})
+        return {**made,'preview':self._preview(bearer,made['id'])}
+
+    def _preview(self, bearer, identity):
+        view=self.view(bearer);claim=next(c for c in view['claims'] if c['id']==identity)
+        entities={e['id']:e for e in view['entities']}
+        return {'scope':view['scope'],'memory_type':claim.get('memory_type'),'retention_until':claim.get('retention_until'),
+                'subject':entities[claim['subject_id']]['name'],'predicate':claim['predicate'],
+                'value':claim['value'],'object':entities[claim['object_id']]['name'] if claim['object_id'] in entities else None,
+                'source':{k:claim['source'][k] for k in ('note_id','path','title','start_line','end_line','quote')} if claim['source'] else None,
+                'state':claim['state'],'needs_review':True,'authority_granted':False}
+
+    def apply_retention(self, bearer):
+        """Forget captured statements whose user-chosen retention has ended, with receipts."""
+        with self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            due=[(r['id'],r['version']) for r in db.execute('''SELECT c.id,c.version FROM memory_claims c JOIN memory_capture m ON m.claim_id=c.id
+                 WHERE c.scope=? AND c.actor=? AND c.state!='forgotten' AND m.retention_until IS NOT NULL AND m.retention_until<=?''',
+                 (p['scope'],p['id'],self.store.now()))]
+        return [self.forget(bearer,identity,{'version':version}) for identity,version in due]
+
+    def propose(self, bearer, body, capture=None):
         exact(body, {'request_id','subject_id','predicate','object_id','value','valid_from','valid_until','evidence'})
         ident(body['request_id']);ident(body['subject_id'])
         if type(body['predicate']) is not str or body['predicate'] not in RELATIONS:
@@ -203,6 +238,9 @@ class ReviewedMemory:
                         body['object_id'],body['value'].strip() if body['value'] else None,body['valid_from'],body['valid_until'],
                         source['note_id'],source['sha256'],source['revision'],source['start_line'],source['end_line'],
                         source['quote_hash'],'proposed',1,self.store.now(),None,None,None))
+            if capture is not None:
+                until=self.store.now()+capture['retention_days']*86400 if capture['retention_days'] else None
+                db.execute('INSERT INTO memory_capture VALUES (?,?,?,?,?)',(cid,capture['memory_type'],until,json.dumps(capture['captured_from'],sort_keys=True),self.store.now()))
             self.store.log(db,p['scope'],p['id'],'memory.proposed',cid)
         return {'id':cid,'state':'proposed','reused':False}
 
@@ -307,6 +345,10 @@ class ReviewedMemory:
             p=self.store.authenticate(db,bearer,{'owner','reader'});self._reconcile(db,p)
             entities=[dict(r) for r in db.execute('SELECT id,kind,name,created FROM memory_entities WHERE scope=? AND actor=? ORDER BY created,id',(p['scope'],p['id']))]
             claims=self._claims(db,p,self.store.now())
+            captures={r['claim_id']:dict(r) for r in db.execute('SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',(p['scope'],p['id']))}
+            for c in claims:
+                m=captures.get(c['id'])
+                c['memory_type'],c['retention_until']=(m['memory_type'],m['retention_until']) if m else (None,None)
             for c in claims:
                 # Support that is unavailable or no longer permitted is withheld, and so is
                 # what was derived from it. Restored access or availability restores both.

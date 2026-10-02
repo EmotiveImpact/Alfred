@@ -152,7 +152,7 @@
     {
       "id": "M04",
       "title": "Explicit capture and approved inbox writes",
-      "status": "planned",
+      "status": "implemented",
       "depends_on": [
         "M01",
         "M02",
@@ -178,6 +178,10 @@
         "Remember-this previews editable scope, memory type, source and retention",
         "Exact path/content/precondition approval is separate from reading or recalling",
         "Concurrent changes, restart and duplicate requests never silently overwrite human notes"
+      ],
+      "evidence": [
+        "tests/test_memory_capture_inbox.py",
+        "docs/evidence/memory-m04/RECEIPT.md"
       ]
     },
     {

@@ -8,12 +8,12 @@ export type RecordOrigin = 'fixture' | 'authored_note' | 'reviewed_entity' | 'so
 export type Availability = 'current' | 'attention' | 'stale' | 'unavailable' | 'withdrawn';
 export interface Provenance { id: string; label: string; revision: string; basis: 'fixture' | 'authored' | 'reported' | 'observed' | 'human_review' | 'source_status'; excerpt: string; }
 /** Workspace scope is a fixture scope in the demo and a server-issued workspace ID when connected. */
-export interface KnowledgeRecord { id: string; title: string; kind: RecordKind; category: Category; scope: string; summary: string; detail: string; status: string; provenance: Provenance; origin?: RecordOrigin; availability?: Availability; path?: string; sha256?: string; }
+export interface KnowledgeRecord { id: string; title: string; kind: RecordKind; category: Category; scope: string; summary: string; detail: string; status: string; provenance: Provenance; origin?: RecordOrigin; availability?: Availability; path?: string; sha256?: string; sourceId?: string; inboxWritable?: boolean; }
 export type RelationshipLayer = 'fixture' | 'note_reference' | 'reviewed_claim' | 'review_support';
 export interface Relationship { id: string; from: string; to: string; relation: string; provenanceId: string; basis: 'fixture' | 'authored' | 'human_review'; layer?: RelationshipLayer; }
 export interface Priority { id: string; title: string; scope: string; timing: string; done: boolean; }
 /** A demo proposal changes local state only. A server action is reviewed and approved only through the server ledger. */
-export interface Proposal { id: string; title: string; body: string; scope: string; status: 'pending' | 'reviewed' | 'declined' | 'in_progress' | 'completed' | 'closed'; effect: 'local_demo_only' | 'server_action'; revision: number; serverState?: string; fingerprint?: string; capability?: string; evidenceCurrent?: boolean; mine?: boolean; createdAt?: string; expiresAt?: string; }
+export interface Proposal { id: string; title: string; body: string; scope: string; status: 'pending' | 'reviewed' | 'declined' | 'in_progress' | 'completed' | 'closed'; effect: 'local_demo_only' | 'server_action'; revision: number; serverState?: string; fingerprint?: string; capability?: string; path?: string; evidenceCurrent?: boolean; mine?: boolean; createdAt?: string; expiresAt?: string; }
 export interface Insight { id: string; recordId: string; title: string; summary: string; reviewedAt: string; supportId: string; }
 export interface ModelState { configured: boolean; name: string | null; allowed: boolean; }
 export interface ConsoleSnapshot { schemaVersion: 1; mode: 'demo' | 'connected'; label: string; records: KnowledgeRecord[]; relationships: Relationship[]; priorities: Priority[]; proposals: Proposal[]; workspaceId?: string; dataRevision?: string; grantRevision?: string; observedAt?: string; insights?: Insight[]; model?: ModelState; }
