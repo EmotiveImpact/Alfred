@@ -17,6 +17,7 @@ from urllib.parse import unquote, urlsplit
 from .local import Fault, canonical
 from .desk_store import DeskStore
 from .desk_runtime import Supervisor
+from . import sync_conflicts
 
 KINDS = ('map', 'project', 'person', 'decision', 'procedure', 'note')
 MAX_NOTES, MAX_BYTES, MAX_TOTAL, MAX_LINKS = 256, 65536, 4194304, 8192
@@ -54,6 +55,10 @@ CREATE TABLE IF NOT EXISTS knowledge_history(
 CREATE TABLE IF NOT EXISTS knowledge_anchors(
  scope TEXT NOT NULL, source TEXT NOT NULL, id TEXT NOT NULL, anchors TEXT NOT NULL,
  PRIMARY KEY(scope,source,id));
+CREATE TABLE IF NOT EXISTS knowledge_conflicts(
+ scope TEXT NOT NULL, source TEXT NOT NULL, path TEXT NOT NULL, original_path TEXT NOT NULL,
+ original_id TEXT, tool TEXT NOT NULL, state TEXT NOT NULL, detected INTEGER NOT NULL,
+ checked INTEGER NOT NULL, PRIMARY KEY(scope,source,path));
 '''
 
 
@@ -361,7 +366,7 @@ class KnowledgeStore(DeskStore):
             return {'id': job['id'], 'state': 'failed', 'proof': json.loads(row['proof'])}
         return super().finish(bearer, job)
 
-    def replace_notes(self, bearer, label, notes, errors, vault_id=None):
+    def replace_notes(self, bearer, label, notes, errors, vault_id=None, conflicts=()):
         if len(notes) > MAX_NOTES or sum(len(n['refs']) for n in notes) > MAX_LINKS:
             raise Fault('knowledge_capacity')
         paths, external_ids = set(), set()
@@ -374,6 +379,7 @@ class KnowledgeStore(DeskStore):
                 if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', external): raise Fault('invalid_stable_note_id')
                 if external in external_ids: raise Fault('duplicate_stable_note_id')
                 external_ids.add(external)
+        conflicts = sync_conflicts.checked(conflicts, paths)
         notes = sorted(notes, key=lambda n:n['path'])
         snapshot = hashlib.sha256(json.dumps([(n['path'],n['sha256']) for n in notes], sort_keys=True).encode()).hexdigest()
         with self.transaction() as db:
@@ -450,6 +456,8 @@ class KnowledgeStore(DeskStore):
                            (scope,source,identity,revision,n['path'],n['sha256'],'ready',self.now()))
                 db.execute('INSERT INTO knowledge_anchors VALUES (?,?,?,?)', (scope,source,identity,json.dumps(n.get('anchors',[]))))
                 db.executemany('INSERT INTO knowledge_refs VALUES (?,?,?,?,?,?,?)', [(scope,source,identity,r['target'],r['line'],r['syntax'],r['relation']) for r in n['refs']])
+            # Conflict copies are recorded with their originals' IDs, never indexed as notes (MEM-014).
+            sync_conflicts.record(self,db,scope,source,conflicts,{n['path']:identity for n,identity,_ in assigned})
             db.execute('INSERT INTO knowledge_sources VALUES (?,?,?,?,?,?,?) ON CONFLICT(scope,source) DO UPDATE SET label=excluded.label,checked=excluded.checked,status=excluded.status,errors=excluded.errors,snapshot=excluded.snapshot',
                        (scope,source,label,self.now(),'attention' if errors else 'ready',json.dumps(errors[:32]),snapshot))
             if db.execute('SELECT count(*) FROM knowledge_notes WHERE scope=?', (scope,)).fetchone()[0] > 10000 or db.execute('SELECT count(*) FROM knowledge_history WHERE scope=?', (scope,)).fetchone()[0] > 10000:
@@ -502,6 +510,7 @@ class KnowledgeStore(DeskStore):
                                   'target_revision':destination['revision'],'anchor':anchor})
                 elif state not in {'external','attachment_not_indexed'}:
                     issues.append({'note':r['origin'],'path':original['path'],'line':r['line'],'target':r['target'],'status':state})
+            conflicts = sync_conflicts.view([dict(r) for r in db.execute('SELECT * FROM knowledge_conflicts WHERE scope=? ORDER BY source,path', (scope,)) if r['source'] in permitted], by_id)
             terms = query.casefold().split()
             selected = [n for n in notes if (not kind or n['kind']==kind) and all(t in (n['title']+' '+n['path']+' '+n['body']+' '+' '.join(n['tags']+n['aliases'])).casefold() for t in terms)]
             def public(n):
@@ -525,7 +534,8 @@ class KnowledgeStore(DeskStore):
                     'nodes':[public(n) for n in notes], 'results':[public(n) for n in selected], 'links':links,
                     'issues':issues, 'sources':[{'source':s['source'],'vault_id':vaults.get(s['source']),'label':s['label'],'last_complete_scan':selections.get(s['source'],{}).get('confirmed'),'last_confirmed_snapshot':s['snapshot'],'checked':s['checked'],'status':s['status'],'errors':json.loads(s['errors'])} for s in sources],
                     'map_health':{'roots':map_roots,'missing_map_sources':missing_map,'outside_two_hops':[n['id'] for n in notes if n['source'] not in imported and distances.get(n['id'],3)>2]},
-                    'counts':{'notes':len(notes),'matches':len(selected),'links':len(links),'issues':len(issues)},
+                    'sync_conflicts':conflicts,
+                    'counts':{'notes':len(notes),'matches':len(selected),'links':len(links),'issues':len(issues),'sync_conflicts':len(conflicts)},
                     'live_ai':False,'read_only':True,'content_egress':False,'anchor_validation':True,'anchor_support':'ATX plain-text headings and single-line trailing block IDs'}
 
     def knowledge_note(self,bearer,identity, *, purpose='read'):
@@ -656,7 +666,7 @@ class MarkdownVault:
 
     def scan(self):
         if self.store.paused(self.principal['scope']): return self.health
-        notes,errors=[],[];total=[0,0];observed={}
+        notes,errors=[],[];total=[0,0];observed={};copies=[]
         def walk(fd,prefix='',depth=0):
             directory_before=self.signature(os.fstat(fd))
             entries=os.listdir(fd);total[0]+=len(entries)
@@ -678,6 +688,13 @@ class MarkdownVault:
                         finally: os.close(child)
                         continue
                     if not name.lower().endswith('.md'): continue
+                    copy=sync_conflicts.conflict_copy(path)
+                    if copy:
+                        # A sync conflict copy is recorded beside its original and never read as a note.
+                        if not stat.S_ISREG(before.st_mode): raise Fault('regular_single_link_note_required')
+                        observed[path]=self.signature(before);copies.append({'path':path,**copy})
+                        errors.append({'path':path,'code':'sync_conflict_copy','original_path':copy['original_path']})
+                        continue
                     if len(notes)>=MAX_NOTES: raise Fault('vault_note_capacity')
                     file=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC,dir_fd=fd)
                     try:
@@ -738,7 +755,7 @@ class MarkdownVault:
                     if (current.st_dev,current.st_ino)!=self.identity: raise Fault('vault_root_replaced')
                 finally: os.close(check)
             finally: os.close(fd)
-            self.store.replace_notes(self.bearer,self.label,notes,errors,self.vault_id)
+            self.store.replace_notes(self.bearer,self.label,notes,errors,self.vault_id,conflicts=sync_conflicts.scanned(copies,notes,errors))
             status='attention' if errors else 'ready'
         except (Fault,OSError) as exc:
             code=exc.code if isinstance(exc,Fault) else 'vault_unavailable'

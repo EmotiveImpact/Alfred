@@ -38,6 +38,8 @@ python3 -m alfred.desk serve --data-dir ~/.local/share/alfred/development
 
 Keep the access key private and the service on loopback. The host must remain running for scanning, queues and routines. Only local drafts are written; nothing is sent externally. This does not install an always-on service.
 
+Keep `--data-dir` on a local disk that no sync tool watches and outside every vault. `init`, `serve` and `restore` refuse a recognised Syncthing, Dropbox, Nextcloud, iCloud Drive or macOS cloud storage folder, a Git working tree or a vault, and there is no override. To keep a copy elsewhere, `backup` writes a consistent, restorable snapshot and `export --export-dir PATH` writes a readable, filtered record; neither is encrypted. See [the sync separation](docs/SYNC.md).
+
 For the separate fixture console, using its committed lockfile and supported Node version:
 
 ```sh

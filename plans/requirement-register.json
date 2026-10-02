@@ -106,13 +106,14 @@
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_memory_m01.py",
-    "docs/evidence/memory-m01/RECEIPT.md"
+    "docs/evidence/memory-m01/RECEIPT.md",
+    "tests/test_sync_conflicts.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Markdown identity, rename continuity and duplicate rejection implemented on the branch; sync-conflict identity unfinished (M09)."
+   "notes": "Markdown identity, rename continuity and duplicate rejection implemented on the branch. Two sync-conflict identity defects fixed and tested (a renamed original no longer moves its identity into the conflict copy; a copy carrying the same adopted ID no longer makes the vault unavailable); copies from unrecognised tools remain separate notes."
   },
   {
    "id": "MEM-003",
@@ -145,7 +146,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Notes, reviewed claims, conversation packets and the console projection carry revision and hash. Documents and connectors pending."
+   "notes": "Notes, reviewed claims, conversation packets, the console projection and connector imports carry revision and hash. Documents pending."
   },
   {
    "id": "MEM-004",
@@ -420,14 +421,18 @@
    "decision": "accepted",
    "implementation": "partial",
    "integration": "backend_connected",
-   "merge": "main_partial",
+   "merge": "main_partial_branch_extended",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_export.py",
+    "docs/SYNC.md",
+    "docs/evidence/memory-m14/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Partial exports exist; scope-limited manifests and redaction pending."
+   "notes": "Credential-scoped portable export (plain JSON and Markdown, hashed manifest, explicit exclusions, private files, never inside a vault) on the branch. Missing: redaction inside records, encryption, export of the index or receipts, export over HTTP or from the console."
   },
   {
    "id": "MEM-014",
@@ -443,18 +448,24 @@
     "SYS-003",
     "RUN-002"
    ],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_sync_conflicts.py",
+    "tests/test_placement.py",
+    "tools/check_sync_conflict_browser.py",
+    "docs/SYNC.md",
+    "docs/evidence/memory-m14/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "See research/INFRASTRUCTURE_2026-10-02.md section 4.2."
+   "notes": "Syncthing, Dropbox and Nextcloud/ownCloud conflict copies are recognised by exact name, recorded beside their originals, kept out of the index and surfaced in the knowledge view and console projection; init, serve and restore refuse a data directory in a recognised sync folder, Git working tree or vault (marker detection only, no override); docs/SYNC.md separates the four kinds of sync. Missing: OneDrive, iCloud, Obsidian Sync and Git conflicts, network filesystem detection, conflict display in the console interface, acceptance with real sync clients."
   },
   {
    "id": "MEM-015",
@@ -692,18 +703,23 @@
     "SYS-001",
     "SYS-002"
    ],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_connectors.py",
+    "tests/test_connector_formats.py",
+    "docs/CONNECTORS.md",
+    "docs/evidence/connectors/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "",
+   "notes": "Read-only contract and owner-selected .ics and .vcf export importers through the unchanged note pipeline; explicit connector.read to import; least-access scopes; freshness through GET /desk/connectors and the connectors command. No live account, device, mail, token or write at any origin; imported items still carry the authored-note label.",
    "owner_decision_needed": "Which account (provider) for the first read-only test connector, and a synthetic test account."
   },
   {

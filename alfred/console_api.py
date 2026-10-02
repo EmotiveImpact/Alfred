@@ -153,6 +153,14 @@ def projection(server, bearer):
                       'evidence': [{'sourceId': 'note:' + n['id'], 'revision': str(n['revision']), 'sha256': n['sha256'],
                                     'location': {'kind': 'lines', 'start': 1, 'end': max(1, len(bodies[n['id']].splitlines()))},
                                     'basis': 'authored', 'availability': 'current'}]})
+    copies = {}
+    for c in knowledge['sync_conflicts']:
+        if c['original']:
+            copies.setdefault('note:' + c['original'], []).append({'path': c['path'], 'tool': c['tool'], 'detectedAt': _iso(c['detected'])})
+    for node in nodes:
+        if node['id'] in copies:
+            # The note stays readable; a sync conflict copy beside it waits for the person (MEM-014).
+            node.update(availability='attention', syncConflict={'state': 'unresolved', 'copies': copies[node['id']]})
     for link in knowledge['links']:
         edges.append({'id': 'ref:' + _digest([link['source'], link['target'], link['line'], link['relation']])[:20],
                       'from': 'note:' + link['source'], 'to': 'note:' + link['target'], 'layer': 'note_reference',
@@ -246,9 +254,14 @@ def projection(server, bearer):
                           'milestonesStatus': 'recorded' if executive['milestone_progress'] else 'not_recorded'},
             'sources': [{'id': 'source:' + s['source'], 'label': s['label'], 'status': s['status'],
                          'checkedAt': _iso(s['checked']), 'issues': len(s['errors'])} for s in sources.values()],
+            'syncConflicts': [{'path': c['path'], 'originalId': 'note:' + c['original'] if c['original'] else None,
+                               'originalPath': c['original_path'], 'state': c['state'], 'tool': c['tool'],
+                               'sourceId': 'source:' + c['source'], 'detectedAt': _iso(c['detected']),
+                               'basis': c['basis']} for c in knowledge['sync_conflicts']],
             'counts': {'notes': len(knowledge['nodes']), 'entities': len(reviewed['entities']),
                        'noteLinks': len(knowledge['links']), 'reviewedClaims': sum(e['layer'] == 'reviewed_claim' for e in edges),
-                       'unresolvedLinks': len(knowledge['issues']), 'pendingApprovals': sum(a['state'] == 'proposed' for a in approvals)},
+                       'unresolvedLinks': len(knowledge['issues']), 'pendingApprovals': sum(a['state'] == 'proposed' for a in approvals),
+                       'syncConflicts': len(knowledge['sync_conflicts'])},
             'model': _model(server, p), 'paused': knowledge['paused'], 'readOnly': True,
             'basis': {'notes': 'authored_note_not_verified_fact', 'claims': 'user_reviewed_statements_not_verified_facts',
                       'decorativeGeometry': 'not_included'},

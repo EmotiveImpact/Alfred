@@ -36,6 +36,10 @@ def note_text(value):
 def destination(filename):
     if not isinstance(filename, str) or not NAME.fullmatch(filename) or '..' in filename:
         raise Fault('invalid_inbox_filename')
+    from .sync_conflicts import conflict_copy
+    if conflict_copy(filename):
+        # The scanner would set such a file aside as a sync conflict copy, not index it.
+        raise Fault('inbox_filename_looks_like_sync_conflict')
     return '/'.join(FOLDER + (filename,))
 
 

@@ -146,6 +146,10 @@ jobs:
           mkdir -p /tmp/alfred-console-connected
           git rev-parse HEAD > /tmp/alfred-console-connected/TESTED_COMMIT.txt
           ALFRED_CONSOLE_OUTPUT=/tmp/alfred-console-connected /tmp/alfred-browser/bin/python tools/check_console_connected_browser.py
+      - name: Browser acceptance of sync conflict handling in the web interface
+        run: |
+          set -euo pipefail
+          ALFRED_SYNC_OUTPUT=/tmp/alfred-console-connected/sync-conflict /tmp/alfred-browser/bin/python tools/check_sync_conflict_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

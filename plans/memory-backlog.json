@@ -326,7 +326,7 @@
     {
       "id": "M09",
       "title": "Explicit vault sync and local host lifecycle",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "M01",
         "M02",
@@ -348,6 +348,14 @@
         "One deliberate sync client per device, tested conflicts and exclusions",
         "Live SQLite ledger is not synced as ordinary vault files",
         "Offline/reconnect, stop, restore and last-confirmed source status remain visible"
+      ],
+      "delivery_status": "conflict copies recognised and recorded, placement guard and portable export on the integration branch; no sync client tested, host lifecycle unchanged; not merged or deployed",
+      "evidence": [
+        "tests/test_sync_conflicts.py",
+        "tests/test_placement.py",
+        "tests/test_export.py",
+        "docs/SYNC.md",
+        "docs/evidence/memory-m14/RECEIPT.md"
       ]
     },
     {
@@ -402,6 +410,13 @@
         "Consented read-only test account keeps canonical source IDs and freshness",
         "Optional later harmless write uses exact approval and capability-specific reconciliation",
         "OAuth refresh/revocation never expose connector secrets to a model or public repo"
+      ],
+      "delivery_status": "read-only export-file connectors (.ics, .vcf) on the integration branch as a first slice; no official account, so no acceptance point is met; not merged or deployed",
+      "evidence": [
+        "tests/test_connectors.py",
+        "tests/test_connector_formats.py",
+        "docs/CONNECTORS.md",
+        "docs/evidence/connectors/RECEIPT.md"
       ]
     },
     {

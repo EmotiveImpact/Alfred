@@ -24,6 +24,8 @@ Successful complete traversal reconciles missing notes and clears their current 
 
 The scanner checks file identity/size/timestamps before and after reading and revalidates observed file/directory signatures before publication. Unclosed frontmatter, fences and HTML comments fail honestly. A stable, syntactically valid intermediate editor save is indistinguishable from an intended save; this is not an editor transaction protocol or universal sync-conflict detector. Results remain labelled indexed snapshots, and later scans/final source checks apply. No filesystem proof here is cryptographic proof against a malicious local filesystem or inode reuse.
 
+Since 2 October, conflict copies named in the documented Syncthing, Dropbox and Nextcloud/ownCloud forms are recognised by name, recorded beside their originals and kept out of the index until the person removes them; other tools' conflicts are not recognised. See [the sync separation](SYNC.md).
+
 ## Decision
 
 Support Obsidian without requiring it. A vault is a local folder of Markdown and attachments, not ALFRED's database. The user can keep editing notes without ALFRED; ALFRED can read selected notes when Obsidian is closed. The first connector remains local filesystem read-only with explicit folders and exclusions.

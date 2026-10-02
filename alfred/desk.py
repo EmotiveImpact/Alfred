@@ -12,6 +12,7 @@ from .desk_http import DeskHTTPServer
 from .local import Fault
 from .knowledge_demo import seed_vault
 from .local_model import LocalOllama
+from .placement import check_data_directory
 
 
 def private_home(path):
@@ -29,6 +30,8 @@ def private_home(path):
 
 
 def init_demo(path):
+    # Live files never go where a sync tool, Git or a vault could hold them (MEM-014).
+    check_data_directory(path)
     path = private_home(path)
     config = path / 'desk-access.json'
     if config.exists() or config.is_symlink() or (path / 'desk.sqlite').exists():
@@ -72,6 +75,7 @@ def load_keys(path):
 def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60, *, vault_exclusions=(), vault_id_key=None):
     # POSIX development target. A lock prevents accidental duplicate supervisors.
     import fcntl
+    check_data_directory(path, (vault,) if vault else ())
     fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     server = supervisor = None
     try:
@@ -155,9 +159,10 @@ def start_local_jobs(store, owner, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate',
+    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export',
                                             'connector-add', 'connector-import', 'connectors'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
+    parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--credential-id')
@@ -179,6 +184,9 @@ def main():
     args = parser.parse_args()
     os.umask(0o077)
     try:
+        if args.command in ('init', 'serve', 'restore'):
+            # Checked before anything is created; backup and access stay available to move out.
+            check_data_directory(args.data_dir, (args.vault,) if args.vault else ())
         path = private_home(args.data_dir)
         if args.command == 'init':
             init_demo(path)
@@ -192,6 +200,17 @@ def main():
             manifest = backup(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], path / 'backups')
             print('Backup written:', manifest['file'], 'sha256', manifest['sha256'])
             print('It is an unencrypted SQLite copy. Keep it private.')
+        elif args.command == 'export':
+            if not args.export_dir:
+                raise Fault('export_dir_required')
+            from .export import export
+            result = export(DeskStore(path / 'desk.sqlite'), load_keys(path)[args.role], args.export_dir,
+                            vaults=(args.vault, path / 'vault'))
+            print('Export written:', result['directory'])
+            print('Statements:', result['counts']['statements'], '- executive records:', result['counts']['executive_records'],
+                  '- left out (forgotten, withheld or past retention):',
+                  sum(v for v in result['excluded'].values() if isinstance(v, int)))
+            print('Readable JSON and Markdown with SHA256SUMS. Not a backup and not encrypted. Keep it private.')
         elif args.command == 'rotate':
             rotate_key(path, args.role)
             print('Rotated the', args.role, 'key. The old key no longer works. Use the access command to reveal the new one.')
@@ -227,6 +246,8 @@ def main():
         print('ALFRED desk stopped. Stored events and drafts remain on disk.')
     except (Fault, OSError, ValueError) as exc:
         print('Cannot start:', exc.code if isinstance(exc, Fault) else type(exc).__name__)
+        if getattr(exc, 'detail', None):
+            print(exc.detail)
         raise SystemExit(1) from None
 
 
