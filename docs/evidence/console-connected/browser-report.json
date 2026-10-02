@@ -1,5 +1,5 @@
 {
-  "passed": 64,
+  "passed": 73,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -47,6 +47,12 @@
     "completing a priority is recorded on the server",
     "completing a milestone updates project progress",
     "executive records are graph records with a labelled link to their project",
+    "a job submitted from the inspector shows its server events in order",
+    "the result is the exact deterministic count, labelled as not an interpretation",
+    "the panel states the honest backend",
+    "a finished job is not polled again",
+    "after leaving and reloading, the job and its result are read back from the server",
+    "extracted lines are the exact first lines of the note, not a summary",
     "1280px has no horizontal overflow",
     "390px has no horizontal overflow",
     "no browser storage used",
@@ -61,7 +67,10 @@
     "revocation returns to sign-in and closes open dialogs",
     "revocation clears every record",
     "a person without grants sees no records, names or counts",
+    "without a read grant a person sees no job history for that source",
     "redeeming an invitation grants exactly what it names to the person who redeems it",
+    "a read grant makes the job history for that source visible",
+    "a reader can inspect the note but cannot submit jobs",
     "no Content Security Policy violations",
     "no requests leave the loopback origin",
     "no uncaught page errors"

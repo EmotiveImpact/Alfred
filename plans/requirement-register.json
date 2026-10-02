@@ -311,13 +311,14 @@
     "tests/test_console_api.py",
     "tests/test_identity_workflows.py",
     "tests/test_memory_programme_wip.py",
-    "tools/check_console_connected_browser.py"
+    "tools/check_console_connected_browser.py",
+    "tests/test_jobs_http.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Strict source grants, policy epochs and model purpose from PR #17; console projection filters before counting. Enrolment/admin HTTP workflows unfinished. Losing a grant now withholds reviews and their values instead of destroying them."
+   "notes": "Strict source grants, policy epochs and model purpose from PR #17; console projection filters before counting. Enrolment/admin HTTP workflows unfinished. Losing a grant now withholds reviews and their values instead of destroying them. Job history, events and controls are also hidden from anyone who cannot read every bound source (the submitter keeps their own history; results stay gated)."
   },
   {
    "id": "MEM-010",
@@ -924,13 +925,14 @@
    "acceptance_evidence": [
     "tests/test_jobs.py",
     "tests/test_jobs_http.py",
-    "docs/JOBS.md"
+    "docs/JOBS.md",
+    "docs/evidence/console-connected/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Local-subprocess backend only: allowlisted first-party kinds, declared permitted inputs, wall-clock and output limits, no credentials. Not a sandbox, VM or remote worker.",
+   "notes": "Local-subprocess backend only: allowlisted first-party kinds, declared permitted inputs, wall-clock and output limits, no credentials. Not a sandbox, VM or remote worker. The connected console can run a job on the exact inspected note revision, follow its events and read the result back after a reload; job history follows strict per-person grants.",
    "owner_decision_needed": "Compute vendor commitment (E2B Cloud, boxd, Modal or self-host only) and whether forks may hold ALFRED material (7.3 decision 5); confirm OpenShell identity (decision 8)."
   },
   {

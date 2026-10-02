@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from alfred.desk import init_demo
+from alfred.desk import init_demo, start_local_jobs
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.desk_http import DeskHTTPServer
 from alfred.reviewed_memory import ReviewedMemory
@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / 'console' / 'dist'
 out = Path(os.environ.get('ALFRED_CONSOLE_OUTPUT', ROOT / 'docs' / 'evidence' / 'console-connected'))
 out.mkdir(parents=True, exist_ok=True)
-checks, console_messages, page_errors, foreign = [], [], [], []
+checks, console_messages, page_errors, foreign, job_requests = [], [], [], [], []
 
 
 def check(name, condition=True):
@@ -44,12 +44,13 @@ with tempfile.TemporaryDirectory() as temp:
     store = KnowledgeStore(home / 'desk.sqlite')
     sup = KnowledgeSupervisor(store, keys['owner'], keys['source'], home / 'project', vault=home / 'vault', interval=.2)
     sup.cycle(); sup.start()
+    jobs, halt_jobs = start_local_jobs(store, keys['owner'], home)
     # A second workspace that must never appear.
     other_source = store.provision('other-workspace', 'other-source', 'source')
     other = root / 'other-vault'; other.mkdir()
     (other / 'Hidden.md').write_text('# Zephyrmarker\nAnother workspace.\n')
     MarkdownVault(store, other_source, other).scan()
-    server = DeskHTTPServer(store, sup, port=0, console_dist=DIST)
+    server = DeskHTTPServer(store, sup, port=0, console_dist=DIST, jobs=jobs)
     thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True); thread.start()
     memory = ReviewedMemory(store)
     try:
@@ -61,6 +62,7 @@ with tempfile.TemporaryDirectory() as temp:
             page.on('console', lambda m: console_messages.append(f'{m.type}: {m.text}'))
             page.on('pageerror', lambda e: page_errors.append(str(e)))
             page.on('request', lambda r: foreign.append(r.url) if not r.url.startswith(server.origin) else None)
+            page.on('request', lambda r: job_requests.append(r.url) if '/desk/jobs' in r.url else None)
             page.goto(server.origin + '/console')
             check('console is served by the ALFRED origin', page.url == server.origin + '/console/')
             expect(page.get_by_role('heading', name='Sign in to ALFRED')).to_be_visible()
@@ -305,6 +307,48 @@ with tempfile.TemporaryDirectory() as temp:
             expect(inspector).to_contain_text('executive link · for project')
             check('executive records are graph records with a labelled link to their project')
             page.get_by_label('Close record inspector').click()
+            # Bounded jobs: run on the exact revision being inspected, follow events, leave and return.
+            film_text = (home / 'vault' / 'projects' / 'Sample Film.md').read_text()
+            page.get_by_role('button', name='Explore projects').click()
+            page.get_by_role('dialog').get_by_role('button', name=re.compile(r'^Sample film The fictional')).click()
+            run = inspector.locator('.run-job')
+            expect(run).to_contain_text('Runs locally on revision')
+            run.get_by_label('Job kind').select_option('word_count')
+            run.get_by_role('button', name='Run on this revision').click()
+            jobs_dialog = page.get_by_role('dialog')
+            expect(jobs_dialog.get_by_role('heading', name='Bounded jobs')).to_be_visible()
+            expect(jobs_dialog.locator('.job-follow h3')).to_contain_text('Word and line count · Finished', timeout=20000)
+            events = jobs_dialog.get_by_label('Job events').inner_text()
+            check('a job submitted from the inspector shows its server events in order',
+                  [x in events for x in ('Submitted', 'Assigned to the local worker', 'Started in a local subprocess', 'Finished and result stored')] == [True] * 4
+                  and events.index('Submitted') < events.index('Started in a local subprocess') < events.index('Finished and result stored'))
+            result = jobs_dialog.get_by_label('Job result')
+            expect(result.locator('.detail-list > div').filter(has_text='Words').locator('dd')).to_have_text(f'{len(film_text.split()):,}')
+            check('the result is the exact deterministic count, labelled as not an interpretation', 'not an interpretation' in result.inner_text())
+            check('the panel states the honest backend', 'not a sandbox' in jobs_dialog.inner_text())
+            before = len(job_requests); page.wait_for_timeout(3000)
+            check('a finished job is not polled again', len(job_requests) - before <= 1)
+            page.screenshot(path=str(out / 'connected-jobs.png'))
+            jobs_dialog.get_by_label('Close panel').click()
+            run.get_by_label('Job kind').select_option('summarise_lines')
+            run.get_by_label('Number of lines').fill('3')
+            run.get_by_role('button', name='Run on this revision').click()
+            expect(jobs_dialog.locator('.job-follow h3')).to_contain_text('First lines (extractive)')
+            jobs_dialog.get_by_label('Close panel').click()
+            # Leave entirely: reload the page, then come back to the jobs panel.
+            page.reload()
+            expect(page.locator('.connection-state')).to_have_text('Connected', timeout=15000)
+            command.fill('jobs'); command.press('Enter')
+            jobs_dialog = page.get_by_role('dialog')
+            expect(jobs_dialog.locator('.job-row')).to_have_count(2, timeout=15000)
+            jobs_dialog.locator('.job-row').filter(has_text='First lines (extractive)').click()
+            expect(jobs_dialog.locator('.job-follow h3')).to_contain_text('First lines (extractive) · Finished', timeout=20000)
+            extracted = jobs_dialog.get_by_label('Extracted lines').locator('li')
+            expect(extracted).to_have_count(3)
+            check('after leaving and reloading, the job and its result are read back from the server')
+            first_lines = [line.strip()[:200] for line in film_text.splitlines() if line.strip()][:3]
+            check('extracted lines are the exact first lines of the note, not a summary', extracted.all_inner_texts() == first_lines)
+            jobs_dialog.get_by_label('Close panel').click()
             # Laptop and mobile layouts.
             for width, height in ((1280, 800), (390, 844)):
                 page.set_viewport_size({'width': width, 'height': height}); page.wait_for_timeout(600)
@@ -324,7 +368,7 @@ with tempfile.TemporaryDirectory() as temp:
             check('server loss never substitutes fixtures', 'Velvet Accademy' not in page.locator('body').inner_text())
             page.screenshot(path=str(out / 'connected-unreachable.png'))
             # A restarted server keeps no in-memory sessions, so the console asks to sign in again.
-            server = DeskHTTPServer(store, sup, port=port, console_dist=DIST)
+            server = DeskHTTPServer(store, sup, port=port, console_dist=DIST, jobs=jobs)
             thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True); thread.start()
             expect(page.get_by_role('heading', name='Sign in to ALFRED')).to_be_visible(timeout=20000)
             check('a restarted server requires a new sign-in and clears the stale view', '0 records' in page.locator('.graph-view-label').inner_text())
@@ -355,6 +399,10 @@ with tempfile.TemporaryDirectory() as temp:
             expect(page.locator('.connection-state')).to_have_text('Connected')
             expect(page.locator('.graph-view-label')).to_contain_text('0 records')
             check('a person without grants sees no records, names or counts', 'Sample film' not in page.locator('body').inner_text())
+            command.fill('jobs'); command.press('Enter')
+            expect(page.get_by_role('dialog')).to_contain_text('No jobs you can see.', timeout=15000)
+            check('without a read grant a person sees no job history for that source')
+            page.get_by_role('dialog').get_by_label('Close panel').click()
             page.get_by_role('button', name='Data and permissions').click()
             security = page.get_by_role('dialog')
             expect(security).to_contain_text('You hold no grants yet')
@@ -364,13 +412,21 @@ with tempfile.TemporaryDirectory() as temp:
             security.get_by_label('Close panel').click()
             expect(page.locator('.graph-view-label')).to_have_text(re.compile(r'[1-9][0-9]* records'), timeout=15000)
             check('redeeming an invitation grants exactly what it names to the person who redeems it', page.get_by_role('button', name='Explore projects').is_visible())
+            command.fill('jobs'); command.press('Enter')
+            expect(page.get_by_role('dialog').locator('.job-row')).to_have_count(2, timeout=15000)
+            check('a read grant makes the job history for that source visible')
+            page.get_by_role('dialog').get_by_label('Close panel').click()
+            page.get_by_role('button', name='Explore projects').click()
+            page.get_by_role('dialog').get_by_role('button', name=re.compile(r'^Sample film The fictional')).click()
+            expect(inspector).to_contain_text('projects/Sample Film.md', timeout=15000)
+            check('a reader can inspect the note but cannot submit jobs', inspector.locator('.run-job').count() == 0)
             csp = [m for m in console_messages if 'Content Security Policy' in m or 'Refused to' in m]
             check('no Content Security Policy violations', not csp)
             check('no requests leave the loopback origin', not foreign)
             check('no uncaught page errors', not page_errors)
             browser.close()
     finally:
-        sup.stop()
+        sup.stop(); halt_jobs()
         try:
             server.shutdown(); server.server_close()
         except Exception:

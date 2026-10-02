@@ -67,6 +67,17 @@ retries once.
   `/desk/actions/{id}/approve|cancel` routes with the exact fingerprint. Demo review
   receipts are never converted into server actions.
 
+## Bounded jobs
+
+An owner can run a first-party job (word and line count, or extractive first lines) on the
+exact note revision open in the inspector, through `/desk/jobs`. The Bounded jobs panel
+(command `jobs`, or Open jobs in Console controls) follows the job's server events from an
+in-memory cursor, stops polling when closed, resumes after the last seen event when
+reopened, and reads everything back from the server after a reload. Results are text with
+their stated basis, never markup. The panel says plainly that the backend is a local
+subprocess, not a sandbox. Readers can see jobs on sources they may read but cannot submit
+or cancel. Authority loss clears the panel with every other view.
+
 ## Not provided by this increment
 
 Priorities, recommendations and milestone progress now come from executive records
@@ -81,6 +92,7 @@ device or GPU certification.
   and service checks, including other-workspace exclusion, strict-grant non-leakage,
   source change, revocation, same-name entities, static-path traversal and a race.
 - `console/tests/connected.test.ts` (18): mapping, reducer selection rules, command
-  routing and mode detection.
-- `tools/check_console_connected_browser.py` (64 checks): real Chromium against the
+  routing and mode detection. `console/tests/jobs.test.ts` (8): job event merging, result
+  reading, wording and command routing.
+- `tools/check_console_connected_browser.py` (73 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

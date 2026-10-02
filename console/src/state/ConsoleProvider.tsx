@@ -8,7 +8,8 @@ import {consoleMode} from '../integration/mode';
 import {emptyConnectedSnapshot} from '../integration/toSnapshot';
 import {useConnection,useRecordDetail} from './useConnection';
 import {useAsk} from './useAsk';
-export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|null;
+import {useJobs} from './useJobs';
+export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|'jobs'|null;
 export type RailView='home'|'search'|'knowledge'|'tasks'|'research'|'systems'|'security'|'settings';
 export function downloadJSON(value:unknown,name:string){
   const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
@@ -25,13 +26,13 @@ function useController(){
   const[graphMode,setGraphMode]=useState<GraphMode>('field'),[activeView,setActiveView]=useState<RailView>('home');
   const[renderEpoch,setRenderEpoch]=useState(0);
   // Lost or changed authority closes every view that could still show withdrawn material.
-  const resetAsk=useRef<()=>void>(()=>{});
+  const resetAsk=useRef<()=>void>(()=>{}),resetJobs=useRef<()=>void>(()=>{});
   // A change the person just made from the access panel keeps that panel open; it shows no records.
   const expectingAccessChange=useRef(false);
   const expectAccessChange=useCallback(()=>{expectingAccessChange.current=true;},[]);
   const onAuthorityLost=useCallback((kind:'cleared'|'changed')=>{
     const keep=kind==='changed'&&expectingAccessChange.current;expectingAccessChange.current=false;
-    setModal(m=>keep&&m==='security'?m:null);setQuery('');setProposalId(null);if(!keep)setActiveView('home');resetAsk.current();
+    setModal(m=>keep&&m==='security'?m:null);setQuery('');setProposalId(null);if(!keep)setActiveView('home');resetAsk.current();resetJobs.current();
     return keep;
   },[]);
   const live=useConnection(mode,dispatch,setNotice,onAuthorityLost);
@@ -58,6 +59,7 @@ function useController(){
   },[connected,live.workspaces]);
   const detail=useRecordDetail(live.client,connected,state.selected,state.snapshot.dataRevision,live.fail);
   const asking=useAsk(live.client,live.fail);resetAsk.current=asking.reset;
+  const jobs=useJobs(live.client,live.fail);resetJobs.current=jobs.reset;
   const[askMode,setAskMode]=useState<'sources'|'local_model'>('sources');
   const askQuestion=(question:string,followUp=false)=>{
     // The selection is sent as context only; the server re-authorises it.
@@ -96,7 +98,7 @@ function useController(){
   const recheckAsk=asking.recheck;
   useEffect(()=>{void recheckAsk();},[state.snapshot.dataRevision]);// eslint-disable-line react-hooks/exhaustive-deps
   const askView={state:asking.state,sessionId:asking.state.status==='done'?asking.state.sessionId:null};
-  return{expectAccessChange,mode,connected,live,detail,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
+  return{expectAccessChange,mode,connected,live,detail,jobs,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
     notice,setNotice,renderer,onStatus,graphMode,setGraphMode,activeView,navigate,systemReduced,reduced,inputRef,searchRef,
     records,relationships,shownRecords,selected,priorities,proposals,pending,projects,activeProposal,results,selectRecord,closeModal,
     switchScope,openReview,openCategory,runCommand,resetDemo,renderEpoch,retryGraphics:()=>setRenderEpoch(n=>n+1)};

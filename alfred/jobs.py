@@ -175,6 +175,31 @@ class JobCoordinator:
             raise Fault('not_found', 404)
         return row
 
+    def _visible(self, db, principal, row) -> bool:
+        """Who may see a job, its events and its controls.
+
+        The person who submitted it always sees their own job's state, so a refused or
+        failed job is never silently lost to them. Anyone else must be able to read every
+        source it was bound to, so strict per-person grants also cover job history. The
+        result itself is always gated separately by `artefact`.
+        """
+        if row['actor'] == principal['id']:
+            return True
+        people = {r['credential']: r['person'] for r in db.execute(
+            'SELECT credential,person FROM identity_devices WHERE credential IN (?,?)', (row['actor'], principal['id']))}
+        if len(people) == 2 and people[row['actor']] == people[principal['id']]:
+            return True
+        sources = set()
+        for item in json.loads(row['inputs']):
+            sources.update([item['source']] if item['type'] == 'note' else item['sources'])
+        return self._sources_permitted(db, principal, sorted(sources), 'read')
+
+    def _permitted_job(self, db, principal, job_id):
+        row = self._job(db, principal['scope'], job_id)
+        if not self._visible(db, principal, row):
+            raise Fault('not_found', 404)  # Indistinguishable from an unknown job.
+        return row
+
     def _settle(self, db, row, state, reason):
         db.execute('UPDATE jobs SET state=?,reason=?,lease_owner=NULL,lease_digest=NULL,lease_until=NULL WHERE id=?',
                    (state, reason, row['id']))
@@ -397,15 +422,20 @@ class JobCoordinator:
     def view(self, bearer, job_id) -> dict:
         with self._read() as db:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
-            return self._view(db, self._job(db, p['scope'], job_id))
+            return self._view(db, self._permitted_job(db, p, job_id))
 
     def jobs(self, bearer, *, limit=50) -> list:
         if type(limit) is not int or not 1 <= limit <= 100:
             raise Fault('invalid_limit')
         with self._read() as db:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
-            rows = db.execute('SELECT * FROM jobs WHERE scope=? ORDER BY created DESC,id DESC LIMIT ?', (p['scope'], limit)).fetchall()
-            return [self._view(db, row) for row in rows]
+            shown = []
+            for row in db.execute('SELECT * FROM jobs WHERE scope=? ORDER BY created DESC,id DESC', (p['scope'],)):
+                if self._visible(db, p, row):
+                    shown.append(self._view(db, row))
+                    if len(shown) == limit:
+                        break
+            return shown
 
     def events(self, bearer, job_id, after_sequence=0, *, limit=100) -> dict:
         """Events after a cursor, so a reconnecting client resumes where it stopped."""
@@ -415,7 +445,7 @@ class JobCoordinator:
             raise Fault('invalid_limit')
         with self._read() as db:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
-            row = self._job(db, p['scope'], job_id)
+            row = self._permitted_job(db, p, job_id)
             items = [{'sequence': r['sequence'], 'kind': r['kind'], 'detail': json.loads(r['detail']), 'at': r['at']}
                      for r in db.execute('SELECT * FROM job_events WHERE job_id=? AND sequence>? ORDER BY sequence LIMIT ?',
                                          (row['id'], after_sequence, limit + 1))]
@@ -429,7 +459,7 @@ class JobCoordinator:
         """Cooperative cancellation. A queued job is cancelled at once; cancellation is not undo."""
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            row = self._job(db, p['scope'], job_id)
+            row = self._permitted_job(db, p, job_id)
             if row['state'] in ('cancelled', 'cancel_requested'):
                 return self._view(db, row)
             if row['state'] == 'queued':
@@ -450,7 +480,7 @@ class JobCoordinator:
             raise Fault('invalid_finding')
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            row = self._job(db, p['scope'], job_id)
+            row = self._permitted_job(db, p, job_id)
             if row['state'] != 'effect_unknown':
                 raise Fault('invalid_state', 409)
             db.execute("UPDATE jobs SET state='reconciled',reason=? WHERE id=?", (finding, row['id']))

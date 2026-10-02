@@ -103,6 +103,28 @@ class JobsHTTPTests(unittest.TestCase):
         self.assertEqual(self.submit('reader-job')[0], 403)
         self.assertEqual(self.req('/desk/jobs/' + job['id'])[1]['id'], job['id'])
 
+    def test_strict_grants_also_govern_job_history(self):
+        self.login()
+        self.req('/desk/identity/enable', {'epoch': 0})
+        epoch = lambda: self.req('/desk/identity')[1]['epoch']
+        grant = {'source': 'demo-source', 'capability': 'read', 'days': 30}
+        self.req('/desk/identity/grants', {**grant, 'epoch': epoch(), 'revoke': False})
+        job = self.until(self.submit('strict')[1]['id'], {'succeeded'})
+        invitation = self.req('/desk/identity/invitations', {**grant, 'days': 1, 'epoch': epoch()})[1]
+        owner = (self.cookie, self.csrf)
+        self.login('reader')
+        self.assertEqual(self.req('/desk/jobs')[1]['jobs'], [])
+        for path in (f"/desk/jobs/{job['id']}", f"/desk/jobs/{job['id']}/events?after=0", '/desk/jobs/artefacts/' + job['result']['sha256']):
+            self.assertEqual(self.req(path)[0], 404, path)
+        self.assertEqual(self.req('/desk/identity/invitations/redeem', {'code': invitation['code']})[0], 200)
+        self.assertEqual([j['id'] for j in self.req('/desk/jobs')[1]['jobs']], [job['id']])
+        self.assertEqual(self.req(f"/desk/jobs/{job['id']}/events?after=0")[0], 200)
+        # The submitter keeps their own job history after losing access; the result does not.
+        self.cookie, self.csrf = owner
+        self.req('/desk/identity/grants', {**grant, 'epoch': epoch(), 'revoke': True})
+        self.assertEqual(self.req(f"/desk/jobs/{job['id']}")[1]['state'], 'succeeded')
+        self.assertEqual(self.req('/desk/jobs/artefacts/' + job['result']['sha256'])[0], 404)
+
     def test_idempotent_submission_over_http(self):
         self.login()
         first = self.submit('same')[1]; again = self.submit('same')[1]

@@ -4,6 +4,7 @@ import {X,LinkSimple,CaretRight,DownloadSimple} from '@phosphor-icons/react';
 import {useConsole,downloadJSON} from '../state/ConsoleProvider';
 import {type RecordDetail,type StatementDetail} from '../integration/ConsoleReadPort';
 import {type Relationship} from '../domain/model';
+import {RunJob} from './JobsPanel';
 const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',executive_link:'executive link',executive_support:'cited support',fixture:''};
 const ORIGIN_BADGE:Record<string,string>={authored_note:'AUTHORED NOTE · NOT A VERIFIED FACT',reviewed_entity:'REVIEWED MEMORY · YOUR JUDGEMENT',source:'SELECTED SOURCE',executive_record:'EXECUTIVE RECORD · AUTHORED BY YOU'};
 function frontmatterEnd(lines:string[]){if(lines[0]?.trim()!=='---')return 0;const end=lines.findIndex((l,i)=>i>0&&l.trim()==='---');return end<0?0:end+1;}
@@ -30,9 +31,9 @@ function ConnectedProvenance({detail}:{detail:RecordDetail}){
   const c=useConsole(),{selectRecord}=c;
   if(detail.type==='note'){
     const start=frontmatterEnd(detail.lines),shown=detail.lines.slice(start,start+14);
-    return <section className="inspector-section"><h3>Provenance</h3><dl className="detail-list"><div><dt>Path</dt><dd>{detail.path}</dd></div><div><dt>Revision</dt><dd>{detail.revision}</dd></div><div><dt>SHA-256</dt><dd className="hash">{detail.sha256.slice(0,16)}…</dd></div><div><dt>Basis</dt><dd>Authored text, not verified</dd></div></dl>
+    return <><section className="inspector-section"><h3>Provenance</h3><dl className="detail-list"><div><dt>Path</dt><dd>{detail.path}</dd></div><div><dt>Revision</dt><dd>{detail.revision}</dd></div><div><dt>SHA-256</dt><dd className="hash">{detail.sha256.slice(0,16)}…</dd></div><div><dt>Basis</dt><dd>Authored text, not verified</dd></div></dl>
       <ol className="source-lines" start={start+1} aria-label="Exact source lines">{shown.map((line,i)=><li key={i}>{line||' '}</li>)}</ol>
-      {detail.lines.length>start+14&&<p className="dialog-note">Showing lines {start+1} to {start+shown.length} of {detail.lines.length}{detail.truncated?' (inspection limit reached)':''}.</p>}</section>;
+      {detail.lines.length>start+14&&<p className="dialog-note">Showing lines {start+1} to {start+shown.length} of {detail.lines.length}{detail.truncated?' (inspection limit reached)':''}.</p>}</section><RunJob noteId={detail.id} revision={detail.revision}/></>;
   }
   if(detail.type==='exec'){
     const project=detail.project?c.state.snapshot.records.find(r=>r.id===detail.project):undefined;

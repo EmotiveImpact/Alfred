@@ -1,6 +1,6 @@
 # Local job coordinator (infrastructure stage 0)
 
-Status, 2 October 2026: implemented on this branch as stage 0 of the staged architecture in [research/INFRASTRUCTURE_2026-10-02.md](../research/INFRASTRUCTURE_2026-10-02.md) (sections 5 and 7). Synthetic data only. Owner and reader HTTP routes and one host worker thread were wired on 2 October (see the end of this document). There is no console view yet, no remote worker, no VM isolation and no sandbox. Nothing is deployed and no background service is installed. It serves PRD rows RUN-002, RUN-003 and SYS-003 only at the single-host, local-subprocess level described here; the provider and mesh decisions in section 7.3 of the research remain open.
+Status, 2 October 2026: implemented on this branch as stage 0 of the staged architecture in [research/INFRASTRUCTURE_2026-10-02.md](../research/INFRASTRUCTURE_2026-10-02.md) (sections 5 and 7). Synthetic data only. Owner and reader HTTP routes and one host worker thread were wired on 2 October (see the end of this document). The connected console has a jobs view (added later on 2 October; see the end of this document). There is no remote worker, no VM isolation and no sandbox. Nothing is deployed and no background service is installed. It serves PRD rows RUN-002, RUN-003 and SYS-003 only at the single-host, local-subprocess level described here; the provider and mesh decisions in section 7.3 of the research remain open.
 
 | File | Contents |
 |---|---|
@@ -78,9 +78,9 @@ Every call authenticates a bearer with `store.authenticate` inside the transacti
 | Call | Who | Notes |
 |---|---|---|
 | `submit(bearer, request)` | owner | `request` keys: `idempotency_key`, `kind`, `parameters`, `inputs`, `side_effect_free`, optional `max_attempts` (1 to 10, default 3). Same key and same request returns the existing job; a different request raises `idempotency_key_collision` (409). |
-| `view(bearer, job)`, `jobs(bearer, limit=)` | owner, reader | Job record, including `last_sequence`, `finished` and `needs_reconciliation`. |
-| `events(bearer, job, after_sequence, limit=)` | owner, reader | Events after a cursor, plus `next_cursor`, `more`, `state` and `finished`, for reconnecting clients. |
-| `cancel(bearer, job)` | owner (any owner in the scope) | Queued: cancelled now. Leased or running: `cancel_requested`. |
+| `view(bearer, job)`, `jobs(bearer, limit=)` | owner, reader | Job record, including `last_sequence`, `finished` and `needs_reconciliation`. Shown only to the person who submitted it or to a caller who may read every source it was bound to; otherwise `not_found`, as for an unknown job. |
+| `events(bearer, job, after_sequence, limit=)` | owner, reader | Events after a cursor, plus `next_cursor`, `more`, `state` and `finished`, for reconnecting clients. Same visibility rule as `view`. |
+| `cancel(bearer, job)` | owner (any owner in the scope who can see the job) | Queued: cancelled now. Leased or running: `cancel_requested`. |
 | `reconcile(bearer, job, finding)` | owner | Only from `effect_unknown`. |
 | `artefact(bearer, sha256)` | owner, reader | Rechecks lineage sources with `policy.permitted(..., 'read')` and verifies the SHA-256 on read. Through the cache when one is configured, falling back to the database copy. |
 | `enrol_worker(bearer, id, label, capabilities)`, `revoke_worker(bearer, id)`, `workers(bearer)` | owner (enrol, revoke); owner, reader (list) | Capabilities must be registered kinds. Revocation is permanent; enrol a new ID instead. |
@@ -147,7 +147,7 @@ Not proven or not built:
 
 - Containment. A local subprocess is not a sandbox; there is no namespace, seccomp, VM or network isolation. The CPU and memory limits are set but not tested.
 - Remote workers, multiple hosts, a mesh, object storage or any vendor service.
-- The browser interface and the console. The HTTP routes are loopback-only, behind the existing session, CSRF and Host/Origin checks.
+- The original web interface has no jobs view; the connected console does (below).
 - Survival of a job when the host process itself dies. The child is in its own session and may run on until it finishes or hits its CPU limit, but its result is then lost; the job's lease expires and recovery applies. Recovery is tested by advancing the coordinator clock and by restarting the coordinator, not by killing the host process.
 - Real external effects. No registered kind has one; the `effect_unknown` path is exercised with a conservative declaration.
 - Power-loss durability beyond SQLite's own guarantees, throughput, fairness between scopes, or Windows support (the backend assumes POSIX).
@@ -196,3 +196,23 @@ either note blocks the shared result.
 
 Evidence: `tests/test_jobs.py` (54) and `tests/test_jobs_http.py` (4), including a client
 that signs out while its job runs and a new session that resumes from its event cursor.
+
+## Console view and job visibility, 2 October 2026
+
+The connected console (`console/src/components/JobsPanel.tsx`) lets an owner run one of
+the two first-party kinds a person would choose (word and line count; extractive first
+lines) on the exact note revision open in the inspector. If the note changes first, the
+server refuses the job instead of running it on newer text. The panel follows the job's
+events from an in-memory cursor while it is open, stops polling when closed, and resumes
+after the last event it saw when reopened; after a full page reload it reads the list,
+events and result back from the server. Results are shown as text with their stated
+basis, never rendered as markup. The test-only `wait` kind is not offered.
+
+Job history now follows strict per-person grants. A job, its events and its controls are
+visible to the person who submitted it, and to anyone else only while they may read every
+source the job was bound to; otherwise the job answers `not_found`, like an unknown one.
+The submitter keeps their own history after losing access, so a refused or failed job is
+never silently lost to them, but the result stays gated by `artefact`, which rechecks
+access and lineage on every read. Evidence: `tests/test_jobs_http.py`
+(`test_strict_grants_also_govern_job_history`) and the jobs section of
+`tools/check_console_connected_browser.py`.

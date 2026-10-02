@@ -75,3 +75,13 @@
 button.access-chip:hover:not(:disabled){border-color:#d7b37566}
 .invitation-code{display:flex;flex-direction:column;gap:4px;margin:10px 0 0;padding:10px 12px;border:1px solid #d7b37540;border-radius:8px;word-break:break-all}
 .invitation-code small{font-size:10px;color:var(--quiet)}
+/* Bounded jobs: a plain event timeline and a text result. */
+.job-events{list-style:none;margin:10px 0 0;padding:0;border-left:1px solid var(--edge-strong)}
+.job-events li{display:flex;justify-content:space-between;gap:12px;padding:5px 0 5px 14px;font-size:12px;color:#c9cfcd;position:relative}
+.job-events li::before{content:"";position:absolute;left:-3px;top:11px;width:5px;height:5px;border-radius:50%;background:#687376}
+.job-events li:last-child::before{background:var(--amber)}
+.job-events time{color:var(--quiet);font-size:11px;white-space:nowrap}
+.job-result{margin-top:12px;padding:12px 14px;border:1px solid var(--edge-strong);border-radius:10px;background:#07090a}
+.job-row.active{border-color:#d7b37555}
+.run-job select,.run-job input{width:100%;margin-top:4px;padding:8px 10px;border:1px solid var(--edge-strong);border-radius:8px;background:#000;color:var(--text);font-size:12px}
+.run-job label{font-size:11px;color:#aeb7b5}

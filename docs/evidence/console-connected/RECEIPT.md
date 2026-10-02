@@ -16,7 +16,7 @@ served by that server and driven in Chromium 141 (SwiftShader).
 | `python3 -m unittest discover -s tests` | 699 pass (includes 16 projection and 12 focus tests) |
 | `npm run build` and `npm test` in `console/` | build passes; 79 unit tests pass |
 | `npx playwright test` (offline demo) | 29 of 29 pass, unchanged behaviour |
-| `tools/check_console_connected_browser.py` | 64 of 64 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations); [report](browser-report.json) |
+| `tools/check_console_connected_browser.py` | 73 of 73 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, and bounded jobs); [report](browser-report.json) |
 | Existing seven backend browser scripts | all pass |
 
 The 43 checks include: sign-in through the real session; graph counts equal to the
@@ -46,11 +46,23 @@ errors.
 
 [Desktop](connected-desktop.png), [reviewed memory inspector](connected-reviewed.png),
 [Ask with project context](connected-ask.png), [390 px](connected-390.png),
-[server unreachable](connected-unreachable.png). Captured from the running console,
-not generated.
+[server unreachable](connected-unreachable.png), [bounded jobs](connected-jobs.png).
+Captured from the running console, not generated.
+
+## Bounded jobs (added after the Stage A and B commit)
+
+The jobs checks run the real host worker (`start_local_jobs`, local subprocess) behind the
+same server. From the inspector an owner runs a word and line count on the open revision
+of a synthetic note; the panel shows the server events in order and the exact count with
+its basis, and a finished job is not polled again. A second, extractive job is submitted and the panel closed at once; after a
+full page reload the panel reads both jobs, the events and the exact first lines back from
+the server. Under strict grants a person without a read grant sees no job history; after
+redeeming a read invitation the history for that source appears, and the reader can
+inspect the note but has no control to submit jobs. Backend rule and tests:
+`docs/JOBS.md` (console view and job visibility).
 
 ## Limits
 
 Synthetic data only. No model configured, so no reasoning quality is claimed.
 Software rendering is not physical-device graphics acceptance. One workspace per
-credential. Priorities and milestones are not yet recorded by the backend.
+credential. Priorities and milestones come from executive records (see `../executive/RECEIPT.md`).
