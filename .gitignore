@@ -7,3 +7,6 @@ __pycache__/
 *.sqlite
 *.sqlite3
 *.db
+console/ALFRED-Console.html
+console/THIRD_PARTY_NOTICES.md
+console/evidence/
