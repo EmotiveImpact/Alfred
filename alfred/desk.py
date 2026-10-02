@@ -159,7 +159,7 @@ def start_local_jobs(store, owner, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export',
+    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
                                             'connector-add', 'connector-import', 'connectors'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
@@ -229,6 +229,26 @@ def main():
             finally:
                 os.close(fd)
             print('Restored', result['restored_from'], '- replayed', result['journal_entries_replayed'], 'forget/revocation entries.')
+        elif args.command == 'rebuild-index':
+            import fcntl
+            from .rebuild import rebuild_index
+            fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            try:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise Fault('stop_alfred_before_rebuild', 409) from None
+                keys = load_keys(path)
+                report = rebuild_index(DeskStore(path / 'desk.sqlite'), keys['owner'], keys['source'],
+                                       Path(args.vault) if args.vault else path / 'vault',
+                                       exclude_folders=tuple(args.vault_exclude), id_key=args.vault_id_key)
+            finally:
+                os.close(fd)
+            notes = report['notes']
+            print('Rebuilt', notes['after'], 'notes from the vault;', notes['same_identity_and_revision'], 'kept the same identity and revision.')
+            print('New revisions:', len(notes['new_revision']), '- no longer present:', len(notes['no_longer_present']),
+                  '- new:', len(notes['new']), '- links unchanged:', report['links']['unchanged'],
+                  '- reviewed statements whose state changed:', len(report['reviewed_statements']['state_changed']))
         elif args.command in ('connector-add', 'connector-import', 'connectors'):
             from .connectors import command
             for line in command(path, args):

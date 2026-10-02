@@ -398,13 +398,15 @@
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_memory_m01.py",
-    "docs/evidence/memory-m01/RECEIPT.md"
+    "docs/evidence/memory-m01/RECEIPT.md",
+    "tests/test_rebuild.py",
+    "docs/evidence/memory-rebuild/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Knowledge history catalogue on the branch; migration and reconciliation tests incomplete."
+   "notes": "Knowledge history catalogue, plus an offline rebuild-index command that rebuilds note, link and anchor projections atomically from the canonical files and the durable catalogue, keeping every identity, revision and review, reporting changes, never reviving invalidated reviews, and tested across a version 1 to 2 schema migration. No rebuild for connector sources (re-import instead), over HTTP or on a schedule."
   },
   {
    "id": "MEM-013",

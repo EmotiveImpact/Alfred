@@ -366,7 +366,7 @@ class KnowledgeStore(DeskStore):
             return {'id': job['id'], 'state': 'failed', 'proof': json.loads(row['proof'])}
         return super().finish(bearer, job)
 
-    def replace_notes(self, bearer, label, notes, errors, vault_id=None, conflicts=()):
+    def replace_notes(self, bearer, label, notes, errors, vault_id=None, conflicts=(), *, rebuild=False):
         if len(notes) > MAX_NOTES or sum(len(n['refs']) for n in notes) > MAX_LINKS:
             raise Fault('knowledge_capacity')
         paths, external_ids = set(), set()
@@ -387,6 +387,11 @@ class KnowledgeStore(DeskStore):
             selection = db.execute('SELECT vault_id FROM knowledge_vaults WHERE scope=? AND source=?', (scope,source)).fetchone()
             if selection and vault_id != selection['vault_id']: raise Fault('vault_selection_required')
             old_source = db.execute('SELECT * FROM knowledge_sources WHERE scope=? AND source=?', (scope,source)).fetchone()
+            if rebuild:
+                # MEM-012: drop only the projections, in this same transaction. The durable catalogue
+                # (history, identities, vault binding) then restores every identity and revision below.
+                for table in ('knowledge_notes','knowledge_refs','knowledge_anchors'):
+                    db.execute(f'DELETE FROM {table} WHERE scope=? AND source=?', (scope,source))
             prior = [dict(r) for r in db.execute('SELECT n.*,i.external_id,i.device,i.inode FROM knowledge_notes n LEFT JOIN knowledge_identity i USING(scope,source,id) WHERE n.scope=? AND n.source=?', (scope,source))]
             # Rebuild removed projections from the durable catalogue, not filenames.
             present = {r['id'] for r in prior}
@@ -664,7 +669,7 @@ class MarkdownVault:
         except BaseException:
             os.close(fd);raise
 
-    def scan(self):
+    def scan(self, *, rebuild=False):
         if self.store.paused(self.principal['scope']): return self.health
         notes,errors=[],[];total=[0,0];observed={};copies=[]
         def walk(fd,prefix='',depth=0):
@@ -755,7 +760,7 @@ class MarkdownVault:
                     if (current.st_dev,current.st_ino)!=self.identity: raise Fault('vault_root_replaced')
                 finally: os.close(check)
             finally: os.close(fd)
-            self.store.replace_notes(self.bearer,self.label,notes,errors,self.vault_id,conflicts=sync_conflicts.scanned(copies,notes,errors))
+            self.store.replace_notes(self.bearer,self.label,notes,errors,self.vault_id,conflicts=sync_conflicts.scanned(copies,notes,errors),rebuild=rebuild)
             status='attention' if errors else 'ready'
         except (Fault,OSError) as exc:
             code=exc.code if isinstance(exc,Fault) else 'vault_unavailable'
