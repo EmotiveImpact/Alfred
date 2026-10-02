@@ -36,6 +36,10 @@ The M jobs below are the bounded memory programme. The whole product also needs 
 | E2 | Files, distributed nodes, remote workers | SYS-003, RUN-002, RUN-003, MEM-014 | Research complete ([evidence](../research/INFRASTRUCTURE_2026-10-02.md)); provider decisions needed. |
 | E3 | Connectors, specialist products, voice, native packaging, release hardening | CON-001, OPS-001, OPS-002, VOI-001 | Not started; each needs real interfaces, accounts or hardware. |
 
+## Remaining build plan, 2 October 2026 (evening)
+
+Workstreams A to D and the first slice of E1 and E3 are now on the integration branch (PR #18): 8 of 33 requirements implemented, 24 partial, 1 not started. Everything still to build is laid out in dependency order, with sizes, acceptance and the owner decisions each item needs, in [REMAINING_BUILD_PLAN.md](REMAINING_BUILD_PLAN.md). It is organised by the release gates below: private pilot, useful assistant, more than one machine, team and operational. Take the lowest-numbered item whose needs are met.
+
 ## Work order
 
 | Job | Work | Main acceptance |

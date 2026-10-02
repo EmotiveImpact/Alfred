@@ -82,6 +82,8 @@ Raised by the wave 2 work:
 
 ## Next executable steps
 
+The full ordered plan for the remainder is [REMAINING_BUILD_PLAN.md](REMAINING_BUILD_PLAN.md).
+
 1. Confirm unified CI on the routines merge.
 2. Export statement history and routine settings in the portable export (MEM-013), once
    the owner answers the export question above.
