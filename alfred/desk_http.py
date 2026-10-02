@@ -396,6 +396,10 @@ class Handler(BaseHTTPRequestHandler):
                 elif not mutation and url.path == '/desk/memory/receipts':
                     from .lifecycle import receipts
                     result = receipts(store,bearer)
+                elif not mutation and (url.path.endswith('/history') or url.path.startswith('/desk/memory/as-of/')):
+                    # Recorded review history and the as-of report (MEM-007); reads only.
+                    from .memory_history import MemoryHistory, route as history_route
+                    result = history_route(MemoryHistory(memory),url.path,mutation,bearer)
                 else: raise Fault('not_found',404)
             elif mutation and re.fullmatch(r'/desk/sources/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget', url.path):
                 # Removes the source from ALFRED, never the person's own files.

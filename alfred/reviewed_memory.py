@@ -3,12 +3,14 @@
 Entities are explicitly created, never merged by name. Review records a user's
 judgement; it grants no device/tool authority. Source slices are reconstructed,
 not duplicated. Invalidated statement values are cleared on reconciliation.
+Every review transition is also appended to a value-free history (memory_history).
 """
 from __future__ import annotations
 import hashlib
 import json
 import secrets
 from .local import Fault, exact, ident, text, timestamp, fingerprint
+from . import memory_history
 
 KINDS = ('person', 'organisation', 'project', 'asset', 'decision', 'commitment', 'event')
 RELATIONS = {
@@ -60,6 +62,7 @@ class ReviewedMemory:
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
             if [r[0] for r in db.execute('SELECT version FROM reviewed_memory_meta')] != [1]:
                 raise Fault('unsupported_reviewed_memory_version')
+        memory_history.initialise(store)
 
     @staticmethod
     def _entity(db, p, identity):
@@ -149,6 +152,7 @@ class ReviewedMemory:
             if state=='changed':
                 db.execute("UPDATE memory_claims SET state='invalidated',value=NULL,object_id=NULL,version=version+1 WHERE id=?",(c['id'],))
                 self.store.log(db,p['scope'],p['id'],'memory.invalidated',c['id'])
+                memory_history.record(db,p['scope'],p['id'],c['id'],'invalidated',self.store.now(),memory_history.SYSTEM,detail='support_changed')
 
     def create_entity(self, bearer, body):
         exact(body, {'id','kind','name'});ident(body['id']);text(body['name'],120)
@@ -242,22 +246,43 @@ class ReviewedMemory:
                 until=self.store.now()+capture['retention_days']*86400 if capture['retention_days'] else None
                 db.execute('INSERT INTO memory_capture VALUES (?,?,?,?,?)',(cid,capture['memory_type'],until,json.dumps(capture['captured_from'],sort_keys=True),self.store.now()))
             self.store.log(db,p['scope'],p['id'],'memory.proposed',cid)
+            memory_history.record(db,p['scope'],p['id'],cid,'proposed',self.store.now(),p['id'],
+                                  detail='captured' if capture is not None else None,valid=(body['valid_from'],body['valid_until']))
         return {'id':cid,'state':'proposed','reused':False}
 
     def review(self, bearer, identity, body):
-        exact(body, {'version','decision','replaces_id','replaces_version'})
+        """Record one decision. Accepting or superseding a proposal may also set its valid
+        period, once, before it is first decided; after that the period is fixed, so the
+        recorded history stays a faithful account of what was held and for when."""
+        base={'version','decision','replaces_id','replaces_version'}
+        if type(body) is not dict or set(body) not in (base,base|{'valid_from','valid_until'}):
+            raise Fault('invalid_fields')
         if type(body['version']) is not int or body['version'] < 1 or body['decision'] not in ('accept','dispute','withdraw','supersede'):
             raise Fault('invalid_memory_review')
         if body['decision']!='supersede' and (body['replaces_id'] is not None or body['replaces_version'] is not None):
             raise Fault('unexpected_memory_replacement')
+        validity=None
+        if 'valid_from' in body:
+            if body['decision'] not in ('accept','supersede'):raise Fault('unexpected_memory_validity')
+            for key in ('valid_from','valid_until'):
+                if body[key] is not None:timestamp(body[key])
+            if body['valid_until'] is not None and body['valid_until'] <= (body['valid_from'] or 0):
+                raise Fault('invalid_memory_validity')
+            validity=(body['valid_from'],body['valid_until'])
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'});self._reconcile(db,p)
             c=self._claim(db,p,identity)
             if c['state']=='invalidated':raise Fault('memory_source_changed',409)
             if c['version']!=body['version']:raise Fault('memory_review_changed',409)
             if c['state'] not in ('proposed','accepted','disputed'):raise Fault('memory_review_closed',409)
+            if validity==(c['valid_from'],c['valid_until']):validity=None
+            if validity is not None and c['state']!='proposed':raise Fault('memory_validity_fixed',409)
+            if memory_history.count(db,p['scope'],p['id'],c['id'])>=memory_history.MAX_HISTORY_PER_CLAIM:
+                raise Fault('memory_history_capacity',409)
             self._source(db,p['scope'],self._ref(c),self.store.now(),p)
             replacement=c['replaces_id']
+            if validity is not None:
+                db.execute('UPDATE memory_claims SET valid_from=?,valid_until=? WHERE id=?',(*validity,c['id']))
             if body['decision']=='supersede':
                 if c['replaces_id'] is not None:raise Fault('memory_replacement_already_recorded',409)
                 if type(body['replaces_version']) is not int:raise Fault('invalid_memory_replacement')
@@ -269,10 +294,14 @@ class ReviewedMemory:
                 db.execute("UPDATE memory_claims SET state='superseded',version=version+1,reviewed=?,reviewer=? WHERE id=?",
                            (self.store.now(),p['id'],replacement))
                 self.store.log(db,p['scope'],p['id'],'memory.superseded',replacement)
+                memory_history.record(db,p['scope'],p['id'],replacement,'superseded',self.store.now(),p['id'],related=c['id'])
             state={'accept':'accepted','supersede':'accepted','dispute':'disputed','withdraw':'withdrawn'}[body['decision']]
             db.execute('UPDATE memory_claims SET state=?,version=version+1,reviewed=?,reviewer=?,replaces_id=? WHERE id=?',
                        (state,self.store.now(),p['id'],replacement,c['id']))
             self.store.log(db,p['scope'],p['id'],'memory.'+state,c['id'])
+            memory_history.record(db,p['scope'],p['id'],c['id'],state,self.store.now(),p['id'],
+                                  related=replacement if body['decision']=='supersede' else None,
+                                  detail='supersede' if body['decision']=='supersede' else None,valid=validity)
         return self.view(bearer)
 
     def forget(self, bearer, identity, body):
@@ -340,20 +369,29 @@ class ReviewedMemory:
                          and c['reviewed'] is not None and c['reviewer']==p['id'] and not c['conflicts'])
         return claims
 
+    def _snapshot(self, db, p, now):
+        """Reconciled entities and claims with withheld values removed, in the caller's
+        transaction. The reviewed-memory view, history and as-of report all read this."""
+        self._reconcile(db,p)
+        entities=[dict(r) for r in db.execute('SELECT id,kind,name,created FROM memory_entities WHERE scope=? AND actor=? ORDER BY created,id',(p['scope'],p['id']))]
+        claims=self._claims(db,p,now)
+        captures={r['claim_id']:dict(r) for r in db.execute('SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',(p['scope'],p['id']))}
+        for c in claims:
+            m=captures.get(c['id'])
+            c['memory_type'],c['retention_until']=(m['memory_type'],m['retention_until']) if m else (None,None)
+        for c in claims:
+            # Support that is unavailable or no longer permitted is withheld, and so is
+            # what was derived from it. Restored access or availability restores both.
+            c['withheld']=c['state']!='invalidated' and c['source'] is None and (c['value'] is not None or c['object_id'] is not None)
+            if c['withheld']:c['value']=None;c['object_id']=None
+        memory_history.observe(db,p,claims,now)
+        return {e['id']:e for e in entities},claims
+
     def view(self, bearer):
         with self.store.transaction() as db:
-            p=self.store.authenticate(db,bearer,{'owner','reader'});self._reconcile(db,p)
-            entities=[dict(r) for r in db.execute('SELECT id,kind,name,created FROM memory_entities WHERE scope=? AND actor=? ORDER BY created,id',(p['scope'],p['id']))]
-            claims=self._claims(db,p,self.store.now())
-            captures={r['claim_id']:dict(r) for r in db.execute('SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',(p['scope'],p['id']))}
-            for c in claims:
-                m=captures.get(c['id'])
-                c['memory_type'],c['retention_until']=(m['memory_type'],m['retention_until']) if m else (None,None)
-            for c in claims:
-                # Support that is unavailable or no longer permitted is withheld, and so is
-                # what was derived from it. Restored access or availability restores both.
-                c['withheld']=c['state']!='invalidated' and c['source'] is None and (c['value'] is not None or c['object_id'] is not None)
-                if c['withheld']:c['value']=None;c['object_id']=None
+            p=self.store.authenticate(db,bearer,{'owner','reader'})
+            entities,claims=self._snapshot(db,p,self.store.now())
+            entities=list(entities.values())
             return {'entities':entities,'claims':claims,'scope':p['scope'],'actor_private':True,
                     'basis':'user_reviewed_statements_not_verified_facts','model_extraction':False,
                     'counts':{'proposed':sum(c['state']=='proposed' for c in claims),'usable':sum(c['usable'] for c in claims),

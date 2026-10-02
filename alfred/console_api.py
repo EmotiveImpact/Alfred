@@ -354,6 +354,8 @@ def record(server, bearer, identity):
                            'validFrom': _iso(c['valid_from']) if c['valid_from'] is not None else None,
                            'validUntil': _iso(c['valid_until']) if c['valid_until'] is not None else None,
                            'validNow': c['valid_now'], 'conflicts': c['conflicts'], 'replacesId': c['replaces_id'],
+                           'replacedBy': next((x['id'] for x in reviewed['claims'] if x['replaces_id'] == c['id']), None),
+                           'recordedAt': _iso(c['created']),
                            'reviewedAt': _iso(c['reviewed']) if c['reviewed'] else None,
                            'withheld': bool(c.get('withheld')),
                            'support': support, 'supportAvailable': support is not None})
