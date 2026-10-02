@@ -1,4 +1,4 @@
-import {useEffect,useMemo,useState} from 'react';
+import {useEffect,useMemo,useRef,useState} from 'react';
 import {CaretDown,Check} from '@phosphor-icons/react';
 import {useConsole} from '../state/ConsoleProvider';
 import {dueLabel} from '../integration/toSnapshot';
@@ -76,7 +76,9 @@ export function ExecutiveRecordsPanel(){
   const[filter,setFilter]=useState(ALL),[by,setBy]=useState<'kind'|'responsible'>('kind');
   const changed=exec.refresh;
   const view=exec.view;
-  useEffect(()=>{if(!expanded||!view)return;document.getElementById('exec-'+expanded)?.scrollIntoView({block:'nearest'});},[expanded,view]);
+  // Bring a newly opened record into view once; later refreshes never move the reader.
+  const scrolled=useRef<string|null>(null);
+  useEffect(()=>{if(!expanded||!view||scrolled.current===expanded)return;const row=document.getElementById('exec-'+expanded);if(row){row.scrollIntoView({block:'nearest'});scrolled.current=expanded;}},[expanded,view]);
   if(brief)return <div className="executive-records"><BriefPanel id={brief} onBack={()=>setBrief(null)}/></div>;
   const records=view?.records??[];
   const choices=view?responsibleChoices(view.responsible_groups.groups,view.responsible_groups.unassigned_open.length):[];
