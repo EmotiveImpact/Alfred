@@ -189,6 +189,7 @@ class ReviewedMemory:
         view=self.view(bearer);claim=next(c for c in view['claims'] if c['id']==identity)
         entities={e['id']:e for e in view['entities']}
         return {'scope':view['scope'],'memory_type':claim.get('memory_type'),'retention_until':claim.get('retention_until'),
+                'valid_from':claim['valid_from'],'valid_until':claim['valid_until'],
                 'subject':entities[claim['subject_id']]['name'],'predicate':claim['predicate'],
                 'value':claim['value'],'object':entities[claim['object_id']]['name'] if claim['object_id'] in entities else None,
                 'source':{k:claim['source'][k] for k in ('note_id','path','title','start_line','end_line','quote')} if claim['source'] else None,

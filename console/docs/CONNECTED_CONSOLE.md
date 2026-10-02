@@ -134,6 +134,40 @@ desk route. Another person's record and an unknown one both return
 Acceptance: `tests/test_executive_workflows.py`, `console/tests/executive.test.ts` and
 `tools/check_executive_browser.py`. Receipt: `docs/evidence/executive-2/RECEIPT.md`.
 
+## Reviewed memory over time (MEM-007)
+
+The Reviewed memory dialog (command `memory`, or Open reviewed memory in Console controls)
+has two views. Both read the server directly and read again whenever the projection changes.
+
+| Route | Purpose |
+|---|---|
+| `GET /desk/memory` | Existing ledger view; the review queue reads proposed and disputed statements from it. |
+| `POST /desk/memory/claims/{id}/review` | Existing decision, version-checked. Accept or supersede may now also carry `valid_from` and `valid_until`, once, while the statement is still proposed. |
+| `GET /desk/memory/claims/{id}/history` | Recorded history (states, times, who, how ALFRED knows) and the replacement lineage both ways. |
+| `GET /desk/memory/as-of/{t}` and `/as-of/{t}/valid/{v}` | What was accepted at recorded time `t` and valid at `v` (default `t`), from the history alone. |
+
+- **Review queue.** Proposed statements oldest first, then disputed ones. Accept (optionally
+  with a valid period), accept as a replacement of a statement the person chooses (only the
+  same record by identifier and the same kind of statement are offered, so a namesake's
+  statements never are), dispute or withdraw. A refused decision, such as a stale version,
+  is explained above the queue after it refreshes. A statement whose support is withheld
+  shows no value and cannot be decided until access returns.
+- **As of a date.** The person picks the day they held something and, optionally, a
+  different day for validity. The report is labelled as ALFRED's own review records, not a
+  statement about the world. It lists what was accepted and valid then, what was accepted
+  but outside its valid period, and what migrated history cannot place, with conflicts under
+  the single-value rule. Values withheld, invalidated or forgotten now are named as such and
+  never shown.
+- **Inspector.** Each reviewed statement shows its valid period, recorded and review times,
+  what it replaces and what replaced it, a dispute, any current conflict, and its recorded
+  history on request. An accepted statement can be disputed or withdrawn there.
+- The capture form ("Remember this") can set a valid period; the preview shows the period
+  the server recorded.
+
+Current answers are unchanged: they still use only accepted, current, authorised and valid
+statements. Acceptance: `tests/test_memory_temporal.py`, `console/tests/temporal.test.ts`
+and `tools/check_temporal_review_browser.py`. Receipt: `docs/evidence/temporal-review/RECEIPT.md`.
+
 ## Not provided by this increment
 
 Priorities, recommendations and milestone progress now come from executive records

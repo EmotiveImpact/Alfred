@@ -79,6 +79,8 @@ Initially retain the existing controlled predicate set; add preferences and comm
 
 Maintain two clocks: when a statement was reported as valid, and when ALFRED learned/recorded it. Late information must not silently rewrite history. Current questions and 'what did we know then?' questions need different selection rules.
 
+**2 October 2026 branch implementation (first-party, MEM-007):** reviewed statements now keep an append-only, value-free history of their review transitions with recorded time and reviewer, migrated honestly for older statements (unknown times are marked, never invented). Valid time stays on the statement. An as-of report answers what was accepted and valid on a chosen date from that history alone, labelled as ALFRED's own records; current answers are unchanged. See [the receipt](evidence/temporal-review/RECEIPT.md). No external temporal adapter is adopted; that decision stays with M07.
+
 A new statement may supplement, dispute or explicitly supersede an older one. Do not automatically choose whichever was ingested last. Competing accepted values with overlapping validity must remain visible and normally require clarification. More general semantic contradiction detection is future work, not provided by the current narrow structural conflict rules.
 
 ## Retrieval order
