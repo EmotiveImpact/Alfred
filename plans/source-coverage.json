@@ -1,0 +1,340 @@
+{
+ "schema_version": 1,
+ "updated_on": "2026-10-02",
+ "completeness": "No verified denominator for all chats exists; coverage is listed, not scored.",
+ "sources": [
+  {
+   "id": "SRC-PRD-0927",
+   "title": "Product requirements (unified baseline)",
+   "kind": "repository_document",
+   "dated": "2026-09-27",
+   "access": "read_in_full",
+   "outcome": "authority",
+   "destinations": [],
+   "location": "docs/PRD.md",
+   "notes": "Remains the requirements authority; 27 original IDs retained unchanged."
+  },
+  {
+   "id": "SRC-ROADMAP-0927",
+   "title": "Execution roadmap",
+   "kind": "repository_document",
+   "dated": "2026-09-27",
+   "access": "read_in_full",
+   "outcome": "authority",
+   "destinations": [],
+   "location": "docs/ROADMAP.md",
+   "notes": "Remains the sequence; a whole-product workstream section was added."
+  },
+  {
+   "id": "SRC-BACKLOG",
+   "title": "Memory backlog M01 to M12",
+   "kind": "repository_document",
+   "dated": "2026-10-01",
+   "access": "read_in_full",
+   "outcome": "authority",
+   "destinations": [],
+   "location": "plans/memory-backlog.json",
+   "notes": "Bounded memory programme, not the whole product."
+  },
+  {
+   "id": "SRC-MASTER-1001",
+   "title": "Master conversation handoff",
+   "kind": "repository_document",
+   "dated": "2026-10-01",
+   "access": "read_in_full",
+   "outcome": "incorporated",
+   "destinations": [
+    "ATT-002",
+    "UX-002"
+   ],
+   "location": "docs/MASTER_HANDOFF_2026-10-01.md",
+   "notes": "Arrived with PR #17. Its job truth table is reflected in the register; its no-merge note was already corrected by the owner."
+  },
+  {
+   "id": "SRC-PR15",
+   "title": "Console refinement PR #15",
+   "kind": "pull_request",
+   "dated": "2026-09-27",
+   "access": "read_in_full",
+   "outcome": "integrated",
+   "destinations": [
+    "UX-001"
+   ],
+   "location": "EmotiveImpact/Alfred#15",
+   "notes": "Merged into the integration branch; combined acceptance recorded."
+  },
+  {
+   "id": "SRC-PR16",
+   "title": "M01/M03 PR #16",
+   "kind": "pull_request",
+   "dated": "2026-10-01",
+   "access": "read_in_full",
+   "outcome": "integrated",
+   "destinations": [
+    "MEM-001",
+    "MEM-002",
+    "MEM-003",
+    "MEM-006",
+    "MEM-012"
+   ],
+   "location": "EmotiveImpact/Alfred#16",
+   "notes": ""
+  },
+  {
+   "id": "SRC-PR17",
+   "title": "Partial M02/M06 PR #17",
+   "kind": "pull_request",
+   "dated": "2026-10-01",
+   "access": "read_in_full",
+   "outcome": "integrated_partial",
+   "destinations": [
+    "SYS-001",
+    "MEM-009",
+    "MEM-008"
+   ],
+   "location": "EmotiveImpact/Alfred#17",
+   "notes": "Contains PR #16; only its two additional commits were applied. Partial work continues on the branch."
+  },
+  {
+   "id": "SRC-ISSUES",
+   "title": "Open issues #2, #3, #4 and #11",
+   "kind": "issue_tracker",
+   "dated": "2026-09-27",
+   "access": "titles_and_state_read",
+   "outcome": "reviewed_no_new_requirements",
+   "destinations": [
+    "ACT-001",
+    "INT-001",
+    "VOI-001"
+   ],
+   "location": "EmotiveImpact/Alfred issues",
+   "notes": "Open issues are tracking records, not running agents. Not closed by this work."
+  },
+  {
+   "id": "SRC-MANDATE-1002",
+   "title": "Whole-Product Agent Prompt",
+   "kind": "owner_supplied_document",
+   "dated": "2026-10-02",
+   "access": "read_in_full",
+   "outcome": "execution_mandate",
+   "destinations": [
+    "UX-002",
+    "ATT-002",
+    "RUN-002",
+    "RUN-003",
+    "SYS-003",
+    "OPS-002"
+   ],
+   "location": "docs/sources/2026-10-02/ALFRED-Whole-Product-Agent-Prompt-2026-10-02.md",
+   "notes": "Sections 4A to 4D are owner instruction, so the work they name is accepted scope."
+  },
+  {
+   "id": "SRC-RECON-V11",
+   "title": "Plan reconciliation version 1.1",
+   "kind": "owner_supplied_document",
+   "dated": "2026-10-02",
+   "access": "read_in_full",
+   "outcome": "incorporated",
+   "destinations": [
+    "UX-002",
+    "ATT-002",
+    "RUN-002",
+    "RUN-003",
+    "SYS-003",
+    "OPS-002"
+   ],
+   "location": "docs/sources/2026-10-02/ALFRED-Plan-Reconciliation-v1.1-2026-10-02.md",
+   "notes": "Partial by its own statement. Its repository table matched the refs checked on 2 October."
+  },
+  {
+   "id": "SRC-RECON-V1",
+   "title": "Plan reconciliation version 1 (164 lines)",
+   "kind": "owner_supplied_document",
+   "dated": "2026-10-02",
+   "access": "not_supplied",
+   "outcome": "superseded",
+   "destinations": [],
+   "location": null,
+   "notes": "Described by version 1.1 as retained but not provided to this session. Version 1.1 corrects its infrastructure omissions."
+  },
+  {
+   "id": "SRC-CHAT-0925-FOUNDATION",
+   "title": "Original ALFRED foundation and source/agent research chats",
+   "kind": "conversation",
+   "dated": "2026-09-25",
+   "access": "not_supplied",
+   "outcome": "awaiting_reconciliation",
+   "destinations": [],
+   "location": null,
+   "notes": "Known only through repository records and reconciliation summaries."
+  },
+  {
+   "id": "SRC-CHAT-0927-CONSOLE",
+   "title": "Console design and build chats",
+   "kind": "conversation",
+   "dated": "2026-09-27",
+   "access": "summary_only",
+   "outcome": "partially_reconciled",
+   "destinations": [
+    "UX-001",
+    "UX-002"
+   ],
+   "location": null,
+   "notes": "Visual direction preserved through repository docs; individual visual iterations not inventoried."
+  },
+  {
+   "id": "SRC-CHAT-0927-SPECIALIST",
+   "title": "Specialist products discussion (ENDSTATE, 8BALL, Noir/Black State, Loc8, God's Eye)",
+   "kind": "conversation",
+   "dated": "2026-09-27",
+   "access": "summary_only",
+   "outcome": "partially_reconciled",
+   "destinations": [
+    "OPS-002",
+    "OPS-001"
+   ],
+   "location": null,
+   "notes": "Direction captured; no product interface, contract or repository was supplied."
+  },
+  {
+   "id": "SRC-CHAT-0929-INFRA",
+   "title": "Open Source ALFRED Infrastructure discussion",
+   "kind": "conversation",
+   "dated": "2026-09-29",
+   "access": "excerpts_via_reconciliation",
+   "outcome": "partially_reconciled",
+   "destinations": [
+    "RUN-002",
+    "RUN-003",
+    "SYS-003",
+    "MEM-014"
+   ],
+   "location": null,
+   "notes": "boxd, Space/SpaceFS, pCloud analogy, two computers and VPS. Home/Core/Drive/Forge labels kept as provisional proposals."
+  },
+  {
+   "id": "SRC-CHAT-1001-WHOLE",
+   "title": "Whole-product reconciliation chat",
+   "kind": "conversation",
+   "dated": "2026-10-01",
+   "access": "summary_only",
+   "outcome": "partially_reconciled",
+   "destinations": [
+    "ATT-002"
+   ],
+   "location": null,
+   "notes": "Through the master handoff."
+  },
+  {
+   "id": "SRC-CHAT-OTHER",
+   "title": "Commercial planning, device/runtime research and other unsupplied chats",
+   "kind": "conversation",
+   "dated": null,
+   "access": "not_supplied",
+   "outcome": "awaiting_reconciliation",
+   "destinations": [],
+   "location": null,
+   "notes": "No verified inventory exists, so no completeness percentage is claimed."
+  },
+  {
+   "id": "SRC-IMAGE-1002",
+   "title": "Latest generated connected-state concept image",
+   "kind": "image",
+   "dated": "2026-10-02",
+   "access": "not_supplied",
+   "outcome": "visual_exploration_only",
+   "destinations": [],
+   "location": null,
+   "notes": "Its counts, percentages, timestamps and online claims are not evidence or commitments."
+  },
+  {
+   "id": "SRC-PUBLIC-INFRA",
+   "title": "Public documentation for infrastructure candidates",
+   "kind": "public_reference",
+   "dated": "2026-10-02",
+   "access": "fetched_summaries",
+   "outcome": "research_evidence",
+   "destinations": [
+    "RUN-002",
+    "RUN-003",
+    "SYS-003"
+   ],
+   "location": "research/INFRASTRUCTURE_2026-10-02.md",
+   "notes": "Vendor claims, verified facts and assumptions labelled separately; licence files not read byte for byte."
+  }
+ ],
+ "research_candidates": [
+  {
+   "name": "boxd",
+   "role": "persistent agent computer (proprietary)",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "Space / SpaceFS",
+   "role": "cloud filesystem with forks and versioned writes (proprietary)",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "pCloud Drive",
+   "role": "experience analogy only",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "JuiceFS",
+   "role": "shared POSIX layer; rejected for stages 1 to 3",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "SeaweedFS",
+   "role": "self-hosted storage; rejected for stages 1 to 3",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "rclone VFS",
+   "role": "bounded cache over object storage for browsing, never for the database",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "Backblaze B2",
+   "role": "object storage with versioning",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "Cloudflare R2",
+   "role": "object storage with free egress, no versioning",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "E2B",
+   "role": "resumable microVM sandboxes",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "NVIDIA OpenShell",
+   "role": "policy-enforcing agent sandbox (identity to be confirmed by the owner)",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "Tailscale / Headscale / NetBird / WireGuard",
+   "role": "private mesh transport",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  },
+  {
+   "name": "restic / Litestream",
+   "role": "backup and SQLite replication",
+   "status": "research_candidate",
+   "evidence": "research/INFRASTRUCTURE_2026-10-02.md"
+  }
+ ]
+}

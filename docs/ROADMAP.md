@@ -22,6 +22,20 @@ M01's bounded selected-vault/read slice is implemented on a draft review branch 
 
 **Remember, retrieve, correct, forget.** A user selects a permitted test vault, reviews a memory, uses it in a follow-up with its original evidence, corrects it and verifies that withdrawn/stale material no longer appears. One approved inbox note can then be created and read back without overwriting human content.
 
+## Whole-product workstreams, 2 October 2026
+
+The M jobs below are the bounded memory programme. The whole product also needs the workstreams in this table; their requirement IDs, separate decision, implementation, integration, merge and deployment states, and owner decisions are in [the requirement register](../plans/requirement-register.json). How the 2 October owner documents were absorbed is in [the reconciliation record](RECONCILIATION_2026-10-02.md). This is one sequence, not a second roadmap.
+
+| Order | Workstream | Requirements | State on the integration branch |
+|---|---|---|---|
+| A | Connected console, read-only and truthful | UX-001, UX-002, MEM-016, MEM-009 | Implemented on the branch and browser-tested against synthetic data ([receipt](evidence/console-connected/RECEIPT.md)). |
+| B | Selection-aware questions on the existing queue | INT-001, UX-002, MEM-006 | Implemented on the branch; no model configured, so no reasoning quality claimed. |
+| C | Remember, retrieve, correct, forget; identity and grants; lexical baseline | MEM-004 to MEM-013, SYS-001, SYS-002 (M02 to M06) | M01/M03 integrated; M02/M06 partial; M04/M05 next. Private data stays gated by M02/M05. |
+| D | Executive records on authoritative data | ATT-002, ATT-001, ACT-001 | Not started. Needs C's provenance and invalidation rules. |
+| E1 | Local job coordinator (research stage 0) | RUN-002, RUN-003, RUN-001 | Buildable now with no vendor decision. Remote stages wait for owner decisions. |
+| E2 | Files, distributed nodes, remote workers | SYS-003, RUN-002, RUN-003, MEM-014 | Research complete ([evidence](../research/INFRASTRUCTURE_2026-10-02.md)); provider decisions needed. |
+| E3 | Connectors, specialist products, voice, native packaging, release hardening | CON-001, OPS-001, OPS-002, VOI-001 | Not started; each needs real interfaces, accounts or hardware. |
+
 ## Work order
 
 | Job | Work | Main acceptance |

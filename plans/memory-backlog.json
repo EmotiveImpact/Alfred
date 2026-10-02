@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
-  "updated_on": "2026-10-01",
+  "updated_on": "2026-10-02",
+  "whole_product_register": "plans/requirement-register.json",
   "scope": "implementation-tracking",
   "baseline_commit": "8398c7437cb0ef1386d8dc4ff1f9e92fb2557ca2",
   "runtime_changes": true,
@@ -30,7 +31,13 @@
     "docs/evidence/memory-m01/RECEIPT.md",
     "docs/evidence/memory-m03/RECEIPT.md",
     "docs/MASTER_HANDOFF_2026-10-01.md",
-    "docs/evidence/memory-programme-wip/RECEIPT.md"
+    "docs/evidence/memory-programme-wip/RECEIPT.md",
+    "docs/RECONCILIATION_2026-10-02.md",
+    "research/INFRASTRUCTURE_2026-10-02.md",
+    "console/docs/CONNECTED_CONSOLE.md",
+    "docs/evidence/integration-2026-10-02/RECEIPT.md",
+    "docs/evidence/console-connected/RECEIPT.md",
+    "docs/sources/2026-10-02/README.md"
   ],
   "jobs": [
     {

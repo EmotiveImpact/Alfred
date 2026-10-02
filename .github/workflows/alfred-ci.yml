@@ -31,6 +31,8 @@ jobs:
           python3 tools/test_source_library.py 2>&1 | tee /tmp/alfred-unified-core/archive-tests.txt
           python3 tools/check_memory_plan.py --self-test 2>&1 | tee /tmp/alfred-unified-core/plan-tests.txt
           python3 tools/check_memory_plan.py | tee /tmp/alfred-unified-core/plan-report.json
+          python3 tools/check_requirement_register.py --self-test 2>&1 | tee /tmp/alfred-unified-core/register-tests.txt
+          python3 tools/check_requirement_register.py | tee /tmp/alfred-unified-core/register-report.json
           python3 -m unittest discover -s tests -v 2>&1 | tee /tmp/alfred-unified-core/application-tests.txt
           python3 tools/build_source_library.py --verify | tee /tmp/alfred-unified-core/library.txt
           python3 tools/import_sources.py --verify | tee /tmp/alfred-unified-core/original-archive.txt

@@ -76,7 +76,13 @@ def check(root: Path) -> dict:
     requirements = set(re.findall(r'^\| ([A-Z]+-\d{3}) \|', prd, re.MULTILINE))
     entries = registry['pinned_reviews'] + registry['documentation_reviews']
     source_ids = {e['id'] for e in entries}
-    errors = validate_plan(plan, requirements, source_ids)
+    # Whole-product requirements tracked outside the M series are covered by the
+    # requirement register (tools/check_requirement_register.py), not by M jobs.
+    register = root / 'plans/requirement-register.json'
+    outside = set()
+    if register.is_file():
+        outside = {r['id'] for r in json.loads(register.read_text())['requirements'] if not r['memory_jobs']}
+    errors = validate_plan(plan, requirements - outside, source_ids)
     if len(source_ids) != len(entries) or len({e['repository'] for e in entries}) != len(entries):
         errors.append('Duplicate repository records')
     if registry['upstream_code_executed'] is not False:
