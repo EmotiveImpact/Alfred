@@ -1,0 +1,17 @@
+test_missing_fts5_is_reported_not_hidden (tests.test_retrieval_evaluation.Fts5UnavailableTests.test_missing_fts5_is_reported_not_hidden) ... ok
+test_answer_keys_never_enter_requests_or_packets (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_answer_keys_never_enter_requests_or_packets) ... ok
+test_both_rankings_measured_when_fts5_is_available (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_both_rankings_measured_when_fts5_is_available) ... ok
+test_committed_report_matches_the_frozen_set (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_committed_report_matches_the_frozen_set) ... ok
+test_frozen_set_hash_is_stable_across_runs (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_frozen_set_hash_is_stable_across_runs) ... ok
+test_frozen_set_meets_minimum_size_and_coverage (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_frozen_set_meets_minimum_size_and_coverage) ... ok
+test_identical_queries_for_every_ranking (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_identical_queries_for_every_ranking) ... ok
+test_leakage_check_is_not_vacuous (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_leakage_check_is_not_vacuous) ... ok
+test_report_fields_exist_and_metrics_are_bounded (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_report_fields_exist_and_metrics_are_bounded) ... ok
+test_request_context_check_detects_an_injected_key (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_request_context_check_detects_an_injected_key) ... ok
+test_retrieval_is_identical_whatever_the_answer_keys (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_retrieval_is_identical_whatever_the_answer_keys) ... ok
+test_zero_permission_leakage_for_every_measured_ranking (tests.test_retrieval_evaluation.RetrievalEvaluationTests.test_zero_permission_leakage_for_every_measured_ranking) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 28.196s
+
+OK

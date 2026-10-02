@@ -1,0 +1,5317 @@
+{
+ "schema": "alfred.retrieval-evaluation.v1",
+ "job": "M06",
+ "tool": "tools/evaluate_retrieval.py",
+ "model_inference": false,
+ "network": false,
+ "answer_keys_in_request_context": false,
+ "private_data": false,
+ "randomness": "none in the evaluation; application identifiers are random but never decide ordering, scoring or hashes",
+ "environment": {
+  "python": "3.11.15",
+  "python_implementation": "CPython",
+  "sqlite": "3.45.1",
+  "fts5_available": true,
+  "platform": "Linux-6.18.44-fc-v51-x86_64-with-glibc2.39",
+  "machine": "x86_64",
+  "latency_basis": "time.perf_counter around each complete retrieve() call (authorisation, note reads, ranking, link expansion and excerpts) in the machine that ran this script; not a measurement of any named target hardware"
+ },
+ "frozen_set": {
+  "corpus_sha256": "350cfaca007b5aac9830f6c232e3762431b6da128410883fc3854d5af6c29fe6",
+  "queries_sha256": "f83030e6123510d36a58458c3ae1a4ee70267dc9351ea5ece26548f23d70f507",
+  "answer_keys_sha256": "177c83a5036be578dabb0b477c28e0ee7592d8ce1e97c3782b92dad2094d4e19",
+  "frozen_set_sha256": "bf9eb18e8532be8e80e2abb3e6d188ace7371e5cb7e875cbe16bcd3289f7507c"
+ },
+ "corpus": {
+  "granted_source_notes": 64,
+  "ungranted_source_notes": 6,
+  "indexed_matches_frozen": true,
+  "index_health": {
+   "eval-notes": {
+    "status": "ready",
+    "notes": 64,
+    "errors": []
+   },
+   "eval-restricted": {
+    "status": "ready",
+    "notes": 6,
+    "errors": []
+   }
+  },
+  "explicit_links_resolved": 28,
+  "link_issues": 0
+ },
+ "queries": {
+  "count": 44,
+  "answerable": 40,
+  "unanswerable": 4,
+  "labelled_supporting_notes": 51,
+  "categories": {
+   "exact": 17,
+   "heading_only": 2,
+   "inflection": 2,
+   "linked": 2,
+   "multi_support": 3,
+   "near_duplicate": 5,
+   "path_only": 2,
+   "personal": 1,
+   "shared_name": 2,
+   "shared_title": 2,
+   "unanswerable": 4,
+   "vocabulary_mismatch": 2
+  },
+  "request_fields": [
+   "purpose",
+   "question",
+   "ranking"
+  ],
+  "identical_across_rankings": true,
+  "sent_sha256": {
+   "keywords": "d5bfdd03c8cf72cef628eafc7da1ffd908ddebe44784ff98022abeb97255088b",
+   "fts5": "d5bfdd03c8cf72cef628eafc7da1ffd908ddebe44784ff98022abeb97255088b"
+  }
+ },
+ "policy": {
+  "mode": "explicit_grants",
+  "grants": [
+   {
+    "source": "eval-notes",
+    "capability": "read"
+   }
+  ],
+  "purpose": "read",
+  "granted_source": "eval-notes",
+  "ungranted_source": "eval-restricted",
+  "legacy_visible_notes": 70,
+  "granted_visible_notes": 64,
+  "granted_visible_sources": [
+   "eval-notes"
+  ]
+ },
+ "protocol": {
+  "repeats": 5,
+  "warmup_passes": 1,
+  "calls": {
+   "legacy_control": 88,
+   "warmup": 88,
+   "measured": 440
+  },
+  "measured_calls_per_ranking": 220,
+  "order": "per query, rankings interleaved; ranking order alternates on each repeat",
+  "quality_from": "first measured repeat; every later repeat must return identical evidence",
+  "percentile_method": "nearest rank",
+  "default_ranking_unchanged": "keywords",
+  "limits": "existing retrieve() limits: five sources and 6,000 excerpt characters",
+  "route_labels": "retrieved_via values are copied from each packet; under the fts5 ranking, keyword_match means selected by the FTS5 ranking (packet ranking field is fts5)",
+  "irrelevant_definition": "an evidence item whose note is not in the answer key, including link-expanded hubs that may still be useful context"
+ },
+ "rankings": {
+  "keywords": {
+   "status": "measured",
+   "recall": {
+    "answerable_queries": 40,
+    "mean_evidence_recall": 0.9229,
+    "micro_evidence_recall": 0.902,
+    "any_hit_rate": 0.95,
+    "full_support_rate": 0.875,
+    "first_item_supporting_rate": 0.9,
+    "by_category": {
+     "exact": {
+      "queries": 17,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "heading_only": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "inflection": {
+      "queries": 2,
+      "mean_evidence_recall": 0.75,
+      "any_hit_rate": 1.0
+     },
+     "linked": {
+      "queries": 2,
+      "mean_evidence_recall": 0.8334,
+      "any_hit_rate": 1.0
+     },
+     "multi_support": {
+      "queries": 3,
+      "mean_evidence_recall": 0.9167,
+      "any_hit_rate": 1.0
+     },
+     "near_duplicate": {
+      "queries": 5,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "path_only": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "personal": {
+      "queries": 1,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "shared_name": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "shared_title": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "vocabulary_mismatch": {
+      "queries": 2,
+      "mean_evidence_recall": 0.0,
+      "any_hit_rate": 0.0
+     }
+    }
+   },
+   "irrelevant_context": {
+    "share_of_evidence_items": 0.7566,
+    "share_of_evidence_items_answerable": 0.7278,
+    "share_of_excerpt_characters": 0.7605,
+    "mean_irrelevant_items_per_query": 3.25,
+    "by_route": {
+     "explicit_link_from_match": {
+      "items": 41,
+      "irrelevant_items": 39
+     },
+     "keyword_match": {
+      "items": 148,
+      "irrelevant_items": 104
+     }
+    },
+    "unanswerable_queries": 4,
+    "unanswerable_queries_returning_evidence": 4,
+    "unanswerable_evidence_items": 20
+   },
+   "volume": {
+    "mean_evidence_items": 4.2955,
+    "max_evidence_items": 5,
+    "queries_without_evidence": 0,
+    "mean_excerpt_characters": 576.5
+   },
+   "latency_ms": {
+    "samples": 220,
+    "p50": 61.696,
+    "p95": 81.924,
+    "mean": 63.751,
+    "min": 50.587,
+    "max": 97.361
+   },
+   "permission_leakage": {
+    "ungranted_evidence_items": 0,
+    "packets_with_ungranted_identifiers_or_text": 0,
+    "packets_checked": 44,
+    "ungranted_evidence_items_all_strict_calls": 0,
+    "strict_calls_checked": 264
+   },
+   "deterministic_across_repeats": true,
+   "legacy_scope_control": {
+    "queries_with_ungranted_evidence": 14,
+    "ungranted_evidence_items": 14
+   }
+  },
+  "fts5": {
+   "status": "measured",
+   "recall": {
+    "answerable_queries": 40,
+    "mean_evidence_recall": 0.9042,
+    "micro_evidence_recall": 0.8824,
+    "any_hit_rate": 0.925,
+    "full_support_rate": 0.875,
+    "first_item_supporting_rate": 0.8,
+    "by_category": {
+     "exact": {
+      "queries": 17,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "heading_only": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "inflection": {
+      "queries": 2,
+      "mean_evidence_recall": 0.5,
+      "any_hit_rate": 0.5
+     },
+     "linked": {
+      "queries": 2,
+      "mean_evidence_recall": 0.5834,
+      "any_hit_rate": 1.0
+     },
+     "multi_support": {
+      "queries": 3,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "near_duplicate": {
+      "queries": 5,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "path_only": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "personal": {
+      "queries": 1,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "shared_name": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "shared_title": {
+      "queries": 2,
+      "mean_evidence_recall": 1.0,
+      "any_hit_rate": 1.0
+     },
+     "vocabulary_mismatch": {
+      "queries": 2,
+      "mean_evidence_recall": 0.0,
+      "any_hit_rate": 0.0
+     }
+    }
+   },
+   "irrelevant_context": {
+    "share_of_evidence_items": 0.7581,
+    "share_of_evidence_items_answerable": 0.7289,
+    "share_of_excerpt_characters": 0.7654,
+    "mean_irrelevant_items_per_query": 3.2045,
+    "by_route": {
+     "explicit_link_from_match": {
+      "items": 50,
+      "irrelevant_items": 49
+     },
+     "keyword_match": {
+      "items": 136,
+      "irrelevant_items": 92
+     }
+    },
+    "unanswerable_queries": 4,
+    "unanswerable_queries_returning_evidence": 4,
+    "unanswerable_evidence_items": 20
+   },
+   "volume": {
+    "mean_evidence_items": 4.2273,
+    "max_evidence_items": 5,
+    "queries_without_evidence": 0,
+    "mean_excerpt_characters": 569.8
+   },
+   "latency_ms": {
+    "samples": 220,
+    "p50": 61.107,
+    "p95": 82.844,
+    "mean": 64.387,
+    "min": 51.361,
+    "max": 100.861
+   },
+   "permission_leakage": {
+    "ungranted_evidence_items": 0,
+    "packets_with_ungranted_identifiers_or_text": 0,
+    "packets_checked": 44,
+    "ungranted_evidence_items_all_strict_calls": 0,
+    "strict_calls_checked": 264
+   },
+   "deterministic_across_repeats": true,
+   "legacy_scope_control": {
+    "queries_with_ungranted_evidence": 16,
+    "ungranted_evidence_items": 16
+   }
+  }
+ },
+ "comparison": {
+  "answerable_queries": 40,
+  "keywords_higher_recall": 2,
+  "fts5_higher_recall": 1,
+  "equal_recall": 37,
+  "identical_evidence_paths": 17,
+  "p50_latency_ratio_fts5_to_keywords": 0.9905,
+  "basis": "descriptive differences on this frozen synthetic set only; no significance test"
+ },
+ "per_query": [
+  {
+   "id": "Q01",
+   "category": "exact",
+   "question": "What replaced the closing fireworks at Harbour Lights?",
+   "support": [
+    "projects/harbour-lights/programme.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/programme.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        11
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 928,
+     "irrelevant_excerpt_characters": 780,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/programme.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 849,
+     "irrelevant_excerpt_characters": 701,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q02",
+   "category": "near_duplicate",
+   "question": "What is the approved Harbour Lights budget total?",
+   "support": [
+    "projects/harbour-lights/budget-approved.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 890,
+     "irrelevant_excerpt_characters": 727,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 890,
+     "irrelevant_excerpt_characters": 727,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q03",
+   "category": "near_duplicate",
+   "question": "Who approved the Harbour Lights budget, and when?",
+   "support": [
+    "projects/harbour-lights/budget-approved.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 890,
+     "irrelevant_excerpt_characters": 727,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 890,
+     "irrelevant_excerpt_characters": 727,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q04",
+   "category": "multi_support",
+   "question": "Who coordinates the Harbour Lights volunteers?",
+   "support": [
+    "people/ines-duarte.md",
+    "projects/harbour-lights/volunteers.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/volunteers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 826,
+     "irrelevant_excerpt_characters": 538,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/volunteers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 826,
+     "irrelevant_excerpt_characters": 538,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q05",
+   "category": "exact",
+   "question": "How many stewards have confirmed?",
+   "support": [
+    "projects/harbour-lights/volunteers.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/volunteers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 165,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/volunteers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 165,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q06",
+   "category": "exact",
+   "question": "What is the mitigation for the high tide risk?",
+   "support": [
+    "projects/harbour-lights/risk-register.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/risk-register.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 171,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/risk-register.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 171,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q07",
+   "category": "shared_title",
+   "question": "What scope was agreed at the Lantern kickoff?",
+   "support": [
+    "projects/lantern/kickoff.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        9,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 630,
+     "irrelevant_excerpt_characters": 496,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        9,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 630,
+     "irrelevant_excerpt_characters": 496,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q08",
+   "category": "shared_title",
+   "question": "Are electric vans in scope for Kestrel?",
+   "support": [
+    "projects/kestrel/kickoff.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/kestrel/fleet-inspection.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/felix-okafor.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/routes.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        4
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 698,
+     "irrelevant_excerpt_characters": 564,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/routes.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        4
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/steering-2026-02.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 749,
+     "irrelevant_excerpt_characters": 615,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q09",
+   "category": "inflection",
+   "question": "When will Lantern cut over?",
+   "support": [
+    "meetings/leadership-2026-02-19.md",
+    "projects/lantern/cutover-plan.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 0.5,
+     "excerpt_characters": 667,
+     "irrelevant_excerpt_characters": 511,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/rowan-hale.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/lantern-ledger-storage.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        10
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": 0.0,
+     "excerpt_characters": 609,
+     "irrelevant_excerpt_characters": 609,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q10",
+   "category": "inflection",
+   "question": "When does the record edit freeze start?",
+   "support": [
+    "projects/lantern/cutover-plan.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/lantern-ledger-storage.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 753,
+     "irrelevant_excerpt_characters": 621,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "procedures/incident-review.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 713,
+     "irrelevant_excerpt_characters": 581,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q11",
+   "category": "near_duplicate",
+   "question": "What blocker was raised at the Lantern stand-up?",
+   "support": [
+    "projects/lantern/standup-2026-02-11.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-11.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "meetings/leadership-2026-02-05.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/support-tiers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 692,
+     "irrelevant_excerpt_characters": 511,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-11.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "procedures/incident-review.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/lantern-ledger-storage.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        10
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 810,
+     "irrelevant_excerpt_characters": 629,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q12",
+   "category": "near_duplicate",
+   "question": "How many duplicate accounts were found in the legacy export?",
+   "support": [
+    "projects/lantern/standup-2026-02-10.md",
+    "projects/lantern/standup-2026-02-11.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-11.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        10
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 755,
+     "irrelevant_excerpt_characters": 485,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-11.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        10
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 755,
+     "irrelevant_excerpt_characters": 485,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q13",
+   "category": "exact",
+   "question": "What happens to fax numbers in the migration?",
+   "support": [
+    "projects/lantern/data-mapping.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 742,
+     "irrelevant_excerpt_characters": 633,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 742,
+     "irrelevant_excerpt_characters": 633,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q14",
+   "category": "linked",
+   "question": "What did the Kestrel steering group decide about the depot?",
+   "support": [
+    "decisions/northgate-yard-lease.md",
+    "meetings/leadership-2026-02-19.md",
+    "projects/kestrel/steering-2026-02.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/steering-2026-02.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "meetings/leadership-2026-02-05.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/northgate-yard-lease.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/felix-okafor.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 0.6667,
+     "excerpt_characters": 700,
+     "irrelevant_excerpt_characters": 350,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/steering-2026-02.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "meetings/leadership-2026-02-05.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/northgate-yard-lease.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/felix-okafor.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 0.6667,
+     "excerpt_characters": 700,
+     "irrelevant_excerpt_characters": 350,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q15",
+   "category": "vocabulary_mismatch",
+   "question": "What vehicle maintenance happens weekly?",
+   "support": [
+    "projects/kestrel/fleet-inspection.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/northgate-yard-lease.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/felix-okafor.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/routes.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        4
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": 0.0,
+     "excerpt_characters": 650,
+     "irrelevant_excerpt_characters": 650,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/felix-okafor.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/routes.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        4
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/steering-2026-02.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": 0.0,
+     "excerpt_characters": 696,
+     "irrelevant_excerpt_characters": 696,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q16",
+   "category": "heading_only",
+   "question": "What is done for winter readiness?",
+   "support": [
+    "projects/kestrel/fleet-inspection.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/fleet-inspection.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "personal/garden-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 2,
+     "supporting_found": 1,
+     "irrelevant_items": 1,
+     "recall": 1.0,
+     "excerpt_characters": 220,
+     "irrelevant_excerpt_characters": 77,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/fleet-inspection.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "personal/garden-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 2,
+     "supporting_found": 1,
+     "irrelevant_items": 1,
+     "recall": 1.0,
+     "excerpt_characters": 220,
+     "irrelevant_excerpt_characters": 77,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q17",
+   "category": "exact",
+   "question": "Which route stays at the old depot?",
+   "support": [
+    "projects/kestrel/routes.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/routes.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        4
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/felix-okafor.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/steering-2026-02.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 631,
+     "irrelevant_excerpt_characters": 518,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/kestrel/routes.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        4
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/felix-okafor.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/steering-2026-02.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 631,
+     "irrelevant_excerpt_characters": 518,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q18",
+   "category": "linked",
+   "question": "Which supplier did the Juniper committee choose?",
+   "support": [
+    "projects/juniper/juniper.md",
+    "projects/juniper/removals-contract.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        9
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/removals-contract.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 643,
+     "irrelevant_excerpt_characters": 310,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        9
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/hybrid-working.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 0.5,
+     "excerpt_characters": 575,
+     "irrelevant_excerpt_characters": 389,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q19",
+   "category": "multi_support",
+   "question": "What is the Juniper move date and the new office address?",
+   "support": [
+    "decisions/juniper-move-date.md",
+    "projects/juniper/new-office.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/removals-contract.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 608,
+     "irrelevant_excerpt_characters": 382,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/removals-contract.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 2,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 608,
+     "irrelevant_excerpt_characters": 382,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q20",
+   "category": "exact",
+   "question": "Why was the Juniper move date chosen?",
+   "support": [
+    "decisions/juniper-move-date.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/removals-contract.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 608,
+     "irrelevant_excerpt_characters": 492,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/removals-contract.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 608,
+     "irrelevant_excerpt_characters": 492,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q21",
+   "category": "vocabulary_mismatch",
+   "question": "Where will finance sit in the new office?",
+   "support": [
+    "projects/juniper/seating-plan.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/priya-raman.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": 0.0,
+     "excerpt_characters": 542,
+     "irrelevant_excerpt_characters": 542,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/priya-raman.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": 0.0,
+     "excerpt_characters": 542,
+     "irrelevant_excerpt_characters": 542,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q22",
+   "category": "path_only",
+   "question": "When is the Orchid renewal date?",
+   "support": [
+    "clients/orchid/renewal-terms.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/support-tiers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 442,
+     "irrelevant_excerpt_characters": 355,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/support-tiers.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 442,
+     "irrelevant_excerpt_characters": 355,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q23",
+   "category": "path_only",
+   "question": "What is the notice period for Saltmarsh?",
+   "support": [
+    "clients/saltmarsh/renewal-terms.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 609,
+     "irrelevant_excerpt_characters": 519,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/rowan-hale.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 656,
+     "irrelevant_excerpt_characters": 566,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q24",
+   "category": "exact",
+   "question": "What support tier is Orchid on?",
+   "support": [
+    "clients/orchid/support-tiers.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "clients/orchid/support-tiers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/orchid-pricing-2027.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 538,
+     "irrelevant_excerpt_characters": 420,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/support-tiers.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "procedures/client-support.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 599,
+     "irrelevant_excerpt_characters": 481,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q25",
+   "category": "heading_only",
+   "question": "Who are the escalation contacts?",
+   "support": [
+    "procedures/client-support.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "procedures/client-support.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        11
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 2,
+     "supporting_found": 1,
+     "irrelevant_items": 1,
+     "recall": 1.0,
+     "excerpt_characters": 237,
+     "irrelevant_excerpt_characters": 134,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "procedures/client-support.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        11
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 2,
+     "supporting_found": 1,
+     "irrelevant_items": 1,
+     "recall": 1.0,
+     "excerpt_characters": 237,
+     "irrelevant_excerpt_characters": 134,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q26",
+   "category": "exact",
+   "question": "What forecast accuracy did Saltmarsh achieve in Q1?",
+   "support": [
+    "clients/saltmarsh/quarterly-review-2026-q1.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/rowan-hale.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 556,
+     "irrelevant_excerpt_characters": 346,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 650,
+     "irrelevant_excerpt_characters": 440,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q27",
+   "category": "exact",
+   "question": "What did Rowan Hale ask for at the quarterly review?",
+   "support": [
+    "clients/saltmarsh/quarterly-review-2026-q1.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/rowan-hale.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "procedures/incident-review.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 600,
+     "irrelevant_excerpt_characters": 429,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/rowan-hale.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "procedures/incident-review.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 600,
+     "irrelevant_excerpt_characters": 429,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q28",
+   "category": "multi_support",
+   "question": "Which projects does Ada Mensah sponsor?",
+   "support": [
+    "people/ada-mensah.md",
+    "projects/harbour-lights/harbour-lights.md",
+    "projects/kestrel/kickoff.md",
+    "projects/lantern/kickoff.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        11
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        7,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 3,
+     "irrelevant_items": 2,
+     "recall": 0.75,
+     "excerpt_characters": 671,
+     "irrelevant_excerpt_characters": 215,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/kestrel/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/ada-mensah.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        11
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 4,
+     "irrelevant_items": 1,
+     "recall": 1.0,
+     "excerpt_characters": 675,
+     "irrelevant_excerpt_characters": 109,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q29",
+   "category": "shared_name",
+   "question": "Who does Morgan Quill report to?",
+   "support": [
+    "people/morgan-quill.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 781,
+     "irrelevant_excerpt_characters": 655,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-11.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 716,
+     "irrelevant_excerpt_characters": 590,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q30",
+   "category": "shared_name",
+   "question": "Which days does Morgan work from the quayside office?",
+   "support": [
+    "people/morgan-ellery.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/hybrid-working.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "procedures/incident-review.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/programme.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 684,
+     "irrelevant_excerpt_characters": 604,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/hybrid-working.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 645,
+     "irrelevant_excerpt_characters": 565,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q31",
+   "category": "exact",
+   "question": "What is the approval threshold for budgets?",
+   "support": [
+    "people/priya-raman.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "people/priya-raman.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 80,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "people/priya-raman.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 80,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q32",
+   "category": "exact",
+   "question": "Who keeps the building access cards?",
+   "support": [
+    "people/tomasz-wolny.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-11.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 3,
+     "supporting_found": 1,
+     "irrelevant_items": 2,
+     "recall": 1.0,
+     "excerpt_characters": 340,
+     "irrelevant_excerpt_characters": 257,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-11.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 3,
+     "supporting_found": 1,
+     "irrelevant_items": 2,
+     "recall": 1.0,
+     "excerpt_characters": 340,
+     "irrelevant_excerpt_characters": 257,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q33",
+   "category": "exact",
+   "question": "Why was the Pier Pavilion chosen over the Corn Exchange?",
+   "support": [
+    "decisions/harbour-lights-venue.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/orchid-pricing-2027.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "meetings/leadership-2026-02-05.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 630,
+     "irrelevant_excerpt_characters": 467,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/rowan-hale.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/risk-register.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 4,
+     "supporting_found": 1,
+     "irrelevant_items": 3,
+     "recall": 1.0,
+     "excerpt_characters": 503,
+     "irrelevant_excerpt_characters": 340,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q34",
+   "category": "exact",
+   "question": "Why was a separate document store rejected for Lantern?",
+   "support": [
+    "decisions/lantern-ledger-storage.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "decisions/lantern-ledger-storage.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        10
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 824,
+     "irrelevant_excerpt_characters": 689,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "decisions/lantern-ledger-storage.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 719,
+     "irrelevant_excerpt_characters": 584,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q35",
+   "category": "exact",
+   "question": "What price increase will Orchid be offered for 2027?",
+   "support": [
+    "decisions/orchid-pricing-2027.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "decisions/orchid-pricing-2027.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/support-tiers.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 522,
+     "irrelevant_excerpt_characters": 410,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "decisions/orchid-pricing-2027.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "clients/orchid/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/support-tiers.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/ines-duarte.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 522,
+     "irrelevant_excerpt_characters": 410,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q36",
+   "category": "exact",
+   "question": "How many office days a week are expected under hybrid working?",
+   "support": [
+    "decisions/hybrid-working.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "decisions/hybrid-working.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        7,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "procedures/incident-review.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 576,
+     "irrelevant_excerpt_characters": 496,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "decisions/hybrid-working.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": true
+      },
+      {
+       "path": "procedures/incident-review.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "personal/reading-list.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 1,
+     "irrelevant_items": 4,
+     "recall": 1.0,
+     "excerpt_characters": 600,
+     "irrelevant_excerpt_characters": 520,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q37",
+   "category": "exact",
+   "question": "How long do I have to submit receipts for expense claims?",
+   "support": [
+    "procedures/expense-claims.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "procedures/expense-claims.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "daily/2026-02-06.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "personal/running-log.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 3,
+     "supporting_found": 1,
+     "irrelevant_items": 2,
+     "recall": 1.0,
+     "excerpt_characters": 328,
+     "irrelevant_excerpt_characters": 199,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "procedures/expense-claims.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": true
+      },
+      {
+       "path": "daily/2026-02-06.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 2,
+     "supporting_found": 1,
+     "irrelevant_items": 1,
+     "recall": 1.0,
+     "excerpt_characters": 231,
+     "irrelevant_excerpt_characters": 102,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q38",
+   "category": "exact",
+   "question": "What must contractors show at reception?",
+   "support": [
+    "procedures/visitor-sign-in.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "procedures/visitor-sign-in.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 94,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "procedures/visitor-sign-in.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 94,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q39",
+   "category": "near_duplicate",
+   "question": "Is the hiring freeze still in place?",
+   "support": [
+    "meetings/leadership-2026-02-05.md",
+    "meetings/leadership-2026-02-19.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "meetings/leadership-2026-02-05.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "meetings/leadership-2026-02-19.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/harbour-lights/programme.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 4,
+     "supporting_found": 2,
+     "irrelevant_items": 2,
+     "recall": 1.0,
+     "excerpt_characters": 434,
+     "irrelevant_excerpt_characters": 280,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "meetings/leadership-2026-02-05.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "meetings/leadership-2026-02-19.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        5
+       ],
+       "supporting": true
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        3,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 3,
+     "supporting_found": 2,
+     "irrelevant_items": 1,
+     "recall": 1.0,
+     "excerpt_characters": 286,
+     "irrelevant_excerpt_characters": 132,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "Q40",
+   "category": "personal",
+   "question": "When should I plant garlic?",
+   "support": [
+    "personal/garden-plan.md"
+   ],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "personal/garden-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 108,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "personal/garden-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": true
+      }
+     ],
+     "evidence_items": 1,
+     "supporting_found": 1,
+     "irrelevant_items": 0,
+     "recall": 1.0,
+     "excerpt_characters": 108,
+     "irrelevant_excerpt_characters": 0,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "U01",
+   "category": "unanswerable",
+   "question": "What is the Saltmarsh carbon offset target?",
+   "support": [],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/rowan-hale.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 615,
+     "irrelevant_excerpt_characters": 615,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "clients/saltmarsh/quarterly-review-2026-q1.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/saltmarsh.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "map.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/orchid/orchid.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "clients/saltmarsh/renewal-terms.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 709,
+     "irrelevant_excerpt_characters": 709,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "U02",
+   "category": "unanswerable",
+   "question": "Who won the office chess tournament?",
+   "support": [],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/hybrid-working.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 599,
+     "irrelevant_excerpt_characters": 599,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/juniper/new-office.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/juniper.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/tomasz-wolny.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/juniper-move-date.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/juniper/removals-contract.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 666,
+     "irrelevant_excerpt_characters": 666,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "U03",
+   "category": "unanswerable",
+   "question": "What is the Kestrel drone budget?",
+   "support": [],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "people/priya-raman.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        6,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/fleet-inspection.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/kestrel/kestrel.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        9
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 837,
+     "irrelevant_excerpt_characters": 837,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "projects/harbour-lights/budget-approved.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/budget-draft.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        6
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/harbour-lights/harbour-lights.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        8,
+        11
+       ],
+       "supporting": false
+      },
+      {
+       "path": "decisions/harbour-lights-venue.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-ellery.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        4,
+        8
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 813,
+     "irrelevant_excerpt_characters": 813,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  },
+  {
+   "id": "U04",
+   "category": "unanswerable",
+   "question": "When is the Lantern board dinner?",
+   "support": [],
+   "results": {
+    "keywords": {
+     "evidence": [
+      {
+       "path": "decisions/lantern-ledger-storage.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/data-mapping.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/kickoff.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        2,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        10
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 850,
+     "irrelevant_excerpt_characters": 850,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    },
+    "fts5": {
+     "evidence": [
+      {
+       "path": "decisions/lantern-ledger-storage.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        4,
+        7
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/standup-2026-02-10.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/lantern.md",
+       "retrieved_via": "keyword_match",
+       "lines": [
+        5,
+        10
+       ],
+       "supporting": false
+      },
+      {
+       "path": "people/morgan-quill.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        5,
+        8
+       ],
+       "supporting": false
+      },
+      {
+       "path": "projects/lantern/cutover-plan.md",
+       "retrieved_via": "explicit_link_from_match",
+       "lines": [
+        1,
+        5
+       ],
+       "supporting": false
+      }
+     ],
+     "evidence_items": 5,
+     "supporting_found": 0,
+     "irrelevant_items": 5,
+     "recall": null,
+     "excerpt_characters": 800,
+     "irrelevant_excerpt_characters": 800,
+     "ungranted_evidence_items": 0,
+     "ungranted_identifiers_or_text": false,
+     "reviewed_statements": 0
+    }
+   }
+  }
+ ],
+ "limitations": [
+  "Invented corpus and questions written by the evaluator; results do not transfer to private vaults.",
+  "Lexical support labels measure whether supporting notes reach the packet, not answer correctness, semantic quality or entailment.",
+  "Latency comes from this container and Python/SQLite build, not named target hardware.",
+  "No model, provider or network call; no new model experiment is implied.",
+  "Reviewed-memory statements are absent from this set, so only authored-note evidence is scored.",
+  "Permission leakage is checked for one ungranted source under strict read grants only."
+ ]
+}
