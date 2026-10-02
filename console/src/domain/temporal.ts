@@ -135,7 +135,7 @@ export const DECIDED:Record<Decision,string>={accept:'Accepted as your reviewed 
 const DETAIL:Record<string,string>={support_changed:'its supporting lines changed',source_removed:'its source was removed from ALFRED',
   claim_forgotten:'forgotten',entity_forgotten:'its record was forgotten',captured:'captured with “Remember this”',supersede:'as a replacement',
   from_audit_log:'from the audit log',from_statement_record:'from the statement record',last_review_time_from_statement_record:'last review time from the statement record',
-  state_found_at_migration:'state found when history began'};
+  state_found_at_migration:'state found when history began',support_unavailable_or_not_permitted:'',support_readable_again:''};
 const ORIGIN:Record<HistoryEntry['origin'],string>={recorded:'',observed:'noticed by ALFRED when it next looked',migrated:'reconstructed from earlier records',replayed:'replayed from the journal on restore'};
 export function historyLine(e:HistoryEntry){
   const who=e.by==='you'?'by you':e.by==='alfred'?'by ALFRED':'by another credential';

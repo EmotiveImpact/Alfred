@@ -270,6 +270,23 @@ class ValidTimeTests(TemporalBase):
         entry = self.history.history(self.owner, made)['entries'][0]
         self.assertEqual(entry['valid_period'], {'from': 1500, 'until': 9000})
 
+    def test_capture_preview_shows_the_recorded_valid_period(self):
+        n = self.note()
+        made = self.memory.capture(self.owner, {'request_id': 'c1', 'subject_id': 'atlas', 'predicate': 'status', 'object_id': None,
+                                                'value': 'planning', 'valid_from': 1500, 'valid_until': 9000, 'memory_type': 'semantic',
+                                                'retention_days': None, 'captured_from': {'note_id': n['id']},
+                                                'evidence': {'note_id': n['id'], 'sha256': n['sha256'], 'revision': n['revision'], 'start_line': 2, 'end_line': 2}})
+        self.assertEqual((made['preview']['valid_from'], made['preview']['valid_until'], made['preview']['state']), (1500, 9000, 'proposed'))
+        self.assertEqual(self.history.history(self.owner, made['id'])['entries'][0]['detail'], 'captured')
+
+    def test_a_statement_with_only_observed_rows_is_counted_as_without_history(self):
+        made = self.propose('s1', 'status', 2, value='planning'); self.review(made, 'accept')
+        with self.store.connection() as db:
+            db.execute("DELETE FROM memory_claim_history WHERE claim_id=?", (made,))
+            db.execute("INSERT INTO memory_claim_history(scope,actor,claim_id,state,at,time_known,by,origin,sets_valid) VALUES ('work','owner',?,'withheld',1000,1,'alfred','observed',0)", (made,))
+        report = self.history.as_of(self.owner, 1500)
+        self.assertEqual((report['without_history'], report['not_yet_recorded'], report['held']), (1, 0, []))
+
     def test_review_sets_the_valid_period_once_while_proposed(self):
         made = self.propose('s1', 'status', 2, value='planning')
         for valid, code in (((9000, 8000), 'invalid_memory_validity'), ((-1, None), 'invalid_timestamp')):

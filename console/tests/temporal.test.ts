@@ -78,7 +78,7 @@ describe('recorded history wording',()=>{
   it('says who made each change and how ALFRED knows',()=>{
     expect(historyLine(entry({})).who).toBe('by you');
     const observed=historyLine(entry({state:'withheld',by:'alfred',origin:'observed',detail:'support_unavailable_or_not_permitted'}));
-    expect([observed.label,observed.who]).toEqual(['Support unavailable or not permitted','by ALFRED']);expect(observed.notes).toContain('noticed by ALFRED');
+    expect([observed.label,observed.who,observed.notes]).toEqual(['Support unavailable or not permitted','by ALFRED','noticed by ALFRED when it next looked']);
     const migrated=historyLine(entry({time_known:false,origin:'migrated',detail:'state_found_at_migration'}));
     expect(migrated.when).toMatch(/^no later than .*exact time not known/);expect(migrated.notes).toContain('reconstructed from earlier records');
     expect(historyLine(entry({state:'forgotten',origin:'replayed'})).notes).toContain('replayed from the journal');

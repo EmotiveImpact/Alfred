@@ -292,7 +292,7 @@ class MemoryHistory:
             later = missing = 0
             for c in claims:
                 entries = history.get(c['id'])
-                if not entries:
+                if not entries or all(e['state'] in AVAILABILITY for e in entries):
                     missing += 1
                     continue
                 state, certain, since, since_known = state_at(entries, moment)
