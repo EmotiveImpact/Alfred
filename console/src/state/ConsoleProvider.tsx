@@ -9,7 +9,7 @@ import {emptyConnectedSnapshot} from '../integration/toSnapshot';
 import {useConnection,useRecordDetail} from './useConnection';
 import {useAsk} from './useAsk';
 import {useJobs} from './useJobs';
-export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|'jobs'|'memory'|null;
+export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|'jobs'|'memory'|'routines'|null;
 export type RailView='home'|'search'|'knowledge'|'tasks'|'research'|'systems'|'security'|'settings';
 /** Where the executive dialog should open: a tab, or one record's details or brief. Read once, then cleared. */
 export type ExecutiveTarget={view:'records'|'attention'|'insights'|'details'|'brief';id:string|null};

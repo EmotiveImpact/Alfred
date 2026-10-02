@@ -367,7 +367,7 @@
     {
       "id": "M10",
       "title": "Commitment and procedure-aware attention",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "M03",
         "M05"
@@ -383,13 +383,29 @@
         "maps-guide"
       ],
       "targets": [
-        "alfred/pulse.py",
-        "alfred/conversation.py"
+        "alfred/routines.py",
+        "alfred/routines_http.py",
+        "console/src/components/RoutinesPanel.tsx",
+        "alfred/pulse.py"
       ],
       "acceptance": [
         "Reviewed commitments can nominate reminders or proposals with explicit reasons",
         "No retrieved procedure text executes or expands capability grants",
         "Routine budgets, silence/interrupt choices, pause and actual outcomes are inspectable"
+      ],
+      "evidence": [
+        "tests/test_routines.py",
+        "tests/test_routines_procedures.py",
+        "console/tests/routines.test.ts",
+        "tools/check_routines_browser.py",
+        "docs/ROUTINES.md",
+        "docs/evidence/routines/RECEIPT.md"
+      ],
+      "delivery_status": "authored routines, nominations and the read-only procedure registry on the integration branch; not merged or deployed",
+      "limitations": [
+        "The three acceptance lines are met against synthetic data on the branch; status stays in progress while M05 (a dependency) is unfinished and the time-zone choice awaits the owner",
+        "Fixed UTC offsets without daylight saving; only the hosted owner credential can author routines",
+        "In-app only: no notifications, push, e-mail, devices, model or learned ranking"
       ]
     },
     {

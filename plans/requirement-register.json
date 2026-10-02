@@ -167,12 +167,14 @@
    "integration": "backend_connected",
    "merge": "main_partial",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_routines_procedures.py"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Bounded conversations and manual statements exist; capture policies and types pending M04/M10. Memory type is now recorded at capture; type-specific policies remain M10."
+   "notes": "Bounded conversations and manual statements exist; memory type is recorded at capture. Commitment-typed statements feed the commitment review routine; procedural ones only the read-only procedure registry; other types are not used by routines. Automatic capture policies remain pending."
   },
   {
    "id": "MEM-005",
@@ -485,18 +487,22 @@
     "SRC-PRD-0927"
    ],
    "depends_on": [],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "accepted",
    "implementation": "partial",
    "integration": "backend_connected",
-   "merge": "main_partial",
+   "merge": "main_partial_branch_extended",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_routines_procedures.py",
+    "tools/check_routines_browser.py",
+    "docs/evidence/routines/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Boundary retained; procedure registry pending."
+   "notes": "Read-only procedure registry with source and review state, plus authored procedure notes marked not reviewed. Tests feed instruction-like procedure text through routines, retrieval, answers, the conversation queue, a job, Pulse and approval dispatch and show no grant, credential, approval, setting, job or file changes. A versioned procedure workflow and workflow learning remain future work."
   },
   {
    "id": "MEM-016",
@@ -687,7 +693,7 @@
     "SRC-PRD-0927"
    ],
    "depends_on": [],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "accepted",
    "implementation": "partial",
    "integration": "backend_connected",
@@ -696,13 +702,16 @@
    "acceptance_evidence": [
     "tests/test_executive_workflows.py",
     "tools/check_executive_browser.py",
-    "docs/evidence/executive-2/RECEIPT.md"
+    "docs/evidence/executive-2/RECEIPT.md",
+    "tests/test_routines.py",
+    "tools/check_routines_browser.py",
+    "docs/evidence/routines/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Fixed Pulse routines with bounded history. In-app attention by four stated rules (overdue, decision past due, due within seven days, milestone without progress for 14 days) with authored snooze; three derived insight rules. Nothing is delivered outside the app, attention is not yet wired into routines, and learned relevance is unmeasured."
+   "notes": "Fixed Pulse routines with bounded history; in-app attention by four stated rules with authored snooze; three derived insight rules. Authored routines (commitment review and morning brief) now have schedules, run and nomination budgets, quiet hours, a show-now or hold-for-brief choice, per-routine and workspace pause, authority rechecked inside every run, and inspectable run outcomes holding citations and counts only. Reminders are accepted, accepted with a follow-up or dismissed; a draft offer only proposes a message.draft that still needs exact approval. In-app only; learned relevance unmeasured; fixed UTC offsets without daylight saving (owner decision)."
   },
   {
    "id": "CON-001",
