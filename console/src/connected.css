@@ -123,3 +123,7 @@ button.access-chip:hover:not(:disabled){border-color:#d7b37566}
 .voice-state.played,.voice-state.no_local_voice,.voice-state.failed{color:var(--amber)}
 .spoken-text summary{font-size:11px;color:var(--quiet);cursor:pointer;margin-top:6px}
 .spoken-text p{font-size:12px;line-height:1.7;color:#c9cfcd;margin:6px 0 0}
+/* Host health: plain rows, owner pause control. */
+.health-panel{margin-top:6px}
+.health-panel .text-button{margin:8px 16px 0 0}
+.health-panel .secondary-button{margin-top:8px}

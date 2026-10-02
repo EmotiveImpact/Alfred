@@ -101,6 +101,37 @@ def _model(server, p):
             'tools_enabled': False}
 
 
+def health(server, bearer):
+    """What the host is doing now, in plain fields. Readers see the same state; only owners may pause."""
+    store = server.store
+    p = store.principal(bearer, {'owner', 'reader'})
+    supervisor = server.supervisor.view(p['scope'])
+    knowledge = supervisor.get('knowledge') or {'configured': False}
+    with store.transaction() as db:
+        backup = db.execute('SELECT created,file FROM lifecycle_backups ORDER BY created DESC LIMIT 1').fetchone() \
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lifecycle_backups'").fetchone() else None
+        job_counts = {r[0]: r[1] for r in db.execute('SELECT state,count(*) FROM jobs WHERE scope=? GROUP BY state', (p['scope'],))} \
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone() else {}
+    from .lifecycle import entries, journal_path
+    conversations = getattr(server, 'conversations', None)
+    return {'checkedAt': _iso(store.now()), 'paused': store.paused(p['scope']), 'role': p['role'],
+            'host': {'status': supervisor.get('status'), 'lastCycle': _iso(supervisor['last_cycle']) if supervisor.get('last_cycle') else None,
+                     'intervalSeconds': supervisor.get('interval_seconds'), 'error': supervisor.get('error'),
+                     'foregroundProcessRequired': True, 'installedService': False},
+            'vault': {'configured': bool(knowledge.get('configured')), 'status': knowledge.get('status'),
+                      'lastScan': _iso(knowledge['last_scan']) if knowledge.get('last_scan') else None,
+                      'notes': knowledge.get('notes'), 'issues': len(knowledge.get('errors') or [])},
+            'jobs': {'configured': server.jobs is not None, 'byState': job_counts,
+                     'backend': 'local subprocess: not a sandbox' if server.jobs is not None else None},
+            'questions': {'configured': conversations is not None,
+                          'waiting': conversations.jobs.qsize() if conversations is not None else 0},
+            'model': _model(server, p),
+            # Backups and the journal cover the whole database, so only owners see them.
+            'lifecycle': {'lastBackup': _iso(backup['created']) if backup else None,
+                          'journalEntries': len(entries(journal_path(store)))} if p['role'] == 'owner' else None,
+            'basis': 'host_report_at_check_time'}
+
+
 def projection(server, bearer):
     store, memory = server.store, getattr(server, 'memory', None)
     if not hasattr(store, 'knowledge'):

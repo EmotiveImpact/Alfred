@@ -95,6 +95,12 @@ from it, and returns a receipt that the console summarises. The person's files a
 touched. Answers withdrawn this way, or by forgetting a statement, end with a plain message
 instead of waiting.
 
+## Host health and pause
+
+Console controls show `GET /desk/console/health`: what the foreground host reports about
+itself, vault scanning, waiting questions, jobs and, for owners, the last backup. The owner
+can pause and resume background work with a confirmation; readers see the state only.
+
 ## What supports an answer
 
 Each answer carries the server's support report (INT-002): which of the question's words
@@ -169,5 +175,5 @@ device or GPU certification.
   routing and mode detection. `console/tests/jobs.test.ts` (8): job event merging, result
   reading, wording and command routing. `console/tests/pairing.test.ts` (2): pairing
   redemption and its in-memory CSRF token.
-- `tools/check_console_connected_browser.py` (94 checks): real Chromium against the
+- `tools/check_console_connected_browser.py` (98 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

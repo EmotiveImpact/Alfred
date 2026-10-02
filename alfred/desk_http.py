@@ -468,6 +468,8 @@ class Handler(BaseHTTPRequestHandler):
                 result = console_api.workspaces(store, bearer)
             elif not mutation and url.path == '/desk/console/projection' and not url.query:
                 result = console_api.projection(self.server, bearer)
+            elif not mutation and url.path == '/desk/console/health' and not url.query:
+                result = console_api.health(self.server, bearer)
             elif not mutation and url.path.startswith('/desk/console/records/') and not url.query:
                 result = console_api.record(self.server, bearer, url.path[len('/desk/console/records/'):])
             elif not mutation and url.path == '/desk/connectors' and not url.query:

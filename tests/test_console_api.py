@@ -55,6 +55,19 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
         r, body = self.raw('/desk/login', {'key': key}); self.assertEqual(r.status, 200)
         self.cookie = r.getheader('Set-Cookie').split(';')[0]; self.csrf = json.loads(body)['csrf']
 
+    def test_host_health_is_read_only_and_backups_are_owner_only(self):
+        self.assertEqual(self.req('/desk/console/health')[0], 401)
+        self.login(self.keys['owner'])
+        code, health = self.req('/desk/console/health')
+        self.assertEqual((code, health['paused'], health['vault']['notes'], health['host']['installedService']), (200, False, 20, False))
+        self.assertEqual(health['lifecycle'], {'lastBackup': None, 'journalEntries': 0})
+        self.assertEqual(self.req('/desk/pause', {'paused': True})[0], 200)
+        self.assertTrue(self.req('/desk/console/health')[1]['paused'])
+        self.login(self.keys['reader'])
+        reader = self.req('/desk/console/health')[1]
+        self.assertEqual((reader['paused'], reader['lifecycle'], reader['role']), (True, None, 'reader'))
+        self.assertEqual(self.req('/desk/pause', {'paused': False})[0], 403)
+
     def projection(self):
         code, data = self.req('/desk/console/projection'); self.assertEqual(code, 200, data)
         return data

@@ -839,12 +839,15 @@
    "integration": "backend_connected",
    "merge": "main_partial",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_console_api.py",
+    "tools/check_console_connected_browser.py"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Foreground local process with pause. No managed service. The host now also runs one local job worker thread, stopped with the desk."
+   "notes": "Foreground local process with pause; no managed or installed service. The host runs one local job worker thread, stopped with the desk. The connected console shows the host's own health report (host state, last cycle, vault scan, waiting questions, jobs, last backup for owners) and lets the owner pause and resume with confirmation. No offline-first operation or service manager."
   },
   {
    "id": "UX-002",

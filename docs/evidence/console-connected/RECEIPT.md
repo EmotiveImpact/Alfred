@@ -16,7 +16,7 @@ served by that server and driven in Chromium 141 (SwiftShader).
 | `python3 -m unittest discover -s tests` | 699 pass (includes 16 projection and 12 focus tests) |
 | `npm run build` and `npm test` in `console/` | build passes; 79 unit tests pass |
 | `npx playwright test` (offline demo) | 29 of 29 pass, unchanged behaviour |
-| `tools/check_console_connected_browser.py` | 94 of 94 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs, device pairing, whole-source removal, sync conflict copies, export connectors and answer support); [report](browser-report.json) |
+| `tools/check_console_connected_browser.py` | 98 of 98 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs, device pairing, whole-source removal, sync conflict copies, export connectors, answer support and host health with pause); [report](browser-report.json) |
 | Existing seven backend browser scripts | all pass |
 
 The 43 checks include: sign-in through the real session; graph counts equal to the
@@ -104,3 +104,11 @@ Each answer now shows "What supports this answer": word coverage, excerpt and no
 withheld reviewed statements by reason, and whether a model was used, with its limits. A
 question about a word the synthetic vault does not contain names that word as not found.
 Details and the evaluation with denominators: [INT-002 receipt](../int-002/RECEIPT.md).
+
+## Host health and pause (added later on 2 October)
+
+Console controls now show the host's own report: host state, last background cycle, vault
+scan and note count, waiting questions, jobs by state, and for owners the last backup and
+journal size, stated as a report from a foreground process, not an installed service. The
+owner pauses with a confirmation, a question is then refused with "ALFRED is paused", and the
+owner resumes from the same panel.

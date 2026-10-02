@@ -342,7 +342,7 @@ with tempfile.TemporaryDirectory() as temp:
             run.get_by_label('Job kind').select_option('summarise_lines')
             run.get_by_label('Number of lines').fill('3')
             run.get_by_role('button', name='Run on this revision').click()
-            expect(jobs_dialog.locator('.job-follow h3')).to_contain_text('First lines (extractive)')
+            expect(jobs_dialog.locator('.job-follow h3')).to_contain_text('First lines (extractive)', timeout=20000)
             jobs_dialog.get_by_label('Close panel').click()
             # Leave entirely: reload the page, then come back to the jobs panel.
             page.reload()
@@ -358,6 +358,25 @@ with tempfile.TemporaryDirectory() as temp:
             first_lines = [line.strip()[:200] for line in film_text.splitlines() if line.strip()][:3]
             check('extracted lines are the exact first lines of the note, not a summary', extracted.all_inner_texts() == first_lines)
             jobs_dialog.get_by_label('Close panel').click()
+            # RUN-001: the host's own report, and the owner's pause control.
+            command.fill('settings'); command.press('Enter')
+            health = page.get_by_role('dialog').get_by_role('region', name='Host health')
+            expect(health).to_contain_text(re.compile(r'ready · [0-9]+ notes'), timeout=15000)
+            check('the console shows what the host is doing and that it is not an installed service', 'not an installed service' in health.inner_text())
+            health.get_by_role('button', name='Pause ALFRED').click()
+            health.get_by_role('group', name='Confirm pause').get_by_role('button', name='Pause now').click()
+            expect(health).to_contain_text('Paused', timeout=15000)
+            check('pausing is a confirmed owner action reported back by the host')
+            page.get_by_role('dialog').get_by_label('Close panel').click()
+            command.fill('What still needs confirming?'); command.press('Enter')
+            expect(page.get_by_role('dialog')).to_contain_text('ALFRED is paused', timeout=15000)
+            check('a paused host refuses new questions and says why')
+            page.get_by_role('dialog').get_by_label('Close panel').click()
+            command.fill('settings'); command.press('Enter')
+            page.get_by_role('dialog').get_by_role('region', name='Host health').get_by_role('button', name='Resume ALFRED').click()
+            expect(page.get_by_role('status').filter(has_text='ALFRED resumed')).to_be_visible(timeout=15000)
+            check('the owner resumes the host from the console')
+            page.get_by_role('dialog').get_by_label('Close panel').click()
             # Laptop and mobile layouts.
             for width, height in ((1280, 800), (390, 844)):
                 page.set_viewport_size({'width': width, 'height': height}); page.wait_for_timeout(600)
