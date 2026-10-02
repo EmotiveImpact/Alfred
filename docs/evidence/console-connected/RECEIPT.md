@@ -16,7 +16,7 @@ served by that server and driven in Chromium 141 (SwiftShader).
 | `python3 -m unittest discover -s tests` | 699 pass (includes 16 projection and 12 focus tests) |
 | `npm run build` and `npm test` in `console/` | build passes; 79 unit tests pass |
 | `npx playwright test` (offline demo) | 29 of 29 pass, unchanged behaviour |
-| `tools/check_console_connected_browser.py` | 73 of 73 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, and bounded jobs); [report](browser-report.json) |
+| `tools/check_console_connected_browser.py` | 81 of 81 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs and device pairing); [report](browser-report.json) |
 | Existing seven backend browser scripts | all pass |
 
 The 43 checks include: sign-in through the real session; graph counts equal to the
@@ -46,7 +46,8 @@ errors.
 
 [Desktop](connected-desktop.png), [reviewed memory inspector](connected-reviewed.png),
 [Ask with project context](connected-ask.png), [390 px](connected-390.png),
-[server unreachable](connected-unreachable.png), [bounded jobs](connected-jobs.png).
+[server unreachable](connected-unreachable.png), [bounded jobs](connected-jobs.png),
+[pairing a device](connected-pairing.png), [device list](connected-devices.png).
 Captured from the running console, not generated.
 
 ## Bounded jobs (added after the Stage A and B commit)
@@ -66,3 +67,12 @@ inspect the note but has no control to submit jobs. Backend rule and tests:
 Synthetic data only. No model configured, so no reasoning quality is claimed.
 Software rendering is not physical-device graphics acceptance. One workspace per
 credential. Priorities and milestones come from executive records (see `../executive/RECEIPT.md`).
+
+## Device pairing (added later on 2 October)
+
+The owner creates a reader pairing code in the Security panel. A second browser context,
+standing in for another device, pairs from the sign-in screen, is shown its own new key
+once, must confirm it has kept the key before continuing, and then reads with the same
+person's grants; the key is no longer on the page afterwards. The owner sees the device in
+their own list and revokes it; the second context returns to sign-in with no records,
+while the owner's session stays connected. Backend rules and tests: the M02 receipt.

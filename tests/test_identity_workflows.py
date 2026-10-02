@@ -101,6 +101,83 @@ class IdentityHTTPTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'invitation_not_valid')
 
 
+class PairingTests(IdentityHTTPTests):
+    """M02 pairing: another device for the same person, without copying a key."""
+
+    def pair(self, name, code, label='Fictional tablet'):
+        status, body, cookie = self.req(name, '/desk/identity/pairing/redeem', {'code': code, 'label': label})
+        if status == 200:
+            self.sessions[name] = (cookie.split(';')[0], body['csrf'])
+        return status, body
+
+    def offer(self, role='owner', by='owner'):
+        return self.req(by, '/desk/identity/pairing', {'role': role})
+
+    def test_a_paired_device_is_the_same_person_with_no_more_authority(self):
+        self.login('owner')
+        self.req('owner', '/desk/identity/grants', {'source': 'demo-source', 'capability': 'read', 'days': 30, 'epoch': self.epoch(), 'revoke': False})
+        status, offer, _ = self.offer()
+        self.assertEqual((status, offer['single_use'], len(offer['code'])), (200, True, 24))
+        owner_view = self.req('owner', '/desk/identity')[1]
+        status, paired = self.pair('tablet', offer['code'])
+        self.assertEqual((status, paired['role']), (200, 'owner'))
+        self.assertLessEqual(paired['expires_at'], offer['device_expires_no_later_than'])
+        tablet_view = self.req('tablet', '/desk/identity')[1]
+        self.assertEqual(tablet_view['person_id'], owner_view['person_id'])
+        self.assertNotEqual(tablet_view['device_id'], owner_view['device_id'])
+        self.assertEqual(self.notes('tablet'), 20)  # Grants belong to the person, so they apply here too.
+        devices = {d['label']: d for d in tablet_view['devices']}
+        self.assertEqual(set(devices), {'Fictional tablet', 'Provisioned access key'})
+        self.assertTrue(devices['Fictional tablet']['current'])
+        # The key works on its own after the pairing session.
+        self.assertEqual(self.store.principal(paired['key'])['role'], 'owner')
+
+    def test_pairing_codes_are_single_use_bounded_and_indistinguishable(self):
+        self.login('owner'); self.login('reader')
+        code = self.offer()[1]['code']
+        self.assertEqual(self.pair('tablet', code)[0], 200)
+        self.assertEqual(self.pair('second', code), (404, {'error': 'pairing_not_valid'}))
+        self.assertEqual(self.pair('third', 'x' * 24)[0], 404)
+        self.assertEqual(self.pair('fourth', self.offer()[1]['code'], label='  ')[0], 400)
+        # A reader can pair a reader device for themselves, never an owner device.
+        self.assertEqual(self.offer('owner', by='reader')[0], 400)
+        status, reader_device = self.pair('reader-phone', self.offer('reader', by='reader')[1]['code'], 'Fictional phone')
+        self.assertEqual((status, reader_device['role']), (200, 'reader'))
+        # An owner may pair a lower-authority reader device for themselves.
+        status, reading = self.pair('owner-reader', self.offer('reader')[1]['code'])
+        self.assertEqual((status, reading['role']), (200, 'reader'))
+        self.assertEqual(self.req('owner-reader', '/desk/identity/invitations', {'source': 'demo-source', 'capability': 'read', 'days': 1, 'epoch': 0})[0], 403)
+        # An expired code and a code from a revoked device are refused the same way.
+        expired = self.offer()[1]['code']
+        with self.store.transaction() as db:
+            db.execute('UPDATE device_pairings SET expires=0 WHERE redeemed_at IS NULL')
+        self.assertEqual(self.pair('late', expired), (404, {'error': 'pairing_not_valid'}))
+        orphan = self.offer('reader', by='reader')[1]['code']
+        self.store.revoke('demo-reader')
+        self.assertEqual(self.pair('orphan', orphan), (404, {'error': 'pairing_not_valid'}))
+
+    def test_refused_pairings_share_the_sign_in_failure_budget(self):
+        for _ in range(20):
+            self.assertEqual(self.pair('guess', 'y' * 24)[0], 404)
+        self.assertEqual(self.pair('guess', 'y' * 24)[0], 429)
+        self.assertEqual(self.req('owner', '/desk/login', {'key': self.keys['owner']})[0], 429)
+
+    def test_a_person_revokes_only_their_own_other_devices(self):
+        self.login('owner'); self.login('reader')
+        self.pair('tablet', self.offer()[1]['code'])
+        owner_device = self.req('owner', '/desk/identity')[1]['device_id']
+        tablet_device = self.req('tablet', '/desk/identity')[1]['device_id']
+        self.assertEqual(self.req('tablet', f'/desk/identity/devices/{tablet_device}/revoke', {})[1], {'error': 'cannot_revoke_current_device'})
+        self.assertEqual(self.req('reader', f'/desk/identity/devices/{owner_device}/revoke', {})[0], 404)
+        status, view, _ = self.req('tablet', f'/desk/identity/devices/{owner_device}/revoke', {})
+        self.assertEqual((status, [d['label'] for d in view['devices']]), (200, ['Fictional tablet']))
+        self.assertEqual(self.req('owner', '/desk/identity')[0], 401)
+        from alfred.lifecycle import entries, journal_path
+        self.assertIn(('credential_revoked', 'demo-owner'), [(e['kind'], e.get('subject')) for e in entries(journal_path(self.store))])
+
+    # The inherited tests also run here, so pairing never changes earlier behaviour.
+
+
 class RotationTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)

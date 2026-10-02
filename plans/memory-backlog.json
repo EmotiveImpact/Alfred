@@ -111,7 +111,7 @@
         "docs/evidence/memory-m02/RECEIPT.md"
       ],
       "limitations": [
-        "Incomplete enrolment/recovery and administrative/HTTP workflows; device review histories remain separate",
+        "Multi-owner administration and team roles are not built; device review histories remain separate",
         "Full access-loss, persistence/display and lifecycle acceptance unfinished; legacy scope policy remains default"
       ]
     },

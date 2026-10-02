@@ -7,7 +7,7 @@ ledgers remain separate even after explicit enrolment into the same person.
 import hashlib
 import re
 import secrets
-from .local import Fault, ident, timestamp
+from .local import Fault, ident, text, timestamp
 
 CAPABILITIES = {'read', 'model', 'inbox.write', 'sync', 'connector.read'}
 SCHEMA = '''
@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS grant_invitations(
  code_hash TEXT PRIMARY KEY, scope TEXT NOT NULL, source TEXT NOT NULL, capability TEXT NOT NULL,
  grant_expires INTEGER NOT NULL, expires INTEGER NOT NULL, created_by TEXT NOT NULL,
  redeemed_by TEXT, redeemed_at INTEGER);
+CREATE TABLE IF NOT EXISTS device_pairings(
+ code_hash TEXT PRIMARY KEY, scope TEXT NOT NULL, person TEXT NOT NULL, role TEXT NOT NULL,
+ created_by TEXT NOT NULL, expires INTEGER NOT NULL, redeemed_credential TEXT, redeemed_at INTEGER);
+CREATE TABLE IF NOT EXISTS device_details(
+ credential TEXT PRIMARY KEY REFERENCES credentials(id), label TEXT NOT NULL, paired_from TEXT, paired_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS memory_tombstones(
  scope TEXT NOT NULL, source TEXT NOT NULL, note_id TEXT NOT NULL, path TEXT NOT NULL,
  at INTEGER NOT NULL, receipt TEXT NOT NULL, PRIMARY KEY(scope,source,note_id));
@@ -79,9 +84,83 @@ class IdentityPolicy:
                     continue
                 sources.append({'source': c['id'], 'label': labels.get(c['id'], 'Unnamed source'), 'permitted': allowed,
                                 'credential_expires': c['expires']})
+            # Only this person's own active devices. Other people's devices are never listed.
+            devices = [{'device': r['device'], 'label': r['label'] or 'Provisioned access key', 'role': r['role'],
+                        'expires': r['expires'], 'paired_at': r['paired_at'], 'current': r['credential'] == p['id']}
+                       for r in db.execute('''SELECT d.credential,d.device,c.role,c.expires,dd.label,dd.paired_at
+                           FROM identity_devices d JOIN credentials c ON c.id=d.credential
+                           LEFT JOIN device_details dd ON dd.credential=d.credential
+                           WHERE d.person=? AND c.scope=? AND c.role IN ('owner','reader') AND c.revoked=0 AND c.expires>?
+                           ORDER BY c.expires DESC,d.device''', (p['person_id'], p['scope'], now))]
             return {'person_id':p['person_id'], 'device_id':p['device_id'], 'generation':p['generation'],
                     'scope':p['scope'], 'role':p['role'], 'mode':'explicit_grants' if row and row['strict'] else 'legacy_scope',
-                    'epoch':row['epoch'] if row else 0, 'grants':grants, 'sources':sources, 'device_reviews_shared':False}
+                    'epoch':row['epoch'] if row else 0, 'grants':grants, 'sources':sources, 'devices':devices,
+                    'device_reviews_shared':False}
+
+    def offer_pairing(self, bearer, role):
+        """A one-time code that adds a device for this same person, without copying a key.
+
+        The new device gets its own credential, never more authority than the offering
+        one: the same role or reader, and an expiry no later than the offering key's.
+        """
+        code = secrets.token_urlsafe(18)
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner', 'reader'})
+            if role not in ('owner', 'reader') or (p['role'] == 'reader' and role != 'reader'):
+                raise Fault('invalid_pairing_role')
+            now = self.store.now()
+            if db.execute('SELECT count(*) FROM device_pairings WHERE scope=? AND redeemed_at IS NULL AND expires>?',
+                          (p['scope'], now)).fetchone()[0] >= 8:
+                raise Fault('pairing_capacity', 409)
+            db.execute('INSERT INTO device_pairings VALUES (?,?,?,?,?,?,NULL,NULL)',
+                       (hashlib.sha256(code.encode()).hexdigest(), p['scope'], p['person_id'], role, p['id'], now + 600))
+            self.store.log(db, p['scope'], p['id'], 'device.pairing_offered', p['device_id'])
+        return {'code': code, 'expires_at': now + 600, 'role': role, 'single_use': True,
+                'device_expires_no_later_than': p['expires']}
+
+    def redeem_pairing(self, code, label):
+        """Called by the new device, which holds only the code. Returns its own key once."""
+        if not isinstance(code, str) or not re.fullmatch(r'[A-Za-z0-9_-]{24}', code):
+            raise Fault('pairing_not_valid', 404)
+        text(label, 60)
+        if not label.strip():
+            raise Fault('device_label_required')
+        bearer = secrets.token_urlsafe(32)
+        with self.store.transaction() as db:
+            now = self.store.now()
+            row = db.execute('SELECT * FROM device_pairings WHERE code_hash=?', (hashlib.sha256(code.encode()).hexdigest(),)).fetchone()
+            offering = db.execute('SELECT * FROM credentials WHERE id=?', (row['created_by'],)).fetchone() if row else None
+            person = db.execute('SELECT person FROM identity_devices WHERE credential=?', (row['created_by'],)).fetchone() if row else None
+            # Unknown, used, expired and orphaned codes are indistinguishable.
+            if (not row or row['redeemed_at'] is not None or row['expires'] <= now or not offering or offering['revoked']
+                    or offering['expires'] <= now or not person or person['person'] != row['person']):
+                raise Fault('pairing_not_valid', 404)
+            if db.execute('SELECT count(*) FROM credentials').fetchone()[0] >= 128:
+                raise Fault('credential_capacity', 409)
+            credential, device = 'device-' + secrets.token_hex(12), 'device-' + secrets.token_hex(12)
+            db.execute('INSERT INTO credentials(id,scope,role,digest,expires) VALUES (?,?,?,?,?)',
+                       (credential, row['scope'], row['role'], hashlib.sha256(bearer.encode()).hexdigest(), offering['expires']))
+            db.execute('INSERT INTO identity_devices VALUES (?,?,?,1)', (credential, row['person'], device))
+            db.execute('INSERT INTO device_details VALUES (?,?,?,?)', (credential, label.strip(), row['created_by'], now))
+            db.execute('UPDATE device_pairings SET redeemed_credential=?,redeemed_at=? WHERE code_hash=?', (credential, now, row['code_hash']))
+            self.store.log(db, row['scope'], credential, 'device.paired', row['created_by'])
+        return {'key': bearer, 'device_id': device, 'role': row['role'], 'expires_at': offering['expires']}
+
+    def revoke_device(self, bearer, device_id):
+        """A person removes one of their own other devices. Revoking this device stays offline."""
+        if not isinstance(device_id, str) or not re.fullmatch(r'device-[0-9a-f]{24}', device_id):
+            raise Fault('not_found', 404)
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner', 'reader'})
+            target = db.execute('''SELECT d.credential FROM identity_devices d JOIN credentials c ON c.id=d.credential
+                WHERE d.device=? AND d.person=? AND c.scope=? AND c.role IN ('owner','reader') AND c.revoked=0''',
+                (device_id, p['person_id'], p['scope'])).fetchone()
+            if not target:
+                raise Fault('not_found', 404)
+            if target['credential'] == p['id']:
+                raise Fault('cannot_revoke_current_device', 409)
+        self.store.revoke(target['credential'], actor=p['id'])
+        return self.view(bearer)
 
     def invite(self, bearer, source, capability, grant_expires, epoch):
         """A one-time code another person redeems with their own key. No one is granted by ID."""

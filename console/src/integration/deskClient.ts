@@ -36,6 +36,8 @@ export class DeskClient implements ConsoleReadPort {
   }
   async session(signal?:AbortSignal){const s=await this.call<SessionInfo>('/desk/session',{signal});this.csrf=s.csrf;return s;}
   async login(key:string){const r=await this.call<{csrf:string}>('/desk/login',{method:'POST',body:{key}});this.csrf=r.csrf;}
+  /** Redeems a one-time pairing code. The new device's own key is returned once, for the person to keep. */
+  async pair(code:string,label:string){const r=await this.call<{csrf:string;key:string;device_id:string;role:'owner'|'reader';expires_at:number}>('/desk/identity/pairing/redeem',{method:'POST',body:{code,label}});this.csrf=r.csrf;return r;}
   async logout(){try{await this.call('/desk/logout',{method:'POST',body:{}});}finally{this.csrf='';}}
   forget(){this.csrf='';}
   async permittedWorkspaces(signal:AbortSignal):Promise<readonly PermittedWorkspace[]>{return (await this.call<{workspaces:PermittedWorkspace[]}>('/desk/console/workspaces',{signal})).workspaces;}

@@ -1,5 +1,5 @@
 {
-  "passed": 73,
+  "passed": 81,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -64,6 +64,14 @@
     "the model capability starts ungranted",
     "the owner grants a capability and the access panel stays open",
     "a one-time invitation code is created",
+    "a single-use pairing code is created for a reader device",
+    "the new device receives its own key, shown once",
+    "continuing requires confirming the key is kept",
+    "the paired device reads with the same person's grants and no longer shows its key",
+    "the paired device has reader authority only",
+    "the owner sees the paired device in their own device list",
+    "revoking a device signs it out and clears its records",
+    "revoking another device leaves this device connected",
     "revocation returns to sign-in and closes open dialogs",
     "revocation clears every record",
     "a person without grants sees no records, names or counts",

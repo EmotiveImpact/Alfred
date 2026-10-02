@@ -528,13 +528,14 @@
    "acceptance_evidence": [
     "docs/evidence/memory-m02/RECEIPT.md",
     "tests/test_identity_workflows.py",
-    "tests/test_memory_programme_wip.py"
+    "tests/test_memory_programme_wip.py",
+    "tools/check_console_connected_browser.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Person/device records, strict grants and epochs from PR #17, plus HTTP grant management, single-use invitations for another person and offline rotation. Missing: pairing workflow, device key recovery, multi-owner administration."
+   "notes": "Person/device records, strict grants and epochs from PR #17, plus HTTP grant management, single-use invitations for another person, offline rotation, and device pairing by single-use code (own key per device, bounded authority and expiry, own-device revocation, documented recovery). Missing: multi-owner administration, team roles, shared review history across devices, strict grants by default."
   },
   {
    "id": "SYS-002",

@@ -186,8 +186,8 @@ class LocalCore:
             self.log(db, scope, credential_id, 'credential.provisioned', credential_id)
         return bearer
 
-    def revoke(self, credential_id: str) -> None:
-        """Offline administration; revocation is checked again before local execution."""
+    def revoke(self, credential_id: str, *, actor: str = 'local-admin') -> None:
+        """Offline administration, or a person removing their own device; checked again before execution."""
         ident(credential_id)
         with self.transaction() as db:
             row = db.execute('SELECT * FROM credentials WHERE id=?', (credential_id,)).fetchone()
@@ -197,7 +197,7 @@ class LocalCore:
             from .lifecycle import append
             append(self, {'kind': 'credential_revoked', 'scope': row['scope'], 'subject': credential_id, 'at': self.now()})
             db.execute('UPDATE credentials SET revoked=1 WHERE id=?', (credential_id,))
-            self.log(db, row['scope'], 'local-admin', 'credential.revoked', credential_id)
+            self.log(db, row['scope'], actor, 'credential.revoked', credential_id)
 
     def authenticate(self, db, bearer: str, roles: set[str]):
         if not isinstance(bearer, str) or not re.fullmatch(r'[A-Za-z0-9_-]{43}', bearer):

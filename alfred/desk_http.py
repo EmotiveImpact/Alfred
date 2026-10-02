@@ -36,17 +36,22 @@ class Sessions:
         self.store, self.items = store, {}
         self.failures = deque(maxlen=40)
 
-    def login(self, bearer):
+    def limited(self, call):
+        """Unauthenticated calls share one failure budget: 20 refusals a minute."""
         now = self.store.now()
         while self.failures and self.failures[0] < now - 60:
             self.failures.popleft()
         if len(self.failures) >= 20:
             raise Fault('login_rate_limited', 429)
         try:
-            p = self.store.principal(bearer)
+            return call()
         except Fault:
             self.failures.append(now)
             raise
+
+    def login(self, bearer):
+        p = self.limited(lambda: self.store.principal(bearer))
+        now = self.store.now()
         self.items = {k: v for k, v in self.items.items() if v['expires'] > now}
         if len(self.items) >= 32:
             raise Fault('session_capacity', 429)
@@ -135,7 +140,7 @@ class Handler(BaseHTTPRequestHandler):
         return data, CONSOLE_TYPES[file.suffix]
 
     def identity_route(self, path, mutation, bearer, body):
-        """Identity and source grants. Rotation and pairing stay offline (they need both keys or a stopped host)."""
+        """Identity, source grants and device pairing. Key rotation stays offline (it needs a stopped host)."""
         from .policy import IdentityPolicy
         policy, store = IdentityPolicy(self.server.store), self.server.store
         if not mutation and path == '/desk/identity':
@@ -163,6 +168,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/desk/identity/invitations/redeem':
             exact(body, {'code'})
             return policy.redeem(bearer, body['code'])
+        if path == '/desk/identity/pairing':
+            exact(body, {'role'})
+            return policy.offer_pairing(bearer, body['role'])
+        match = re.fullmatch(r'/desk/identity/devices/([A-Za-z0-9-]{1,40})/revoke', path)
+        if match:
+            exact(body, set())
+            return policy.revoke_device(bearer, match.group(1))
         raise Fault('not_found', 404)
 
     def jobs_route(self, url, mutation, bearer, body):
@@ -322,6 +334,16 @@ class Handler(BaseHTTPRequestHandler):
                 # No Secure attribute on this HTTP-loopback-only development server.
                 cookie = f'{self.server.cookie_name}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=1800'
                 self.send_payload(200, {'csrf': csrf}, cookie=cookie)
+                return
+            if mutation and url.path == '/desk/identity/pairing/redeem':
+                # The new device holds only a one-time code, so this precedes the session check.
+                exact(body, {'code', 'label'})
+                from .policy import IdentityPolicy
+                paired = self.server.sessions.limited(
+                    lambda: IdentityPolicy(self.server.store).redeem_pairing(body['code'], body['label']))
+                token, csrf = self.server.sessions.login(paired['key'])
+                cookie = f'{self.server.cookie_name}={token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=1800'
+                self.send_payload(200, {'csrf': csrf, **paired}, cookie=cookie)
                 return
             session_token = self.cookie()
             session = self.server.sessions.get(session_token)

@@ -78,6 +78,15 @@ their stated basis, never markup. The panel says plainly that the backend is a l
 subprocess, not a sandbox. Readers can see jobs on sources they may read but cannot submit
 or cancel. Authority loss clears the panel with every other view.
 
+## Pairing another device
+
+The sign-in screen offers "Pair this device with a code". A person signed in elsewhere
+creates a single-use code in Data and permissions; the new device redeems it with a name,
+receives its own key once (the console asks the person to confirm they kept it), and then
+signs in as the same person with no more authority than the offering device. Devices are
+listed per person and can be revoked from any other device of that person. See the M02
+receipt for the rules.
+
 ## Not provided by this increment
 
 Priorities, recommendations and milestone progress now come from executive records
@@ -93,6 +102,7 @@ device or GPU certification.
   source change, revocation, same-name entities, static-path traversal and a race.
 - `console/tests/connected.test.ts` (18): mapping, reducer selection rules, command
   routing and mode detection. `console/tests/jobs.test.ts` (8): job event merging, result
-  reading, wording and command routing.
-- `tools/check_console_connected_browser.py` (73 checks): real Chromium against the
+  reading, wording and command routing. `console/tests/pairing.test.ts` (2): pairing
+  redemption and its in-memory CSRF token.
+- `tools/check_console_connected_browser.py` (81 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

@@ -72,9 +72,18 @@ export function useConnection(mode:ConsoleMode,dispatch:Dispatch<ConsoleAction>,
       return 'That access key was not accepted.';
     }
   },[client,start]);
+  const pairDevice=useCallback(async(code:string,label:string):Promise<{key:string;role:string;expiresAt:number}|string>=>{
+    try{const r=await client.pair(code.trim(),label.trim());return{key:r.key,role:r.role,expiresAt:r.expires_at};}
+    catch(error){
+      if(error instanceof DeskError&&error.code==='login_rate_limited')return 'Too many attempts. Wait a minute and try again.';
+      if(error instanceof DeskError&&error.kind==='unavailable')return 'ALFRED is not reachable.';
+      if(error instanceof DeskError&&error.code==='device_label_required')return 'Name this device first.';
+      return 'That pairing code is not valid, has been used or has expired.';
+    }
+  },[client]);
   const signOut=useCallback(async()=>{try{await client.logout();}catch{/* the local view is cleared regardless */}clear({kind:'signed_out',message:'Signed out. Records were cleared from this view.'});},[client,clear]);
   const retry=useCallback(()=>{if(sessionRef.current)void refresh();else void start();},[refresh,start]);
-  return {client,connection,session,workspaces,refresh,retry,signIn,signOut,fail};
+  return {client,connection,session,workspaces,refresh,retry,signIn,signOut,fail,pairDevice,continueAfterPairing:start};
 }
 /** Abortable inspection of one permitted record, re-read whenever the projection changes. */
 export function useRecordDetail(client:DeskClient,enabled:boolean,id:string|null,dataRevision:string|undefined,onError:(error:unknown)=>void):DetailState{
