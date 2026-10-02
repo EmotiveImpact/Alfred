@@ -311,7 +311,11 @@ class KnowledgeStore(DeskStore):
         if super().evidence_valid(db, row):
             return True
         from .conversation import knowledge_action_current
-        return knowledge_action_current(self, db, row)
+        if knowledge_action_current(self, db, row):
+            return True
+        # A draft the person accepted from a routine nomination (M10).
+        from .routines import action_current
+        return action_current(self, db, row)
 
     def valid_origin(self, db, row):
         from . import inbox
@@ -792,6 +796,13 @@ class KnowledgeSupervisor(Supervisor):
                     self.pulse.cycle()
                 except Fault as exc:
                     self.error = exc.code
+            # Routines record a due slot as skipped while paused, so they are called either way.
+            if getattr(self, 'routines', None) is not None:
+                try:
+                    self.routines.cycle()
+                except Exception as exc:
+                    # A routine failure is recorded on its run; it never stops the supervisor.
+                    self.error = exc.code if isinstance(exc, Fault) else 'routines_failed'
 
     def view(self,scope):
         result=super().view(scope)
