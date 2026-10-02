@@ -109,9 +109,12 @@ claimed.
 Every time keeps its stated basis: UTC; an IANA zone resolved with the system zoneinfo
 database; floating local time; an all-day date (with the exclusive end said plainly); or an
 explicitly unresolved time zone. Windows names, host-dependent keys such as `localtime` and
-other non-IANA identifiers are never guessed, and embedded `VTIMEZONE` definitions are not
-interpreted. A local time skipped or repeated by a clock change is flagged and read as
-RFC 5545 requires. `DURATION` adds nominal days to the local date and exact hours after.
+other non-IANA identifiers are never guessed, embedded `VTIMEZONE` definitions are not
+interpreted, and a calendar-wide `X-WR-TIMEZONE` is not applied to floating times. A local
+time skipped or repeated by a clock change is flagged and read as RFC 5545 requires.
+`DURATION` adds nominal days to the local date and exact hours after. A file with a
+scheduling `METHOD` (an invitation, reply or cancellation) is refused: it is a message, not
+a complete export. `METHOD:PUBLISH` and no method are accepted.
 
 `RRULE` is kept as text, with a plain description only for simple daily, weekly, monthly
 or yearly rules. Occurrences are never expanded: an expansion relative to the import time
@@ -166,7 +169,11 @@ kept, so a backup restored from before the renewal still authenticates.
   contacts are documents an owner may cite; they never create, link or merge entities.
 - Application encryption and key custody (SYS-002). Use synthetic data only.
 
-Known limits: exports above 200 items or 1 MiB are refused whole (export a smaller range);
-the import writes its snapshot and then its receipt in two transactions, so a crash between
-them leaves the freshness record one import behind; the workspace keeps at most 10,000
-history rows across all sources.
+Known limits: exports above 200 items or 1 MiB are refused whole (export a smaller range).
+The knowledge view holds 256 current records across every source in a workspace; an import
+that would exceed it is refused, but a vault that grows after an import can still reach it,
+and the view then reports `knowledge_view_capacity` as it already does for a large vault.
+The import writes its snapshot and then its receipt in two transactions, so a crash between
+them leaves the freshness record one import behind. The workspace keeps at most 10,000
+history rows across all sources. Importing records the highest origin revision seen before
+the snapshot is written, so an interrupted import still guards against an older export.

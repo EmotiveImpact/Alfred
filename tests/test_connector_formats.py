@@ -344,6 +344,17 @@ class CalendarTests(unittest.TestCase):
         for absent in ('never shown', 'agenda.pdf', 'Alarm text'):
             self.assertNotIn(absent, body)
 
+    def test_a_published_export_is_accepted_but_a_scheduling_message_is_not(self):
+        self.assertEqual(len(ics.parse(calendar('METHOD:PUBLISH', *event('SUMMARY:A')))['items']), 1)
+        for method in ('REQUEST', 'REPLY', 'CANCEL', 'COUNTER'):
+            with self.assertRaises(Fault, msg=method) as caught:
+                ics.parse(calendar('METHOD:' + method, *event('SUMMARY:A')))
+            self.assertEqual(caught.exception.code, 'ics_scheduling_message_not_an_export')
+
+    def test_a_calendar_wide_time_zone_is_not_applied_to_floating_times(self):
+        items = ics.parse(calendar('X-WR-TIMEZONE:Europe/London', *event('DTSTART:20261014T090000')))['items']
+        self.assertEqual(items[0]['times']['DTSTART']['basis'], 'floating')
+
     def test_several_calendars_in_one_file(self):
         raw = calendar(*event('SUMMARY:A', uid='a@example.org')) + calendar(*event('SUMMARY:B', uid='b@example.org'))
         self.assertEqual([i['summary'] for i in ics.parse(raw)['items']], ['A', 'B'])

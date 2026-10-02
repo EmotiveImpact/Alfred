@@ -370,6 +370,10 @@ def parse(raw):
         versions = [value.strip() for name, _, value in calendar['properties'] if name == 'VERSION']
         if versions != ['2.0']:
             raise Fault('ics_version_unsupported')
+        # An export publishes a calendar. A scheduling message (an invitation, reply or
+        # cancellation) is not a complete snapshot, so importing it could remove everything else.
+        if any(value.strip().upper() != 'PUBLISH' for name, _, value in calendar['properties'] if name == 'METHOD'):
+            raise Fault('ics_scheduling_message_not_an_export')
         for child in calendar['children']:
             if child['name'] in SCOPES:
                 if len(items) >= MAX_ITEMS:
