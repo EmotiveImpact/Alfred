@@ -130,6 +130,8 @@ class LocalCore:
                 raise Fault('unsupported_database_version')
             db.execute('PRAGMA journal_mode=WAL')
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nPRAGMA user_version=2; COMMIT;')
+            from .policy import initialise
+            initialise(db)
         self.path.chmod(0o600)
 
     @contextmanager
@@ -177,20 +179,25 @@ class LocalCore:
             try:
                 db.execute('INSERT INTO credentials(id,scope,role,digest,expires) VALUES (?,?,?,?,?)',
                            (credential_id, scope, role, hashlib.sha256(bearer.encode()).hexdigest(), self.now()+ttl))
+                from .policy import enrol
+                enrol(db, credential_id)
             except sqlite3.IntegrityError:
                 raise Fault('credential_exists', 409) from None
             self.log(db, scope, credential_id, 'credential.provisioned', credential_id)
         return bearer
 
-    def revoke(self, credential_id: str) -> None:
-        """Offline administration; revocation is checked again before local execution."""
+    def revoke(self, credential_id: str, *, actor: str = 'local-admin') -> None:
+        """Offline administration, or a person removing their own device; checked again before execution."""
         ident(credential_id)
         with self.transaction() as db:
             row = db.execute('SELECT * FROM credentials WHERE id=?', (credential_id,)).fetchone()
             if not row:
                 raise Fault('not_found', 404)
+            # Journalled first so restoring an older backup cannot restore this access.
+            from .lifecycle import append
+            append(self, {'kind': 'credential_revoked', 'scope': row['scope'], 'subject': credential_id, 'at': self.now()})
             db.execute('UPDATE credentials SET revoked=1 WHERE id=?', (credential_id,))
-            self.log(db, row['scope'], 'local-admin', 'credential.revoked', credential_id)
+            self.log(db, row['scope'], actor, 'credential.revoked', credential_id)
 
     def authenticate(self, db, bearer: str, roles: set[str]):
         if not isinstance(bearer, str) or not re.fullmatch(r'[A-Za-z0-9_-]{43}', bearer):
@@ -201,7 +208,8 @@ class LocalCore:
             raise Fault('unauthorised', 401)
         if row['role'] not in roles:
             raise Fault('forbidden', 403)
-        return row
+        device = db.execute('SELECT * FROM identity_devices WHERE credential=?', (row['id'],)).fetchone()
+        return dict(row) | {'person_id':device['person'], 'device_id':device['device'], 'generation':device['generation']}
 
     def log(self, db, scope, actor, kind, subject):
         db.execute('INSERT INTO audit(scope,actor,kind,subject,at) VALUES (?,?,?,?,?)',

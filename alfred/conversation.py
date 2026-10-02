@@ -11,7 +11,9 @@ import threading
 import time
 from .local import Fault, exact, ident, text, fingerprint, canonical
 from .evidence_review import assess_interpretation
-from .grounded import retrieve, question_terms, references, check_sources, validate_interpretation
+from .grounded import (retrieve, question_terms, references, check_packet, packet_current_db,
+                       sources_current_db, validate_interpretation, parse_focus)
+from .reviewed_memory import context_references, context_current_db, ambiguities_current_db
 
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS conversation_meta(version INTEGER NOT NULL);
@@ -33,20 +35,9 @@ TTL = 86400
 MAX_SESSIONS, MAX_TURNS = 24, 40
 
 
-def refs_current_db(db, scope, refs, now):
+def refs_current_db(db, scope, refs, now, principal=None):
     """Check source authority/revisions in the SAME transaction as action approval."""
-    if not refs or len(refs) > 5:
-        return False
-    for ref in refs:
-        row = db.execute('''SELECT n.sha256,n.revision FROM knowledge_notes n
-          JOIN credentials c ON c.id=n.source AND c.scope=n.scope
-          JOIN knowledge_sources s ON s.source=n.source AND s.scope=n.scope
-          WHERE n.scope=? AND n.id=? AND n.status='ready' AND c.revoked=0
-          AND c.expires>? AND s.status IN ('ready','attention')''',
-          (scope, ref['note_id'], now)).fetchone()
-        if not row or row['sha256'] != ref['sha256'] or row['revision'] != ref['revision']:
-            return False
-    return True
+    return bool(refs) and sources_current_db(db,scope,refs,now,principal)
 
 
 def knowledge_action_current(store, db, row):
@@ -58,7 +49,16 @@ def knowledge_action_current(store, db, row):
         return False
     active = db.execute('SELECT 1 FROM conversations WHERE id=? AND scope=? AND actor=? AND expires>?',
                         (link['session'], row['scope'], row['actor'], store.now())).fetchone()
-    return bool(active) and refs_current_db(db, row['scope'], json.loads(link['references_json']), store.now())
+    binding=json.loads(link['references_json'])
+    # Historical rows are plain source lists; new receipts also bind the exact
+    # review versions and original support without copying statement values.
+    refs=binding if type(binding) is list else binding['sources']
+    p={'scope':row['scope'],'id':row['actor']}
+    if not active or not refs_current_db(db,row['scope'],refs,store.now(),p):return False
+    if type(binding) is list:return True
+    p={'scope':row['scope'],'id':row['actor']}
+    current=context_current_db(db,p,binding['memory'],store.now())
+    return current is not None and ambiguities_current_db(db,p,current,binding['memory_ambiguities'])
 
 
 class ConversationService:
@@ -71,6 +71,9 @@ class ConversationService:
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
             if [r[0] for r in db.execute('SELECT version FROM conversation_meta')] != [1]:
                 raise Fault('unsupported_conversation_version')
+            # Additive column: older turns simply have no selected-record context.
+            if 'focus' not in {r[1] for r in db.execute('PRAGMA table_info(conversation_turns)')}:
+                db.execute('ALTER TABLE conversation_turns ADD COLUMN focus TEXT')
 
     def cleanup(self, db):
         # Deletes application rows, not secure erasure of WAL/backups/filesystem.
@@ -115,8 +118,9 @@ class ConversationService:
         return {'forgotten':True,'secure_erasure':False,'approved_drafts_undone':False}
 
     def submit(self,bearer,sid,body):
-        exact(body,{'question','mode','follow_up','request_id','after'})
-        question_terms(body['question']);ident(body['request_id'])
+        keys={'question','mode','follow_up','request_id','after'}
+        exact(body,keys|{'focus'} if type(body) is dict and 'focus' in body else keys)
+        question_terms(body['question']);ident(body['request_id']);parse_focus(body.get('focus'))
         if body['mode'] not in {'sources','local_model'} or type(body['follow_up']) is not bool or type(body['after']) is not int or body['after']<0:
             raise Fault('invalid_conversation_request')
         request_hash=fingerprint(body)
@@ -143,9 +147,9 @@ class ConversationService:
                     WHERE s.actor=? AND t.created>?''',(p['id'],self.store.now()-60)).fetchone()[0]>=6:
                     raise Fault('conversation_rate_limited',429)
                 tid='turn-'+secrets.token_hex(12)
-                db.execute('INSERT INTO conversation_turns VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO conversation_turns(id,session,ordinal,request_id,request_hash,question,mode,follow_up,state,created,completed,result,focus) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                            (tid,sid,count+1,body['request_id'],request_hash,body['question'].strip(),body['mode'],int(body['follow_up']),
-                            'queued',self.store.now(),None,None))
+                            'queued',self.store.now(),None,None,body.get('focus')))
                 db.execute('UPDATE conversations SET updated=? WHERE id=?',(self.store.now(),sid))
             self.jobs.put_nowait((bearer,sid,tid))
         return {'turn_id':tid,'state':'queued','reused':False}
@@ -205,17 +209,19 @@ class ConversationService:
             for item in history:previous_terms.extend(question_terms(item['question']))
             prefix=' '.join(dict.fromkeys(previous_terms))[:min(180,max(0,499-len(question)))]
             contextual=(prefix+' '+question).strip() if prefix else question
-            packet=retrieve(self.store,bearer,contextual);packet['question']=question
+            packet=retrieve(self.store,bearer,contextual,purpose='model' if current['mode']=='local_model' else 'read',focus=current['focus']);packet['question']=question
             packet['conversation_questions']=[h['question'] for h in history]
             packet['retrieval_question']=contextual
             result={'packet':packet,'claims':[],'mode':current['mode'],'model_used':False,'model':None,
                     'status':'sources_found' if packet['evidence'] else 'no_sources','actions_executed':False,
                     'semantic_entailment_verified':False,'content_sent_to_model':False,'usage':None}
             started=time.monotonic()
-            if current['mode']=='local_model' and packet['evidence']:
+            if current['mode']=='local_model' and packet['memory_ambiguities']:
+                result['status']='memory_needs_clarification'
+            elif current['mode']=='local_model' and packet['evidence']:
                 principal=self.store.principal(bearer,{'owner'})
                 if self.provider is None or principal['scope']!=self.provider_scope:raise Fault('model_workspace_not_authorised')
-                if not check_sources(self.store,bearer,references(packet))['current_index_match']:raise Fault('sources_changed')
+                if not check_packet(self.store,bearer,packet):raise Fault('sources_changed')
                 result['content_sent_to_model']=True
                 value=self.provider.generate(packet)
                 result['claims']=validate_interpretation(value,packet)
@@ -223,21 +229,26 @@ class ConversationService:
                 result.update(model_used=True,model=self.provider.model,status='model_interpretation' if result['claims'] else 'model_abstained',
                               usage=getattr(self.provider,'last_usage',None))
                 if result['evidence_review']['status']=='withheld_for_review':result['status']='model_needs_review'
+            from .answer_support import assess
+            result['support']=assess(packet,result,question_terms(question))
             result['elapsed_ms']=round((time.monotonic()-started)*1000)
             if self.stop_event.is_set():raise Fault('conversation_worker_stopped')
             with self.store.transaction() as db:
                 principal,_=self.own(db,bearer,sid)
                 paused=db.execute('SELECT paused FROM desk_settings WHERE scope=?',(principal['scope'],)).fetchone()
                 if paused and paused[0]:raise Fault('conversation_processing_paused')
-                if packet['evidence'] and not refs_current_db(db,principal['scope'],references(packet),self.store.now()):raise Fault('sources_changed')
+                if not packet_current_db(self.store,db,principal,packet):raise Fault('sources_changed')
                 # Persist references, not another copy of source passages/quotes.
                 stored=json.loads(json.dumps(result))
                 for source in stored['packet']['evidence']:source.pop('excerpt',None)
+                # Only review/source bindings survive in conversation storage.
+                stored['packet']['memory']=[{'support':c['support'],'claim_id':c['claim_id'],'version':c['version']}
+                                             for c in packet['memory']]
                 for claim in stored['claims']:
                     for cite in claim['citations']:cite.pop('quote',None)
                 db.execute("UPDATE conversation_turns SET state='completed',completed=?,result=? WHERE id=? AND state='running'",(self.store.now(),json.dumps(stored),tid))
         except Exception as exc:
-            state='source_changed' if isinstance(exc,Fault) and exc.code in {'sources_changed','sources_changed_during_question'} else 'failed'
+            state='source_changed' if isinstance(exc,Fault) and exc.code in {'sources_changed','sources_changed_during_question'} else 'focus_unavailable' if isinstance(exc,Fault) and exc.code=='focus_not_available' else 'failed'
             self.finish_error(tid,state)
         finally:self.jobs.task_done()
         return True
@@ -245,20 +256,35 @@ class ConversationService:
     def view(self,bearer,sid):
         with self.store.transaction() as db:
             p,session=self.own(db,bearer,sid)
-            rows=[dict(r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
+            rows=[dict(r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result,focus FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
             for turn in rows:
                 if not turn['result']:continue
                 result=json.loads(turn['result']);sources=result['packet']['evidence']
-                if sources and not refs_current_db(db,p['scope'],references(result['packet']),self.store.now()):
+                if not packet_current_db(self.store,db,p,result['packet']):
                     # Remove stale interpretations from active application storage.
                     db.execute("UPDATE conversation_turns SET state='source_changed',result=NULL WHERE id=?",(turn['id'],))
                     turn['state'],turn['result']='source_changed',None;continue
                 for source in sources:
                     note=db.execute('SELECT body FROM knowledge_notes WHERE scope=? AND id=?',(p['scope'],source['note_id'])).fetchone()
                     source['excerpt']='\n'.join(note['body'].splitlines()[source['start_line']-1:source['end_line']])
+                memory=context_current_db(db,p,context_references(result['packet']),self.store.now())
+                for c,saved in zip(memory,result['packet'].get('memory',[])):
+                    c['support']['source_id']=saved['support']['source_id']
+                result['packet']['memory']=memory
+                focus=result['packet'].get('focus')
+                if focus and not self.focus_current_db(db,p,focus):
+                    # The selection itself was withdrawn; keep no label for it.
+                    result['packet']['focus']={'record_id':focus['record_id'],'label':None,'available':False,'basis':focus['basis']}
                 turn['result']=result
             return {'id':sid,'title':session['title'],'expires':session['expires'],'turns':rows,'retention_seconds':TTL,
                     'private_to_current_credential':True,'role':p['role'],'actions_executed_by_conversation':False}
+
+    def focus_current_db(self,db,p,focus):
+        kind,identity=parse_focus(focus['record_id'])
+        if kind=='note':
+            return sources_current_db(db,p['scope'],[{'note_id':identity,'sha256':focus['sha256'],'revision':focus['revision']}],self.store.now(),p)
+        return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_entities'").fetchone()
+                    and db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],p['id'])).fetchone())
 
     def propose_draft(self,bearer,sid,body):
         exact(body,{'turn_id','text','request_id'});ident(body['turn_id']);ident(body['request_id']);text(body['text'])
@@ -267,8 +293,8 @@ class ConversationService:
             if p['role']!='owner':raise Fault('forbidden',403)
             row=db.execute('SELECT * FROM conversation_turns WHERE session=? AND id=?',(sid,body['turn_id'])).fetchone()
             if not row or row['state']!='completed' or not row['result']:raise Fault('conversation_result_required',409)
-            refs=references(json.loads(row['result'])['packet'])
-            if not refs_current_db(db,p['scope'],refs,self.store.now()):raise Fault('evidence_not_current',409)
+            packet=json.loads(row['result'])['packet'];refs=references(packet);memory_refs=context_references(packet)
+            if not refs or not packet_current_db(self.store,db,p,packet):raise Fault('evidence_not_current',409)
             aid=body['request_id'];params={'text':body['text']}
             existing=db.execute('SELECT * FROM actions WHERE scope=? AND id=?',(p['scope'],aid)).fetchone()
             if existing:
@@ -278,8 +304,9 @@ class ConversationService:
                 return self.store.action_view(existing)
             if db.execute('SELECT count(*) FROM actions WHERE scope=?',(p['scope'],)).fetchone()[0]>=5000:raise Fault('action_capacity',409)
             expiry=min(self.store.now()+900,session['expires'])
-            bound={'id':aid,'scope':p['scope'],'actor':p['id'],'capability':'message.draft','parameters':params,'expires_at':expiry,'sources':refs,'turn':row['id']}
+            ambiguity=packet.get('memory_ambiguities',[])
+            bound={'id':aid,'scope':p['scope'],'actor':p['id'],'capability':'message.draft','parameters':params,'expires_at':expiry,'sources':refs,'memory':memory_refs,'memory_ambiguities':ambiguity,'turn':row['id']}
             db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)',(p['scope'],aid,p['id'],'message.draft',canonical(params),fingerprint(bound),expiry,'proposed',self.store.now(),None))
-            db.execute('INSERT INTO conversation_action_sources VALUES (?,?,?,?,?)',(p['scope'],aid,sid,row['id'],json.dumps(refs)))
+            db.execute('INSERT INTO conversation_action_sources VALUES (?,?,?,?,?)',(p['scope'],aid,sid,row['id'],json.dumps({'sources':refs,'memory':memory_refs,'memory_ambiguities':ambiguity})))
             self.store.log(db,p['scope'],p['id'],'action.proposed_from_conversation',aid)
             return self.store.action_view(db.execute('SELECT * FROM actions WHERE scope=? AND id=?',(p['scope'],aid)).fetchone())

@@ -1,0 +1,17 @@
+test_acceptance_required (__main__.PlanTests.test_acceptance_required) ... ok
+test_completion_needs_evidence (__main__.PlanTests.test_completion_needs_evidence) ... ok
+test_cycle (__main__.PlanTests.test_cycle) ... ok
+test_duplicate (__main__.PlanTests.test_duplicate) ... ok
+test_implementation_cannot_hide_runtime (__main__.PlanTests.test_implementation_cannot_hide_runtime) ... ok
+test_implementation_tracking (__main__.PlanTests.test_implementation_tracking) ... ok
+test_planning_cannot_claim_runtime (__main__.PlanTests.test_planning_cannot_claim_runtime) ... ok
+test_unknown_candidate (__main__.PlanTests.test_unknown_candidate) ... ok
+test_unknown_dependency (__main__.PlanTests.test_unknown_dependency) ... ok
+test_unknown_requirement (__main__.PlanTests.test_unknown_requirement) ... ok
+test_unknown_status (__main__.PlanTests.test_unknown_status) ... ok
+test_valid (__main__.PlanTests.test_valid) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.001s
+
+OK

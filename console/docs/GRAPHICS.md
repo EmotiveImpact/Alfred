@@ -1,25 +1,45 @@
-# Graphics implementation
+# ALFRED graphics implementation: refinement 02
 
-React Three Fiber mounts an actual Three.js WebGL2 scene inside an otherwise normal DOM workspace. The camera is perspective; drag rotates the view through OrbitControls with pan/zoom disabled. The scene uses no remote textures, Earth map image, baked video or generated screenshot.
+This replaces the v0.1 graphics description, retained verbatim under `archive/GRAPHICS-v01.md`. That older version describes a time-varying brightness effect which is no longer used.
 
-## Original GLSL materials
+## Components and rendering ownership
 
-`src/scene/shaders.ts` contains point, edge, shell and star materials. Points have per-point strength, phase and warmth, view-normal depth fading, radial cores and faint halos. Time changes decorative luminance, never record status. Edges have view-dependent alpha; typed relationship geometry is separate from the decorative lattice. The shell has a restrained Fresnel-like illuminated edge. Record nodes have compact high-energy centres and faint glints.
+`scene/KnowledgeSphere.tsx` owns the persistent canvas, camera controls, visibility/motion state and graphics-loss handling. `scene/layers.tsx` separates Shell, ParticleField, Lattice, OrbitLines, EvidenceLinks and RecordNodes. `scene/RenderPipeline.tsx` owns the single final render callback and the RenderPass -> UnrealBloomPass -> OutputPass chain. `scene/shaders.ts` contains the original point, edge, shell and star shaders.
 
-Three's EffectComposer runs RenderPass, UnrealBloomPass and OutputPass. ACES tone mapping and restrained bloom provide the finish. Pure black is shared by the canvas and DOM to avoid a visible rectangular seam. No perpetual CSS blur substitutes for real geometry.
+The UI remains normal React DOM with CSS and SVG. Shaders supply the signature sphere and selection materials, not the text, forms, navigation labels or executive panel. This is a deliberate design boundary: the useful controls remain crisp and readable, while a small part of the screen carries the movement and light.
 
-## Bounds and controls
+## Stable light, not flashing
 
-The refined high field begins with 40,000 candidate positions and retains a deterministic organic subset. Balanced begins with 14,000. These are decorative candidates, not entity counts. The lattice is 160 nodes. Record nodes and explicit fixture arcs are separate geometries.
+The shaders have no time-driven brightness uniform or phase-driven pulse. Exposure is fixed at 1 with ACES tone mapping. Ambient animation is slow rotation, not a periodic light flare. The canvas is not keyed by quality, workspace or selection. Task and dialog changes preserve the renderer and stable record arrays.
 
-Pixel ratio is capped by profile. Animation uses delta clamping, and paused/reduced-motion/hidden views switch to demand rendering. Controls remain interactive. Geometry and composer resources are disposed on replacement and unmount.
+The expanding rail overlays a fixed grid column, so opening its labels does not resize the canvas. The local clock is isolated in the header. The composer is created and disposed in a matching effect and one callback owns the final draw. Transparent additive layers have explicit render order and do not write depth. Soft point edges and multisampled targets reduce harsh subpixel changes.
 
-The current geometry layout is for a small fixture set. The contract rejects more than 1,000 records or 4,000 relationships, but that is an ingress ceiling, not a guarantee that every combination is an appropriate real-time workload. Do not load a large production graph without measured level-of-detail and layout work.
+Pause, operating-system reduced motion, hidden-document state and relationship-only mode use demand rendering. Ambient rendering also pauses while a modal is open. The provenance inspector appears immediately without an opacity transition. Context loss is visible, record browsing remains available, and the browser suite exercises restoration.
 
-## Important limitations
+These measures address plausible causes of the reported flashing. A twelve-frame luminance sample and paused-pixel comparison are bounded regressions, not a certification that every physical monitor, browser, driver or GPU is flicker-free.
 
-The point field is procedural rather than geographic. Its clusters do not represent countries or knowledge density. The reference's tiny star/particle placement is not reproduced pixel-for-pixel. Colour and shading can vary by renderer and display.
+## Geometry and semantics
 
-The field is intentionally calm rather than audio-reactive because no audio source is connected. A future audio adapter must provide a measured amplitude envelope with explicit permission; do not animate a fake listening state.
+High quality starts with 44,000 decorative point candidates; balanced starts with 16,000. A deterministic procedural filter retains an organic subset. The decorative lattice uses 280 points and unique bounded nearest-neighbour segments. The background field, lattice and orbit lines are not memory records or evidence.
 
-Software rendering in CI must be distinguished from physical-GPU performance. Retain the actual renderer string and test environment in the delivery evidence. Test WebGL context loss/restoration and large-scope changes as part of hardening before production.
+Actual fixture records use ID-based positions from `domain/projection.ts`. Display-name equality is not entity identity. Explicit relationship arcs come only from the current scope's relationship list. Their provenance is exposed in the inspector.
+
+Field mode combines material decoration and real fixture records. Relationships mode removes the decorative shell, points, lattice and orbits. It shows only those records and supported fixture links. Few links should produce a sparse graph, not fabricated complexity.
+
+There is no Earth texture, country map, remote image or video. The appearance is an abstract knowledge sphere, not geographical data or model hidden reasoning.
+
+## Portrait framing correction
+
+`scene/camera.ts` provides `cameraDistanceForViewport` and the shared 34-degree field of view. The desktop distance remains 4. Portrait views fit the sphere into the narrower dimension. The fitted control state is saved so switching to relationship mode does not restore the old close-up camera.
+
+`styles.css` remains the main material/layout stylesheet. The final explicit portrait correction in `refinements.css`, imported after it, keeps the mobile canvas inside its actual workspace rather than extending it behind the rail and beyond the right edge. Five camera tests cover the desktop baseline, complete-sphere projection at three viewport shapes and safe handling of an unmeasured viewport.
+
+The browser capture is still required: mathematical framing tests alone do not establish a usable phone layout.
+
+## Remaining limits
+
+The renderer is tuned for a bounded small fixture set, not arbitrary million-node graphs. The model's ingress ceilings are not performance guarantees. Stable IDs prevent reorder jitter but do not supply collision-free production clustering, complete label placement or large-graph level of detail.
+
+Chromium with SwiftShader proves that the real shaders and interactions ran. It is not a physical-GPU frame-rate, thermal, battery or display-fidelity measurement. Safari, Firefox, target-device GPU checks and a complete accessibility audit remain separate gates.
+
+Keep these distinctions in future delivery claims. Do not replace a failing hardware check with a generated image or a test that only confirms a canvas element exists.

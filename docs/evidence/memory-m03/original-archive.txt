@@ -1,0 +1,1 @@
+Verified 1946 exact source files across 5 pinned snapshots.

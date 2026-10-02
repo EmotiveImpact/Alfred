@@ -18,10 +18,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def validate_plan(plan: dict, requirements: set[str], sources: set[str]) -> list[str]:
     errors: list[str] = []
-    if plan.get('schema_version') != 1 or plan.get('scope') != 'planning-only':
-        errors.append('Unexpected planning schema/scope')
-    if plan.get('runtime_changes') is not False:
-        errors.append('This planning revision must not claim runtime changes')
+    if plan.get('schema_version') != 1 or plan.get('scope') not in {'planning-only','implementation-tracking'}:
+        errors.append('Unexpected backlog schema/scope')
+    expected_runtime = plan.get('scope') == 'implementation-tracking'
+    if plan.get('runtime_changes') is not expected_runtime:
+        errors.append('Runtime-change flag disagrees with backlog scope')
     jobs = plan.get('jobs', [])
     ids = [j.get('id') for j in jobs]
     if len(ids) != len(set(ids)) or any(not isinstance(i, str) or not re.fullmatch(r'M\d{2}', i) for i in ids):
@@ -75,7 +76,13 @@ def check(root: Path) -> dict:
     requirements = set(re.findall(r'^\| ([A-Z]+-\d{3}) \|', prd, re.MULTILINE))
     entries = registry['pinned_reviews'] + registry['documentation_reviews']
     source_ids = {e['id'] for e in entries}
-    errors = validate_plan(plan, requirements, source_ids)
+    # Whole-product requirements tracked outside the M series are covered by the
+    # requirement register (tools/check_requirement_register.py), not by M jobs.
+    register = root / 'plans/requirement-register.json'
+    outside = set()
+    if register.is_file():
+        outside = {r['id'] for r in json.loads(register.read_text())['requirements'] if not r['memory_jobs']}
+    errors = validate_plan(plan, requirements - outside, source_ids)
     if len(source_ids) != len(entries) or len({e['repository'] for e in entries}) != len(entries):
         errors.append('Duplicate repository records')
     if registry['upstream_code_executed'] is not False:
@@ -123,12 +130,12 @@ def check(root: Path) -> dict:
                 errors.append(f'{job["id"]}: missing local evidence')
     if errors:
         raise ValueError('\n'.join(errors))
-    return {'scope': 'planning/source-shelf consistency only', 'requirements': len(requirements), 'jobs': len(plan['jobs']),
+    return {'scope': 'backlog/source-shelf consistency only', 'requirements': len(requirements), 'jobs': len(plan['jobs']),
             'repository_references': len(entries), 'pinned_reviews': len(registry['pinned_reviews']),
             'preserved_extension_repositories': len(registry.get('preserved_source_shelf', [])),
             'preserved_extension_files': registry.get('extension_source_files_total', 0),
             'preserved_all_source_files': registry.get('all_preserved_source_files_total', 0),
-            'local_links_checked': link_count, 'runtime_changed': False, 'model_run': False, 'sha256': hashes}
+            'local_links_checked': link_count, 'runtime_changed': plan['runtime_changes'], 'model_run': False, 'sha256': hashes}
 
 
 class PlanTests(unittest.TestCase):
@@ -141,6 +148,14 @@ class PlanTests(unittest.TestCase):
         return validate_plan(self.plan if plan is None else plan, {'MEM-001'}, {'source'})
     def test_valid(self):
         self.assertEqual(self.errors(), [])
+    def test_implementation_tracking(self):
+        self.plan.update(scope='implementation-tracking',runtime_changes=True)
+        self.plan['jobs'][0].update(status='implemented',evidence=['tests/test_memory_m01.py'])
+        self.assertEqual(self.errors(),[])
+    def test_planning_cannot_claim_runtime(self):
+        self.plan['runtime_changes']=True; self.assertTrue(self.errors())
+    def test_implementation_cannot_hide_runtime(self):
+        self.plan['scope']='implementation-tracking'; self.assertTrue(self.errors())
     def test_duplicate(self):
         self.plan['jobs'].append(deepcopy(self.plan['jobs'][0])); self.assertTrue(self.errors())
     def test_unknown_requirement(self):

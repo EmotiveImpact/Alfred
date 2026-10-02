@@ -45,6 +45,10 @@ class DeskStore(LocalCore):
                 raise Fault('unsupported_database_version')
             db.execute('PRAGMA journal_mode=WAL')
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + DESK_SCHEMA + '\nPRAGMA user_version=3; COMMIT;')
+            from .policy import initialise
+            initialise(db)
+            from .lifecycle import initialise as lifecycle_tables
+            lifecycle_tables(db)
             if db.execute('SELECT version FROM desk_meta').fetchall()[0][0] != 1:
                 raise Fault('unsupported_desk_version')
         self.path.chmod(0o600)

@@ -12,9 +12,33 @@ v0.8 provides local persistence, credential-scoped sessions, source retrieval, c
 
 The memory work in this revision is researched requirements and a build plan, not an implemented Obsidian connector upgrade, graph engine, account integration or new model. The v0.7 small model's known failures and the blocked v0.8 comparison remain recorded. The development stack is merged into main; no deployment has occurred.
 
+## M01 review checkpoint, 30 September 2026
+
+M01's bounded selected-vault/read slice is implemented on a draft review branch from current main. [Its receipt](evidence/memory-m01/RECEIPT.md) records synthetic acceptance and limitations. The backlog tracks this implementation separately from merge/deployment status. M02 through M12 remain planned; private-pilot gates M02/M05 are unchanged. M03 is the next dependent memory slice after M01 review. Full native Obsidian compatibility and the complete memory loop remain unfinished.
+
 ## Immediate deliverable
 
+**1 October 2026 draft checkpoint:** M03 is implemented on the M01 review branch. Accepted/current/relevant actor-private statements now enter question and conversation context with exact support and review/valid-time basis. [The receipt](evidence/memory-m03/RECEIPT.md) records bounded selection, namesake qualification, stale review checks and source-only compatibility. M02 and M04-M12 remain planned; M02/M05 private-pilot gates are unchanged. The complete memory loop and real console adapter remain unfinished.
+
 **Remember, retrieve, correct, forget.** A user selects a permitted test vault, reviews a memory, uses it in a follow-up with its original evidence, corrects it and verifies that withdrawn/stale material no longer appears. One approved inbox note can then be created and read back without overwriting human content.
+
+## Whole-product workstreams, 2 October 2026
+
+The M jobs below are the bounded memory programme. The whole product also needs the workstreams in this table; their requirement IDs, separate decision, implementation, integration, merge and deployment states, and owner decisions are in [the requirement register](../plans/requirement-register.json). How the 2 October owner documents were absorbed is in [the reconciliation record](RECONCILIATION_2026-10-02.md). This is one sequence, not a second roadmap.
+
+| Order | Workstream | Requirements | State on the integration branch |
+|---|---|---|---|
+| A | Connected console, read-only and truthful | UX-001, UX-002, MEM-016, MEM-009 | Implemented on the branch and browser-tested against synthetic data ([receipt](evidence/console-connected/RECEIPT.md)). |
+| B | Selection-aware questions on the existing queue | INT-001, UX-002, MEM-006 | Implemented on the branch; no model configured, so no reasoning quality claimed. |
+| C | Remember, retrieve, correct, forget; identity and grants; lexical baseline | MEM-004 to MEM-013, SYS-001, SYS-002 (M02 to M06) | M01, M03, M04 and M06 implemented on the branch; M05 in progress (no encryption or key custody); M02 partial. Private data stays gated by M02/M05. |
+| D | Executive records on authoritative data | ATT-002, ATT-001, ACT-001 | Partial on the branch: records shared by the panel and graph, milestone-only progress, labelled recommendations ([receipt](evidence/executive/RECEIPT.md)). |
+| E1 | Local job coordinator (research stage 0) | RUN-002, RUN-003, RUN-001, SYS-003 | Partial on the branch: durable jobs, local-subprocess worker in the host, reconnectable events, bounded cache, HTTP routes ([design and evidence](JOBS.md)). Remote stages wait for owner decisions. |
+| E2 | Files, distributed nodes, remote workers | SYS-003, RUN-002, RUN-003, MEM-014 | Research complete ([evidence](../research/INFRASTRUCTURE_2026-10-02.md)); provider decisions needed. |
+| E3 | Connectors, specialist products, voice, native packaging, release hardening | CON-001, OPS-001, OPS-002, VOI-001 | Not started; each needs real interfaces, accounts or hardware. |
+
+## Remaining build plan, 2 October 2026 (evening)
+
+Workstreams A to D and the first slice of E1 and E3 are now on the integration branch (PR #18): 8 of 33 requirements implemented, 24 partial, 1 not started. Everything still to build is laid out in dependency order, with sizes, acceptance and the owner decisions each item needs, in [REMAINING_BUILD_PLAN.md](REMAINING_BUILD_PLAN.md). It is organised by the release gates below: private pilot, useful assistant, more than one machine, team and operational. Take the lowest-numbered item whose needs are met.
 
 ## Work order
 

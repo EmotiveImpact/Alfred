@@ -37,6 +37,8 @@ Personal, company and client/operation boundaries apply to every layer. The inte
 
 These modules exist. The unified gateway, reviewed-memory retrieval bridge, vault writes, embeddings and third-party graph adapters do not yet exist. Runtime source is unchanged by this planning revision.
 
+**1 October 2026 draft implementation checkpoint:** The M01/M03 review branch implements selected-vault identity and the bounded reviewed-memory bridge described in [the M03 receipt](evidence/memory-m03/RECEIPT.md). Existing scope/source grants and actor-private review records are enforced before selection; accepted/current/non-conflicting statements retain original support, review version, entity IDs, recorded/valid times and supersession lineage. Final checks also bind conversation-derived drafts. The broader gateway, person/device grants, capture/writes, deletion/restore, embeddings and graph adapters remain future work. This checkpoint does not claim deployment or completion of the target contracts below.
+
 ## Proposed flow
 
 ```text
@@ -76,6 +78,8 @@ Initially retain the existing controlled predicate set; add preferences and comm
 ## Temporal and conflict behaviour
 
 Maintain two clocks: when a statement was reported as valid, and when ALFRED learned/recorded it. Late information must not silently rewrite history. Current questions and 'what did we know then?' questions need different selection rules.
+
+**2 October 2026 branch implementation (first-party, MEM-007):** reviewed statements now keep an append-only, value-free history of their review transitions with recorded time and reviewer, migrated honestly for older statements (unknown times are marked, never invented). Valid time stays on the statement. An as-of report answers what was accepted and valid on a chosen date from that history alone, labelled as ALFRED's own records; current answers are unchanged. See [the receipt](evidence/temporal-review/RECEIPT.md). No external temporal adapter is adopted; that decision stays with M07.
 
 A new statement may supplement, dispute or explicitly supersede an older one. Do not automatically choose whichever was ingested last. Competing accepted values with overlapping validity must remain visible and normally require clarification. More general semantic contradiction detection is future work, not provided by the current narrow structural conflict rules.
 

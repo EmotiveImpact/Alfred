@@ -1,0 +1,564 @@
+{
+ "schema": "alfred.answer-support-evaluation.v1",
+ "mode": "sources_only_no_model",
+ "cases": [
+  {
+   "id": "found-1",
+   "category": "found",
+   "question": "When does Harbour open?",
+   "follow_up": false,
+   "expected": {
+    "status": "all_words_found"
+   },
+   "observed": {
+    "status": "all_words_found",
+    "words": {
+     "asked": [
+      "harbour",
+      "open"
+     ],
+     "found": [
+      "harbour",
+      "open"
+     ],
+     "not_found": []
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "disputed": 1,
+      "outside_valid_period": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "found-2",
+   "category": "found",
+   "question": "Who leads Harbour?",
+   "follow_up": false,
+   "expected": {
+    "found_includes": [
+     "harbour"
+    ]
+   },
+   "observed": {
+    "status": "partly_covered",
+    "words": {
+     "asked": [
+      "leads",
+      "harbour"
+     ],
+     "found": [
+      "harbour"
+     ],
+     "not_found": [
+      "leads"
+     ]
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "disputed": 1,
+      "outside_valid_period": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "found-3",
+   "category": "found",
+   "question": "Is Lantern pausing?",
+   "follow_up": false,
+   "expected": {
+    "found_includes": [
+     "lantern",
+     "pausing"
+    ]
+   },
+   "observed": {
+    "status": "all_words_found",
+    "words": {
+     "asked": [
+      "lantern",
+      "pausing"
+     ],
+     "found": [
+      "lantern",
+      "pausing"
+     ],
+     "not_found": []
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "needs_fresh_review": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "missing-1",
+   "category": "missing",
+   "question": "What is the Harbour budget?",
+   "follow_up": false,
+   "expected": {
+    "not_found_includes": [
+     "budget"
+    ],
+    "status": "partly_covered"
+   },
+   "observed": {
+    "status": "partly_covered",
+    "words": {
+     "asked": [
+      "harbour",
+      "budget"
+     ],
+     "found": [
+      "harbour"
+     ],
+     "not_found": [
+      "budget"
+     ]
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "disputed": 1,
+      "outside_valid_period": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "missing-2",
+   "category": "missing",
+   "question": "Which supplier delivers the turbines?",
+   "follow_up": false,
+   "expected": {
+    "status": "nothing_found"
+   },
+   "observed": {
+    "status": "nothing_found",
+    "words": {
+     "asked": [
+      "supplier",
+      "delivers",
+      "turbines"
+     ],
+     "found": [],
+     "not_found": [
+      "supplier",
+      "delivers",
+      "turbines"
+     ]
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {},
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "conflict-1",
+   "category": "conflict",
+   "question": "What is the Atlas status?",
+   "follow_up": false,
+   "expected": {
+    "withheld": {
+     "conflicting": 2
+    },
+    "statements_used": 0
+   },
+   "observed": {
+    "status": "all_words_found",
+    "words": {
+     "asked": [
+      "atlas",
+      "status"
+     ],
+     "found": [
+      "atlas",
+      "status"
+     ],
+     "not_found": []
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "conflicting": 2
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "disputed-1",
+   "category": "disputed",
+   "question": "Who leads Harbour?",
+   "follow_up": false,
+   "expected": {
+    "withheld_includes": "disputed"
+   },
+   "observed": {
+    "status": "partly_covered",
+    "words": {
+     "asked": [
+      "leads",
+      "harbour"
+     ],
+     "found": [
+      "harbour"
+     ],
+     "not_found": [
+      "leads"
+     ]
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "disputed": 1,
+      "outside_valid_period": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "changed-1",
+   "category": "changed",
+   "question": "What is the Lantern status?",
+   "follow_up": false,
+   "expected": {
+    "withheld_includes": "needs_fresh_review"
+   },
+   "observed": {
+    "status": "all_words_found",
+    "words": {
+     "asked": [
+      "lantern",
+      "status"
+     ],
+     "found": [
+      "lantern",
+      "status"
+     ],
+     "not_found": []
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "needs_fresh_review": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "valid-1",
+   "category": "valid_time",
+   "question": "When does Harbour open?",
+   "follow_up": false,
+   "expected": {
+    "withheld_includes": "outside_valid_period"
+   },
+   "observed": {
+    "status": "all_words_found",
+    "words": {
+     "asked": [
+      "harbour",
+      "open"
+     ],
+     "found": [
+      "harbour",
+      "open"
+     ],
+     "not_found": []
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "disputed": 1,
+      "outside_valid_period": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "restricted-1",
+   "category": "access",
+   "question": "Where does the Zephyr code word live?",
+   "follow_up": false,
+   "expected": {
+    "not_found_includes": [
+     "zephyr"
+    ],
+    "no_text": "Zephyr code word lives"
+   },
+   "observed": {
+    "status": "nothing_found",
+    "words": {
+     "asked": [
+      "zephyr",
+      "code",
+      "word",
+      "live"
+     ],
+     "found": [],
+     "not_found": [
+      "zephyr",
+      "code",
+      "word",
+      "live"
+     ]
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {},
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "followup-1",
+   "category": "context",
+   "question": "Who leads Harbour?",
+   "follow_up": false,
+   "expected": {
+    "earlier_questions": 0
+   },
+   "observed": {
+    "status": "partly_covered",
+    "words": {
+     "asked": [
+      "leads",
+      "harbour"
+     ],
+     "found": [
+      "harbour"
+     ],
+     "not_found": [
+      "leads"
+     ]
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "disputed": 1,
+      "outside_valid_period": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "followup-2",
+   "category": "context",
+   "question": "And when does it open?",
+   "follow_up": true,
+   "expected": {
+    "earlier_questions": 1,
+    "asked": [
+     "open"
+    ]
+   },
+   "observed": {
+    "status": "all_words_found",
+    "words": {
+     "asked": [
+      "open"
+     ],
+     "found": [
+      "open"
+     ],
+     "not_found": []
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "disputed": 1,
+      "outside_valid_period": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 1,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
+   "id": "paraphrase-1",
+   "category": "limitation",
+   "question": "How much does Atlas cost?",
+   "follow_up": false,
+   "expected": {
+    "not_found_includes": [
+     "cost"
+    ],
+    "limitation": "The price is in the note, but \"cost\" is a different word, so it is reported as not found."
+   },
+   "observed": {
+    "status": "partly_covered",
+    "words": {
+     "asked": [
+      "much",
+      "atlas",
+      "cost"
+     ],
+     "found": [
+      "atlas"
+     ],
+     "not_found": [
+      "much",
+      "cost"
+     ]
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "conflicting": 2
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  }
+ ],
+ "denominators": {
+  "cases": 13,
+  "passed": 13,
+  "failed": 0,
+  "by_category": {
+   "access": {
+    "cases": 1,
+    "passed": 1
+   },
+   "changed": {
+    "cases": 1,
+    "passed": 1
+   },
+   "conflict": {
+    "cases": 1,
+    "passed": 1
+   },
+   "context": {
+    "cases": 2,
+    "passed": 2
+   },
+   "disputed": {
+    "cases": 1,
+    "passed": 1
+   },
+   "found": {
+    "cases": 3,
+    "passed": 3
+   },
+   "limitation": {
+    "cases": 1,
+    "passed": 1
+   },
+   "missing": {
+    "cases": 2,
+    "passed": 2
+   },
+   "valid_time": {
+    "cases": 1,
+    "passed": 1
+   }
+  },
+  "words": {
+   "asked": 29,
+   "found": 16,
+   "not_found": 13
+  }
+ },
+ "failed_cases": [],
+ "limitations": [
+  {
+   "id": "paraphrase-1",
+   "note": "The price is in the note, but \"cost\" is a different word, so it is reported as not found."
+  }
+ ],
+ "claims": "Literal coverage and accounting only. Not truth, entailment, completeness or model quality."
+}

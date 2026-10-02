@@ -1,9 +1,10 @@
 {
   "schema_version": 1,
-  "updated_on": "2026-09-27",
-  "scope": "planning-only",
-  "baseline_commit": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed",
-  "runtime_changes": false,
+  "updated_on": "2026-10-02",
+  "whole_product_register": "plans/requirement-register.json",
+  "scope": "implementation-tracking",
+  "baseline_commit": "8398c7437cb0ef1386d8dc4ff1f9e92fb2557ca2",
+  "runtime_changes": true,
   "programme_issue": 11,
   "private_pilot_requires": [
     "M02",
@@ -26,13 +27,29 @@
     "BUILD_START_HERE.md",
     "docs/PRODUCT_POSITIONING.md",
     "docs/CONSOLIDATION_2026-09-27.md",
-    "third_party/library/README.md"
+    "third_party/library/README.md",
+    "docs/evidence/memory-m01/RECEIPT.md",
+    "docs/evidence/memory-m03/RECEIPT.md",
+    "docs/MASTER_HANDOFF_2026-10-01.md",
+    "docs/evidence/memory-programme-wip/RECEIPT.md",
+    "docs/RECONCILIATION_2026-10-02.md",
+    "research/INFRASTRUCTURE_2026-10-02.md",
+    "console/docs/CONNECTED_CONSOLE.md",
+    "docs/evidence/integration-2026-10-02/RECEIPT.md",
+    "docs/evidence/console-connected/RECEIPT.md",
+    "docs/sources/2026-10-02/README.md",
+    "docs/CHECKPOINT_2026-10-02.md",
+    "docs/JOBS.md",
+    "docs/evidence/memory-m04/RECEIPT.md",
+    "docs/evidence/memory-m05/RECEIPT.md",
+    "docs/evidence/memory-m06/RECEIPT.md",
+    "docs/evidence/executive/RECEIPT.md"
   ],
   "jobs": [
     {
       "id": "M01",
       "title": "Selected vault identity and compatible read pipeline",
-      "status": "planned",
+      "status": "implemented",
       "depends_on": [],
       "requirements": [
         "MEM-001",
@@ -51,12 +68,23 @@
         "Obsidian closed: selected files still index without writes",
         "Rename, duplicate IDs, aliases and supported anchors preserve or explicitly reject identity",
         "Excluded folders, unsafe paths, partial saves and lost sources fail honestly"
+      ],
+      "delivery_status": "draft PR; not merged or deployed",
+      "evidence": [
+        "tests/test_memory_m01.py",
+        "docs/evidence/memory-m01/RECEIPT.md",
+        "docs/evidence/memory-m01/local-tests.txt"
+      ],
+      "limitations": [
+        "POSIX filesystem scanner; no native Obsidian app acceptance",
+        "Rename plus edit requires explicitly adopted alfred_id; ambiguous continuity is rejected",
+        "Credential rotation/fine-grained grants and deletion/restore remain M02/M05"
       ]
     },
     {
       "id": "M02",
       "title": "Person/device identity and source/capability grants",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [],
       "requirements": [
         "SYS-001",
@@ -74,12 +102,23 @@
         "Credential rotation and explicit person linking do not merge distinct users",
         "Permission filtering happens before ranking, traversal and egress",
         "Mid-request revocation prevents disallowed result persistence/display"
+      ],
+      "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
+      "evidence": [
+        "tests/test_memory_programme_wip.py",
+        "tests/test_identity_workflows.py",
+        "docs/evidence/memory-programme-wip/RECEIPT.md",
+        "docs/evidence/memory-m02/RECEIPT.md"
+      ],
+      "limitations": [
+        "Multi-owner administration and team roles are not built; device review histories remain separate",
+        "Full access-loss, persistence/display and lifecycle acceptance unfinished; legacy scope policy remains default"
       ]
     },
     {
       "id": "M03",
       "title": "Reviewed-memory context bridge",
-      "status": "planned",
+      "status": "implemented",
       "depends_on": [
         "M01"
       ],
@@ -103,12 +142,28 @@
         "Relevant accepted statements enter bounded context with exact original support and review basis",
         "Disputed, expired, invalidated and conflicting statements are withheld or explicitly qualified",
         "Namesakes, late records and changed ownership preserve distinct identities and history"
+      ],
+      "delivery_status": "draft PR; not merged or deployed",
+      "evidence": [
+        "tests/test_memory_m03.py",
+        "tools/check_memory_context_browser.py",
+        "docs/evidence/memory-m03/RECEIPT.md",
+        "docs/evidence/memory-m03/local-tests.txt",
+        "tests/test_memory_temporal.py",
+        "tools/check_temporal_review_browser.py",
+        "docs/evidence/temporal-review/RECEIPT.md"
+      ],
+      "limitations": [
+        "Existing coarse source/workspace checks and actor-private reviews; person/device grants remain M02",
+        "Current-time keywords and structural conflicts only; recorded history and a deterministic as-of report over ALFRED's own review records exist (MEM-007), but no semantic entailment and the as-of report does not feed answers",
+        "Namesakes retain IDs and withhold model use; automatic entity resolution and disambiguation UI are not implemented",
+        "Capture/writes, deletion/restore and private-data release remain M04/M05 and M02/M05 gates"
       ]
     },
     {
       "id": "M04",
       "title": "Explicit capture and approved inbox writes",
-      "status": "planned",
+      "status": "implemented",
       "depends_on": [
         "M01",
         "M02",
@@ -134,12 +189,16 @@
         "Remember-this previews editable scope, memory type, source and retention",
         "Exact path/content/precondition approval is separate from reading or recalling",
         "Concurrent changes, restart and duplicate requests never silently overwrite human notes"
+      ],
+      "evidence": [
+        "tests/test_memory_capture_inbox.py",
+        "docs/evidence/memory-m04/RECEIPT.md"
       ]
     },
     {
       "id": "M05",
       "title": "Correction, deletion, encryption and restore lifecycle",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "M02",
         "M03"
@@ -162,12 +221,16 @@
         "Deletion/revocation removes or blocks all current dependent projections with a receipt",
         "Temporary unavailability is distinguished from deletion",
         "Restored backups reapply tombstones/grants; residual retention and key custody are explicit"
+      ],
+      "evidence": [
+        "tests/test_memory_lifecycle.py",
+        "docs/evidence/memory-m05/RECEIPT.md"
       ]
     },
     {
       "id": "M06",
       "title": "Lexical baseline and deterministic retrieval evaluation",
-      "status": "planned",
+      "status": "implemented",
       "depends_on": [
         "M01",
         "M03"
@@ -191,6 +254,17 @@
         "Compare current ranking with FTS5 on identical invented support-labelled queries",
         "Report recall, irrelevant context, latency and permission leakage separately",
         "Keep answer keys outside request context; no new model experiment implied"
+      ],
+      "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
+      "evidence": [
+        "tests/test_retrieval_evaluation.py",
+        "tools/evaluate_retrieval.py",
+        "docs/evidence/memory-m06/RECEIPT.md",
+        "docs/evidence/memory-m06/report.json"
+      ],
+      "limitations": [
+        "Authorised-subset FTS5 code and synthetic filtering checks only",
+        "Support-labelled current-versus-FTS comparison, recall/irrelevance/latency/leakage report not yet implemented"
       ]
     },
     {
@@ -224,6 +298,9 @@
         "Pin chosen implementation, dependencies, model/service terms and egress settings before adoption",
         "Provenance, review status and deletion survive an adapter round-trip",
         "Reject complexity without measured benefit; do not reroute the blocked model operation"
+      ],
+      "limitations": [
+        "First-party valid time, recorded time, disputes and supersession are built without an adapter (docs/evidence/temporal-review/RECEIPT.md); this decision is now only whether an external adapter adds measured benefit."
       ]
     },
     {
@@ -255,7 +332,7 @@
     {
       "id": "M09",
       "title": "Explicit vault sync and local host lifecycle",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "M01",
         "M02",
@@ -277,12 +354,20 @@
         "One deliberate sync client per device, tested conflicts and exclusions",
         "Live SQLite ledger is not synced as ordinary vault files",
         "Offline/reconnect, stop, restore and last-confirmed source status remain visible"
+      ],
+      "delivery_status": "conflict copies recognised and recorded, placement guard and portable export on the integration branch; no sync client tested, host lifecycle unchanged; not merged or deployed",
+      "evidence": [
+        "tests/test_sync_conflicts.py",
+        "tests/test_placement.py",
+        "tests/test_export.py",
+        "docs/SYNC.md",
+        "docs/evidence/memory-m14/RECEIPT.md"
       ]
     },
     {
       "id": "M10",
       "title": "Commitment and procedure-aware attention",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "M03",
         "M05"
@@ -298,13 +383,29 @@
         "maps-guide"
       ],
       "targets": [
-        "alfred/pulse.py",
-        "alfred/conversation.py"
+        "alfred/routines.py",
+        "alfred/routines_http.py",
+        "console/src/components/RoutinesPanel.tsx",
+        "alfred/pulse.py"
       ],
       "acceptance": [
         "Reviewed commitments can nominate reminders or proposals with explicit reasons",
         "No retrieved procedure text executes or expands capability grants",
         "Routine budgets, silence/interrupt choices, pause and actual outcomes are inspectable"
+      ],
+      "evidence": [
+        "tests/test_routines.py",
+        "tests/test_routines_procedures.py",
+        "console/tests/routines.test.ts",
+        "tools/check_routines_browser.py",
+        "docs/ROUTINES.md",
+        "docs/evidence/routines/RECEIPT.md"
+      ],
+      "delivery_status": "authored routines, nominations and the read-only procedure registry on the integration branch; not merged or deployed",
+      "limitations": [
+        "The three acceptance lines are met against synthetic data on the branch; status stays in progress while M05 (a dependency) is unfinished and the time-zone choice awaits the owner",
+        "Fixed UTC offsets without daylight saving; only the hosted owner credential can author routines",
+        "In-app only: no notifications, push, e-mail, devices, model or learned ranking"
       ]
     },
     {
@@ -331,6 +432,13 @@
         "Consented read-only test account keeps canonical source IDs and freshness",
         "Optional later harmless write uses exact approval and capability-specific reconciliation",
         "OAuth refresh/revocation never expose connector secrets to a model or public repo"
+      ],
+      "delivery_status": "read-only export-file connectors (.ics, .vcf) on the integration branch as a first slice; no official account, so no acceptance point is met; not merged or deployed",
+      "evidence": [
+        "tests/test_connectors.py",
+        "tests/test_connector_formats.py",
+        "docs/CONNECTORS.md",
+        "docs/evidence/connectors/RECEIPT.md"
       ]
     },
     {
@@ -365,5 +473,6 @@
   ],
   "product_category": "operational and executive intelligence",
   "integration_branch": "main",
-  "previous_baseline_commit": "73a255a10cb43f55a14aaf45165800bd17e60553"
+  "previous_baseline_commit": "73a255a10cb43f55a14aaf45165800bd17e60553",
+  "planning_baseline_commit": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed"
 }

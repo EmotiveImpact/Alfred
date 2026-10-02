@@ -1,0 +1,53 @@
+/* Reviewed memory: review queue, as-of report and statement history. Same palette: true black, graphite, ivory, sparse amber. No new effects or motion. */
+.memory-review{min-width:0}
+.memory-review h3{display:flex;align-items:baseline;gap:8px;margin:18px 0 6px;font-size:10px;font-weight:500;letter-spacing:1.6px;text-transform:uppercase;color:#aeb7b5}
+.memory-review h3 span{font-variant-numeric:tabular-nums;color:var(--amber)}
+.memory-review .quiet-empty{font-size:12px;color:#8b9597;margin:6px 0}
+.review-card{display:flex;flex-direction:column;gap:8px;min-width:0;margin:10px 0;padding:14px;border:1px solid var(--edge-strong);border-radius:10px;background:#050607}
+.review-card header{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.review-card header strong{font-size:13px;font-weight:400;color:#e0e1dc;overflow-wrap:anywhere}
+.review-state{padding:2px 8px;border:1px solid #d7b37555;border-radius:999px;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--amber)}
+.review-state.disputed{border-color:#c98a6b66;color:#d9a184}
+.review-statement{margin:0;font-size:12px;line-height:1.7;color:#c7cdcc;overflow-wrap:anywhere}
+.review-statement b{font-weight:500;color:#e6e2d6}
+.review-card blockquote{margin:0;padding-left:14px;border-left:2px solid #a99b6970;font-size:12px;line-height:1.75;color:#a9b5b6;white-space:pre-wrap;overflow-wrap:anywhere}
+.review-card>.text-button{align-self:flex-start;color:var(--text);text-align:left}
+.review-note{margin:0;font-size:11px;line-height:1.65;color:#8b9597}
+.review-meta{margin:0;font-size:10px;letter-spacing:.3px;line-height:1.6;color:var(--quiet);overflow-wrap:anywhere}
+.valid-period{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin:0;padding:10px 12px;border:1px solid var(--edge);border-radius:8px;min-width:0}
+.valid-period legend{padding:0 6px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#c9bf9f}
+.valid-period small{grid-column:1/-1;font-size:10px;line-height:1.6;color:#7f8b8d}
+.valid-period label,.replace-choice,.asof-form label{display:flex;flex-direction:column;gap:4px;min-width:0;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--quiet)}
+.valid-period input,.replace-choice select,.asof-form input{min-width:0;max-width:100%;padding:7px 9px;border:1px solid var(--edge-strong);border-radius:7px;background:#000;color:var(--text);font-size:12px;text-transform:none;letter-spacing:0;color-scheme:dark}
+.review-actions{margin-top:4px}
+.review-actions .primary-button,.review-actions .secondary-button{min-height:32px;padding:6px 12px}
+.asof-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px;margin:6px 0 10px}
+.asof-form label{flex:1 1 150px}
+.asof-form label small{font-size:9px;letter-spacing:.4px;text-transform:none}
+.asof-form .secondary-button{min-height:34px;padding:6px 12px;gap:8px}
+.asof-report{display:flex;flex-direction:column;gap:6px;min-width:0}
+.asof-report .review-scope{margin-top:6px}
+.asof-item{padding:10px 0;border-top:1px solid var(--edge);min-width:0}
+.asof-item p{margin:0;font-size:12px;line-height:1.7;color:#d6d9d4;overflow-wrap:anywhere}
+.asof-item strong{font-weight:500}
+.asof-item small{display:block;margin-top:3px;font-size:10px;line-height:1.55;color:var(--quiet);overflow-wrap:anywhere}
+.asof-item.hidden-value p{color:#8e9698}
+.asof-warning,.temporal-warning{color:#d9a184!important}
+.statement-temporal{display:flex;flex-direction:column;gap:3px;margin-top:8px;padding-top:8px;border-top:1px dashed #ffffff12}
+.statement-temporal p{margin:0;font-size:11px;line-height:1.6;color:#9aa5a6}
+.statement-temporal .text-button{margin-top:4px;align-self:flex-start}
+.temporal-actions{display:flex;gap:14px}
+.statement-history summary{cursor:pointer;margin-top:4px;font-size:11px;color:#cfc6b4}
+.history-list{margin:8px 0 6px;padding:0;list-style:none;border-left:1px solid #a99b6950}
+.history-list li{display:flex;flex-direction:column;gap:1px;padding:4px 0 6px 12px;font-size:11px;line-height:1.5}
+.history-list li strong{font-weight:500;color:#dcd6c6}
+.history-list li[data-state=withheld] strong,.history-list li[data-state=invalidated] strong,.history-list li[data-state=forgotten] strong{color:#d9a184}
+.history-list li span{color:#9aa5a6}
+.history-list li small{font-size:10px;color:#7f8b8d;overflow-wrap:anywhere}
+.lineage h4{margin:8px 0 2px;font-size:10px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;color:#aeb7b5}
+.lineage ol{margin:0;padding-left:18px;font-size:11px;line-height:1.6;color:#c7cdcc}
+.lineage small{display:block;font-size:10px;color:#7f8b8d}
+.remember-form .valid-period{margin-top:2px}
+@media(max-width:700px){.valid-period{grid-template-columns:minmax(0,1fr)}.review-card{padding:12px}}
+.review-refusal{margin:4px 0 8px;line-height:1.6}
+.statement .history-list small,.statement .lineage small,.statement .statement-temporal small{text-transform:none;letter-spacing:.2px;margin-top:0}

@@ -36,7 +36,13 @@ The v0.7 small-model experiment has documented relevance, abstention and conflic
 
 The newer React/TypeScript/Three.js console is now present in main. Its fictional fixtures are not real backend data. Preserve this functional frontend and the existing backend-connected web interface while implementing their authenticated adapter. The internal Obsidian console name is not an Obsidian note-app integration.
 
+## M01 implementation checkpoint, 30 September 2026
+
+The bounded selected-vault/read slice is implemented on a draft review branch from current main. [M01 acceptance and limits](evidence/memory-m01/RECEIPT.md) and the [read contract](OBSIDIAN_INTEGRATION.md) record catalogue identity, conservative rename/revision continuity, opt-in IDs, validated supported anchors, exclusions and availability. This advances MEM-001/002/003/012 for Markdown without claiming complete sync, deletion/restore, native Obsidian, private-vault or model-context acceptance. M02-M12 remain planned.
+
 ## First complete personal-memory experience
+
+The 1 October 2026 M03 draft checkpoint now supplies relevant accepted/current reviewed statements to source-backed questions and bounded conversations. [Acceptance and limits](evidence/memory-m03/RECEIPT.md) cover exact original support, review/temporal basis, namesakes, explicit replacements and final review/source checks. This is an implementation on the review branch, not a main merge or complete remember/correct/forget loop. M02 and M04-M12 remain planned; M02/M05 still gate private data.
 
 1. The user selects an allowed local vault/project and can inspect what will be indexed. Obsidian is optional.
 2. The user asks a question. ALFRED retrieves authorised source passages and relevant accepted statements, with dates and uncertainty visible.
@@ -84,6 +90,19 @@ This is a target workflow. Some steps exist separately, but the complete loop is
 | OPS-001 | Role-limited team and operational workspaces, specialist-engine adapters. | Read actual ENDSTATE/Noir contracts; keep simulation distinct from observation. |
 | UX-001 | Premium operational and executive intelligence console, not an admin-dashboard default. | Preserve the approved black/graphite/ivory, sparse-amber direction and concurrent console work; do not claim implementation matches the target before inspection. |
 | RUN-001 | Explicit host lifecycle, pause, recovery, bounded offline capability and health. | Local process exists; no always-on deployment or native background-device claim yet. |
+
+## Whole-product requirements added 2 October 2026
+
+Reconciled from the owner-supplied [plan reconciliation v1.1 and whole-product mandate](RECONCILIATION_2026-10-02.md). These are additional requirement IDs with traceable origins, not a second roadmap. Delivery state for every requirement is kept separately in [the requirement register](../plans/requirement-register.json); provider and architecture choices that need the owner are listed there and are not implied by these rows.
+
+| ID | Requirement | Acceptance direction |
+|---|---|---|
+| UX-002 | Project-centred focus: selecting a record sets a stable, visible working context that the inspector, graph and next question share; changing workspace or authority clears or revalidates it. Origin: reconciliation 3B and 3C. | Select a project, open its exact source, follow a supported relationship, ask a contextual question and clear it. Shared names or ownership never create edges. Unavailable, empty and denied states are truthful, never fixtures. |
+| ATT-002 | Executive records: goals, priorities, commitments, decisions, project milestones, preparation and follow-up held as authoritative records, with sources, owners and dates. Origin: reconciliation 3D and 4D. | The executive panel and graph read the same records. Inferred priorities are labelled recommendations, never silent obligations. Progress needs defined inputs. Cross-project insight requires permitted support from every contributing scope. |
+| RUN-002 | Distributed operation across enrolled trusted computers and an optional always-on coordinator, with one authority per job. Origin: 29 September infrastructure discussion via reconciliation 4A and 8. | Explicit enrolment and revocation; declared node capabilities; deliberate placement; one durable job identity; cancellation, bounded retries and reconciled outcomes; visible freshness when offline. No live database synchronised through a generic folder. |
+| RUN-003 | Isolated execution of bounded jobs on local or remote workers, with persistent and disposable lifecycles evaluated separately. Origin: reconciliation 4B and 8.4. | Declared inputs, limited file and tool permissions, scoped short-lived credentials, runtime and cost limits, logs, cancellation and verifiable outputs. A worker result is validated, never treated as permission. Forks never duplicate authority, credentials or effects. |
+| SYS-003 | Expandable file access: authorised on-demand reads, a bounded local cache, explicit offline availability, revisions, conflicts, quotas, export and recovery. Origin: reconciliation 4B and 8.4. | Authorised files are readable without a full local copy; revoked or unapproved files are excluded; cache size is enforced; authoritative databases, secrets, durable files, indexes and scratch space stay distinct. |
+| OPS-002 | Common capability contract for independent specialist products (ENDSTATE, 8BALL, Noir/Black State, Loc8, God's Eye). Origin: 27 September specialist discussion via reconciliation 4C. | Identity, capabilities, stable record IDs, observation basis, original timestamps, freshness, simulation or replay state, permissions, supported actions and receipts. A read-only adapter first; a contract is not proof that any adapter exists. |
 
 ## Acceptance and evaluation
 

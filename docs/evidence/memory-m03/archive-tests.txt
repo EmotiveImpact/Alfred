@@ -1,0 +1,27 @@
+test_binary_excluded (__main__.SourceLibraryTests.test_binary_excluded) ... ok
+test_broad_source_without_prefix_cap (__main__.SourceLibraryTests.test_broad_source_without_prefix_cap) ... ok
+test_bytes_preserved (__main__.SourceLibraryTests.test_bytes_preserved) ... ok
+test_data_directories_excluded (__main__.SourceLibraryTests.test_data_directories_excluded) ... ok
+test_duplicate_rejected (__main__.SourceLibraryTests.test_duplicate_rejected) ... ok
+test_full_verification_and_tamper (__main__.SourceLibraryTests.test_full_verification_and_tamper) ... ok
+test_git_attributes_excluded (__main__.SourceLibraryTests.test_git_attributes_excluded) ... ok
+test_hardlink_excluded (__main__.SourceLibraryTests.test_hardlink_excluded) ... ok
+test_headless_reference_gate (__main__.SourceLibraryTests.test_headless_reference_gate) ... ok
+test_lfs_pointer_not_asset (__main__.SourceLibraryTests.test_lfs_pointer_not_asset) ... ok
+test_licence_mismatch_rejected (__main__.SourceLibraryTests.test_licence_mismatch_rejected) ... ok
+test_multiple_roots_rejected (__main__.SourceLibraryTests.test_multiple_roots_rejected) ... ok
+test_non_utf8_excluded (__main__.SourceLibraryTests.test_non_utf8_excluded) ... ok
+test_private_key_content_excluded (__main__.SourceLibraryTests.test_private_key_content_excluded) ... ok
+test_secret_paths_excluded (__main__.SourceLibraryTests.test_secret_paths_excluded) ... ok
+test_source_is_not_executed (__main__.SourceLibraryTests.test_source_is_not_executed) ... ok
+test_symlink_excluded (__main__.SourceLibraryTests.test_symlink_excluded) ... ok
+test_traversal_rejected (__main__.SourceLibraryTests.test_traversal_rejected) ... ok
+test_unlicensed_not_unlicense (__main__.SourceLibraryTests.test_unlicensed_not_unlicense) ... ok
+test_unsafe_paths (__main__.SourceLibraryTests.test_unsafe_paths) ... ok
+test_valid_path (__main__.SourceLibraryTests.test_valid_path) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 0.034s
+
+OK
+{"verified_source_files": 2, "verified_source_bytes": 62, "snapshots": 1, "catalogued_repositories": 1, "upstream_executed": false}

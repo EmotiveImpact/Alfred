@@ -12,6 +12,7 @@ from .desk_http import DeskHTTPServer
 from .local import Fault
 from .knowledge_demo import seed_vault
 from .local_model import LocalOllama
+from .placement import check_data_directory
 
 
 def private_home(path):
@@ -29,6 +30,8 @@ def private_home(path):
 
 
 def init_demo(path):
+    # Live files never go where a sync tool, Git or a vault could hold them (MEM-014).
+    check_data_directory(path)
     path = private_home(path)
     config = path / 'desk-access.json'
     if config.exists() or config.is_symlink() or (path / 'desk.sqlite').exists():
@@ -69,9 +72,10 @@ def load_keys(path):
         os.close(fd)
 
 
-def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60):
+def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60, *, vault_exclusions=(), vault_id_key=None):
     # POSIX development target. A lock prevents accidental duplicate supervisors.
     import fcntl
+    check_data_directory(path, (vault,) if vault else ())
     fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     server = supervisor = None
     try:
@@ -81,8 +85,9 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
             raise Fault('desk_already_running', 409) from None
         keys = load_keys(path)
         store = DeskStore(path / 'desk.sqlite')
-        supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None))
-        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None)
+        supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None), vault_exclusions=vault_exclusions, vault_id_key=vault_id_key)
+        jobs, job_stop = start_local_jobs(store, keys['owner'], path)
+        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs)
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
         print('Local development data. Microphone OFF. No external messages are sent.', flush=True)
@@ -92,25 +97,96 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
     finally:
         if supervisor:
             supervisor.stop()
+        if 'job_stop' in locals():
+            job_stop()
         if server:
             server.server_close()
         os.close(fd)
 
 
+def rotate_key(path, role):
+    """Offline credential rotation. The host must be stopped because it holds the old keys."""
+    import fcntl
+    from .policy import IdentityPolicy
+    fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Fault('stop_alfred_before_rotation', 409) from None
+        keys = load_keys(path)
+        store = DeskStore(path / 'desk.sqlite')
+        if role not in keys:
+            raise Fault('invalid_role')
+        policy = IdentityPolicy(store)
+        with store.transaction() as db:
+            generation = store.authenticate(db, keys[role], {'owner', 'reader', 'source'})['generation']
+        import secrets
+        # Stage the new key on disk first, so a failure can never leave a key nobody holds.
+        replacement, old = secrets.token_urlsafe(32), keys[role]
+        staging = path / 'desk-access.json.rotating'
+        staging.unlink(missing_ok=True)
+        handle = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(handle, 'w') as stream:
+            json.dump(keys | {role: replacement}, stream); stream.flush(); os.fsync(stream.fileno())
+        try:
+            policy.rotate(old, generation, replacement=replacement)
+        except BaseException:
+            staging.unlink(missing_ok=True)
+            raise
+        os.replace(staging, path / 'desk-access.json')
+        return replacement
+    finally:
+        os.close(fd)
+
+
+def start_local_jobs(store, owner, path):
+    """One local-subprocess worker thread for this host. Not a sandbox or remote worker."""
+    import threading
+    from .jobs import BoundedCache, JobCoordinator, JobWorker, LocalSubprocessBackend
+    from .job_kinds import KINDS
+    jobs = JobCoordinator(store, cache=BoundedCache(path / 'job-cache', 256 * 1024 * 1024))
+    if not any(w['id'] == 'local-host' for w in jobs.workers(owner)):
+        jobs.enrol_worker(owner, 'local-host', 'This computer (local subprocess)', sorted(KINDS))
+    worker = JobWorker(jobs, LocalSubprocessBackend(), owner, 'local-host', poll_seconds=0.2)
+    stop = threading.Event()
+    thread = threading.Thread(target=worker.run, args=(stop,), kwargs={'idle_seconds': 0.75}, name='alfred-local-jobs', daemon=True)
+    thread.start()
+    def halt():
+        stop.set(); thread.join(10)
+    return jobs, halt
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke'))
+    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
+                                            'connector-add', 'connector-import', 'connectors'))
+    parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
+    parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--credential-id')
     parser.add_argument('--vault', help='Explicit read-only Markdown folder; no Obsidian plugins are loaded')
+    parser.add_argument('--vault-exclude', action='append', default=[], help='Exclude a relative folder and its descendants; repeat as needed')
+    parser.add_argument('--vault-id-key', choices=('alfred_id',), help='Explicitly adopt stable alfred_id frontmatter properties')
     parser.add_argument('--local-model', help='Opt-in tool-free model on an operator-managed local Ollama server; no model is downloaded')
     parser.add_argument('--model-port', type=int, default=11434)
     parser.add_argument('--model-timeout', type=int, default=60, help='Bounded conversation model deadline, 1 to 90 seconds')
-    parser.add_argument('--role', choices=('owner', 'reader'), default='owner')
+    parser.add_argument('--role', choices=('owner', 'reader', 'source'), default='owner')
+    # Read-only connectors over export files you select (CON-001). ALFRED must be stopped.
+    parser.add_argument('--connector', choices=('ics-export', 'vcf-export'), help='Calendar (.ics) or contacts (.vcf) export connector')
+    parser.add_argument('--connector-label', help='Label for a new connector source, for example "Calendar export"')
+    parser.add_argument('--connector-scope', action='append', default=[], help='Read scope for a new connector; repeat as needed (default: the least)')
+    parser.add_argument('--connector-source', help='Connector source ID printed by connector-add')
+    parser.add_argument('--export-file', help='The export file you selected; it is only ever read')
+    parser.add_argument('--dry-run', action='store_true', help='Show what an import would change, changing nothing')
+    parser.add_argument('--allow-remove-all', action='store_true', help='Accept an export that removes every current item')
     args = parser.parse_args()
     os.umask(0o077)
     try:
+        if args.command in ('init', 'serve', 'restore'):
+            # Checked before anything is created; backup and access stay available to move out.
+            check_data_directory(args.data_dir, (args.vault,) if args.vault else ())
         path = private_home(args.data_dir)
         if args.command == 'init':
             init_demo(path)
@@ -119,6 +195,64 @@ def main():
         elif args.command == 'access':
             # Explicit secret-reveal command, never used in CI logs or screenshots.
             print(load_keys(path)[args.role])
+        elif args.command == 'backup':
+            from .lifecycle import backup
+            manifest = backup(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], path / 'backups')
+            print('Backup written:', manifest['file'], 'sha256', manifest['sha256'])
+            print('It is an unencrypted SQLite copy. Keep it private.')
+        elif args.command == 'export':
+            if not args.export_dir:
+                raise Fault('export_dir_required')
+            from .export import export
+            result = export(DeskStore(path / 'desk.sqlite'), load_keys(path)[args.role], args.export_dir,
+                            vaults=(args.vault, path / 'vault'))
+            print('Export written:', result['directory'])
+            print('Statements:', result['counts']['statements'], '- executive records:', result['counts']['executive_records'],
+                  '- left out (forgotten, withheld or past retention):',
+                  sum(v for v in result['excluded'].values() if isinstance(v, int)))
+            print('Readable JSON and Markdown with SHA256SUMS. Not a backup and not encrypted. Keep it private.')
+        elif args.command == 'rotate':
+            rotate_key(path, args.role)
+            print('Rotated the', args.role, 'key. The old key no longer works. Use the access command to reveal the new one.')
+        elif args.command == 'restore':
+            if not args.backup_file:
+                raise Fault('backup_file_required')
+            import fcntl
+            from .lifecycle import restore
+            fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            try:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise Fault('stop_alfred_before_restore', 409) from None
+                result = restore(args.backup_file, path / 'desk.sqlite')
+            finally:
+                os.close(fd)
+            print('Restored', result['restored_from'], '- replayed', result['journal_entries_replayed'], 'forget/revocation entries.')
+        elif args.command == 'rebuild-index':
+            import fcntl
+            from .rebuild import rebuild_index
+            fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+            try:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except BlockingIOError:
+                    raise Fault('stop_alfred_before_rebuild', 409) from None
+                keys = load_keys(path)
+                report = rebuild_index(DeskStore(path / 'desk.sqlite'), keys['owner'], keys['source'],
+                                       Path(args.vault) if args.vault else path / 'vault',
+                                       exclude_folders=tuple(args.vault_exclude), id_key=args.vault_id_key)
+            finally:
+                os.close(fd)
+            notes = report['notes']
+            print('Rebuilt', notes['after'], 'notes from the vault;', notes['same_identity_and_revision'], 'kept the same identity and revision.')
+            print('New revisions:', len(notes['new_revision']), '- no longer present:', len(notes['no_longer_present']),
+                  '- new:', len(notes['new']), '- links unchanged:', report['links']['unchanged'],
+                  '- reviewed statements whose state changed:', len(report['reviewed_statements']['state_changed']))
+        elif args.command in ('connector-add', 'connector-import', 'connectors'):
+            from .connectors import command
+            for line in command(path, args):
+                print(line)
         elif args.command == 'revoke':
             if not args.credential_id:
                 raise Fault('credential_id_required')
@@ -127,11 +261,13 @@ def main():
         else:
             if not 1024 <= args.port <= 65535:
                 raise Fault('invalid_port')
-            serve(path, args.port, args.vault, args.local_model, args.model_port, args.model_timeout)
+            serve(path, args.port, args.vault, args.local_model, args.model_port, args.model_timeout, vault_exclusions=args.vault_exclude, vault_id_key=args.vault_id_key)
     except KeyboardInterrupt:
         print('ALFRED desk stopped. Stored events and drafts remain on disk.')
     except (Fault, OSError, ValueError) as exc:
         print('Cannot start:', exc.code if isinstance(exc, Fault) else type(exc).__name__)
+        if getattr(exc, 'detail', None):
+            print(exc.detail)
         raise SystemExit(1) from None
 
 

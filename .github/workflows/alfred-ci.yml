@@ -31,6 +31,8 @@ jobs:
           python3 tools/test_source_library.py 2>&1 | tee /tmp/alfred-unified-core/archive-tests.txt
           python3 tools/check_memory_plan.py --self-test 2>&1 | tee /tmp/alfred-unified-core/plan-tests.txt
           python3 tools/check_memory_plan.py | tee /tmp/alfred-unified-core/plan-report.json
+          python3 tools/check_requirement_register.py --self-test 2>&1 | tee /tmp/alfred-unified-core/register-tests.txt
+          python3 tools/check_requirement_register.py | tee /tmp/alfred-unified-core/register-report.json
           python3 -m unittest discover -s tests -v 2>&1 | tee /tmp/alfred-unified-core/application-tests.txt
           python3 tools/build_source_library.py --verify | tee /tmp/alfred-unified-core/library.txt
           python3 tools/import_sources.py --verify | tee /tmp/alfred-unified-core/original-archive.txt
@@ -69,6 +71,7 @@ jobs:
           ALFRED_CONVERSATION_OUTPUT=/tmp/alfred-unified-browser/conversation /tmp/alfred-browser/bin/python tools/check_conversation_browser.py
           /tmp/alfred-browser/bin/python tools/check_memory_browser.py
           cp -r docs/evidence/memory-v08 /tmp/alfred-unified-browser/memory
+          ALFRED_M03_OUTPUT=/tmp/alfred-unified-browser/memory-context /tmp/alfred-browser/bin/python tools/check_memory_context_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -110,4 +113,62 @@ jobs:
         with:
           name: alfred-unified-console
           path: console/evidence
+          retention-days: 7
+  console-connected:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the console exactly as the server will serve it
+        working-directory: console
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.20.0
+          npm ci
+          npm run build
+      - name: Isolated first-party browser testing tools
+        run: |
+          python3 -m venv /tmp/alfred-browser
+          /tmp/alfred-browser/bin/pip install 'playwright==1.57.0' 'Pillow==11.3.0'
+          if command -v google-chrome >/dev/null; then
+            echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            /tmp/alfred-browser/bin/python -m playwright install --with-deps chromium
+          fi
+      - name: Browser-to-backend acceptance of the connected console
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/alfred-console-connected
+          git rev-parse HEAD > /tmp/alfred-console-connected/TESTED_COMMIT.txt
+          ALFRED_CONSOLE_OUTPUT=/tmp/alfred-console-connected /tmp/alfred-browser/bin/python tools/check_console_connected_browser.py
+      - name: Browser acceptance of executive workflows in the connected console
+        run: |
+          set -euo pipefail
+          ALFRED_EXECUTIVE_OUTPUT=/tmp/alfred-console-connected/executive /tmp/alfred-browser/bin/python tools/check_executive_browser.py
+      - name: Browser acceptance of read-aloud states (output only, scripted synthesiser)
+        run: |
+          set -euo pipefail
+          ALFRED_VOICE_OUTPUT=/tmp/alfred-console-connected/voice /tmp/alfred-browser/bin/python tools/check_voice_browser.py
+      - name: Browser acceptance of sync conflict handling in the web interface
+        run: |
+          set -euo pipefail
+          ALFRED_SYNC_OUTPUT=/tmp/alfred-console-connected/sync-conflict /tmp/alfred-browser/bin/python tools/check_sync_conflict_browser.py
+      - name: Browser acceptance of temporal review in the connected console
+        run: |
+          set -euo pipefail
+          ALFRED_TEMPORAL_OUTPUT=/tmp/alfred-console-connected/temporal-review /tmp/alfred-browser/bin/python tools/check_temporal_review_browser.py
+      - name: Browser acceptance of authored routines and the procedure registry
+        run: |
+          set -euo pipefail
+          ALFRED_ROUTINES_OUTPUT=/tmp/alfred-console-connected/routines /tmp/alfred-browser/bin/python tools/check_routines_browser.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: alfred-console-connected
+          path: /tmp/alfred-console-connected
           retention-days: 7

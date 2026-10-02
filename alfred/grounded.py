@@ -8,9 +8,12 @@ from __future__ import annotations
 import re
 import html
 from urllib.parse import quote
-from .local import Fault, exact
+from .local import Fault, exact, ident
 from .evidence_review import assess_interpretation
 from .knowledge import safe_text
+from .reviewed_memory import (ReviewedMemory, MAX_CONTEXT_CLAIMS, MAX_CONTEXT_CHARACTERS,
+                              context_statement, context_references, context_current_db,
+                              context_ambiguities, ambiguities_current_db)
 
 STOP = frozenset('a an and are as at be been but by can could did do does for from give had has have how i in into is it its me my of on or our please should show tell that the their them there these they this to us was we were what when where which who why will with would you your about'.split())
 MAX_SOURCES, MAX_CHARACTERS = 5, 6000
@@ -51,17 +54,31 @@ def excerpt(note, terms, remaining):
     return {'start_line': start + 1, 'end_line': start + len(chosen), 'excerpt': '\n'.join(chosen)}
 
 
-def retrieve(store, bearer, question):
+FOCUS = re.compile(r'(note):([0-9a-f]{24})|(entity):([A-Za-z0-9][A-Za-z0-9_.-]{0,79})')
+
+
+def parse_focus(focus):
+    """A selected record narrows context. It is never permission and never evidence by itself."""
+    if focus is None:
+        return None, None
+    match = FOCUS.fullmatch(focus) if isinstance(focus, str) else None
+    if not match:
+        raise Fault('invalid_focus')
+    return (match[1], match[2]) if match[1] else (match[3], match[4])
+
+
+def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', focus=None):
     terms = question_terms(question)
-    graph = store.knowledge(bearer)
+    focus_kind, focus_id = parse_focus(focus)
+    graph = store.knowledge(bearer, purpose=purpose)
     ranked, notes, skipped = [], {}, []
     for meta in graph['nodes']:
         try:
-            note = store.knowledge_note(bearer, meta['id'])
+            note = store.knowledge_note(bearer, meta['id'], purpose=purpose)
         except Fault:
             skipped.append({'note_id': meta['id'], 'reason': 'source_unavailable'})
             continue
-        if note['sha256'] != meta['sha256']:
+        if note['sha256'] != meta['sha256'] or note['revision'] != meta['revision']:
             skipped.append({'note_id': meta['id'], 'reason': 'source_changed'})
             continue
         notes[meta['id']] = (meta, note)
@@ -72,8 +89,18 @@ def retrieve(store, bearer, question):
         if matched:
             ranked.append((score, meta['path'], meta['id']))
     ranked.sort(key=lambda x: (-x[0], x[1], x[2]))
+    if ranking == 'fts5':
+        from .retrieval import fts_rank
+        ranked = fts_rank(notes, terms)
+    elif ranking != 'keywords':
+        raise Fault('unsupported_ranking')
+    if focus_kind == 'note' and focus_id not in notes:
+        # Removed, changed during this read, or not permitted for this purpose.
+        raise Fault('focus_not_available', 409)
     seeds = [r[2] for r in ranked[:3]]
-    selection = [(identity, 'keyword_match', None) for identity in seeds]
+    if focus_kind == 'note':
+        seeds = [focus_id] + [s for s in seeds if s != focus_id][:2]
+    selection = [(identity, 'selected_record' if identity == focus_id and focus_kind == 'note' else 'keyword_match', None) for identity in seeds]
     # Follow only explicit graph edges from retrieved notes. A link supplies context,
     # not evidence that the target is true or that it entails the answer.
     candidates = []
@@ -88,8 +115,57 @@ def retrieve(store, bearer, question):
             break
         if identity not in {s[0] for s in selection}:
             selection.append((identity, 'keyword_match', None))
-    evidence, remaining = [], MAX_CHARACTERS
+    # A review judgement can find its source through explicit entity identity even
+    # when the note contains none of the entity's chosen display name. Allocate its
+    # exact original support first, inside the existing source/excerpt budgets.
+    snapshot=ReviewedMemory(store).view(bearer)
+    entities={e['id']:e for e in snapshot['entities']}
+    if focus_kind=='entity' and focus_id not in entities:
+        raise Fault('focus_not_available',409)
+    memory_ranked=[]
+    withheld={}
+    for c in snapshot['claims']:
+        if not c['usable'] and c['subject_id'] in entities:
+            # Counted, never shown: relevant reviewed statements this answer may not use, and why (INT-002).
+            reason=('conflicting' if c.get('conflicts') else 'disputed' if c['state']=='disputed'
+                    else 'not_currently_available' if c.get('withheld') else 'needs_fresh_review' if c['state']=='invalidated'
+                    else 'outside_valid_period' if c['state']=='accepted' else 'awaiting_review' if c['state']=='proposed' else None)
+            # Relevant only when the question names the statement's subject, not merely its predicate.
+            subject=entities[c['subject_id']]['name'].casefold()
+            if reason and any(t in subject for t in terms):withheld[reason]=withheld.get(reason,0)+1
+            continue
+        if c['subject_id'] not in entities or (c['object_id'] and c['object_id'] not in entities):continue
+        subject=entities[c['subject_id']]
+        other=entities[c['object_id']]['name'] if c['object_id'] else c['value']
+        searchable=(subject['name']+' '+c['predicate'].replace('_',' ')+' '+(other or '')).casefold()
+        score=sum(t in searchable for t in terms)
+        if focus_kind=='entity' and focus_id in (c['subject_id'],c['object_id']):score+=100
+        if score:memory_ranked.append((-score,c['subject_id'],c['predicate'],c['created'],c['id'],c))
+    memory_ranked.sort(key=lambda r:r[:-1])
+    evidence, memory, remaining, memory_characters = [], [], MAX_CHARACTERS, 0
+    support_ids={}
+    for *_,c in memory_ranked:
+        if len(memory)>=MAX_CONTEXT_CLAIMS:break
+        support=c['source'];identity=support['note_id']
+        if identity not in notes:continue
+        _,note=notes[identity]
+        if (note['sha256'],note['revision'])!=(support['sha256'],support['revision']):continue
+        size=sum(len(entities[e]['name']) for e in (c['subject_id'],c['object_id']) if e)+len(c['value'] or '')+len(c['predicate'])
+        if memory_characters+size>MAX_CONTEXT_CHARACTERS:continue
+        key=(identity,support['sha256'],support['revision'],support['start_line'],support['end_line'])
+        sid=support_ids.get(key)
+        if sid is None:
+            if len(evidence)>=MAX_SOURCES or len(support['quote'])>remaining:continue
+            sid='S'+str(len(evidence)+1);support_ids[key]=sid;remaining-=len(support['quote'])
+            evidence.append({'source_id':sid,'note_id':identity,'title':note['title'],'path':note['path'],
+                             'kind':note['kind'],'sha256':note['sha256'],'revision':note['revision'],
+                             'indexed':note['indexed'],'retrieved_via':'reviewed_statement_support','via_note_id':None,
+                             'basis':'authored_note_not_verified_fact','start_line':support['start_line'],
+                             'end_line':support['end_line'],'excerpt':support['quote']})
+        memory.append(context_statement(c,entities,sid));memory_characters+=size
     for identity, reason, origin in selection:
+        if len(evidence)>=MAX_SOURCES:break
+        if identity in {s['note_id'] for s in evidence}:continue
         meta, note = notes[identity]
         part = excerpt(note, terms, remaining)
         if part is None:
@@ -100,19 +176,34 @@ def retrieve(store, bearer, question):
                          'sha256': note['sha256'], 'revision': note['revision'], 'indexed': note['indexed'],
                          'retrieved_via': reason, 'via_note_id': origin,
                          'basis': 'authored_note_not_verified_fact', **part})
-    return {'question': question.strip(), 'scope': graph['scope'], 'indexed_at': graph['now'],
+    # Display names are labels, never merge keys. Flag relevant namesakes even if
+    # one has no usable statement or falls outside the bounded context selection.
+    ambiguities=context_ambiguities(entities,memory)
+    selected=None
+    if focus_kind=='note':
+        meta=notes[focus_id][0]
+        selected={'record_id':'note:'+focus_id,'label':meta['title'],'sha256':meta['sha256'],'revision':meta['revision'],
+                  'basis':'user_selection_context_not_authority'}
+    elif focus_kind=='entity':
+        selected={'record_id':'entity:'+focus_id,'label':entities[focus_id]['name'],'basis':'user_selection_context_not_authority'}
+    return {'question': question.strip(), 'scope': graph['scope'], 'indexed_at': graph['now'], 'focus': selected,
+            'purpose':purpose, 'ranking':ranking,
             'terms': terms, 'evidence': evidence, 'skipped': skipped[:32],
-            'retrieval': 'bounded_keywords_plus_explicit_one_hop_links', 'indexed_snapshot_only': True,
-            'limits': {'sources': MAX_SOURCES, 'excerpt_characters': MAX_CHARACTERS}}
+            'memory':memory, 'memory_ambiguities':ambiguities, 'memory_withheld':dict(sorted(withheld.items())),
+            'memory_basis':'user_reviewed_statements_not_verified_facts', 'authority_granted':False,
+            'retrieval': 'bounded_reviewed_memory_plus_keywords_and_explicit_one_hop_links', 'indexed_snapshot_only': True,
+            'limits': {'sources': MAX_SOURCES, 'excerpt_characters': MAX_CHARACTERS,
+                       'memory_statements':MAX_CONTEXT_CLAIMS,'memory_characters':MAX_CONTEXT_CHARACTERS}}
 
 
-def check_sources(store, bearer, references):
+def check_sources(store, bearer, references, memory_references=None, memory_ambiguities=None):
     store.principal(bearer, {'owner', 'reader'})
     if type(references) is not list or len(references) > MAX_SOURCES:
         raise Fault('invalid_source_references')
     problems = []
     for ref in references:
         exact(ref, {'note_id', 'sha256', 'revision'})
+        ident(ref['note_id'])
         if type(ref['sha256']) is not str or not re.fullmatch(r'[0-9a-f]{64}', ref['sha256']):
             raise Fault('invalid_source_hash')
         if type(ref['revision']) is not int or ref['revision'] < 1:
@@ -126,7 +217,41 @@ def check_sources(store, bearer, references):
             continue
         if note['sha256'] != ref['sha256'] or note['revision'] != ref['revision']:
             problems.append({'note_id': ref['note_id'], 'reason': 'source_changed'})
+    with store.transaction() as db:
+        p=store.authenticate(db,bearer,{'owner','reader'})
+        if not sources_current_db(db,p['scope'],references,store.now(),p) and not problems:
+            problems.append({'reason':'source_changed'})
+        current=context_current_db(db,p,memory_references if memory_references is not None else [],store.now())
+        if current is None or (memory_ambiguities is not None and not ambiguities_current_db(db,p,current,memory_ambiguities)):
+            problems.append({'reason':'reviewed_memory_changed'})
     return {'current_index_match': not problems, 'problems': problems, 'indexed_snapshot_only': True}
+
+
+def sources_current_db(db, scope, refs, now, principal=None, purpose='read'):
+    """Current source bindings, in the transaction that decides to use them."""
+    if type(refs) is not list or len(refs)>MAX_SOURCES:return False
+    for ref in refs:
+        row=db.execute('''SELECT n.sha256,n.revision,n.source FROM knowledge_notes n
+          JOIN credentials c ON c.id=n.source AND c.scope=n.scope
+          JOIN knowledge_sources s ON s.source=n.source AND s.scope=n.scope
+          WHERE n.scope=? AND n.id=? AND n.status='ready' AND c.role='source' AND c.revoked=0
+          AND c.expires>? AND s.status IN ('ready','attention')''',(scope,ref['note_id'],now)).fetchone()
+        if not row or (row['sha256'],row['revision'])!=(ref['sha256'],ref['revision']):return False
+        from .policy import permitted
+        if principal is not None and not permitted(db,principal,row['source'],now,purpose):return False
+    return True
+
+
+def packet_current_db(store, db, p, packet):
+    if p['scope']!=packet['scope'] or not sources_current_db(db,p['scope'],references(packet),store.now(),p,packet.get('purpose','read')):return False
+    current=context_current_db(db,p,context_references(packet),store.now())
+    return current is not None and ambiguities_current_db(db,p,current,packet.get('memory_ambiguities',[]))
+
+
+def check_packet(store, bearer, packet):
+    with store.transaction() as db:
+        p=store.authenticate(db,bearer,{'owner','reader'})
+        return packet_current_db(store,db,p,packet)
 
 
 def references(packet):
@@ -204,15 +329,17 @@ def ask(store, bearer, body, provider=None, provider_scope=None):
             raise Fault('model_workspace_not_authorised', 403)
         if store.paused(principal['scope']):
             raise Fault('model_processing_paused', 409)
-    packet = retrieve(store, bearer, body['question'])
+    packet = retrieve(store, bearer, body['question'], purpose='model' if use_model else 'read')
     result = {'packet': packet, 'mode': body['mode'], 'status': 'sources_found' if packet['evidence'] else 'no_sources',
               'claims': [], 'model_used': False, 'content_sent_to_model': False, 'model': None,
               'citation_integrity': 'indexed_source_lines_and_hashes', 'semantic_entailment_verified': False,
               'actions_executed': False, 'stored_in_browser': False}
-    if use_model and packet['evidence']:
+    if use_model and packet['memory_ambiguities']:
+        result['status']='memory_needs_clarification'
+    elif use_model and packet['evidence']:
         # Recheck right at egress. Local endpoint credentials are never model input.
         store.principal(bearer, {'owner'})
-        if not check_sources(store, bearer, references(packet))['current_index_match']:
+        if not check_packet(store, bearer, packet):
             raise Fault('sources_changed_during_question', 409)
         if store.paused(principal['scope']):
             raise Fault('model_processing_paused', 409)
@@ -231,7 +358,7 @@ def ask(store, bearer, body, provider=None, provider_scope=None):
     current = store.principal(bearer, {'owner', 'reader'})
     if current['scope'] != principal['scope'] or (use_model and store.paused(current['scope'])):
         raise Fault('question_context_changed', 409)
-    if not check_sources(store, bearer, references(packet))['current_index_match']:
+    if not check_packet(store, bearer, packet):
         raise Fault('sources_changed_during_question', 409)
     result['export_markdown'] = export_markdown(result)
     return result
