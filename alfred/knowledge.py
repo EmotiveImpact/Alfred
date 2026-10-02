@@ -518,11 +518,13 @@ class KnowledgeStore(DeskStore):
                 for target in adjacency.get(item,()):
                     if target not in distances:
                         distances[target]=distances[item]+1;queue.append(target)
-            missing_map = sorted(s for s in permitted if not any(n['source']==s and n['path'].casefold()=='map.md' for n in notes))
+            # Map health describes curated vaults; an imported export snapshot has no MAP.md.
+            imported = {r[0] for r in db.execute('SELECT source FROM connector_instances WHERE scope=?', (scope,))} if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='connector_instances'").fetchone() else set()
+            missing_map = sorted(s for s in permitted if s not in imported and not any(n['source']==s and n['path'].casefold()=='map.md' for n in notes))
             return {'scope':scope,'query':query,'kind':kind,'now':self.now(),'paused':self.paused(scope),
                     'nodes':[public(n) for n in notes], 'results':[public(n) for n in selected], 'links':links,
                     'issues':issues, 'sources':[{'source':s['source'],'vault_id':vaults.get(s['source']),'label':s['label'],'last_complete_scan':selections.get(s['source'],{}).get('confirmed'),'last_confirmed_snapshot':s['snapshot'],'checked':s['checked'],'status':s['status'],'errors':json.loads(s['errors'])} for s in sources],
-                    'map_health':{'roots':map_roots,'missing_map_sources':missing_map,'outside_two_hops':[n['id'] for n in notes if distances.get(n['id'],3)>2]},
+                    'map_health':{'roots':map_roots,'missing_map_sources':missing_map,'outside_two_hops':[n['id'] for n in notes if n['source'] not in imported and distances.get(n['id'],3)>2]},
                     'counts':{'notes':len(notes),'matches':len(selected),'links':len(links),'issues':len(issues)},
                     'live_ai':False,'read_only':True,'content_egress':False,'anchor_validation':True,'anchor_support':'ATX plain-text headings and single-line trailing block IDs'}
 

@@ -155,7 +155,8 @@ def start_local_jobs(store, owner, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate'))
+    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate',
+                                            'connector-add', 'connector-import', 'connectors'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
@@ -167,6 +168,14 @@ def main():
     parser.add_argument('--model-port', type=int, default=11434)
     parser.add_argument('--model-timeout', type=int, default=60, help='Bounded conversation model deadline, 1 to 90 seconds')
     parser.add_argument('--role', choices=('owner', 'reader', 'source'), default='owner')
+    # Read-only connectors over export files you select (CON-001). ALFRED must be stopped.
+    parser.add_argument('--connector', choices=('ics-export', 'vcf-export'), help='Calendar (.ics) or contacts (.vcf) export connector')
+    parser.add_argument('--connector-label', help='Label for a new connector source, for example "Calendar export"')
+    parser.add_argument('--connector-scope', action='append', default=[], help='Read scope for a new connector; repeat as needed (default: the least)')
+    parser.add_argument('--connector-source', help='Connector source ID printed by connector-add')
+    parser.add_argument('--export-file', help='The export file you selected; it is only ever read')
+    parser.add_argument('--dry-run', action='store_true', help='Show what an import would change, changing nothing')
+    parser.add_argument('--allow-remove-all', action='store_true', help='Accept an export that removes every current item')
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -201,6 +210,10 @@ def main():
             finally:
                 os.close(fd)
             print('Restored', result['restored_from'], '- replayed', result['journal_entries_replayed'], 'forget/revocation entries.')
+        elif args.command in ('connector-add', 'connector-import', 'connectors'):
+            from .connectors import command
+            for line in command(path, args):
+                print(line)
         elif args.command == 'revoke':
             if not args.credential_id:
                 raise Fault('credential_id_required')
