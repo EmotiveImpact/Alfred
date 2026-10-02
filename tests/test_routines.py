@@ -395,6 +395,10 @@ class NominationTests(Base):
         result = self.accept(self.reminder)
         self.assertEqual((result['nomination']['state'], result['nomination']['outcome']), ('accepted', {'follow_up': None}))
         self.assertEqual(self.count('executive_records'), before)
+        # The same request again returns the recorded decision; a different decision is refused.
+        self.assertEqual(self.accept(self.reminder)['nomination']['outcome'], {'follow_up': None})
+        self.fault('nomination_closed', self.accept, self.reminder, True)
+        self.assertEqual(self.count('executive_records'), before)
         self.fault('nomination_closed', self.accept, self.reminder, False, None, 2)
 
     def test_accepting_with_a_follow_up_uses_the_executive_api_once(self):

@@ -555,8 +555,12 @@ class Routines:
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             row = self._nomination(db, p, identity)
-            if row['state'] == 'accepted' and row['version'] == body['version'] + 1 and row['outcome']:
-                return self._accepted(db, p, row)
+            if row['state'] == 'accepted' and row['version'] == body['version'] + 1:
+                # The same decision sent again returns its recorded result; a different one is refused.
+                recorded = json.loads(row['outcome'] or '{}')
+                if row['kind'] == 'draft' or bool(recorded.get('follow_up')) == body['create_follow_up']:
+                    return self._accepted(db, p, row)
+                raise Fault('nomination_closed', 409)
             if row['version'] != body['version']:
                 raise Fault('nomination_changed', 409)
             if row['state'] != 'open':
