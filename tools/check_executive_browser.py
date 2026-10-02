@@ -305,6 +305,10 @@ with tempfile.TemporaryDirectory() as temp:
             for width, height in ((1280, 800), (390, 844)):
                 page.set_viewport_size({'width': width, 'height': height}); page.wait_for_timeout(500); top(tasks)
                 check(f'{width}px executive dialog has no horizontal overflow', page.evaluate('document.documentElement.scrollWidth<=innerWidth'))
+                check(f'{width}px every control stays inside the dialog', page.evaluate('''() => {
+                    const d = document.querySelector('dialog.dialog'), c = d.querySelector('.dialog-content'), box = d.getBoundingClientRect();
+                    return c.scrollWidth <= c.clientWidth + 1 && [...d.querySelectorAll('select,input,textarea,button')].every(e => {
+                      const b = e.getBoundingClientRect(); return b.width === 0 || (b.left >= box.left - 1 && b.right <= box.right + 1); }); }'''))
                 page.screenshot(path=str(out / f'executive-{width}.png'), full_page=True)
             check('no browser storage used', page.evaluate('localStorage.length===0&&sessionStorage.length===0'))
             check('no access key rendered', owner not in page.content())
