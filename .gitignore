@@ -10,3 +10,6 @@ __pycache__/
 console/ALFRED-Console.html
 console/THIRD_PARTY_NOTICES.md
 console/evidence/
+
+# Agent worktrees used during development; never committed
+.claude/worktrees/
