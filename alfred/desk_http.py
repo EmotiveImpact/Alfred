@@ -134,6 +134,37 @@ class Handler(BaseHTTPRequestHandler):
             return data.replace(CONSOLE_MODE_DEMO, CONSOLE_MODE_CONNECTED), 'text/html; charset=utf-8'
         return data, CONSOLE_TYPES[file.suffix]
 
+    def identity_route(self, path, mutation, bearer, body):
+        """Identity and source grants. Rotation and pairing stay offline (they need both keys or a stopped host)."""
+        from .policy import IdentityPolicy
+        policy, store = IdentityPolicy(self.server.store), self.server.store
+        if not mutation and path == '/desk/identity':
+            return policy.view(bearer)
+        if not mutation:
+            raise Fault('not_found', 404)
+        def expiry(source, days):
+            if type(days) is not int or not 1 <= days <= 30:
+                raise Fault('invalid_grant_days')
+            limit = next((s['credential_expires'] for s in policy.view(bearer)['sources'] if s['source'] == source), None)
+            if limit is None:
+                raise Fault('source_not_available', 404)
+            return min(store.now() + days * 86400, limit)
+        if path == '/desk/identity/enable':
+            exact(body, {'epoch'})
+            return policy.enable(bearer, body['epoch'])
+        if path == '/desk/identity/grants':
+            exact(body, {'source', 'capability', 'days', 'epoch', 'revoke'})
+            if body['revoke'] is True:
+                return policy.grant(bearer, body['source'], body['capability'], store.now() + 1, body['epoch'], revoke=True)
+            return policy.grant(bearer, body['source'], body['capability'], expiry(body['source'], body['days']), body['epoch'])
+        if path == '/desk/identity/invitations':
+            exact(body, {'source', 'capability', 'days', 'epoch'})
+            return policy.invite(bearer, body['source'], body['capability'], expiry(body['source'], body['days']), body['epoch'])
+        if path == '/desk/identity/invitations/redeem':
+            exact(body, {'code'})
+            return policy.redeem(bearer, body['code'])
+        raise Fault('not_found', 404)
+
     def jobs_route(self, url, mutation, bearer, body):
         """Owner and reader job calls. Worker calls stay in-process with the host."""
         jobs = self.server.jobs
@@ -370,6 +401,8 @@ class Handler(BaseHTTPRequestHandler):
                 if 'memory_ambiguities' in body:keys.add('memory_ambiguities')
                 exact(body, keys)
                 result = check_sources(store, bearer, body['references'], body.get('memory_references'),body.get('memory_ambiguities'))
+            elif (url.path == '/desk/identity' or url.path.startswith('/desk/identity/')) and not url.query:
+                result = self.identity_route(url.path, mutation, bearer, body)
             elif (url.path == '/desk/executive' or url.path.startswith('/desk/executive/')) and not url.query:
                 executive = self.server.executive
                 if executive is None: raise Fault('executive_not_configured', 409)

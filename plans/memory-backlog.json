@@ -106,7 +106,9 @@
       "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
       "evidence": [
         "tests/test_memory_programme_wip.py",
-        "docs/evidence/memory-programme-wip/RECEIPT.md"
+        "tests/test_identity_workflows.py",
+        "docs/evidence/memory-programme-wip/RECEIPT.md",
+        "docs/evidence/memory-m02/RECEIPT.md"
       ],
       "limitations": [
         "Incomplete enrolment/recovery and administrative/HTTP workflows; device review histories remain separate",

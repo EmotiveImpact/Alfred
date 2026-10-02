@@ -100,6 +100,42 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
         os.close(fd)
 
 
+def rotate_key(path, role):
+    """Offline credential rotation. The host must be stopped because it holds the old keys."""
+    import fcntl
+    from .policy import IdentityPolicy
+    fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Fault('stop_alfred_before_rotation', 409) from None
+        keys = load_keys(path)
+        store = DeskStore(path / 'desk.sqlite')
+        if role not in keys:
+            raise Fault('invalid_role')
+        policy = IdentityPolicy(store)
+        with store.transaction() as db:
+            generation = store.authenticate(db, keys[role], {'owner', 'reader', 'source'})['generation']
+        import secrets
+        # Stage the new key on disk first, so a failure can never leave a key nobody holds.
+        replacement, old = secrets.token_urlsafe(32), keys[role]
+        staging = path / 'desk-access.json.rotating'
+        staging.unlink(missing_ok=True)
+        handle = os.open(staging, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(handle, 'w') as stream:
+            json.dump(keys | {role: replacement}, stream); stream.flush(); os.fsync(stream.fileno())
+        try:
+            policy.rotate(old, generation, replacement=replacement)
+        except BaseException:
+            staging.unlink(missing_ok=True)
+            raise
+        os.replace(staging, path / 'desk-access.json')
+        return replacement
+    finally:
+        os.close(fd)
+
+
 def start_local_jobs(store, owner, path):
     """One local-subprocess worker thread for this host. Not a sandbox or remote worker."""
     import threading
@@ -119,7 +155,7 @@ def start_local_jobs(store, owner, path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore'))
+    parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
@@ -130,7 +166,7 @@ def main():
     parser.add_argument('--local-model', help='Opt-in tool-free model on an operator-managed local Ollama server; no model is downloaded')
     parser.add_argument('--model-port', type=int, default=11434)
     parser.add_argument('--model-timeout', type=int, default=60, help='Bounded conversation model deadline, 1 to 90 seconds')
-    parser.add_argument('--role', choices=('owner', 'reader'), default='owner')
+    parser.add_argument('--role', choices=('owner', 'reader', 'source'), default='owner')
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -147,6 +183,9 @@ def main():
             manifest = backup(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], path / 'backups')
             print('Backup written:', manifest['file'], 'sha256', manifest['sha256'])
             print('It is an unencrypted SQLite copy. Keep it private.')
+        elif args.command == 'rotate':
+            rotate_key(path, args.role)
+            print('Rotated the', args.role, 'key. The old key no longer works. Use the access command to reveal the new one.')
         elif args.command == 'restore':
             if not args.backup_file:
                 raise Fault('backup_file_required')

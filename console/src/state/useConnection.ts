@@ -12,7 +12,7 @@ function isAbort(error:unknown){return error instanceof DOMException&&error.name
  * grant or workspace change clears selection; sign-out and revocation clear all records.
  * Network loss keeps the last confirmed projection but labels it with its confirmation time.
  */
-export function useConnection(mode:ConsoleMode,dispatch:Dispatch<ConsoleAction>,notify:(message:string)=>void,onAuthorityLost:()=>void){
+export function useConnection(mode:ConsoleMode,dispatch:Dispatch<ConsoleAction>,notify:(message:string)=>void,onAuthorityLost:(kind:'cleared'|'changed')=>boolean){
   const client=useMemo(()=>new DeskClient(),[]);
   const[connection,setConnection]=useState<ConnectionState>(mode==='demo'?{kind:'demo'}:{kind:'checking'});
   const[session,setSession]=useState<SessionInfo|null>(null);
@@ -21,7 +21,7 @@ export function useConnection(mode:ConsoleMode,dispatch:Dispatch<ConsoleAction>,
   const inflight=useRef<AbortController|null>(null),retried=useRef(false);
   const clear=useCallback((next:ConnectionState)=>{
     inflight.current?.abort();inflight.current=null;sessionRef.current=null;last.current={};client.forget();
-    setSession(null);setWorkspaces([]);dispatch({type:'projection',snapshot:emptyConnectedSnapshot()});onAuthorityLost();setConnection(next);
+    setSession(null);setWorkspaces([]);dispatch({type:'projection',snapshot:emptyConnectedSnapshot()});onAuthorityLost('cleared');setConnection(next);
   },[client,dispatch,onAuthorityLost]);
   const fail=useCallback((error:unknown)=>{
     if(isAbort(error))return;
@@ -38,7 +38,7 @@ export function useConnection(mode:ConsoleMode,dispatch:Dispatch<ConsoleAction>,
       const projection=await client.readProjection(controller.signal);
       if(controller.signal.aborted||sessionRef.current!==current)return;
       const snapshot=toSnapshot(projection,current.scope),previous=last.current;
-      if(previous.grant&&previous.grant!==snapshot.grantRevision){onAuthorityLost();notify('Access changed. The view was rebuilt from current permissions.');}
+      if(previous.grant&&previous.grant!==snapshot.grantRevision&&!onAuthorityLost('changed'))notify('Access changed. The view was rebuilt from current permissions.');
       if(previous.data!==snapshot.dataRevision||previous.grant!==snapshot.grantRevision)dispatch({type:'projection',snapshot});
       last.current={data:snapshot.dataRevision,grant:snapshot.grantRevision,observedAt:snapshot.observedAt};retried.current=false;
       setConnection({kind:'ready',workspaceId:snapshot.workspaceId!,observedAt:snapshot.observedAt!});

@@ -6,6 +6,7 @@ requires `npm run build` in console/ first. No model, account or private data.
 """
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -329,6 +330,20 @@ with tempfile.TemporaryDirectory() as temp:
             check('a restarted server requires a new sign-in and clears the stale view', '0 records' in page.locator('.graph-view-label').inner_text())
             page.get_by_label('Access key').fill(keys['owner']); page.get_by_role('button', name='Sign in').click()
             expect(page.locator('.connection-state')).to_have_text('Connected')
+            # M02: the owner manages grants and invites another person, from the console.
+            page.get_by_role('button', name='Data and permissions').click()
+            security = page.get_by_role('dialog')
+            expect(security).to_contain_text('Explicit grants', timeout=15000)
+            model_switch = security.get_by_role('switch', name='Model for Local Markdown vault')
+            check('the model capability starts ungranted', model_switch.get_attribute('aria-checked') == 'false')
+            model_switch.click()
+            expect(model_switch).to_have_attribute('aria-checked', 'true', timeout=15000)
+            check('the owner grants a capability and the access panel stays open', security.is_visible())
+            security.get_by_role('button', name='Create one-time code').click()
+            expect(security.get_by_label('One-time code', exact=True).locator('.hash')).to_be_visible(timeout=15000)
+            invitation = security.get_by_label('One-time code', exact=True).locator('.hash').inner_text().strip()
+            check('a one-time invitation code is created', len(invitation) == 24)
+            security.get_by_label('Close panel').click()
             # Revocation clears everything without a reload.
             page.get_by_role('button', name='Explore projects').click()
             store.revoke('demo-owner')
@@ -340,6 +355,15 @@ with tempfile.TemporaryDirectory() as temp:
             expect(page.locator('.connection-state')).to_have_text('Connected')
             expect(page.locator('.graph-view-label')).to_contain_text('0 records')
             check('a person without grants sees no records, names or counts', 'Sample film' not in page.locator('body').inner_text())
+            page.get_by_role('button', name='Data and permissions').click()
+            security = page.get_by_role('dialog')
+            expect(security).to_contain_text('You hold no grants yet')
+            security.get_by_label('One-time code').fill(invitation)
+            security.get_by_role('button', name='Redeem').click()
+            expect(page.get_by_role('status').filter(has_text='Code redeemed')).to_be_visible(timeout=15000)
+            security.get_by_label('Close panel').click()
+            expect(page.locator('.graph-view-label')).to_have_text(re.compile(r'[1-9][0-9]* records'), timeout=15000)
+            check('redeeming an invitation grants exactly what it names to the person who redeems it', page.get_by_role('button', name='Explore projects').is_visible())
             csp = [m for m in console_messages if 'Content Security Policy' in m or 'Refused to' in m]
             check('no Content Security Policy violations', not csp)
             check('no requests leave the loopback origin', not foreign)

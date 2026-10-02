@@ -26,7 +26,14 @@ function useController(){
   const[renderEpoch,setRenderEpoch]=useState(0);
   // Lost or changed authority closes every view that could still show withdrawn material.
   const resetAsk=useRef<()=>void>(()=>{});
-  const onAuthorityLost=useCallback(()=>{setModal(null);setQuery('');setProposalId(null);setActiveView('home');resetAsk.current();},[]);
+  // A change the person just made from the access panel keeps that panel open; it shows no records.
+  const expectingAccessChange=useRef(false);
+  const expectAccessChange=useCallback(()=>{expectingAccessChange.current=true;},[]);
+  const onAuthorityLost=useCallback((kind:'cleared'|'changed')=>{
+    const keep=kind==='changed'&&expectingAccessChange.current;expectingAccessChange.current=false;
+    setModal(m=>keep&&m==='security'?m:null);setQuery('');setProposalId(null);if(!keep)setActiveView('home');resetAsk.current();
+    return keep;
+  },[]);
   const live=useConnection(mode,dispatch,setNotice,onAuthorityLost);
   const connected=mode==='connected';
   const systemReduced=useReducedMotion(),inputRef=useRef<HTMLInputElement>(null),searchRef=useRef<HTMLInputElement>(null);
@@ -89,7 +96,7 @@ function useController(){
   const recheckAsk=asking.recheck;
   useEffect(()=>{void recheckAsk();},[state.snapshot.dataRevision]);// eslint-disable-line react-hooks/exhaustive-deps
   const askView={state:asking.state,sessionId:asking.state.status==='done'?asking.state.sessionId:null};
-  return{mode,connected,live,detail,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
+  return{expectAccessChange,mode,connected,live,detail,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
     notice,setNotice,renderer,onStatus,graphMode,setGraphMode,activeView,navigate,systemReduced,reduced,inputRef,searchRef,
     records,relationships,shownRecords,selected,priorities,proposals,pending,projects,activeProposal,results,selectRecord,closeModal,
     switchScope,openReview,openCategory,runCommand,resetDemo,renderEpoch,retryGraphics:()=>setRenderEpoch(n=>n+1)};

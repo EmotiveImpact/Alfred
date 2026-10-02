@@ -1,5 +1,5 @@
 {
-  "passed": 60,
+  "passed": 64,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -55,9 +55,13 @@
     "server loss is shown as unreachable with last confirmation time",
     "server loss never substitutes fixtures",
     "a restarted server requires a new sign-in and clears the stale view",
+    "the model capability starts ungranted",
+    "the owner grants a capability and the access panel stays open",
+    "a one-time invitation code is created",
     "revocation returns to sign-in and closes open dialogs",
     "revocation clears every record",
     "a person without grants sees no records, names or counts",
+    "redeeming an invitation grants exactly what it names to the person who redeems it",
     "no Content Security Policy violations",
     "no requests leave the loopback origin",
     "no uncaught page errors"

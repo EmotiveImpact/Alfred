@@ -16,7 +16,7 @@ served by that server and driven in Chromium 141 (SwiftShader).
 | `python3 -m unittest discover -s tests` | 699 pass (includes 16 projection and 12 focus tests) |
 | `npm run build` and `npm test` in `console/` | build passes; 79 unit tests pass |
 | `npx playwright test` (offline demo) | 29 of 29 pass, unchanged behaviour |
-| `tools/check_console_connected_browser.py` | 60 of 60 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart and strict-grant checks); [report](browser-report.json) |
+| `tools/check_console_connected_browser.py` | 64 of 64 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations); [report](browser-report.json) |
 | Existing seven backend browser scripts | all pass |
 
 The 43 checks include: sign-in through the real session; graph counts equal to the
