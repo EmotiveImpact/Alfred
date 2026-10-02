@@ -132,7 +132,7 @@ def _cancel(db, scope, action_ids, counts):
             counts['completed_actions_not_undone'].append(action_id)
 
 
-def forget_source_db(db, scope, source, now):
+def forget_source_db(db, scope, source, now, *, origin='recorded', at=None):
     """Remove one source's content and everything derived from it. Idempotent, so a
     restore can replay it. The person's own files are never read, edited or deleted."""
     counts = {'notes_removed': 0, 'reviewed_statements_invalidated': 0, 'conversation_answers_withdrawn': 0,
@@ -157,10 +157,13 @@ def forget_source_db(db, scope, source, now):
             if _has(db, table):
                 db.execute(f'DELETE FROM {table} WHERE scope=? AND source=?', (scope, source))
     if notes and _has(db, 'memory_claims'):
-        claims = [r[0] for r in db.execute("SELECT id,note_id FROM memory_claims WHERE scope=? AND state NOT IN ('invalidated','forgotten')", (scope,))
+        claims = [(r[0], r[2]) for r in db.execute("SELECT id,note_id,actor FROM memory_claims WHERE scope=? AND state NOT IN ('invalidated','forgotten')", (scope,))
                   if r[1] in notes]
-        for identity in claims:
+        from .memory_history import SYSTEM, record_if_present
+        for identity, owner in claims:
             db.execute("UPDATE memory_claims SET state='invalidated',value=NULL,object_id=NULL,version=version+1 WHERE id=?", (identity,))
+            record_if_present(db, scope, owner, identity, 'invalidated', at if at is not None else now, SYSTEM,
+                              origin=origin, detail='source_removed')
         counts['reviewed_statements_invalidated'] = len(claims)
     if notes and _has(db, 'conversation_turns'):
         for row in db.execute('''SELECT t.id,t.result FROM conversation_turns t JOIN conversations s ON s.id=t.session
@@ -237,11 +240,14 @@ def forget_source(store, bearer, source, *, cache=None):
     return full | {'cached_results_removed': dropped}
 
 
-def apply_entry(db, entry, now):
-    """Idempotently apply one journal entry to a database (live or restored)."""
+def apply_entry(db, entry, now, origin='recorded'):
+    """Idempotently apply one journal entry to a database (live or restored).
+
+    History rows for a replay carry the time the journal recorded, never a value."""
     kind, scope = entry['kind'], entry['scope']
+    at = entry.get('at', now) if origin == 'replayed' else now
     if kind == 'source_forgotten':
-        return forget_source_db(db, scope, entry['subject'], now)
+        return forget_source_db(db, scope, entry['subject'], now, origin=origin, at=at)
     if kind == 'credential_revoked':
         db.execute('UPDATE credentials SET revoked=1 WHERE id=?', (entry['subject'],))
         return {}
@@ -259,9 +265,12 @@ def apply_entry(db, entry, now):
         db.execute('DELETE FROM memory_entities WHERE id=? AND scope=? AND actor=?', (entry['subject'], scope, actor))
     else:
         ids = [entry['subject']]
+    from .memory_history import record_if_present
     for identity in ids:
-        db.execute("UPDATE memory_claims SET state='forgotten',value=NULL,object_id=NULL,version=version+1 WHERE id=? AND scope=? AND actor=? AND state!='forgotten'",
-                   (identity, scope, actor))
+        changed = db.execute("UPDATE memory_claims SET state='forgotten',value=NULL,object_id=NULL,version=version+1 WHERE id=? AND scope=? AND actor=? AND state!='forgotten'",
+                             (identity, scope, actor)).rowcount
+        if changed:
+            record_if_present(db, scope, actor, identity, 'forgotten', at, actor, origin=origin, detail=kind)
     return withdraw_dependants(db, scope, actor, ids, now)
 
 
@@ -335,7 +344,7 @@ def restore(backup_file, database, now=None) -> dict:
         db.execute('BEGIN IMMEDIATE')
         withdrawn = {'conversation_answers_withdrawn': 0, 'pending_actions_cancelled': []}
         for entry in journal:
-            effect = apply_entry(db, entry, now or time.time())
+            effect = apply_entry(db, entry, now or time.time(), origin='replayed')
             withdrawn['conversation_answers_withdrawn'] += effect.get('conversation_answers_withdrawn', 0)
             withdrawn['pending_actions_cancelled'] += effect.get('pending_actions_cancelled', [])
         db.execute('COMMIT')

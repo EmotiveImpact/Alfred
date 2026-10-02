@@ -148,11 +148,14 @@
         "tests/test_memory_m03.py",
         "tools/check_memory_context_browser.py",
         "docs/evidence/memory-m03/RECEIPT.md",
-        "docs/evidence/memory-m03/local-tests.txt"
+        "docs/evidence/memory-m03/local-tests.txt",
+        "tests/test_memory_temporal.py",
+        "tools/check_temporal_review_browser.py",
+        "docs/evidence/temporal-review/RECEIPT.md"
       ],
       "limitations": [
         "Existing coarse source/workspace checks and actor-private reviews; person/device grants remain M02",
-        "Current-time keywords and structural conflicts only; no semantic entailment or general historical query engine",
+        "Current-time keywords and structural conflicts only; recorded history and a deterministic as-of report over ALFRED's own review records exist (MEM-007), but no semantic entailment and the as-of report does not feed answers",
         "Namesakes retain IDs and withhold model use; automatic entity resolution and disambiguation UI are not implemented",
         "Capture/writes, deletion/restore and private-data release remain M04/M05 and M02/M05 gates"
       ]
@@ -295,6 +298,9 @@
         "Pin chosen implementation, dependencies, model/service terms and egress settings before adoption",
         "Provenance, review status and deletion survive an adapter round-trip",
         "Reject complexity without measured benefit; do not reroute the blocked model operation"
+      ],
+      "limitations": [
+        "First-party valid time, recorded time, disputes and supersession are built without an adapter (docs/evidence/temporal-review/RECEIPT.md); this decision is now only whether an external adapter adds measured benefit."
       ]
     },
     {

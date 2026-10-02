@@ -398,6 +398,10 @@ class Handler(BaseHTTPRequestHandler):
                 elif not mutation and url.path == '/desk/memory/receipts':
                     from .lifecycle import receipts
                     result = receipts(store,bearer)
+                elif not mutation and (url.path.endswith('/history') or url.path.startswith('/desk/memory/as-of/')):
+                    # Recorded review history and the as-of report (MEM-007); reads only.
+                    from .memory_history import MemoryHistory, route as history_route
+                    result = history_route(MemoryHistory(memory),url.path,mutation,bearer)
                 else: raise Fault('not_found',404)
             elif url.path.startswith('/desk/voice/playbacks') and not url.query:
                 # VOI-001 playback records only. No route here accepts audio or requests a microphone.

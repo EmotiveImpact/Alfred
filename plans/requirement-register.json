@@ -200,7 +200,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Explicit remember-this capture with preview, separate review and retention."
+   "notes": "Explicit remember-this capture with preview, separate review and retention. The review queue in the console now accepts with a valid period, accepts as a replacement, disputes and withdraws (docs/evidence/temporal-review/RECEIPT.md)."
   },
   {
    "id": "MEM-006",
@@ -244,21 +244,25 @@
     "SRC-PRD-0927"
    ],
    "depends_on": [],
-   "owner": "unassigned",
+   "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "partial",
+   "implementation": "implemented_on_branch",
    "integration": "backend_connected",
-   "merge": "main_partial",
+   "merge": "main_partial_branch_extended",
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_memory_m03.py",
-    "docs/evidence/memory-m03/RECEIPT.md"
+    "docs/evidence/memory-m03/RECEIPT.md",
+    "tests/test_memory_temporal.py",
+    "console/tests/temporal.test.ts",
+    "tools/check_temporal_review_browser.py",
+    "docs/evidence/temporal-review/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Narrow validity/conflict rules. Full temporal query contract pending M07 decision."
+   "notes": "First-party temporal review on the branch: a value-free recorded history of every review transition (with migration of earlier statements, unknown times marked), valid periods set at proposal, capture or the first decision and fixed afterwards, disputes, withdrawal and supersession with lineage both ways, withheld and restored support recorded as observations, and a deterministic as-of report over ALFRED's own records. Console review queue, statement history and as-of view. Limits: supersession does not keep the replaced statement true for an earlier period; history is not in exports; not a semantic conflict detector or general temporal query language; the optional external adapter decision stays with M07."
   },
   {
    "id": "MEM-008",
@@ -348,7 +352,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided."
+   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided. Forgetting and source removal now leave value-free history rows; restore replays a forget at the journal time."
   },
   {
    "id": "MEM-011",
@@ -434,7 +438,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Credential-scoped portable export (plain JSON and Markdown, hashed manifest, explicit exclusions, private files, never inside a vault) on the branch. Missing: redaction inside records, encryption, export of the index or receipts, export over HTTP or from the console."
+   "notes": "Credential-scoped portable export (plain JSON and Markdown, hashed manifest, explicit exclusions, private files, never inside a vault) on the branch. Missing: redaction inside records, encryption, export of the index or receipts, export over HTTP or from the console. Statement review history is not yet included in portable exports."
   },
   {
    "id": "MEM-014",

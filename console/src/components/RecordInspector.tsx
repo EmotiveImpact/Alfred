@@ -7,6 +7,7 @@ import {type Relationship} from '../domain/model';
 import {RunJob} from './JobsPanel';
 import {ExecutiveInspectorActions} from './ExecutiveWorkflows';
 import {SyncConflictNotice,SourceConflicts} from './SourceSafety';
+import {StatementTemporal} from './StatementHistory';
 const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',executive_link:'executive link',executive_support:'cited support',executive_responsible:'responsible (your link)',fixture:''};
 const ORIGIN_BADGE:Record<string,string>={authored_note:'AUTHORED NOTE · NOT A VERIFIED FACT',reviewed_entity:'REVIEWED MEMORY · YOUR JUDGEMENT',source:'SELECTED SOURCE',executive_record:'EXECUTIVE RECORD · AUTHORED BY YOU'};
 function frontmatterEnd(lines:string[]){if(lines[0]?.trim()!=='---')return 0;const end=lines.findIndex((l,i)=>i>0&&l.trim()==='---');return end<0?0:end+1;}
@@ -66,6 +67,7 @@ function ConnectedProvenance({detail}:{detail:RecordDetail}){
   return <section className="inspector-section"><h3>Reviewed statements</h3>{detail.sameNameEntities.length>0&&<p className="dialog-note">{detail.sameNameEntities.length} other record{detail.sameNameEntities.length>1?'s share':' shares'} this name. They are kept separate.</p>}
     {detail.statements.length?detail.statements.map(s=><div className={`statement ${s.usable?'usable':'withheld'}`} key={s.id}><p><strong>{s.predicate.replaceAll('_',' ')}</strong> {s.value??s.object?.name??''}</p><small>{statementLabel(s)}</small>
       {s.support?<><blockquote>{s.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord(s.support!.noteId)}>{s.support.title}, {s.support.startLine===s.support.endLine?`line ${s.support.startLine}`:`lines ${s.support.startLine}–${s.support.endLine}`}</button></>:s.state!=='forgotten'&&<p className="dialog-note">Original support is not currently available.</p>}
+      <StatementTemporal s={s} siblings={detail.statements}/>
       {s.state!=='forgotten'&&<ForgetControl label="Forget this statement" path={`/desk/memory/claims/${s.id}/forget`} body={{version:s.version}} confirm="Removes the reviewed value from ALFRED's current records, withdraws saved answers that used it and cancels undecided drafts. Audit entries, older backups and completed drafts remain."/>}</div>):<p>No statements recorded for this record.</p>}
     <ForgetControl label="Forget this record and its statements" path={`/desk/memory/entities/${detail.id.slice('entity:'.length)}/forget`} body={{}} confirm="Removes this record's name and every reviewed statement that mentions it from current records. A restore from an older backup replays this forget."/></section>;
 }

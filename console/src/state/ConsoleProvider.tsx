@@ -9,7 +9,7 @@ import {emptyConnectedSnapshot} from '../integration/toSnapshot';
 import {useConnection,useRecordDetail} from './useConnection';
 import {useAsk} from './useAsk';
 import {useJobs} from './useJobs';
-export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|'jobs'|null;
+export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|'jobs'|'memory'|null;
 export type RailView='home'|'search'|'knowledge'|'tasks'|'research'|'systems'|'security'|'settings';
 /** Where the executive dialog should open: a tab, or one record's details or brief. Read once, then cleared. */
 export type ExecutiveTarget={view:'records'|'attention'|'insights'|'details'|'brief';id:string|null};
@@ -28,6 +28,7 @@ function useController(){
   const[graphMode,setGraphMode]=useState<GraphMode>('field'),[activeView,setActiveView]=useState<RailView>('home');
   const[renderEpoch,setRenderEpoch]=useState(0);
   const[executiveTarget,setExecutiveTarget]=useState<ExecutiveTarget|null>(null);
+  const[memoryTab,setMemoryTab]=useState<'queue'|'asof'>('queue');
   // Lost or changed authority closes every view that could still show withdrawn material.
   const resetAsk=useRef<()=>void>(()=>{}),resetJobs=useRef<()=>void>(()=>{});
   // A change the person just made from the access panel keeps that panel open; it shows no records.
@@ -73,6 +74,7 @@ function useController(){
   const openReview=(id:string,outcome:'reviewed'|'declined'='reviewed')=>{setProposalId(id);setReviewConsent(false);setReviewOutcome(outcome);setModal('review');};
   const openCategory=(category:Category|null)=>{dispatch({type:'category',category});setModal('records');};
   const openExecutive=(view:ExecutiveTarget['view'],id:string|null=null)=>{setExecutiveTarget({view,id});setModal('tasks');};
+  const openMemory=(tab:'queue'|'asof'='queue')=>{setMemoryTab(tab);setModal('memory');};
   const navigate=(view:RailView)=>{
     setActiveView(view);dispatch({type:'select',id:null});
     if(view==='home'){setGraphMode('field');setModal(null);return;}
@@ -106,7 +108,7 @@ function useController(){
     notice,setNotice,renderer,onStatus,graphMode,setGraphMode,activeView,navigate,systemReduced,reduced,inputRef,searchRef,
     records,relationships,shownRecords,selected,priorities,proposals,pending,projects,activeProposal,results,selectRecord,closeModal,
     switchScope,openReview,openCategory,runCommand,resetDemo,renderEpoch,retryGraphics:()=>setRenderEpoch(n=>n+1),
-    executiveTarget,setExecutiveTarget,openExecutive};
+    executiveTarget,setExecutiveTarget,openExecutive,memoryTab,openMemory};
 }
 export type ConsoleController=ReturnType<typeof useController>;
 const Context=createContext<ConsoleController|null>(null);
