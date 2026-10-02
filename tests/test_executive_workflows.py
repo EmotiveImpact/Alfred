@@ -130,6 +130,7 @@ class ResponsibleTests(Base):
         self.assertEqual(self.get(one['id'])['responsible_link'], 'entity:morgan-1')
 
     def test_forgotten_or_hidden_link_is_unavailable_and_its_name_is_withheld(self):
+        self.ref_hidden = self.ref('Morgan')
         self.memory.create_entity(self.owner, {'id': 'morgan-1', 'kind': 'person', 'name': 'Morgan Example'})
         entity = self.create('commitment', responsible='Budget owner', responsible_link='entity:morgan-1')
         note = self.create('commitment', responsible='Budget owner', responsible_link=self.ref('Morgan'))
@@ -140,6 +141,10 @@ class ResponsibleTests(Base):
         IdentityPolicy(self.store).enable(self.owner, 0)
         record = self.get(note['id'])
         self.assertEqual((record['responsible_state'], record['responsible_name']), ('unavailable', None))
+        # The label can still change while the existing link is kept; a new hidden link cannot be made.
+        kept = self.records.update(self.owner, note['id'], {'version': 1, 'responsible': 'Budget lead', 'responsible_link': record['responsible_link']})
+        self.assertEqual((kept['responsible'], kept['responsible_link'], kept['responsible_state']), ('Budget lead', record['responsible_link'], 'unavailable'))
+        self.fault('responsible_not_available', self.records.update, self.owner, entity['id'], {'version': 1, 'responsible_link': self.ref_hidden})
 
     def test_responsible_changes_are_version_checked_and_owner_only(self):
         made = self.create('commitment', responsible='Finance lead', responsible_link=self.ref('Morgan'))
@@ -295,7 +300,13 @@ class BriefTests(Base):
 
     def test_access_is_rechecked_when_the_brief_is_assembled(self):
         made = self.decision(responsible_link=self.ref('Morgan'))
-        first = json.dumps(self.records.brief(self.owner, made['id']))
+        brief = self.records.brief(self.owner, made['id'])
+        self.assertEqual([(n['role'], n['excerpt']) for n in brief['linked_notes']],
+                         [('project', 'Launch review on Friday.'), ('responsible', 'Looks after the Atlas budget.'), ('cited_support', 'Budget sign-off pending.')])
+        # Statements supported by any linked note are included, each with its own citation.
+        self.assertEqual({s['claim_id']: s['why'] for s in brief['statements']},
+                         {self.status: 'supported_by_linked_note', self.owner_claim: 'supported_by_linked_note'})
+        first = json.dumps(brief)
         self.assertIn('Launch review on Friday.', first); self.assertIn('budget sign-off pending', first)
         policy = IdentityPolicy(self.store)
         policy.enable(self.owner, 0)

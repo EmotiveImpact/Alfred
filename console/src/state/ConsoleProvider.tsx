@@ -10,6 +10,8 @@ import {useConnection,useRecordDetail} from './useConnection';
 import {useAsk} from './useAsk';
 export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|null;
 export type RailView='home'|'search'|'knowledge'|'tasks'|'research'|'systems'|'security'|'settings';
+/** Where the executive dialog should open: a tab, or one record's details or brief. Read once, then cleared. */
+export type ExecutiveTarget={view:'records'|'attention'|'insights'|'details'|'brief';id:string|null};
 export function downloadJSON(value:unknown,name:string){
   const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
   const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -24,6 +26,7 @@ function useController(){
   const[notice,setNotice]=useState(''),[renderer,setRenderer]=useState('Starting graphics');
   const[graphMode,setGraphMode]=useState<GraphMode>('field'),[activeView,setActiveView]=useState<RailView>('home');
   const[renderEpoch,setRenderEpoch]=useState(0);
+  const[executiveTarget,setExecutiveTarget]=useState<ExecutiveTarget|null>(null);
   // Lost or changed authority closes every view that could still show withdrawn material.
   const resetAsk=useRef<()=>void>(()=>{});
   // A change the person just made from the access panel keeps that panel open; it shows no records.
@@ -31,7 +34,7 @@ function useController(){
   const expectAccessChange=useCallback(()=>{expectingAccessChange.current=true;},[]);
   const onAuthorityLost=useCallback((kind:'cleared'|'changed')=>{
     const keep=kind==='changed'&&expectingAccessChange.current;expectingAccessChange.current=false;
-    setModal(m=>keep&&m==='security'?m:null);setQuery('');setProposalId(null);if(!keep)setActiveView('home');resetAsk.current();
+    setModal(m=>keep&&m==='security'?m:null);setQuery('');setProposalId(null);setExecutiveTarget(null);if(!keep)setActiveView('home');resetAsk.current();
     return keep;
   },[]);
   const live=useConnection(mode,dispatch,setNotice,onAuthorityLost);
@@ -67,6 +70,7 @@ function useController(){
   };
   const openReview=(id:string,outcome:'reviewed'|'declined'='reviewed')=>{setProposalId(id);setReviewConsent(false);setReviewOutcome(outcome);setModal('review');};
   const openCategory=(category:Category|null)=>{dispatch({type:'category',category});setModal('records');};
+  const openExecutive=(view:ExecutiveTarget['view'],id:string|null=null)=>{setExecutiveTarget({view,id});setModal('tasks');};
   const navigate=(view:RailView)=>{
     setActiveView(view);dispatch({type:'select',id:null});
     if(view==='home'){setGraphMode('field');setModal(null);return;}
@@ -99,7 +103,8 @@ function useController(){
   return{expectAccessChange,mode,connected,live,detail,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
     notice,setNotice,renderer,onStatus,graphMode,setGraphMode,activeView,navigate,systemReduced,reduced,inputRef,searchRef,
     records,relationships,shownRecords,selected,priorities,proposals,pending,projects,activeProposal,results,selectRecord,closeModal,
-    switchScope,openReview,openCategory,runCommand,resetDemo,renderEpoch,retryGraphics:()=>setRenderEpoch(n=>n+1)};
+    switchScope,openReview,openCategory,runCommand,resetDemo,renderEpoch,retryGraphics:()=>setRenderEpoch(n=>n+1),
+    executiveTarget,setExecutiveTarget,openExecutive};
 }
 export type ConsoleController=ReturnType<typeof useController>;
 const Context=createContext<ConsoleController|null>(null);

@@ -379,7 +379,9 @@ class ExecutiveRecords:
                 if link is not None:
                     if changes.get('responsible', row['responsible']) is None:
                         raise Fault('responsible_label_required')
-                    self._check_responsible(db, p, link)
+                    # A new link must be visible now; keeping an existing one never re-reveals it.
+                    if link != row['responsible_ref']:
+                        self._check_responsible(db, p, link)
                 changes['responsible_ref'] = link
             if 'snoozed_until' in body:
                 until = body['snoozed_until']
@@ -676,10 +678,14 @@ def assemble_brief(db, p, now, record, records, ctx):
         questions.append({'code': code, 'text': message, 'cite': _cite(record)})
     notes = []
     project = resolve(record['project']) if record['project'] else None
-    if project and project['origin'] == 'authored_note':
-        note = project['note']
+    person = resolve(record['responsible_link']) if record['responsible_link'] else None
+    # The record's own links: its project and an explicitly picked person, when each is a note the caller can read now.
+    for role, target in (('project', project), ('responsible', person)):
+        if not target or target['origin'] != 'authored_note':
+            continue
+        note = target['note']
         line, excerpt, truncated = _excerpt(note['body'])
-        notes.append({'role': 'project', 'state': 'current', 'note_id': note['id'], 'title': note['title'], 'path': note['path'],
+        notes.append({'role': role, 'state': 'current', 'note_id': note['id'], 'title': note['title'], 'path': note['path'],
                       'revision': note['revision'], 'sha256': note['sha256'], 'start_line': line, 'end_line': line,
                       'excerpt': excerpt, 'truncated': truncated,
                       'cite': {'note': note['id'], 'revision': note['revision'], 'lines': [line, line] if line else []}})
