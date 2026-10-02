@@ -95,6 +95,16 @@ from it, and returns a receipt that the console summarises. The person's files a
 touched. Answers withdrawn this way, or by forgetting a statement, end with a plain message
 instead of waiting.
 
+## Sync conflicts and export connectors
+
+A note with a sync conflict copy beside it shows the copy, the tool that made it and plain
+guidance; ALFRED never merges or chooses. A source lists all its conflict copies, including
+those whose original is missing. Items imported by a read-only export connector are
+labelled as unchecked export reports, not authored notes. The access panel lists export
+connectors with their freshness, item count and scopes, and shows an Import switch
+(`connector.read`) for connector sources in place of inbox writing. Imports themselves stay
+an offline command.
+
 ## Executive workflows (ATT-002, ATT-001)
 
 The executive dialog ("tasks") reads `GET /desk/executive` directly and re-reads it
@@ -151,5 +161,5 @@ device or GPU certification.
   routing and mode detection. `console/tests/jobs.test.ts` (8): job event merging, result
   reading, wording and command routing. `console/tests/pairing.test.ts` (2): pairing
   redemption and its in-memory CSRF token.
-- `tools/check_console_connected_browser.py` (85 checks): real Chromium against the
+- `tools/check_console_connected_browser.py` (92 checks): real Chromium against the
   real server and a synthetic vault. Evidence: `docs/evidence/console-connected/`.

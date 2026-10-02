@@ -40,6 +40,10 @@ export interface ProjectionNode {
   supportState?:string|null;
   responsible?:string|null;
   snoozedUntil?:number|null;
+  /** connector_export: an unchecked report from an owner-selected export file (CON-001). */
+  sourceKind?:'vault'|'connector_export';
+  /** A sync tool kept a conflict copy beside this note (MEM-014). The copy is never indexed. */
+  syncConflict?:{state:string;copies:{path:string;tool:string;detectedAt:string}[]};
 }
 export interface ProjectionEdge {
   id:string;from:string;to:string;
@@ -68,11 +72,12 @@ export interface ConnectedProjection {
     attention?:ServerAttention[];attentionCount?:number;snoozedCount?:number;derivedInsights?:ServerDerivedInsight[]};
   model?:{configured:boolean;name:string|null;allowed:boolean;tools_enabled:boolean};
   counts?:Record<string,number>;
+  syncConflicts?:{path:string;originalId:string|null;originalPath:string;state:string;tool:string;sourceId:string;detectedAt:string;basis:string}[];
   paused?:boolean;
   authorityGranted?:false;
 }
 export interface PermittedWorkspace {id:string;label:string;role:'owner'|'reader';synthetic:boolean}
-export interface NoteDetail {id:string;type:'note';label:string;kind:string;path:string;revision:string;sha256:string;indexedAt:string;lines:string[];truncated:boolean;basis:string}
+export interface NoteDetail {id:string;type:'note';label:string;kind:string;path:string;revision:string;sha256:string;indexedAt:string;lines:string[];truncated:boolean;basis:string;sourceKind?:'vault'|'connector_export'}
 export interface StatementDetail {
   id:string;version:number;state:string;usable:boolean;predicate:string;value:string|null;
   subject:{id:string;kind:string;name:string}|null;object:{id:string;kind:string;name:string}|null;

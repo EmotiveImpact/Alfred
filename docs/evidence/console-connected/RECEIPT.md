@@ -16,7 +16,7 @@ served by that server and driven in Chromium 141 (SwiftShader).
 | `python3 -m unittest discover -s tests` | 699 pass (includes 16 projection and 12 focus tests) |
 | `npm run build` and `npm test` in `console/` | build passes; 79 unit tests pass |
 | `npx playwright test` (offline demo) | 29 of 29 pass, unchanged behaviour |
-| `tools/check_console_connected_browser.py` | 85 of 85 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs, device pairing and whole-source removal); [report](browser-report.json) |
+| `tools/check_console_connected_browser.py` | 92 of 92 named checks pass (43 at the Stage A and B commit; later commits added M05 forgetting, M04 capture and inbox notes, executive records, server restart, strict grants and invitations, bounded jobs, device pairing, whole-source removal, sync conflict copies and export connectors); [report](browser-report.json) |
 | Existing seven backend browser scripts | all pass |
 
 The 43 checks include: sign-in through the real session; graph counts equal to the
@@ -48,7 +48,8 @@ errors.
 [Ask with project context](connected-ask.png), [390 px](connected-390.png),
 [server unreachable](connected-unreachable.png), [bounded jobs](connected-jobs.png),
 [pairing a device](connected-pairing.png), [device list](connected-devices.png),
-[source removed](connected-source-removed.png).
+[source removed](connected-source-removed.png), [sync conflict](connected-sync-conflict.png),
+[export connectors](connected-connectors.png).
 Captured from the running console, not generated.
 
 ## Bounded jobs (added after the Stage A and B commit)
@@ -85,3 +86,14 @@ source in the inspector, asks to remove it, must tick explicit consent, and conf
 receipt summary appears, the view drops to zero records, the synthetic files on disk are
 still there, and the removal is in the lifecycle journal. The first page is closed before
 this scenario so that two software-rendered scenes do not compete for the CPU.
+
+## Sync conflict copies and export connectors (added later on 2 October)
+
+The fresh workspace also holds a Syncthing conflict copy beside a synthetic note and one
+imported calendar export (explicit grants, `connector.read` and `read` for its owner). The
+graph counts 23 records: the copy is not a record. The note's inspector names the copy and
+the tool, and says ALFRED never merges or chooses; the source inspector lists the copy as
+beside its original. The imported event is labelled as an unchecked export report rather
+than an authored note. The access panel shows the connector, its freshness and item count,
+and an Import switch for that source in place of inbox writing. Removing the vault source
+then leaves the connector's two records.

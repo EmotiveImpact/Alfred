@@ -36,6 +36,13 @@ def _iso(seconds):
     return datetime.fromtimestamp(seconds, timezone.utc).isoformat().replace('+00:00', 'Z')
 
 
+def _connector_sources(db, scope):
+    """Sources created by a read-only export connector (CON-001), if any exist."""
+    if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='connector_instances'").fetchone():
+        return set()
+    return {r[0] for r in db.execute('SELECT source FROM connector_instances WHERE scope=?', (scope,))}
+
+
 def grant_revision(db, p, now):
     """Changes whenever this bearer's effective read authority could change."""
     policy = db.execute('SELECT strict,epoch FROM source_policy WHERE scope=?', (p['scope'],)).fetchone()
@@ -135,8 +142,10 @@ def projection(server, bearer):
     with store.transaction() as db:
         q = store.authenticate(db, bearer, {'owner', 'reader'})
         writable = {s for s in sources if q['role'] == 'owner' and permitted(db, q, s, store.now(), 'inbox.write')}
+        imported = _connector_sources(db, scope)
     for s in knowledge['sources']:
-        nodes.append({'id': 'source:' + s['source'], 'label': s['label'], 'type': 'source', 'kind': 'vault',
+        nodes.append({'id': 'source:' + s['source'], 'label': s['label'], 'type': 'source',
+                      'kind': 'connector_export' if s['source'] in imported else 'vault',
                       'category': 'sources', 'origin': 'source', 'workspaceId': scope,
                       'availability': SOURCE_AVAILABILITY.get(s['status'], 'unavailable'),
                       'summary': {'ready': 'Selected source, last scan complete.',
@@ -150,6 +159,8 @@ def projection(server, bearer):
                       'workspaceId': scope, 'availability': 'current', 'summary': _summary(bodies[n['id']]),
                       'path': n['path'], 'revision': str(n['revision']), 'sha256': n['sha256'],
                       'sourceId': 'source:' + n['source'], 'updatedAt': _iso(n['indexed']),
+                      # An imported export item is an unchecked report from that export, not an authored note.
+                      'sourceKind': 'connector_export' if n['source'] in imported else 'vault',
                       'evidence': [{'sourceId': 'note:' + n['id'], 'revision': str(n['revision']), 'sha256': n['sha256'],
                                     'location': {'kind': 'lines', 'start': 1, 'end': max(1, len(bodies[n['id']].splitlines()))},
                                     'basis': 'authored', 'availability': 'current'}]})
@@ -301,7 +312,10 @@ def record(server, bearer, identity):
                 raise
             raise Fault('record_not_available', 404) from None
         lines = note['body'].splitlines()
-        return {'id': identity, 'type': 'note', 'origin': 'authored_note', 'workspaceId': p['scope'],
+        with store.transaction() as db:
+            row = db.execute('SELECT source FROM knowledge_notes WHERE scope=? AND id=?', (p['scope'], key)).fetchone()
+            source_kind = 'connector_export' if row and row['source'] in _connector_sources(db, p['scope']) else 'vault'
+        return {'id': identity, 'type': 'note', 'origin': 'authored_note', 'workspaceId': p['scope'], 'sourceKind': source_kind,
                 'label': note['title'], 'kind': note['kind'], 'path': note['path'], 'revision': str(note['revision']),
                 'sha256': note['sha256'], 'indexedAt': _iso(note['indexed']), 'lines': lines[:400],
                 'truncated': len(lines) > 400, 'basis': note['basis'], 'grantRevision': revision,

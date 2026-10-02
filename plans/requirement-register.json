@@ -459,13 +459,14 @@
     "tests/test_placement.py",
     "tools/check_sync_conflict_browser.py",
     "docs/SYNC.md",
-    "docs/evidence/memory-m14/RECEIPT.md"
+    "docs/evidence/memory-m14/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Syncthing, Dropbox and Nextcloud/ownCloud conflict copies are recognised by exact name, recorded beside their originals, kept out of the index and surfaced in the knowledge view and console projection; init, serve and restore refuse a data directory in a recognised sync folder, Git working tree or vault (marker detection only, no override); docs/SYNC.md separates the four kinds of sync. Missing: OneDrive, iCloud, Obsidian Sync and Git conflicts, network filesystem detection, conflict display in the console interface, acceptance with real sync clients."
+   "notes": "Syncthing, Dropbox and Nextcloud/ownCloud conflict copies are recognised by exact name, recorded beside their originals, kept out of the index and surfaced in the knowledge view, the console projection and the console inspector; init, serve and restore refuse a data directory in a recognised sync folder, Git working tree or vault (marker detection only, no override); docs/SYNC.md separates the four kinds of sync. Missing: OneDrive, iCloud, Obsidian Sync and Git conflicts, network filesystem detection, acceptance with real sync clients."
   },
   {
    "id": "MEM-015",
@@ -717,13 +718,14 @@
     "tests/test_connectors.py",
     "tests/test_connector_formats.py",
     "docs/CONNECTORS.md",
-    "docs/evidence/connectors/RECEIPT.md"
+    "docs/evidence/connectors/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Read-only contract and owner-selected .ics and .vcf export importers through the unchanged note pipeline; explicit connector.read to import; least-access scopes; freshness through GET /desk/connectors and the connectors command. No live account, device, mail, token or write at any origin; imported items still carry the authored-note label.",
+   "notes": "Read-only contract and owner-selected .ics and .vcf export importers through the unchanged note pipeline; explicit connector.read to import; least-access scopes; freshness through GET /desk/connectors, the connectors command and the console access panel, which also offers the connector.read switch; imported items are labelled as unchecked export reports. No live account, device, mail, token or write at any origin.",
    "owner_decision_needed": "Which account (provider) for the first read-only test connector, and a synthetic test account."
   },
   {

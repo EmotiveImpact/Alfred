@@ -1,5 +1,5 @@
 {
-  "passed": 85,
+  "passed": 92,
   "checks": [
     "console is served by the ALFRED origin",
     "signed-out view shows no fixture records",
@@ -79,8 +79,15 @@
     "redeeming an invitation grants exactly what it names to the person who redeems it",
     "a read grant makes the job history for that source visible",
     "a reader can inspect the note but cannot submit jobs",
+    "the conflict copy is not a record: 20 notes, 2 sources, 1 imported item",
+    "the note shows its sync conflict copy and the tool that made it",
+    "an imported calendar item is labelled as an unchecked export report, not an authored note",
+    "the access panel shows the connector, its freshness and item count",
+    "the owner sees the import grant as its own switch",
+    "a connector source offers no inbox writing",
+    "the source lists its conflict copies",
     "removing a source needs explicit consent",
-    "removing a source clears its records from the console with a receipt",
+    "removing a source clears its records, leaving the other source, with a receipt",
     "the person's own files are untouched",
     "the removal is journalled for restore",
     "no Content Security Policy violations",
@@ -90,6 +97,7 @@
   "browser_console": [
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
     "error: Failed to load resource: net::ERR_CONNECTION_REFUSED",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
     "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",

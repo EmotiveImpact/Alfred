@@ -633,6 +633,18 @@ class ConsoleHTTPTests(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertIn('Imported calendar event: a report of what the selected export contained, not checked against the calendar itself.', record['lines'])
 
+    def test_imported_items_are_labelled_as_export_reports_not_authored_notes(self):
+        self.login('owner')
+        nodes = {n['id']: n for n in self.get('owner', '/desk/console/projection')[1]['nodes']}
+        imported = [n for n in nodes.values() if n.get('sourceId') == 'source:' + self.source]
+        vault = [n for n in nodes.values() if n.get('sourceId') == 'source:demo-source']
+        self.assertEqual({n['sourceKind'] for n in imported}, {'connector_export'})
+        self.assertEqual({n['sourceKind'] for n in vault}, {'vault'})
+        self.assertEqual((nodes['source:' + self.source]['kind'], nodes['source:demo-source']['kind']), ('connector_export', 'vault'))
+        record = self.get('owner', '/desk/console/records/' + imported[0]['id'])[1]
+        self.assertEqual(record['sourceKind'], 'connector_export')
+        self.assertEqual(self.get('owner', '/desk/console/records/' + vault[0]['id'])[1]['sourceKind'], 'vault')
+
     def test_status_route_needs_a_session_filters_readers_and_cannot_change_anything(self):
         self.assertEqual(self.get('nobody', '/desk/connectors')[0], 401)
         self.login('owner')

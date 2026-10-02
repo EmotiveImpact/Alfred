@@ -22,6 +22,7 @@ export function toSnapshot(projection:ConnectedProjection,expectedWorkspace:stri
     id:node.id,title:node.label,kind:KIND[node.type]??'note',category:category(node),scope:w,
     summary:node.summary??'',detail:node.summary??'',status:node.status??node.availability??'current',execKind:node.origin==='executive_record'?node.kind:undefined,due:node.due,responsible:node.responsible??undefined,
     origin:node.origin,availability:node.availability,path:node.path,sha256:node.sha256,sourceId:node.sourceId,inboxWritable:node.inboxWritable,
+    sourceKind:node.sourceKind,syncConflict:node.syncConflict?{copies:node.syncConflict.copies.map(c=>({path:c.path,tool:c.tool,detectedAt:c.detectedAt}))}:undefined,
     provenance:{id:node.evidence[0]?.sourceId??node.id,label:node.path??(node.origin?ORIGIN_LABEL[node.origin]:node.label),
       revision:node.revision??'',basis:node.origin==='reviewed_entity'?'human_review':node.origin==='source'?'source_status':'authored',excerpt:node.summary??''}}));
   const ex=projection.executive;
@@ -41,6 +42,7 @@ export function toSnapshot(projection:ConnectedProjection,expectedWorkspace:stri
   const derivedInsights=(ex?.derivedInsights??[]).map(i=>({rule:i.rule,statement:i.statement,recordIds:i.recordIds.filter(id=>names.has(id))})).filter(i=>i.recordIds.length);
   return {schemaVersion:1,mode:'connected',label:'ALFRED workspace',records,relationships,priorities,proposals,workspaceId:w,recommendations,milestones,
     attention,attentionCount:ex?.attentionCount??attention.length,snoozedCount:ex?.snoozedCount??0,derivedInsights,
+    syncConflicts:(projection.syncConflicts??[]).map(c=>({path:c.path,originalId:c.originalId&&names.has(c.originalId)?c.originalId:null,originalPath:c.originalPath,state:c.state,tool:c.tool,sourceId:c.sourceId,detectedAt:c.detectedAt})),
     dataRevision:projection.dataRevision,grantRevision:projection.grantRevision,observedAt:projection.observedAt,insights,
     model:projection.model?{configured:projection.model.configured,name:projection.model.name,allowed:projection.model.allowed}:{configured:false,name:null,allowed:false}};
 }
