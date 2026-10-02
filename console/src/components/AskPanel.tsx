@@ -1,5 +1,6 @@
 import {useState} from 'react';
 import {AnswerSupport} from './AnswerSupport';
+import {ReadAloud} from './ReadAloud';
 import {ArrowRight,Crosshair,FileText,WarningCircle} from '@phosphor-icons/react';
 import {useConsole} from '../state/ConsoleProvider';
 import {DeskError} from '../integration/deskClient';
@@ -33,6 +34,7 @@ export function AskPanel(){
     {packet&&<>
       {packet.focus&&packet.focus.available===false&&<p className="dialog-note">The selected record has since been withdrawn.</p>}
       <AnswerSupport report={result!.support}/>
+      {turn&&<ReadAloud key={turn.id} turnId={turn.id} question={packet.question} evidence={packet.evidence} memory={packet.memory}/>}
       {result!.claims.length>0&&<section className="ask-section"><h3>Model interpretation</h3><p className="dialog-note">Citations are checked against the supplied lines. That checks reference integrity, not truth.</p>{result!.claims.map((claim,i)=><div className="statement" key={i}><p>{claim.text}</p><small>{claim.citations.map(ci=>`${ci.source_id} ${ci.start_line}–${ci.end_line}`).join(' · ')}</small></div>)}</section>}
       {result!.status==='model_abstained'&&<p className="dialog-note">The model abstained. The sources below are shown unchanged.</p>}
       {packet.memory.length>0&&<section className="ask-section"><h3>Your reviewed statements</h3>{packet.memory.map(m=><div className="statement usable" key={m.claim_id}><p><strong>{m.subject.name}</strong> {m.predicate.replaceAll('_',' ')} {m.value??m.object?.name}</p><small>Your judgement, supported by {m.support.source_id} · not a verified fact</small></div>)}</section>}

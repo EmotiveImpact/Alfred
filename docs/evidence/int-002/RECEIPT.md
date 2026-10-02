@@ -12,8 +12,8 @@ Every answer from the conversation queue now carries a support report
 supports this answer":
 
 - which of the current question's own words were found in the excerpts and reviewed
-  statements about to be shown (a shown word starting with the asked word), and which were
-  not found;
+  statements about to be shown (a shown word starting with the asked word, or with its stem
+  after one common English ending is removed), and which were not found;
 - how many excerpts, from how many notes, and how they were retrieved;
 - reviewed statements used, and reviewed statements about the subjects asked about that were
   withheld, counted by reason (conflicting, disputed, support unavailable, needing a fresh
@@ -27,14 +27,14 @@ completeness. It never changes what the answer contains.
 
 ## Evaluation with denominators
 
-`tools/evaluate_answers.py` asks 12 fixed, invented questions through the real conversation
+`tools/evaluate_answers.py` asks 13 fixed, invented questions through the real conversation
 queue over a fixed, invented vault with reviewed statements, then scores each support report
 against the expectation written in the tool. Expectations are applied only after every
 answer exists. Results: [report.json](report.json).
 
 | Category | Cases | Passed |
 |---|---|---|
-| found | 2 | 2 |
+| found | 3 | 3 |
 | missing | 2 | 2 |
 | conflict | 1 | 1 |
 | disputed | 1 | 1 |
@@ -43,9 +43,9 @@ answer exists. Results: [report.json](report.json).
 | access (a restricted source never leaks) | 1 | 1 |
 | context (follow-ups) | 2 | 2 |
 | limitation | 1 | 1 |
-| **Total** | **12** | **12** |
+| **Total** | **13** | **13** |
 
-Across the 12 questions, 27 words were asked, 14 found and 13 not found.
+Across the 13 questions, 29 words were asked, 16 found and 13 not found.
 
 **Failed cases on the first run, now fixed.** The first version of the report failed 2 of
 the 12 cases, and both were real defects:
@@ -59,6 +59,8 @@ the 12 cases, and both were real defects:
 
 Both have regression tests in `tests/test_answer_support.py`.
 
+**Later refinement.** A light stem rule (one common ending removed, at least four letters kept) now finds "confirming" against "confirmation" and "pausing" against "paused"; case `found-3` covers it.
+
 **Published limitation.** "How much does Atlas cost?" reports "cost" as not found although
 the note gives a price: a different word is a different word to these checks. That is
 correct for literal coverage and would mislead if read as understanding.
@@ -68,7 +70,7 @@ correct for literal coverage and would mislead if read as understanding.
 | Command | Result |
 |---|---|
 | `python3 -m unittest discover -s tests` | passes, including `tests/test_answer_support.py` (7) and `tests/test_answer_evaluation.py` (1) |
-| `python3 tools/evaluate_answers.py --output docs/evidence/int-002/report.json` | 12 of 12 cases pass |
+| `python3 tools/evaluate_answers.py --output docs/evidence/int-002/report.json` | 13 of 13 cases pass |
 | `cd console && npm run build && npm test` | build passes; 110 unit tests, including `tests/answer-support.test.ts` (4) |
 | `tools/check_console_connected_browser.py` | 94 checks pass, including the support block on a real answer and a word the sources do not contain ([screenshot](../console-connected/connected-answer-support.png)) |
 

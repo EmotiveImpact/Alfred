@@ -88,6 +88,8 @@ class DeskHTTPServer(HTTPServer):
         self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
         from .executive import ExecutiveRecords
         self.executive = ExecutiveRecords(store) if hasattr(store, 'knowledge') else None
+        from .voice import VoiceLog
+        self.voice = VoiceLog(store) if hasattr(store, 'knowledge') else None
         self.conversations = ConversationService(store, local_model, supervisor.scope) if hasattr(store, 'knowledge') else None
         self.pulse = Pulse(store, supervisor) if hasattr(store, 'knowledge') and hasattr(supervisor, 'owner') else None
         if self.pulse is not None: supervisor.pulse = self.pulse
@@ -397,6 +399,19 @@ class Handler(BaseHTTPRequestHandler):
                     from .lifecycle import receipts
                     result = receipts(store,bearer)
                 else: raise Fault('not_found',404)
+            elif url.path.startswith('/desk/voice/playbacks') and not url.query:
+                # VOI-001 playback records only. No route here accepts audio or requests a microphone.
+                voice, rest = self.server.voice, url.path[len('/desk/voice/playbacks'):]
+                if mutation and rest == '':
+                    result = voice.generated(bearer, body)
+                elif mutation and re.fullmatch(r'/voice-[0-9a-f]{20}/report', rest):
+                    result = voice.report(bearer, rest.split('/')[1], body)
+                elif mutation and re.fullmatch(r'/voice-[0-9a-f]{20}/acknowledge', rest):
+                    result = voice.acknowledge(bearer, rest.split('/')[1], body)
+                elif not mutation and re.fullmatch(r'/turn/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}', rest):
+                    result = voice.history(bearer, rest.split('/')[2])
+                else:
+                    raise Fault('not_found', 404)
             elif mutation and re.fullmatch(r'/desk/sources/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget', url.path):
                 # Removes the source from ALFRED, never the person's own files.
                 exact(body, {'confirm'})

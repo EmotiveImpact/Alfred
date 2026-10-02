@@ -41,6 +41,7 @@ RESTRICTED = {'Vault Room.md': '# Vault Room\nThe Zephyr code word lives here.\n
 CASES = [
     ('found-1', 'found', 'When does Harbour open?', False, {'status': 'all_words_found'}),
     ('found-2', 'found', 'Who leads Harbour?', False, {'found_includes': ['harbour']}),
+    ('found-3', 'found', 'Is Lantern pausing?', False, {'found_includes': ['lantern', 'pausing']}),
     ('missing-1', 'missing', 'What is the Harbour budget?', False, {'not_found_includes': ['budget'], 'status': 'partly_covered'}),
     ('missing-2', 'missing', 'Which supplier delivers the turbines?', False, {'status': 'nothing_found'}),
     ('conflict-1', 'conflict', 'What is the Atlas status?', False, {'withheld': {'conflicting': 2}, 'statements_used': 0}),

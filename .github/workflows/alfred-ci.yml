@@ -150,6 +150,10 @@ jobs:
         run: |
           set -euo pipefail
           ALFRED_EXECUTIVE_OUTPUT=/tmp/alfred-console-connected/executive /tmp/alfred-browser/bin/python tools/check_executive_browser.py
+      - name: Browser acceptance of read-aloud states (output only, scripted synthesiser)
+        run: |
+          set -euo pipefail
+          ALFRED_VOICE_OUTPUT=/tmp/alfred-console-connected/voice /tmp/alfred-browser/bin/python tools/check_voice_browser.py
       - name: Browser acceptance of sync conflict handling in the web interface
         run: |
           set -euo pipefail

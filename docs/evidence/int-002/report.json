@@ -80,6 +80,45 @@
    "failed_checks": []
   },
   {
+   "id": "found-3",
+   "category": "found",
+   "question": "Is Lantern pausing?",
+   "follow_up": false,
+   "expected": {
+    "found_includes": [
+     "lantern",
+     "pausing"
+    ]
+   },
+   "observed": {
+    "status": "all_words_found",
+    "words": {
+     "asked": [
+      "lantern",
+      "pausing"
+     ],
+     "found": [
+      "lantern",
+      "pausing"
+     ],
+     "not_found": []
+    },
+    "reviewed_statements": {
+     "used": 0,
+     "withheld": {
+      "needs_fresh_review": 1
+     },
+     "ambiguous_names": []
+    },
+    "context": {
+     "earlier_questions": 0,
+     "selected_record": false
+    }
+   },
+   "passed": true,
+   "failed_checks": []
+  },
+  {
    "id": "missing-1",
    "category": "missing",
    "question": "What is the Harbour budget?",
@@ -467,8 +506,8 @@
   }
  ],
  "denominators": {
-  "cases": 12,
-  "passed": 12,
+  "cases": 13,
+  "passed": 13,
   "failed": 0,
   "by_category": {
    "access": {
@@ -492,8 +531,8 @@
     "passed": 1
    },
    "found": {
-    "cases": 2,
-    "passed": 2
+    "cases": 3,
+    "passed": 3
    },
    "limitation": {
     "cases": 1,
@@ -509,8 +548,8 @@
    }
   },
   "words": {
-   "asked": 27,
-   "found": 14,
+   "asked": 29,
+   "found": 16,
    "not_found": 13
   }
  },

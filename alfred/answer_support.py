@@ -17,9 +17,20 @@ import re
 
 VERSION = 1
 BASIS = 'deterministic_term_coverage_not_truth_or_entailment'
-LIMITS = ('Counts and word matches only (a shown word starting with the asked word). A found word is '
+LIMITS = ('Counts and word matches only (a shown word starting with the asked word or its stem). A found word is '
           'not an answer, a word that is not found may be phrased differently in your notes, and contradictions inside note text '
           'are not detected; only conflicting reviewed statements are.')
+
+
+ENDINGS = ('ations', 'ation', 'ments', 'ment', 'ings', 'ing', 'ies', 'ied', 'ed', 'es', 's')
+
+
+def _stem(word):
+    """Remove one common ending, keeping at least four letters. Not a full stemmer."""
+    for ending in ENDINGS:
+        if word.endswith(ending) and len(word) - len(ending) >= 4:
+            return word[:-len(ending)]
+    return word
 
 
 def _words(text):
@@ -36,9 +47,9 @@ def assess(packet, result, asked):
             if isinstance(part, dict):
                 shown |= _words(part.get('name') or '')
         shown |= _words((statement.get('predicate') or '').replace('_', ' ') + ' ' + (statement.get('value') or ''))
-    # A word counts as found when a shown word starts with it ("open" finds "opens"),
-    # close to retrieval's own substring matching without matching inside other words.
-    found = [t for t in asked if any(w.startswith(t) for w in shown)]
+    # A word counts as found when a shown word starts with it ("open" finds "opens") or with
+    # its stem after a common English ending is removed ("confirming" finds "confirmation").
+    found = [t for t in asked if any(w.startswith(t) or w.startswith(_stem(t)) for w in shown)]
     missing = [t for t in asked if t not in found]
     withheld = dict(packet.get('memory_withheld') or {})
     review = result.get('evidence_review') or {}

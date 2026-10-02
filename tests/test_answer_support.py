@@ -33,8 +33,9 @@ class AssessTests(unittest.TestCase):
 
     def test_inflected_words_count_as_found_but_words_inside_other_words_do_not(self):
         # Found by the evaluation: "open" must find "opens", as retrieval already does.
-        report = assess(packet([excerpt('n1', 'Harbour', 'Harbour opens in spring.')]), {'model_used': False}, ['harbour', 'open', 'ring'])
-        self.assertEqual((report['words']['found'], report['words']['not_found']), (['harbour', 'open'], ['ring']))
+        report = assess(packet([excerpt('n1', 'Harbour', 'Harbour opens in spring. Confirmation pending.')]), {'model_used': False},
+                        ['harbour', 'open', 'ring', 'confirming', 'sting'])
+        self.assertEqual((report['words']['found'], report['words']['not_found']), (['harbour', 'open', 'confirming'], ['ring', 'sting']))
 
     def test_reviewed_statements_count_as_shown_and_withheld_ones_are_only_counted(self):
         statement = {'subject': {'name': 'Atlas'}, 'object': None, 'predicate': 'budget_status', 'value': 'approved'}

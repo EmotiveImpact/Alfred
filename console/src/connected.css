@@ -115,3 +115,11 @@ button.access-chip:hover:not(:disabled){border-color:#d7b37566}
 .answer-support p{margin:0 0 6px;font-size:12px;color:#d9dedc}
 .answer-support ul{margin:0 0 6px;padding-left:16px;font-size:11px;line-height:1.7;color:#b9c2c2}
 .answer-support small{font-size:10px;line-height:1.6;color:var(--quiet)}
+/* Read aloud: output only, states in plain words. */
+.read-aloud{margin-top:10px}
+.read-aloud .button-row{margin-top:0;gap:14px}
+.read-aloud .text-button{display:inline-flex;align-items:center;gap:6px}
+.voice-state{margin:6px 0 0;font-size:11px;line-height:1.6;color:#b9c2c2}
+.voice-state.played,.voice-state.no_local_voice,.voice-state.failed{color:var(--amber)}
+.spoken-text summary{font-size:11px;color:var(--quiet);cursor:pointer;margin-top:6px}
+.spoken-text p{font-size:12px;line-height:1.7;color:#c9cfcd;margin:6px 0 0}
