@@ -1,5 +1,12 @@
 # ALFRED unified build handoff
 
+**Latest handoff, 1 October 2026:** read
+[MASTER_HANDOFF_2026-10-01.md](docs/MASTER_HANDOFF_2026-10-01.md) first. The
+memory-programme checkpoint preserves paused partial M02/M06 changes on a
+separate branch; it does not complete all M jobs or replace the whole-product
+roadmap. Main and draft PRs #15/#16 remain unchanged. The older dated sections
+below retain their historical context.
+
 27 September 2026. Product category: **operational and executive intelligence**.
 
 ## Start from main

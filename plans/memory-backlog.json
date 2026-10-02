@@ -28,7 +28,9 @@
     "docs/CONSOLIDATION_2026-09-27.md",
     "third_party/library/README.md",
     "docs/evidence/memory-m01/RECEIPT.md",
-    "docs/evidence/memory-m03/RECEIPT.md"
+    "docs/evidence/memory-m03/RECEIPT.md",
+    "docs/MASTER_HANDOFF_2026-10-01.md",
+    "docs/evidence/memory-programme-wip/RECEIPT.md"
   ],
   "jobs": [
     {
@@ -69,7 +71,7 @@
     {
       "id": "M02",
       "title": "Person/device identity and source/capability grants",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [],
       "requirements": [
         "SYS-001",
@@ -87,6 +89,15 @@
         "Credential rotation and explicit person linking do not merge distinct users",
         "Permission filtering happens before ranking, traversal and egress",
         "Mid-request revocation prevents disallowed result persistence/display"
+      ],
+      "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
+      "evidence": [
+        "tests/test_memory_programme_wip.py",
+        "docs/evidence/memory-programme-wip/RECEIPT.md"
+      ],
+      "limitations": [
+        "Incomplete enrolment/recovery and administrative/HTTP workflows; device review histories remain separate",
+        "Full access-loss, persistence/display and lifecycle acceptance unfinished; legacy scope policy remains default"
       ]
     },
     {
@@ -193,7 +204,7 @@
     {
       "id": "M06",
       "title": "Lexical baseline and deterministic retrieval evaluation",
-      "status": "planned",
+      "status": "in_progress",
       "depends_on": [
         "M01",
         "M03"
@@ -217,6 +228,15 @@
         "Compare current ranking with FTS5 on identical invented support-labelled queries",
         "Report recall, irrelevant context, latency and permission leakage separately",
         "Keep answer keys outside request context; no new model experiment implied"
+      ],
+      "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
+      "evidence": [
+        "tests/test_memory_programme_wip.py",
+        "docs/evidence/memory-programme-wip/RECEIPT.md"
+      ],
+      "limitations": [
+        "Authorised-subset FTS5 code and synthetic filtering checks only",
+        "Support-labelled current-versus-FTS comparison, recall/irrelevance/latency/leakage report not yet implemented"
       ]
     },
     {

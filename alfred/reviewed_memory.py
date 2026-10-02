@@ -76,7 +76,7 @@ class ReviewedMemory:
         return dict(row)
 
     @staticmethod
-    def _source(db, scope, ref, now):
+    def _source(db, scope, ref, now, principal=None):
         """Read and check current indexed source in the caller's transaction."""
         exact(ref, {'note_id', 'sha256', 'revision', 'start_line', 'end_line'})
         ident(ref['note_id'])
@@ -93,7 +93,8 @@ class ReviewedMemory:
           WHERE n.scope=? AND n.id=? AND n.status='ready' AND s.status IN ('ready','attention')
           AND c.role='source' AND c.revoked=0 AND c.expires>?''',
           (scope, ref['note_id'], now)).fetchone()
-        if not n or n['sha256'] != ref['sha256'] or n['revision'] != ref['revision']:
+        from .policy import permitted
+        if not n or (principal is not None and not permitted(db,principal,n['source'],now)) or n['sha256'] != ref['sha256'] or n['revision'] != ref['revision']:
             raise Fault('memory_source_changed', 409)
         lines = n['body'].splitlines()
         if last > len(lines):
@@ -115,7 +116,7 @@ class ReviewedMemory:
                               (p['scope'], p['id'])).fetchall():
             c=dict(row)
             try:
-                source=self._source(db,p['scope'],self._ref(c),self.store.now())
+                source=self._source(db,p['scope'],self._ref(c),self.store.now(),p)
                 valid=source['quote_hash']==c['quote_hash']
             except Fault:
                 valid=False
@@ -171,7 +172,7 @@ class ReviewedMemory:
                 other=self._entity(db,p,body['object_id'])
                 if other['kind'] not in relation['objects']:raise Fault('memory_object_kind')
                 if body['subject_id']==body['object_id']:raise Fault('memory_self_relation')
-            source=self._source(db,p['scope'],body['evidence'],self.store.now())
+            source=self._source(db,p['scope'],body['evidence'],self.store.now(),p)
             if db.execute('SELECT count(*) FROM memory_claims WHERE actor=?',(p['id'],)).fetchone()[0]>=MAX_CLAIMS:
                 raise Fault('memory_claim_capacity',409)
             cid='claim-'+secrets.token_hex(12)
@@ -195,7 +196,7 @@ class ReviewedMemory:
             if c['state']=='invalidated':raise Fault('memory_source_changed',409)
             if c['version']!=body['version']:raise Fault('memory_review_changed',409)
             if c['state'] not in ('proposed','accepted','disputed'):raise Fault('memory_review_closed',409)
-            self._source(db,p['scope'],self._ref(c),self.store.now())
+            self._source(db,p['scope'],self._ref(c),self.store.now(),p)
             replacement=c['replaces_id']
             if body['decision']=='supersede':
                 if c['replaces_id'] is not None:raise Fault('memory_replacement_already_recorded',409)
@@ -224,7 +225,7 @@ class ReviewedMemory:
             c['source']=None
             if c['state']!='invalidated' and (c['value'] is not None or c['object_id'] is not None):
                 try:
-                    source=cls._source(db,p['scope'],cls._ref(c),now)
+                    source=cls._source(db,p['scope'],cls._ref(c),now,p)
                     if source['quote_hash']==c['quote_hash']:c['source']=source
                 except Fault:pass
             c['valid_now']=(c['valid_from'] is None or c['valid_from']<=now) and (c['valid_until'] is None or c['valid_until']>now)

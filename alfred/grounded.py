@@ -54,13 +54,13 @@ def excerpt(note, terms, remaining):
     return {'start_line': start + 1, 'end_line': start + len(chosen), 'excerpt': '\n'.join(chosen)}
 
 
-def retrieve(store, bearer, question):
+def retrieve(store, bearer, question, *, purpose='read', ranking='keywords'):
     terms = question_terms(question)
-    graph = store.knowledge(bearer)
+    graph = store.knowledge(bearer, purpose=purpose)
     ranked, notes, skipped = [], {}, []
     for meta in graph['nodes']:
         try:
-            note = store.knowledge_note(bearer, meta['id'])
+            note = store.knowledge_note(bearer, meta['id'], purpose=purpose)
         except Fault:
             skipped.append({'note_id': meta['id'], 'reason': 'source_unavailable'})
             continue
@@ -75,6 +75,11 @@ def retrieve(store, bearer, question):
         if matched:
             ranked.append((score, meta['path'], meta['id']))
     ranked.sort(key=lambda x: (-x[0], x[1], x[2]))
+    if ranking == 'fts5':
+        from .retrieval import fts_rank
+        ranked = fts_rank(notes, terms)
+    elif ranking != 'keywords':
+        raise Fault('unsupported_ranking')
     seeds = [r[2] for r in ranked[:3]]
     selection = [(identity, 'keyword_match', None) for identity in seeds]
     # Follow only explicit graph edges from retrieved notes. A link supplies context,
@@ -143,6 +148,7 @@ def retrieve(store, bearer, question):
     # one has no usable statement or falls outside the bounded context selection.
     ambiguities=context_ambiguities(entities,memory)
     return {'question': question.strip(), 'scope': graph['scope'], 'indexed_at': graph['now'],
+            'purpose':purpose, 'ranking':ranking,
             'terms': terms, 'evidence': evidence, 'skipped': skipped[:32],
             'memory':memory, 'memory_ambiguities':ambiguities,
             'memory_basis':'user_reviewed_statements_not_verified_facts', 'authority_granted':False,
@@ -174,7 +180,7 @@ def check_sources(store, bearer, references, memory_references=None, memory_ambi
             problems.append({'note_id': ref['note_id'], 'reason': 'source_changed'})
     with store.transaction() as db:
         p=store.authenticate(db,bearer,{'owner','reader'})
-        if not sources_current_db(db,p['scope'],references,store.now()) and not problems:
+        if not sources_current_db(db,p['scope'],references,store.now(),p) and not problems:
             problems.append({'reason':'source_changed'})
         current=context_current_db(db,p,memory_references if memory_references is not None else [],store.now())
         if current is None or (memory_ambiguities is not None and not ambiguities_current_db(db,p,current,memory_ambiguities)):
@@ -182,21 +188,23 @@ def check_sources(store, bearer, references, memory_references=None, memory_ambi
     return {'current_index_match': not problems, 'problems': problems, 'indexed_snapshot_only': True}
 
 
-def sources_current_db(db, scope, refs, now):
+def sources_current_db(db, scope, refs, now, principal=None, purpose='read'):
     """Current source bindings, in the transaction that decides to use them."""
     if type(refs) is not list or len(refs)>MAX_SOURCES:return False
     for ref in refs:
-        row=db.execute('''SELECT n.sha256,n.revision FROM knowledge_notes n
+        row=db.execute('''SELECT n.sha256,n.revision,n.source FROM knowledge_notes n
           JOIN credentials c ON c.id=n.source AND c.scope=n.scope
           JOIN knowledge_sources s ON s.source=n.source AND s.scope=n.scope
           WHERE n.scope=? AND n.id=? AND n.status='ready' AND c.role='source' AND c.revoked=0
           AND c.expires>? AND s.status IN ('ready','attention')''',(scope,ref['note_id'],now)).fetchone()
         if not row or (row['sha256'],row['revision'])!=(ref['sha256'],ref['revision']):return False
+        from .policy import permitted
+        if principal is not None and not permitted(db,principal,row['source'],now,purpose):return False
     return True
 
 
 def packet_current_db(store, db, p, packet):
-    if p['scope']!=packet['scope'] or not sources_current_db(db,p['scope'],references(packet),store.now()):return False
+    if p['scope']!=packet['scope'] or not sources_current_db(db,p['scope'],references(packet),store.now(),p,packet.get('purpose','read')):return False
     current=context_current_db(db,p,context_references(packet),store.now())
     return current is not None and ambiguities_current_db(db,p,current,packet.get('memory_ambiguities',[]))
 
@@ -282,7 +290,7 @@ def ask(store, bearer, body, provider=None, provider_scope=None):
             raise Fault('model_workspace_not_authorised', 403)
         if store.paused(principal['scope']):
             raise Fault('model_processing_paused', 409)
-    packet = retrieve(store, bearer, body['question'])
+    packet = retrieve(store, bearer, body['question'], purpose='model' if use_model else 'read')
     result = {'packet': packet, 'mode': body['mode'], 'status': 'sources_found' if packet['evidence'] else 'no_sources',
               'claims': [], 'model_used': False, 'content_sent_to_model': False, 'model': None,
               'citation_integrity': 'indexed_source_lines_and_hashes', 'semantic_entailment_verified': False,

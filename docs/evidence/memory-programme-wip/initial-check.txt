@@ -1,0 +1,12 @@
+Initial WIP checkpoint check, 1 October 2026:
+Command: python3 -m unittest discover -s tests -v
+Result: Ran 663 tests in 6.923s; FAILED (errors=467).
+Representative error: sqlite3.OperationalError: no such table: identity_devices
+Cause: DeskStore has its own initialisation path and does not call LocalCore.__init__.
+Correction before publishing: initialise the policy schema in DeskStore too.
+The later local-tests.txt contains the complete rerun. This failed result is not
+represented as passing or as a completed M02 acceptance check.
+
+Second check: Ran 663 tests in 17.056s; FAILED (errors=2).
+Cause: two M03 race-injection wrappers did not forward new retrieval keyword arguments.
+Correction: wrappers forward **kwargs; their original stale-review assertions remain unchanged.

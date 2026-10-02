@@ -267,8 +267,8 @@ class ContextTests(Fixture):
 
     def test_review_change_before_egress_never_calls_provider(self):
         cid=self.claim();original=retrieve
-        def race(*args):
-            p=original(*args);self.review(cid,'dispute');return p
+        def race(*args,**kwargs):
+            p=original(*args,**kwargs);self.review(cid,'dispute');return p
         model=PacketFixture()
         with patch('alfred.grounded.retrieve',race):
             self.fault('sources_changed_during_question',lambda:self.answer(model,'local_model'))
@@ -276,8 +276,8 @@ class ContextTests(Fixture):
 
     def test_review_change_before_default_return_discards_packet(self):
         cid=self.claim();original=retrieve
-        def race(*args):
-            p=original(*args);self.review(cid,'dispute');return p
+        def race(*args,**kwargs):
+            p=original(*args,**kwargs);self.review(cid,'dispute');return p
         with patch('alfred.grounded.retrieve',race):self.fault('sources_changed_during_question',self.answer)
 
     def test_a_reacceptance_requires_the_new_review_version(self):

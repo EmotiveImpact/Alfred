@@ -1,0 +1,12 @@
+{
+  "alfred/local.py": "826df97889614fd45ea7e3e733a78d62a864c650b031cd10367c074ddac48b78",
+  "alfred/desk_store.py": "8c22c3337ac7ab23c011e7c7e11c364c3421603f359f697d5c08bcd70be1b398",
+  "alfred/policy.py": "591156761ca6c56559fa74521eff051bd3c6f9c13d436fe30416d99dd5aaa3b3",
+  "alfred/knowledge.py": "67df2f4938a288afa40fb88d44df6ad7105ac9376b533eb6949286b75f137b24",
+  "alfred/reviewed_memory.py": "68934e6b92ab80fd829e45de9b9a4e7bade840e3d787c2de105dc41a80216e37",
+  "alfred/grounded.py": "ce1ffbd31cc37683d8681866096527b5ca11abef26f934f6ca52664049174e56",
+  "alfred/conversation.py": "832d39f61a218a1a1c10074bdca04574b81cc556ce526f6c9f191541d0d03971",
+  "alfred/retrieval.py": "d07fd53c03892f16b5afe8782ad8711c3f522c8a0d14b973a0e7d33345285dec",
+  "tests/test_memory_m03.py": "40c50d3f3d42110db5cb4eb8b72ee75ed7249de6fd41bc2a85bc8edee278ff23",
+  "tests/test_memory_programme_wip.py": "856d47bb7f6f85d821b7260b85519243de998007b4f6b34f6a25d79e7597353c"
+}

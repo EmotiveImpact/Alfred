@@ -130,6 +130,8 @@ class LocalCore:
                 raise Fault('unsupported_database_version')
             db.execute('PRAGMA journal_mode=WAL')
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nPRAGMA user_version=2; COMMIT;')
+            from .policy import initialise
+            initialise(db)
         self.path.chmod(0o600)
 
     @contextmanager
@@ -177,6 +179,8 @@ class LocalCore:
             try:
                 db.execute('INSERT INTO credentials(id,scope,role,digest,expires) VALUES (?,?,?,?,?)',
                            (credential_id, scope, role, hashlib.sha256(bearer.encode()).hexdigest(), self.now()+ttl))
+                from .policy import enrol
+                enrol(db, credential_id)
             except sqlite3.IntegrityError:
                 raise Fault('credential_exists', 409) from None
             self.log(db, scope, credential_id, 'credential.provisioned', credential_id)
@@ -201,7 +205,8 @@ class LocalCore:
             raise Fault('unauthorised', 401)
         if row['role'] not in roles:
             raise Fault('forbidden', 403)
-        return row
+        device = db.execute('SELECT * FROM identity_devices WHERE credential=?', (row['id'],)).fetchone()
+        return dict(row) | {'person_id':device['person'], 'device_id':device['device'], 'generation':device['generation']}
 
     def log(self, db, scope, actor, kind, subject):
         db.execute('INSERT INTO audit(scope,actor,kind,subject,at) VALUES (?,?,?,?,?)',
