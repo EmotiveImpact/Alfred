@@ -37,7 +37,13 @@
     "console/docs/CONNECTED_CONSOLE.md",
     "docs/evidence/integration-2026-10-02/RECEIPT.md",
     "docs/evidence/console-connected/RECEIPT.md",
-    "docs/sources/2026-10-02/README.md"
+    "docs/sources/2026-10-02/README.md",
+    "docs/CHECKPOINT_2026-10-02.md",
+    "docs/JOBS.md",
+    "docs/evidence/memory-m04/RECEIPT.md",
+    "docs/evidence/memory-m05/RECEIPT.md",
+    "docs/evidence/memory-m06/RECEIPT.md",
+    "docs/evidence/executive/RECEIPT.md"
   ],
   "jobs": [
     {

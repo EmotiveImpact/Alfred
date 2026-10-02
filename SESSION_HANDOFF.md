@@ -1,6 +1,12 @@
 # ALFRED unified build handoff
 
-**Latest handoff, 1 October 2026:** read
+**Latest checkpoint, 2 October 2026:** resume from
+[CHECKPOINT_2026-10-02.md](docs/CHECKPOINT_2026-10-02.md) on branch
+`claude/alfred-development-qpgxhg` (draft PR #18), which combines PRs #15, #16 and #17 with
+the connected console, M04, M05 (partial), M06, executive records and the stage 0 job
+coordinator. Nothing there is merged to main or deployed.
+
+**Previous handoff, 1 October 2026:** read
 [MASTER_HANDOFF_2026-10-01.md](docs/MASTER_HANDOFF_2026-10-01.md) first. The
 memory-programme checkpoint preserves paused partial M02/M06 changes on a
 separate branch; it does not complete all M jobs or replace the whole-product
