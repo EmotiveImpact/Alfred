@@ -1,0 +1,66 @@
+/* Routines (M10). Same palette: true black, graphite, ivory, sparse amber. No new motion or effects. */
+.routines-panel{display:flex;flex-direction:column;gap:12px;min-width:0}
+.routines-panel select,.routines-panel input{min-width:0;max-width:100%}
+.routines-panel section{display:flex;flex-direction:column;gap:12px;min-width:0}
+.routines-panel .button-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.routines-panel .secondary-button{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:6px 12px}
+.routines-panel .text-button{display:inline-flex;align-items:center;gap:5px}
+.routine-alert{display:flex;align-items:center;gap:8px;margin:0;padding:8px 11px;border:1px solid #d7b37530;border-radius:8px;font-size:12px;color:#d9c9a2}
+.routine-card{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border:1px solid var(--edge-strong);border-radius:10px;background:#050607;min-width:0}
+.routine-card>header{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;align-items:start}
+.routine-card>header>div{min-width:0}
+.routine-card h3{margin:0;font-size:13px;font-weight:400;letter-spacing:.4px;color:#e2e4dd}
+.routine-card header p{margin:4px 0 0;font-size:12px;line-height:1.6;color:#a9b5b6}
+.routine-chips{grid-column:2;display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 0;padding:0;list-style:none}
+.routine-chips li{padding:2px 9px;border:1px solid var(--edge-strong);border-radius:999px;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:#8e9c9f}
+.routine-chips li.on{border-color:#d7b37566;color:var(--amber)}
+.routine-chips li.warn{border-color:#d9a18466;color:#d9a184}
+.routine-line{margin:0;font-size:11px;letter-spacing:.3px;color:#9aa7a9;overflow-wrap:anywhere}
+.routine-rules summary{cursor:pointer;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#aeb7b5}
+.routine-rules summary:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+.routine-rules ul{margin:8px 0 0;padding-left:18px;font-size:11px;line-height:1.7;color:#b9c2c2}
+.routine-form{display:flex;flex-direction:column;gap:10px;padding-top:10px;border-top:1px solid var(--edge)}
+.routine-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.routine-grid label{display:flex;flex-direction:column;gap:4px;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--quiet);min-width:0}
+.routine-grid select,.routine-grid input{padding:7px 9px;border:1px solid var(--edge-strong);border-radius:7px;background:#000;color:var(--text);font-size:12px;text-transform:none;letter-spacing:0;color-scheme:dark}
+.routine-check{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)}
+.routine-check input{accent-color:#d7b375;flex-shrink:0}
+.routine-quiet,.routine-interrupt{display:flex;flex-direction:column;gap:8px;margin:0;padding:10px 12px;border:1px solid var(--edge);border-radius:8px;min-width:0}
+.routine-quiet legend,.routine-interrupt legend{display:inline-flex;align-items:center;gap:6px;padding:0 6px;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#c9bf9f}
+.routine-subhead{display:flex;align-items:center;gap:8px;margin:6px 0 0;font-size:10px;font-weight:500;letter-spacing:1.4px;text-transform:uppercase;color:#aeb7b5}
+.routine-subhead span{font-size:10px;font-variant-numeric:tabular-nums;color:var(--amber)}
+.nomination-list,.procedure-list,.run-list,.procedure-notes,.routine-cites{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.nomination-row,.procedure-list li{display:flex;flex-direction:column;gap:6px;padding:11px 13px;border:1px solid var(--edge);border-radius:9px;background:#040505;min-width:0}
+.nomination-row.decided{opacity:.75}
+.nomination-head{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:start}
+.nomination-head strong{font-size:12px;font-weight:400;color:#e2e4dd;overflow-wrap:anywhere}
+.nomination-head small{grid-column:2;font-size:10px;letter-spacing:.3px;color:#8e9c9f}
+.procedure-list .nomination-head{grid-template-columns:minmax(0,1fr)}
+.procedure-list .nomination-head small{grid-column:1}
+.nomination-reason,.procedure-value{margin:0;font-size:12px;line-height:1.6;color:#b9c2c2;overflow-wrap:anywhere}
+.nomination-source,.nomination-decided{margin:0;font-size:11px;color:#8b9597;overflow-wrap:anywhere}
+.nomination-decided{color:#c9bf9f}
+.nomination-hold{display:flex;align-items:center;gap:6px;margin:0;font-size:11px;color:#d9c9a2}
+.procedure-quote{margin:0;padding-left:12px;border-left:2px solid #a99b6970;font-size:12px;line-height:1.7;color:#a9b5b6;white-space:pre-wrap;overflow-wrap:anywhere}
+.procedure-basis{margin:0;font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:#6f7b7d}
+.procedure-notes li{display:flex;flex-direction:column;gap:3px;padding:8px 0;border-bottom:1px solid var(--edge);font-size:12px}
+.procedure-notes small{font-size:10px;color:#8b9597}
+.run-row{border-bottom:1px solid var(--edge)}
+.run-row>button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:9px 0;text-align:left}
+.run-row>button>span{display:flex;flex-direction:column;gap:3px;min-width:0}
+.run-row strong{font-size:12px;font-weight:400;color:#dfe3df}
+.run-row small{font-size:10px;letter-spacing:.3px;color:#8e9c9f;overflow-wrap:anywhere}
+.run-row.status-skipped small{color:#c9bf9f}
+.run-row.status-failed small{color:#d9a184}
+.run-row>button[aria-expanded=true] svg{transform:rotate(90deg)}
+.run-row>button:hover strong{color:var(--amber)}
+.run-detail{display:flex;flex-direction:column;gap:8px;padding:0 0 12px}
+.run-detail .detail-list{margin:0}
+.routine-cites li{padding-left:12px;border-left:2px solid #d7b37540;font-size:11px;line-height:1.6;color:#b9c2c2;overflow-wrap:anywhere}
+.routine-cites li.gone{border-left-color:#687376;color:#8b9597}
+.attention-mark.rule-brief{background:transparent;border:1px solid #d7b375}
+.routine-section .attention-row{display:flex;align-items:flex-start;gap:11px;width:100%;padding:7px 0;text-align:left}
+/* Four tabs: on narrow screens they wrap instead of widening the dialog. */
+.routines-panel .exec-tabs{flex-wrap:wrap;border-radius:16px}
+@media(max-width:700px){.routines-panel .exec-tabs button{padding:6px 10px}.routine-card{padding:12px}.routine-grid{grid-template-columns:minmax(0,1fr)}}
+.run-cite-head{margin:4px 0 0;font-size:10px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;color:#aeb7b5}

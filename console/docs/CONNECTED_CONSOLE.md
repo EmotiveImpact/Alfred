@@ -134,6 +134,23 @@ desk route. Another person's record and an unknown one both return
 Acceptance: `tests/test_executive_workflows.py`, `console/tests/executive.test.ts` and
 `tools/check_executive_browser.py`. Receipt: `docs/evidence/executive-2/RECEIPT.md`.
 
+## Routines (M10: ATT-001, MEM-004, MEM-015)
+
+The Routines dialog (command `routines`, or Open routines in Console controls) reads
+`GET /desk/routines` and `GET /desk/routines/procedures` directly and re-reads them after each
+confirmed projection refresh and after every change made there. It has four tabs: authored
+settings for the commitment review and morning brief (schedule, local offset, run and
+nomination budgets, quiet hours, interrupt choice, draft offers, pause and run now); the
+nominations, shown and held, with accept, accept and add follow-up, propose draft for
+approval, and dismiss; the run history with skipped reasons and what each run read and cited;
+and the read-only procedure registry. Accepting a draft offer opens the existing approval
+review for the exact text. The executive panel adds a Routines section only when something is
+shown now or a brief exists; held items never appear there. The offline demonstration says
+plainly that routines need the connected product and runs nothing. Rules, routes and limits:
+[docs/ROUTINES.md](../../docs/ROUTINES.md). Acceptance: `tests/test_routines.py`,
+`tests/test_routines_procedures.py`, `console/tests/routines.test.ts` and
+`tools/check_routines_browser.py`.
+
 ## Not provided by this increment
 
 Priorities, recommendations and milestone progress now come from executive records
