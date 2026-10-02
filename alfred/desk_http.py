@@ -14,6 +14,7 @@ from .grounded import ask, check_sources
 from .pulse import Pulse
 from .conversation import ConversationService
 from .reviewed_memory import ReviewedMemory
+from . import console_api
 
 ASSETS = {'/assets/reviewed-memory.js': ('reviewed-memory.js', 'text/javascript; charset=utf-8'),
           '/assets/reviewed-memory.css': ('reviewed-memory.css', 'text/css; charset=utf-8'),'/assets/conversation.js': ('conversation.js', 'text/javascript; charset=utf-8'),
@@ -24,6 +25,10 @@ ASSETS = {'/assets/reviewed-memory.js': ('reviewed-memory.js', 'text/javascript;
           '/': ('index.html', 'text/html; charset=utf-8'),
           '/assets/app.js': ('app.js', 'text/javascript; charset=utf-8'),
           '/assets/app.css': ('app.css', 'text/css; charset=utf-8')}
+CONSOLE_ASSET = re.compile(r'/console/(assets/[A-Za-z0-9][A-Za-z0-9_.-]{0,120}\.(?:js|css)|mark\.svg)')
+CONSOLE_TYPES = {'.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml'}
+CONSOLE_MODE_DEMO = b'<meta name="alfred-mode" content="demo"/>'
+CONSOLE_MODE_CONNECTED = b'<meta name="alfred-mode" content="connected"/>'
 
 
 class Sessions:
@@ -71,7 +76,7 @@ class Sessions:
 
 class DeskHTTPServer(HTTPServer):
     allow_reuse_address = True
-    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None):
+    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
         self.local_model = local_model
         self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
@@ -79,6 +84,9 @@ class DeskHTTPServer(HTTPServer):
         self.pulse = Pulse(store, supervisor) if hasattr(store, 'knowledge') and hasattr(supervisor, 'owner') else None
         if self.pulse is not None: supervisor.pulse = self.pulse
         self.assets = Path(assets) if assets else Path(__file__).resolve().parents[1] / 'web'
+        # The built premium console is served from this same loopback origin so
+        # it inherits the session, CSRF, Host/Origin and CSP boundary unchanged.
+        self.console_dist = Path(console_dist) if console_dist else Path(__file__).resolve().parents[1] / 'console' / 'dist'
         super().__init__(('127.0.0.1', port), Handler)
         self.host = f'127.0.0.1:{self.server_port}'
         self.origin = 'http://' + self.host
@@ -103,6 +111,25 @@ class Handler(BaseHTTPRequestHandler):
     sys_version = ''
     def log_message(self, *_):
         pass
+
+    def console_file(self, path):
+        root = self.server.console_dist.resolve()
+        if path == '/console/':
+            relative = 'index.html'
+        else:
+            match = CONSOLE_ASSET.fullmatch(path)
+            if not match:
+                raise Fault('not_found', 404)
+            relative = match[1]
+        file = root / relative
+        if file.is_symlink() or not file.is_file() or root not in file.resolve().parents:
+            raise Fault('console_not_built' if relative == 'index.html' else 'not_found', 404)
+        data = file.read_bytes()
+        if relative == 'index.html':
+            if data.count(CONSOLE_MODE_DEMO) != 1:
+                raise Fault('console_mode_marker_missing', 500)
+            return data.replace(CONSOLE_MODE_DEMO, CONSOLE_MODE_CONNECTED), 'text/html; charset=utf-8'
+        return data, CONSOLE_TYPES[file.suffix]
 
     def send_payload(self, status, value, *, content_type='application/json; charset=utf-8', cookie=None):
         data = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=True).encode()
@@ -180,6 +207,19 @@ class Handler(BaseHTTPRequestHandler):
             if not mutation and url.path in ASSETS and not url.query:
                 filename, mime = ASSETS[url.path]
                 self.send_payload(200, (self.server.assets / filename).read_bytes(), content_type=mime)
+                return
+            if not mutation and url.path == '/console' and not url.query:
+                self.send_response(308)
+                self.send_header('Location', '/console/')
+                self.send_header('Content-Length', '0')
+                self.send_header('Cache-Control', 'no-store')
+                self.send_header('Connection', 'close')
+                self.end_headers()
+                self.close_connection = True
+                return
+            if not mutation and url.path.startswith('/console/') and not url.query:
+                data, mime = self.console_file(url.path)
+                self.send_payload(200, data, content_type=mime)
                 return
             if not mutation and url.path == '/favicon.ico':
                 self.send_payload(200, b'', content_type='image/x-icon')
@@ -266,6 +306,12 @@ class Handler(BaseHTTPRequestHandler):
                 if 'memory_ambiguities' in body:keys.add('memory_ambiguities')
                 exact(body, keys)
                 result = check_sources(store, bearer, body['references'], body.get('memory_references'),body.get('memory_ambiguities'))
+            elif not mutation and url.path == '/desk/console/workspaces' and not url.query:
+                result = console_api.workspaces(store, bearer)
+            elif not mutation and url.path == '/desk/console/projection' and not url.query:
+                result = console_api.projection(self.server, bearer)
+            elif not mutation and url.path.startswith('/desk/console/records/') and not url.query:
+                result = console_api.record(self.server, bearer, url.path[len('/desk/console/records/'):])
             elif not mutation and url.path.startswith('/desk/knowledge'):
                 result = knowledge_get(store, bearer, url)
             elif not mutation and re.fullmatch(r'/desk/evidence/[0-9]+', url.path) and not url.query:

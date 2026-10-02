@@ -12,7 +12,7 @@ import time
 from .local import Fault, exact, ident, text, fingerprint, canonical
 from .evidence_review import assess_interpretation
 from .grounded import (retrieve, question_terms, references, check_packet, packet_current_db,
-                       sources_current_db, validate_interpretation)
+                       sources_current_db, validate_interpretation, parse_focus)
 from .reviewed_memory import context_references, context_current_db, ambiguities_current_db
 
 SCHEMA = '''
@@ -71,6 +71,9 @@ class ConversationService:
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
             if [r[0] for r in db.execute('SELECT version FROM conversation_meta')] != [1]:
                 raise Fault('unsupported_conversation_version')
+            # Additive column: older turns simply have no selected-record context.
+            if 'focus' not in {r[1] for r in db.execute('PRAGMA table_info(conversation_turns)')}:
+                db.execute('ALTER TABLE conversation_turns ADD COLUMN focus TEXT')
 
     def cleanup(self, db):
         # Deletes application rows, not secure erasure of WAL/backups/filesystem.
@@ -115,8 +118,9 @@ class ConversationService:
         return {'forgotten':True,'secure_erasure':False,'approved_drafts_undone':False}
 
     def submit(self,bearer,sid,body):
-        exact(body,{'question','mode','follow_up','request_id','after'})
-        question_terms(body['question']);ident(body['request_id'])
+        keys={'question','mode','follow_up','request_id','after'}
+        exact(body,keys|{'focus'} if type(body) is dict and 'focus' in body else keys)
+        question_terms(body['question']);ident(body['request_id']);parse_focus(body.get('focus'))
         if body['mode'] not in {'sources','local_model'} or type(body['follow_up']) is not bool or type(body['after']) is not int or body['after']<0:
             raise Fault('invalid_conversation_request')
         request_hash=fingerprint(body)
@@ -143,9 +147,9 @@ class ConversationService:
                     WHERE s.actor=? AND t.created>?''',(p['id'],self.store.now()-60)).fetchone()[0]>=6:
                     raise Fault('conversation_rate_limited',429)
                 tid='turn-'+secrets.token_hex(12)
-                db.execute('INSERT INTO conversation_turns VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+                db.execute('INSERT INTO conversation_turns(id,session,ordinal,request_id,request_hash,question,mode,follow_up,state,created,completed,result,focus) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
                            (tid,sid,count+1,body['request_id'],request_hash,body['question'].strip(),body['mode'],int(body['follow_up']),
-                            'queued',self.store.now(),None,None))
+                            'queued',self.store.now(),None,None,body.get('focus')))
                 db.execute('UPDATE conversations SET updated=? WHERE id=?',(self.store.now(),sid))
             self.jobs.put_nowait((bearer,sid,tid))
         return {'turn_id':tid,'state':'queued','reused':False}
@@ -205,7 +209,7 @@ class ConversationService:
             for item in history:previous_terms.extend(question_terms(item['question']))
             prefix=' '.join(dict.fromkeys(previous_terms))[:min(180,max(0,499-len(question)))]
             contextual=(prefix+' '+question).strip() if prefix else question
-            packet=retrieve(self.store,bearer,contextual,purpose='model' if current['mode']=='local_model' else 'read');packet['question']=question
+            packet=retrieve(self.store,bearer,contextual,purpose='model' if current['mode']=='local_model' else 'read',focus=current['focus']);packet['question']=question
             packet['conversation_questions']=[h['question'] for h in history]
             packet['retrieval_question']=contextual
             result={'packet':packet,'claims':[],'mode':current['mode'],'model_used':False,'model':None,
@@ -242,7 +246,7 @@ class ConversationService:
                     for cite in claim['citations']:cite.pop('quote',None)
                 db.execute("UPDATE conversation_turns SET state='completed',completed=?,result=? WHERE id=? AND state='running'",(self.store.now(),json.dumps(stored),tid))
         except Exception as exc:
-            state='source_changed' if isinstance(exc,Fault) and exc.code in {'sources_changed','sources_changed_during_question'} else 'failed'
+            state='source_changed' if isinstance(exc,Fault) and exc.code in {'sources_changed','sources_changed_during_question'} else 'focus_unavailable' if isinstance(exc,Fault) and exc.code=='focus_not_available' else 'failed'
             self.finish_error(tid,state)
         finally:self.jobs.task_done()
         return True
@@ -250,7 +254,7 @@ class ConversationService:
     def view(self,bearer,sid):
         with self.store.transaction() as db:
             p,session=self.own(db,bearer,sid)
-            rows=[dict(r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
+            rows=[dict(r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result,focus FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
             for turn in rows:
                 if not turn['result']:continue
                 result=json.loads(turn['result']);sources=result['packet']['evidence']
@@ -265,9 +269,20 @@ class ConversationService:
                 for c,saved in zip(memory,result['packet'].get('memory',[])):
                     c['support']['source_id']=saved['support']['source_id']
                 result['packet']['memory']=memory
+                focus=result['packet'].get('focus')
+                if focus and not self.focus_current_db(db,p,focus):
+                    # The selection itself was withdrawn; keep no label for it.
+                    result['packet']['focus']={'record_id':focus['record_id'],'label':None,'available':False,'basis':focus['basis']}
                 turn['result']=result
             return {'id':sid,'title':session['title'],'expires':session['expires'],'turns':rows,'retention_seconds':TTL,
                     'private_to_current_credential':True,'role':p['role'],'actions_executed_by_conversation':False}
+
+    def focus_current_db(self,db,p,focus):
+        kind,identity=parse_focus(focus['record_id'])
+        if kind=='note':
+            return sources_current_db(db,p['scope'],[{'note_id':identity,'sha256':focus['sha256'],'revision':focus['revision']}],self.store.now(),p)
+        return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_entities'").fetchone()
+                    and db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],p['id'])).fetchone())
 
     def propose_draft(self,bearer,sid,body):
         exact(body,{'turn_id','text','request_id'});ident(body['turn_id']);ident(body['request_id']);text(body['text'])

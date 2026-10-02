@@ -1,23 +1,34 @@
 import {createContext,useCallback,useContext,useEffect,useMemo,useReducer,useRef,useState,type ReactNode} from 'react';
 import {useReducedMotion} from 'motion/react';
 import {createDemoSnapshot} from '../domain/fixtures';
-import {initialState,reducer,searchRecords,type Category,type Scope} from '../domain/model';
+import {initialState,reducer,searchRecords,SCOPES,type Category} from '../domain/model';
 import {parseCommand} from '../domain/commands';
 import {type GraphMode} from '../domain/projection';
-export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|null;
+import {consoleMode} from '../integration/mode';
+import {emptyConnectedSnapshot} from '../integration/toSnapshot';
+import {useConnection,useRecordDetail} from './useConnection';
+import {useAsk} from './useAsk';
+export type Modal='brief'|'search'|'review'|'settings'|'voice'|'handoff'|'tasks'|'records'|'security'|'ask'|null;
 export type RailView='home'|'search'|'knowledge'|'tasks'|'research'|'systems'|'security'|'settings';
 export function downloadJSON(value:unknown,name:string){
   const url=URL.createObjectURL(new Blob([JSON.stringify(value,null,2)],{type:'application/json'}));
   const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 function useController(){
-  const[state,dispatch]=useReducer(reducer,undefined,()=>initialState(createDemoSnapshot()));
+  // Decided once from the serving origin. Connected mode never loads fixtures, even on failure.
+  const[mode]=useState(()=>consoleMode());
+  const[state,dispatch]=useReducer(reducer,undefined,()=>initialState(mode==='connected'?emptyConnectedSnapshot():createDemoSnapshot()));
   const[modal,setModal]=useState<Modal>(null),[query,setQuery]=useState(''),[command,setCommand]=useState('');
   const[proposalId,setProposalId]=useState<string|null>(null),[reviewConsent,setReviewConsent]=useState(false);
   const[reviewOutcome,setReviewOutcome]=useState<'reviewed'|'declined'>('reviewed');
   const[notice,setNotice]=useState(''),[renderer,setRenderer]=useState('Starting graphics');
   const[graphMode,setGraphMode]=useState<GraphMode>('field'),[activeView,setActiveView]=useState<RailView>('home');
   const[renderEpoch,setRenderEpoch]=useState(0);
+  // Lost or changed authority closes every view that could still show withdrawn material.
+  const resetAsk=useRef<()=>void>(()=>{});
+  const onAuthorityLost=useCallback(()=>{setModal(null);setQuery('');setProposalId(null);setActiveView('home');resetAsk.current();},[]);
+  const live=useConnection(mode,dispatch,setNotice,onAuthorityLost);
+  const connected=mode==='connected';
   const systemReduced=useReducedMotion(),inputRef=useRef<HTMLInputElement>(null),searchRef=useRef<HTMLInputElement>(null);
   const reduced=Boolean(systemReduced)||state.reducedMotion;
   // Deliberately depend on the immutable record arrays, not the entire snapshot.
@@ -33,7 +44,20 @@ function useController(){
   const onStatus=useCallback((status:string)=>setRenderer(status),[]);
   const selectRecord=useCallback((id:string)=>dispatch({type:'select',id}),[]);
   const closeModal=useCallback(()=>setModal(null),[]);
-  const switchScope=useCallback((scope:Scope)=>{dispatch({type:'scope',scope});setModal(null);setQuery('');setActiveView('home');},[]);
+  const switchScope=useCallback((scope:string)=>{
+    // In connected mode the only permitted workspaces are the ones the server issued.
+    if(connected&&!live.workspaces.some(w=>w.id===scope))return;
+    dispatch({type:'scope',scope});setModal(null);setQuery('');setActiveView('home');
+  },[connected,live.workspaces]);
+  const detail=useRecordDetail(live.client,connected,state.selected,state.snapshot.dataRevision,live.fail);
+  const asking=useAsk(live.client,live.fail);resetAsk.current=asking.reset;
+  const[askMode,setAskMode]=useState<'sources'|'local_model'>('sources');
+  const askQuestion=(question:string,followUp=false)=>{
+    // The selection is sent as context only; the server re-authorises it.
+    const focusRecord=state.snapshot.records.find(r=>r.id===state.selected&&(r.origin==='authored_note'||r.origin==='reviewed_entity'));
+    const mode=askMode==='local_model'&&state.snapshot.model?.allowed?'local_model':'sources';
+    void asking.ask(question,{focus:focusRecord?.id??null,focusLabel:focusRecord?.title??null,mode,followUp});setModal('ask');
+  };
   const openReview=(id:string,outcome:'reviewed'|'declined'='reviewed')=>{setProposalId(id);setReviewConsent(false);setReviewOutcome(outcome);setModal('review');};
   const openCategory=(category:Category|null)=>{dispatch({type:'category',category});setModal('records');};
   const navigate=(view:RailView)=>{
@@ -46,13 +70,15 @@ function useController(){
     setModal(view as Modal);
   };
   const runCommand=(text:string)=>{
-    const intent=parseCommand(text);setCommand('');
+    const intent=parseCommand(text,connected?[]:SCOPES);setCommand('');
     if(intent.kind==='empty'){inputRef.current?.focus();return;}
+    // Connected: plain text asks; an explicit "search …" searches. The two stay distinct.
+    if(connected&&intent.kind==='search'&&!/^\/?search\s/i.test(text.trim())){askQuestion(text.trim().slice(0,500));return;}
     if(intent.kind==='scope'){switchScope(intent.scope);return;}
     if(intent.kind==='dialog'){setModal(intent.dialog);return;}
     setQuery(intent.query);setModal('search');
   };
-  const resetDemo=()=>{dispatch({type:'reset',snapshot:createDemoSnapshot()});setGraphMode('field');setActiveView('home');setModal(null);setNotice('Demo reset. No external data changed.');};
+  const resetDemo=()=>{if(connected)return;dispatch({type:'reset',snapshot:createDemoSnapshot()});setGraphMode('field');setActiveView('home');setModal(null);setNotice('Demo reset. No external data changed.');};
   useEffect(()=>{if(!notice)return;const t=setTimeout(()=>setNotice(''),4000);return()=>clearTimeout(t);},[notice]);
   useEffect(()=>{
     const key=(e:KeyboardEvent)=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){e.preventDefault();setQuery('');setModal('search');}
@@ -60,7 +86,10 @@ function useController(){
     window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
   },[modal]);
   useEffect(()=>{if(modal==='search')searchRef.current?.focus();},[modal]);
-  return{state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
+  const recheckAsk=asking.recheck;
+  useEffect(()=>{void recheckAsk();},[state.snapshot.dataRevision]);// eslint-disable-line react-hooks/exhaustive-deps
+  const askView={state:asking.state,sessionId:asking.state.status==='done'?asking.state.sessionId:null};
+  return{mode,connected,live,detail,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
     notice,setNotice,renderer,onStatus,graphMode,setGraphMode,activeView,navigate,systemReduced,reduced,inputRef,searchRef,
     records,relationships,shownRecords,selected,priorities,proposals,pending,projects,activeProposal,results,selectRecord,closeModal,
     switchScope,openReview,openCategory,runCommand,resetDemo,renderEpoch,retryGraphics:()=>setRenderEpoch(n=>n+1)};

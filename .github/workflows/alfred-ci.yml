@@ -112,3 +112,41 @@ jobs:
           name: alfred-unified-console
           path: console/evidence
           retention-days: 7
+  console-connected:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build the console exactly as the server will serve it
+        working-directory: console
+        run: |
+          set -euo pipefail
+          npm install -g npm@11.20.0
+          npm ci
+          npm run build
+      - name: Isolated first-party browser testing tools
+        run: |
+          python3 -m venv /tmp/alfred-browser
+          /tmp/alfred-browser/bin/pip install 'playwright==1.57.0' 'Pillow==11.3.0'
+          if command -v google-chrome >/dev/null; then
+            echo "CHROMIUM_PATH=$(command -v google-chrome)" >> "$GITHUB_ENV"
+          else
+            /tmp/alfred-browser/bin/python -m playwright install --with-deps chromium
+          fi
+      - name: Browser-to-backend acceptance of the connected console
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/alfred-console-connected
+          git rev-parse HEAD > /tmp/alfred-console-connected/TESTED_COMMIT.txt
+          ALFRED_CONSOLE_OUTPUT=/tmp/alfred-console-connected /tmp/alfred-browser/bin/python tools/check_console_connected_browser.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: alfred-console-connected
+          path: /tmp/alfred-console-connected
+          retention-days: 7

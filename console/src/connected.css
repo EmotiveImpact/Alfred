@@ -1,0 +1,51 @@
+/* Connected-state surfaces. Same palette: black, graphite, ivory, sparse amber. No new effects. */
+.connection-state[data-state="ready"] i{background:#acb9a0;box-shadow:none}
+.connection-state[data-state="unavailable"] i,.connection-state[data-state="denied"] i{background:#c98a6b;box-shadow:none}
+.connection-state[data-state="signed_out"] i,.connection-state[data-state="checking"] i,.connection-state[data-state="loading"] i{background:#687376;box-shadow:none}
+.connection-gate{position:absolute;inset:18% 20%;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px;color:var(--text);pointer-events:auto}
+.connection-gate p{max-width:380px;font-size:12px;line-height:1.8;color:#a7a8a8;margin:0}
+.connection-gate small{font-size:11px;color:var(--quiet)}
+.connection-gate.quiet{pointer-events:none;inset:auto 20% 12%;}
+.sign-in{display:flex;flex-direction:column;align-items:center;gap:12px;width:min(380px,100%);padding:28px 26px;border:1px solid var(--edge-strong);border-radius:14px;background:linear-gradient(160deg,#0c0e10f2,#050607f2)}
+.sign-in h2{font-size:18px;font-weight:400;margin:0;letter-spacing:.2px}
+.sign-in input{width:100%;padding:11px 13px;border:1px solid var(--edge-strong);border-radius:9px;background:#000;color:var(--text);font-size:13px}
+.sign-in .primary-button{margin-top:6px;width:100%;padding:10px 14px;border-radius:9px}
+.sign-in-error{color:#d9a184;font-size:12px;margin:0}
+.connection-banner{position:absolute;left:50%;top:8px;transform:translateX(-50%);z-index:6;display:flex;align-items:center;gap:10px;padding:8px 12px;border:1px solid #c98a6b55;border-radius:9px;background:#0b0c0de6;font-size:11px;color:#d0c6bb;max-width:calc(100% - 32px)}
+.connection-banner button{display:flex;align-items:center;gap:5px;color:var(--amber);font-size:11px}
+.source-lines{margin:14px 0 0;padding-left:34px;font:12px/1.75 ui-monospace,SFMono-Regular,Menlo,monospace;color:#b9c2c2;white-space:pre-wrap;overflow-wrap:anywhere}
+.source-lines li::marker{color:#5c6668;font-size:10px}
+.statement{padding:12px 0;border-top:1px solid var(--edge)}
+.statement p{margin:0;font-size:12px;line-height:1.7}
+.statement small{display:block;font-size:10px;letter-spacing:.6px;text-transform:uppercase;color:var(--quiet);margin-top:3px}
+.statement.usable small{color:var(--sage)}
+.statement.withheld p{color:#8e9698}
+.statement .text-button{margin-top:8px;font-size:11px;color:var(--amber);text-align:left}
+.project-note{display:block;font-size:10px;color:var(--quiet);margin-top:6px;letter-spacing:.3px}
+.hash{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px}
+@media(max-width:700px){.connection-gate{inset:10% 4%}.connection-gate.quiet{inset:auto 4% 8%}}
+.ask-panel{display:flex;flex-direction:column;gap:6px}
+.ask-question{font-size:16px;line-height:1.5;color:var(--text);margin:0 0 6px}
+.ask-context{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px}
+.focus-chip,.mode-chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--edge-strong);border-radius:999px;font-size:11px;color:#d8d2c4}
+.focus-chip svg{color:var(--amber)}
+.focus-chip small{color:var(--quiet);font-size:10px}
+.focus-chip.quiet,.mode-chip{color:#9aa3a5}
+.ask-section{margin-top:14px}
+.ask-section h3{font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:#aeb7b5;font-weight:500;margin:0 0 4px}
+.evidence{padding:12px 0;border-top:1px solid var(--edge)}
+.evidence header{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.evidence header small{flex-basis:100%;font-size:10px;color:var(--quiet);letter-spacing:.3px}
+.evidence .text-button{display:inline-flex;align-items:center;gap:5px;color:var(--text);font-size:12px}
+.evidence blockquote{margin-top:8px;white-space:pre-wrap}
+.source-id{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--amber);border:1px solid #d7b37540;border-radius:4px;padding:1px 5px}
+.draft-proposal{margin-top:16px;border-top:1px solid var(--edge);padding-top:12px}
+.draft-proposal summary{cursor:pointer;font-size:12px;color:#cfc6b4}
+.draft-proposal textarea{width:100%;margin:6px 0 10px;padding:10px 12px;border:1px solid var(--edge-strong);border-radius:8px;background:#000;color:var(--text);font:inherit;font-size:12px;resize:vertical}
+.follow-up{display:flex;gap:8px;margin-top:16px;padding:6px;border:1px solid var(--edge-strong);border-radius:10px}
+.follow-up input{flex:1;min-width:0;border:0;background:none;color:var(--text);outline:none;font-size:12px;padding:4px 6px}
+.send-inline{display:grid;place-items:center;width:30px;height:30px;border-radius:7px;color:var(--amber)}
+/* Keep scrolling inside the dialog frame: the frame caps at 820px, so must its content. */
+.dialog-content{max-height:min(818px,calc(100dvh - 58px))}
+@media(max-width:700px){.dialog-content{max-height:calc(100dvh - 32px)}}
+.evidence blockquote,.ask-panel .statement blockquote{margin:8px 0 0;padding-left:14px;border-left:2px solid #a99b6970;font-size:12px;line-height:1.75;color:#a9b5b6;white-space:pre-wrap;overflow-wrap:anywhere}

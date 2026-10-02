@@ -54,8 +54,22 @@ def excerpt(note, terms, remaining):
     return {'start_line': start + 1, 'end_line': start + len(chosen), 'excerpt': '\n'.join(chosen)}
 
 
-def retrieve(store, bearer, question, *, purpose='read', ranking='keywords'):
+FOCUS = re.compile(r'(note):([0-9a-f]{24})|(entity):([A-Za-z0-9][A-Za-z0-9_.-]{0,79})')
+
+
+def parse_focus(focus):
+    """A selected record narrows context. It is never permission and never evidence by itself."""
+    if focus is None:
+        return None, None
+    match = FOCUS.fullmatch(focus) if isinstance(focus, str) else None
+    if not match:
+        raise Fault('invalid_focus')
+    return (match[1], match[2]) if match[1] else (match[3], match[4])
+
+
+def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', focus=None):
     terms = question_terms(question)
+    focus_kind, focus_id = parse_focus(focus)
     graph = store.knowledge(bearer, purpose=purpose)
     ranked, notes, skipped = [], {}, []
     for meta in graph['nodes']:
@@ -80,8 +94,13 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords'):
         ranked = fts_rank(notes, terms)
     elif ranking != 'keywords':
         raise Fault('unsupported_ranking')
+    if focus_kind == 'note' and focus_id not in notes:
+        # Removed, changed during this read, or not permitted for this purpose.
+        raise Fault('focus_not_available', 409)
     seeds = [r[2] for r in ranked[:3]]
-    selection = [(identity, 'keyword_match', None) for identity in seeds]
+    if focus_kind == 'note':
+        seeds = [focus_id] + [s for s in seeds if s != focus_id][:2]
+    selection = [(identity, 'selected_record' if identity == focus_id and focus_kind == 'note' else 'keyword_match', None) for identity in seeds]
     # Follow only explicit graph edges from retrieved notes. A link supplies context,
     # not evidence that the target is true or that it entails the answer.
     candidates = []
@@ -101,6 +120,8 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords'):
     # exact original support first, inside the existing source/excerpt budgets.
     snapshot=ReviewedMemory(store).view(bearer)
     entities={e['id']:e for e in snapshot['entities']}
+    if focus_kind=='entity' and focus_id not in entities:
+        raise Fault('focus_not_available',409)
     memory_ranked=[]
     for c in snapshot['claims']:
         if not c['usable'] or c['subject_id'] not in entities or (c['object_id'] and c['object_id'] not in entities):continue
@@ -108,6 +129,7 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords'):
         other=entities[c['object_id']]['name'] if c['object_id'] else c['value']
         searchable=(subject['name']+' '+c['predicate'].replace('_',' ')+' '+(other or '')).casefold()
         score=sum(t in searchable for t in terms)
+        if focus_kind=='entity' and focus_id in (c['subject_id'],c['object_id']):score+=100
         if score:memory_ranked.append((-score,c['subject_id'],c['predicate'],c['created'],c['id'],c))
     memory_ranked.sort(key=lambda r:r[:-1])
     evidence, memory, remaining, memory_characters = [], [], MAX_CHARACTERS, 0
@@ -147,7 +169,14 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords'):
     # Display names are labels, never merge keys. Flag relevant namesakes even if
     # one has no usable statement or falls outside the bounded context selection.
     ambiguities=context_ambiguities(entities,memory)
-    return {'question': question.strip(), 'scope': graph['scope'], 'indexed_at': graph['now'],
+    selected=None
+    if focus_kind=='note':
+        meta=notes[focus_id][0]
+        selected={'record_id':'note:'+focus_id,'label':meta['title'],'sha256':meta['sha256'],'revision':meta['revision'],
+                  'basis':'user_selection_context_not_authority'}
+    elif focus_kind=='entity':
+        selected={'record_id':'entity:'+focus_id,'label':entities[focus_id]['name'],'basis':'user_selection_context_not_authority'}
+    return {'question': question.strip(), 'scope': graph['scope'], 'indexed_at': graph['now'], 'focus': selected,
             'purpose':purpose, 'ranking':ranking,
             'terms': terms, 'evidence': evidence, 'skipped': skipped[:32],
             'memory':memory, 'memory_ambiguities':ambiguities,

@@ -19,3 +19,7 @@ Read `console/docs/COMPONENT_ARCHITECTURE.md`, `console/docs/BUILD_BRIEF.md`, `c
 The refinement implements the small logo in a narrow expanding icon rail, one executive surface, no slogan block, stable record layout and an explicit relationship-only mode. It removes time-driven shader brightness and avoids ordinary UI-induced canvas remounts. Consult actual rendering evidence before asserting physical-device flicker or performance results.
 
 The console is still a disconnected demonstration. ConsoleReadPort is a proposed typed integration boundary, not an implemented HTTP client. The next builder should preserve this presentation and connect the authorised read-only projection first, then conversation and exact action/result flows. No automatic merge or deployment is implied.
+
+## Connected console (2 October 2026)
+
+The console now connects to the real backend when the ALFRED server serves it at `/console/`. See `console/docs/CONNECTED_CONSOLE.md` and `docs/evidence/console-connected/RECEIPT.md`. The read-only projection, record inspection, selection-to-question context and server approvals are implemented and browser-tested against synthetic data. The offline demonstration keeps its fixtures and labels. Priorities, milestones, voice, accounts and devices remain unimplemented.
