@@ -278,13 +278,14 @@
    "merge": "branch_only",
    "deployment": "not_deployed",
    "acceptance_evidence": [
-    "tests/test_memory_programme_wip.py"
+    "tests/test_retrieval_evaluation.py",
+    "docs/evidence/memory-m06/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Opt-in authorised-subset FTS5 path from PR #17; frozen labelled comparison not yet run."
+   "notes": "M06 measured keywords against authorised-subset FTS5 on 44 frozen synthetic questions: keywords recall 0.92, FTS5 0.90, zero leakage under strict grants, about 76 per cent irrelevant context from packet assembly. Keywords stay default. Hybrid retrieval not built."
   },
   {
    "id": "MEM-009",
@@ -603,14 +604,17 @@
    "decision": "accepted",
    "implementation": "partial",
    "integration": "isolated",
-   "merge": "main_partial",
+   "merge": "main_partial_branch_extended",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_retrieval_evaluation.py",
+    "docs/evidence/memory-m06/RECEIPT.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Literal evidence checks only. The blocked live-model comparison remains blocked and is not rerouted."
+   "notes": "Literal evidence checks only. The blocked live-model comparison remains blocked and is not rerouted. A deterministic retrieval-support evaluation now exists (M06); answer-level evaluation does not."
   },
   {
    "id": "ACT-001",
@@ -797,7 +801,7 @@
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Foreground local process with pause. No managed service."
+   "notes": "Foreground local process with pause. No managed service. The host now also runs one local job worker thread, stopped with the desk."
   },
   {
    "id": "UX-002",
@@ -873,16 +877,20 @@
    ],
    "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_jobs.py",
+    "tests/test_jobs_http.py",
+    "docs/JOBS.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "",
+   "notes": "Single-host stage 0: one durable job authority with leases, heartbeats, cancellation, bounded retries, effect_unknown reconciliation and reconnectable event cursors. No second node, mesh or enrolment of another computer.",
    "owner_decision_needed": "Where the authoritative database and coordinator live; mesh control plane and key expiry policy (research/INFRASTRUCTURE_2026-10-02.md 7.3, decisions 1 and 2)."
   },
   {
@@ -901,16 +909,20 @@
    ],
    "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_jobs.py",
+    "tests/test_jobs_http.py",
+    "docs/JOBS.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "",
+   "notes": "Local-subprocess backend only: allowlisted first-party kinds, declared permitted inputs, wall-clock and output limits, no credentials. Not a sandbox, VM or remote worker.",
    "owner_decision_needed": "Compute vendor commitment (E2B Cloud, boxd, Modal or self-host only) and whether forks may hold ALFRED material (7.3 decision 5); confirm OpenShell identity (decision 8)."
   },
   {
@@ -928,16 +940,20 @@
    ],
    "owner": "build-session-2026-10-02",
    "decision": "accepted",
-   "implementation": "not_started",
-   "integration": "not_applicable",
-   "merge": "not_merged",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
    "deployment": "not_deployed",
-   "acceptance_evidence": [],
+   "acceptance_evidence": [
+    "tests/test_jobs.py",
+    "tests/test_jobs_http.py",
+    "docs/JOBS.md"
+   ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "",
+   "notes": "Bounded content-addressed cache with a hard limit, LRU eviction, pins for offline availability and hash verification. No cloud storage.",
    "owner_decision_needed": "Object storage vendor, region and spending ceiling; which scopes may leave the primary machine (7.3 decisions 3, 4 and 6)."
   },
   {

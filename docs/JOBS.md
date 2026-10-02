@@ -1,6 +1,6 @@
 # Local job coordinator (infrastructure stage 0)
 
-Status, 2 October 2026: implemented on this branch as stage 0 of the staged architecture in [research/INFRASTRUCTURE_2026-10-02.md](../research/INFRASTRUCTURE_2026-10-02.md) (sections 5 and 7). Synthetic data only. There are no HTTP routes yet, no console view, no remote worker, no VM isolation and no sandbox. Nothing is deployed and no background service is installed. It serves PRD rows RUN-002, RUN-003 and SYS-003 only at the single-host, local-subprocess level described here; the provider and mesh decisions in section 7.3 of the research remain open.
+Status, 2 October 2026: implemented on this branch as stage 0 of the staged architecture in [research/INFRASTRUCTURE_2026-10-02.md](../research/INFRASTRUCTURE_2026-10-02.md) (sections 5 and 7). Synthetic data only. Owner and reader HTTP routes and one host worker thread were wired on 2 October (see the end of this document). There is no console view yet, no remote worker, no VM isolation and no sandbox. Nothing is deployed and no background service is installed. It serves PRD rows RUN-002, RUN-003 and SYS-003 only at the single-host, local-subprocess level described here; the provider and mesh decisions in section 7.3 of the research remain open.
 
 | File | Contents |
 |---|---|
@@ -147,7 +147,7 @@ Not proven or not built:
 
 - Containment. A local subprocess is not a sandbox; there is no namespace, seccomp, VM or network isolation. The CPU and memory limits are set but not tested.
 - Remote workers, multiple hosts, a mesh, object storage or any vendor service.
-- HTTP routes, the browser interface and the console. Nothing is exposed over the network.
+- The browser interface and the console. The HTTP routes are loopback-only, behind the existing session, CSRF and Host/Origin checks.
 - Survival of a job when the host process itself dies. The child is in its own session and may run on until it finishes or hits its CPU limit, but its result is then lost; the job's lease expires and recovery applies. Recovery is tested by advancing the coordinator clock and by restarting the coordinator, not by killing the host process.
 - Real external effects. No registered kind has one; the `effect_unknown` path is exercised with a conservative declaration.
 - Power-loss durability beyond SQLite's own guarantees, throughput, fairness between scopes, or Windows support (the backend assumes POSIX).
@@ -174,3 +174,25 @@ Effect-bearing kinds additionally need ALFRED's existing approval binding of exa
 - Serve artefact bytes with their stored media type, `X-Content-Type-Options: nosniff` and as an attachment or JSON-encoded value; never render them as HTML.
 - Map `Fault.status` directly. Do not reveal lease tokens in any view; they are only returned to the leasing worker.
 - Start one `JobWorker` thread per host process with `LocalSubprocessBackend` (like the existing `Supervisor`), stop it on shutdown, and enrol its worker ID with the owner credential the host already holds. Starting a worker is not deploying or installing a service.
+
+## Wired on 2 October 2026
+
+`alfred/desk_http.py` exposes the owner and reader calls under `/desk/jobs` behind the
+existing session, CSRF and Host/Origin checks: list and submit (`/desk/jobs`), view
+(`/desk/jobs/{id}`), events from a cursor (`/desk/jobs/{id}/events?after=N`), cancel,
+reconcile, recover, workers (list, enrol, revoke) and results
+(`/desk/jobs/artefacts/{sha256}`, returned as a JSON value, never as a page). Worker
+calls (lease, start, heartbeat, complete, fail) stay in-process.
+
+`python3 -m alfred.desk serve` starts one `JobWorker` thread with the local-subprocess
+backend for the enrolled worker `local-host`, and a `BoundedCache` of 256 MiB under
+the private data directory. Stopping the desk stops the worker; queued work stays
+queued and leases expire and are recovered on the next start.
+
+Results now follow M05: a result derived from a note that has since been deleted,
+directly or through another result, can no longer be read or used as an input.
+Identical results produced from different notes merge their full lineage, so deleting
+either note blocks the shared result.
+
+Evidence: `tests/test_jobs.py` (54) and `tests/test_jobs_http.py` (4), including a client
+that signs out while its job runs and a new session that resumes from its event cursor.

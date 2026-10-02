@@ -219,7 +219,7 @@
     {
       "id": "M06",
       "title": "Lexical baseline and deterministic retrieval evaluation",
-      "status": "in_progress",
+      "status": "implemented",
       "depends_on": [
         "M01",
         "M03"
@@ -246,8 +246,10 @@
       ],
       "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
       "evidence": [
-        "tests/test_memory_programme_wip.py",
-        "docs/evidence/memory-programme-wip/RECEIPT.md"
+        "tests/test_retrieval_evaluation.py",
+        "tools/evaluate_retrieval.py",
+        "docs/evidence/memory-m06/RECEIPT.md",
+        "docs/evidence/memory-m06/report.json"
       ],
       "limitations": [
         "Authorised-subset FTS5 code and synthetic filtering checks only",

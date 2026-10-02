@@ -320,6 +320,19 @@ class ResultTests(Base):
                    self.request(key='k2', inputs=[{'artefact': done['result']['sha256']}]))
 
 
+    def test_deleting_a_source_note_blocks_results_derived_from_it(self):
+        done = self.run_job()
+        second = self.run_job(key='k2', kind='summarise_lines', parameters={'max_lines': 3},
+                              inputs=[{'artefact': done['result']['sha256']}])
+        (self.vault / 'Plan.md').unlink()
+        MarkdownVault(self.store, self.source, self.vault).scan()
+        # M05: deletion blocks every dependent result, including results of results.
+        for sha in (done['result']['sha256'], second['result']['sha256']):
+            self.fault('artefact_not_available', self.jobs.artefact, self.owner, sha)
+        self.fault('inputs_denied', self.jobs.submit, self.owner,
+                   self.request(key='k3', inputs=[{'artefact': done['result']['sha256']}]))
+
+
 class CancellationTests(Base):
     def test_queued_job_is_cancelled_immediately(self):
         job = self.jobs.submit(self.owner, self.request())

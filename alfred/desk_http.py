@@ -76,8 +76,9 @@ class Sessions:
 
 class DeskHTTPServer(HTTPServer):
     allow_reuse_address = True
-    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None):
+    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None, jobs=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
+        self.jobs = jobs
         self.local_model = local_model
         self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
         self.conversations = ConversationService(store, local_model, supervisor.scope) if hasattr(store, 'knowledge') else None
@@ -130,6 +131,58 @@ class Handler(BaseHTTPRequestHandler):
                 raise Fault('console_mode_marker_missing', 500)
             return data.replace(CONSOLE_MODE_DEMO, CONSOLE_MODE_CONNECTED), 'text/html; charset=utf-8'
         return data, CONSOLE_TYPES[file.suffix]
+
+    def jobs_route(self, url, mutation, bearer, body):
+        """Owner and reader job calls. Worker calls stay in-process with the host."""
+        jobs = self.server.jobs
+        if jobs is None:
+            raise Fault('jobs_not_configured', 409)
+        parts = url.path.split('/')[3:]
+        if url.query and not (len(parts) == 2 and parts[1] == 'events' and not mutation):
+            raise Fault('invalid_query')
+        if parts == []:
+            if mutation:
+                return jobs.submit(bearer, body)
+            from .jobs import BACKEND_NOTE
+            return {'jobs': jobs.jobs(bearer), 'backend': BACKEND_NOTE}
+        if parts == ['workers']:
+            if not mutation:
+                return {'workers': jobs.workers(bearer)}
+            exact(body, {'id', 'label', 'capabilities'})
+            return jobs.enrol_worker(bearer, body['id'], body['label'], body['capabilities'])
+        if len(parts) == 3 and parts[0] == 'workers' and parts[2] == 'revoke' and mutation:
+            exact(body, set())
+            return jobs.revoke_worker(bearer, parts[1])
+        if parts == ['recover'] and mutation:
+            exact(body, set())
+            return jobs.recover(bearer)
+        if len(parts) == 2 and parts[0] == 'artefacts' and not mutation:
+            artefact = jobs.artefact(bearer, parts[1])
+            data = artefact.pop('data')
+            # Returned as a JSON value, never served as a page.
+            if artefact['media_type'] in ('application/json', 'text/plain'):
+                artefact['text'] = data.decode('utf-8', errors='replace')
+            else:
+                import base64
+                artefact['base64'] = base64.b64encode(data).decode('ascii')
+            return artefact
+        if len(parts) == 1 and not mutation:
+            return jobs.view(bearer, parts[0])
+        if len(parts) == 2 and parts[1] == 'events' and not mutation:
+            query = parse_qs(url.query, strict_parsing=True) if url.query else {}
+            if set(query) - {'after'} or any(len(v) != 1 for v in query.values()):
+                raise Fault('invalid_query')
+            after = query.get('after', ['0'])[0]
+            if not re.fullmatch(r'[0-9]{1,9}', after):
+                raise Fault('invalid_cursor')
+            return jobs.events(bearer, parts[0], int(after))
+        if len(parts) == 2 and parts[1] == 'cancel' and mutation:
+            exact(body, set())
+            return jobs.cancel(bearer, parts[0])
+        if len(parts) == 2 and parts[1] == 'reconcile' and mutation:
+            exact(body, {'finding'})
+            return jobs.reconcile(bearer, parts[0], body['finding'])
+        raise Fault('not_found', 404)
 
     def send_payload(self, status, value, *, content_type='application/json; charset=utf-8', cookie=None):
         data = value if isinstance(value, bytes) else json.dumps(value, ensure_ascii=True).encode()
@@ -315,6 +368,8 @@ class Handler(BaseHTTPRequestHandler):
                 if 'memory_ambiguities' in body:keys.add('memory_ambiguities')
                 exact(body, keys)
                 result = check_sources(store, bearer, body['references'], body.get('memory_references'),body.get('memory_ambiguities'))
+            elif url.path == '/desk/jobs' or url.path.startswith('/desk/jobs/'):
+                result = self.jobs_route(url, mutation, bearer, body)
             elif not mutation and url.path == '/desk/console/workspaces' and not url.query:
                 result = console_api.workspaces(store, bearer)
             elif not mutation and url.path == '/desk/console/projection' and not url.query:

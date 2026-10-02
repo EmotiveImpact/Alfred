@@ -82,7 +82,8 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
         keys = load_keys(path)
         store = DeskStore(path / 'desk.sqlite')
         supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None), vault_exclusions=vault_exclusions, vault_id_key=vault_id_key)
-        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None)
+        jobs, job_stop = start_local_jobs(store, keys['owner'], path)
+        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs)
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
         print('Local development data. Microphone OFF. No external messages are sent.', flush=True)
@@ -92,9 +93,28 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
     finally:
         if supervisor:
             supervisor.stop()
+        if 'job_stop' in locals():
+            job_stop()
         if server:
             server.server_close()
         os.close(fd)
+
+
+def start_local_jobs(store, owner, path):
+    """One local-subprocess worker thread for this host. Not a sandbox or remote worker."""
+    import threading
+    from .jobs import BoundedCache, JobCoordinator, JobWorker, LocalSubprocessBackend
+    from .job_kinds import KINDS
+    jobs = JobCoordinator(store, cache=BoundedCache(path / 'job-cache', 256 * 1024 * 1024))
+    if not any(w['id'] == 'local-host' for w in jobs.workers(owner)):
+        jobs.enrol_worker(owner, 'local-host', 'This computer (local subprocess)', sorted(KINDS))
+    worker = JobWorker(jobs, LocalSubprocessBackend(), owner, 'local-host', poll_seconds=0.2)
+    stop = threading.Event()
+    thread = threading.Thread(target=worker.run, args=(stop,), kwargs={'idle_seconds': 0.75}, name='alfred-local-jobs', daemon=True)
+    thread.start()
+    def halt():
+        stop.set(); thread.join(10)
+    return jobs, halt
 
 
 def main():

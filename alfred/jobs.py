@@ -244,6 +244,30 @@ class JobCoordinator:
             WHERE n.scope=? AND n.id=? AND n.status='ready' AND c.revoked=0 AND c.expires>?
             AND s.status IN ('ready','attention')''', (scope, note_id, self.store.now())).fetchone()
 
+    @staticmethod
+    def _lineage_live(db, scope, lineage) -> bool:
+        """False once any note a result was derived from has been deleted (M05).
+
+        Deletion blocks dependent results; a later edit does not, because the result
+        records the exact revision it was derived from.
+        """
+        pending, seen = [lineage], set()
+        while pending:
+            current = pending.pop()
+            for note in current.get('notes', []):
+                row = db.execute('SELECT status FROM knowledge_notes WHERE scope=? AND id=?', (scope, note['id'])).fetchone()
+                if not row or row['status'] == 'missing':
+                    return False
+            for parent in current.get('artefacts', []):
+                if parent in seen:
+                    continue
+                seen.add(parent)
+                row = db.execute('SELECT lineage FROM artefacts WHERE scope=? AND sha256=?', (scope, parent)).fetchone()
+                if not row:
+                    return False
+                pending.append(json.loads(row['lineage']))
+        return True
+
     def _sources_permitted(self, db, principal, sources, capability) -> bool:
         now = self.store.now()
         return all(permitted(db, principal, source, now, capability) for source in sources)
@@ -264,8 +288,10 @@ class JobCoordinator:
             else:
                 artefact = db.execute('SELECT size,lineage FROM artefacts WHERE scope=? AND sha256=?',
                                       (principal['scope'], ref['artefact'])).fetchone()
-                sources = json.loads(artefact['lineage'])['sources'] if artefact else None
-                if not artefact or not self._sources_permitted(db, principal, sources, capability):
+                lineage = json.loads(artefact['lineage']) if artefact else None
+                sources = lineage['sources'] if artefact else None
+                if (not artefact or not self._sources_permitted(db, principal, sources, capability)
+                        or not self._lineage_live(db, principal['scope'], lineage)):
                     raise Fault('inputs_denied', 403)
                 bound.append({'type': 'artefact', 'sha256': ref['artefact'], 'size': artefact['size'],
                               'sources': sources})
@@ -299,7 +325,8 @@ class JobCoordinator:
             else:
                 artefact = db.execute('SELECT lineage,body FROM artefacts WHERE scope=? AND sha256=?',
                                       (row['scope'], item['sha256'])).fetchone()
-                if not artefact or not self._sources_permitted(db, principal, json.loads(artefact['lineage'])['sources'], capability):
+                if (not artefact or not self._sources_permitted(db, principal, json.loads(artefact['lineage'])['sources'], capability)
+                        or not self._lineage_live(db, row['scope'], json.loads(artefact['lineage']))):
                     return None, 'inputs_denied'
                 data = bytes(artefact['body'])
                 if hashlib.sha256(data).hexdigest() != item['sha256']:
@@ -439,7 +466,8 @@ class JobCoordinator:
         with self._read() as db:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
             row = db.execute('SELECT * FROM artefacts WHERE scope=? AND sha256=?', (p['scope'], sha256)).fetchone()
-            if not row or not self._sources_permitted(db, p, json.loads(row['lineage'])['sources'], 'read'):
+            if (not row or not self._sources_permitted(db, p, json.loads(row['lineage'])['sources'], 'read')
+                    or not self._lineage_live(db, p['scope'], json.loads(row['lineage']))):
                 raise Fault('artefact_not_available', 404)
             meta = {'sha256': row['sha256'], 'size': row['size'], 'media_type': row['media_type'],
                     'job_id': row['job_id'], 'created_at': row['created'], 'lineage': json.loads(row['lineage'])}
@@ -631,6 +659,9 @@ class JobCoordinator:
                     # Identical bytes from another job: reading needs every source of every producer (fail closed).
                     merged = json.loads(existing['lineage'])
                     merged['sources'] = sorted(set(merged['sources']) | set(lineage['sources']))
+                    notes = {(n['id'], n['revision']): n for n in merged.get('notes', []) + lineage['notes']}
+                    merged['notes'] = [notes[k] for k in sorted(notes)]
+                    merged['artefacts'] = sorted(set(merged.get('artefacts', [])) | set(lineage['artefacts']))
                     db.execute('UPDATE artefacts SET lineage=? WHERE scope=? AND sha256=?', (json.dumps(merged, sort_keys=True), row['scope'], actual))
                 else:
                     count, total = db.execute('SELECT count(*),coalesce(sum(size),0) FROM artefacts WHERE scope=?', (row['scope'],)).fetchone()
