@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/workspace/Alfred/tools/check_console_connected_browser.py", line 415, in <module>
+    check('the model capability starts ungranted', model_switch.get_attribute('aria-checked') == 'false')
+  File "/workspace/Alfred/tools/check_console_connected_browser.py", line 31, in check
+    assert condition, name
+           ^^^^^^^^^
+AssertionError: the model capability starts ungranted

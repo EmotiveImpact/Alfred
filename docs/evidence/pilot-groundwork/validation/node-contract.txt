@@ -1,0 +1,9 @@
+test_cancel_is_reconciled_after_disconnect_without_new_lease (tests.test_pilot_node_contract.NodeContractTests.test_cancel_is_reconciled_after_disconnect_without_new_lease) ... ok
+test_forked_worker_identity_has_no_original_lease_authority (tests.test_pilot_node_contract.NodeContractTests.test_forked_worker_identity_has_no_original_lease_authority) ... ok
+test_reconnected_worker_cannot_publish_a_stale_attempt (tests.test_pilot_node_contract.NodeContractTests.test_reconnected_worker_cannot_publish_a_stale_attempt) ... ok
+test_simultaneous_workers_receive_one_lease (tests.test_pilot_node_contract.NodeContractTests.test_simultaneous_workers_receive_one_lease) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.179s
+
+OK

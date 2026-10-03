@@ -1,0 +1,14 @@
+test_export_after_backup_remains_accounted_for_after_restore (tests.test_export.ExportTests.test_export_after_backup_remains_accounted_for_after_restore) ... FAIL
+
+======================================================================
+FAIL: test_export_after_backup_remains_accounted_for_after_restore (tests.test_export.ExportTests.test_export_after_backup_remains_accounted_for_after_restore)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Alfred/tests/test_export.py", line 59, in test_export_after_backup_remains_accounted_for_after_restore
+    self.assertIsNotNone(row)
+AssertionError: unexpectedly None
+
+----------------------------------------------------------------------
+Ran 1 test in 0.205s
+
+FAILED (failures=1)

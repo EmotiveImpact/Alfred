@@ -1,0 +1,72 @@
+test_restricted_approval_is_absent_for_another_person_in_same_workspace (tests.test_console_api.ConsoleProjectionHTTPTests.test_restricted_approval_is_absent_for_another_person_in_same_workspace) ... FAIL
+test_own_approval_is_withheld_after_source_read_revocation (tests.test_console_api.ConsoleProjectionHTTPTests.test_own_approval_is_withheld_after_source_read_revocation) ... FAIL
+test_restricted_action_state_and_metadata_are_filtered (tests.test_console_api.ConsoleProjectionHTTPTests.test_restricted_action_state_and_metadata_are_filtered) ... FAIL
+
+======================================================================
+FAIL: test_restricted_approval_is_absent_for_another_person_in_same_workspace (tests.test_console_api.ConsoleProjectionHTTPTests.test_restricted_approval_is_absent_for_another_person_in_same_workspace)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Alfred/tests/test_console_api.py", line 249, in test_restricted_approval_is_absent_for_another_person_in_same_workspace
+    self.assertEqual(projection['approvals'], [])
+AssertionError: Lists differ: [{'id': 'restricted-inbox', 'capability': [372 chars]nt'}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'id': 'restricted-inbox', 'capability': 'vault.inbox_note', 'state': 'proposed', 'text': 'Private-draft-marker\n', 'path': 'ALFRED/Inbox/Private-destination-marker.md', 'fingerprint': '8f0c1f3f9e410dae8891d89218c7590243847293bb34fa4cd15744b231f98db3', 'createdAt': '2026-10-03T04:23:33Z', 'expiresAt': '2026-10-03T04:38:33Z', 'evidenceCurrent': True, 'mine': False, 'effect': 'vault_inbox_note_create_only_not_sent'}
+
++ []
+- [{'capability': 'vault.inbox_note',
+-   'createdAt': '2026-10-03T04:23:33Z',
+-   'effect': 'vault_inbox_note_create_only_not_sent',
+-   'evidenceCurrent': True,
+-   'expiresAt': '2026-10-03T04:38:33Z',
+-   'fingerprint': '8f0c1f3f9e410dae8891d89218c7590243847293bb34fa4cd15744b231f98db3',
+-   'id': 'restricted-inbox',
+-   'mine': False,
+-   'path': 'ALFRED/Inbox/Private-destination-marker.md',
+-   'state': 'proposed',
+-   'text': 'Private-draft-marker\n'}]
+
+======================================================================
+FAIL: test_own_approval_is_withheld_after_source_read_revocation (tests.test_console_api.ConsoleProjectionHTTPTests.test_own_approval_is_withheld_after_source_read_revocation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Alfred/tests/test_console_api.py", line 269, in test_own_approval_is_withheld_after_source_read_revocation
+    self.assertEqual(projection['approvals'], [])
+AssertionError: Lists differ: [{'id': 'restricted-inbox', 'capability': [371 chars]nt'}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'id': 'restricted-inbox', 'capability': 'vault.inbox_note', 'state': 'proposed', 'text': 'Private-draft-marker\n', 'path': 'ALFRED/Inbox/Private-destination-marker.md', 'fingerprint': '31069548833f71dbca689a141cf2bbf557468f2befd166ca1aa6b31e802c1606', 'createdAt': '2026-10-03T04:23:33Z', 'expiresAt': '2026-10-03T04:38:33Z', 'evidenceCurrent': True, 'mine': True, 'effect': 'vault_inbox_note_create_only_not_sent'}
+
++ []
+- [{'capability': 'vault.inbox_note',
+-   'createdAt': '2026-10-03T04:23:33Z',
+-   'effect': 'vault_inbox_note_create_only_not_sent',
+-   'evidenceCurrent': True,
+-   'expiresAt': '2026-10-03T04:38:33Z',
+-   'fingerprint': '31069548833f71dbca689a141cf2bbf557468f2befd166ca1aa6b31e802c1606',
+-   'id': 'restricted-inbox',
+-   'mine': True,
+-   'path': 'ALFRED/Inbox/Private-destination-marker.md',
+-   'state': 'proposed',
+-   'text': 'Private-draft-marker\n'}]
+
+======================================================================
+FAIL: test_restricted_action_state_and_metadata_are_filtered (tests.test_console_api.ConsoleProjectionHTTPTests.test_restricted_action_state_and_metadata_are_filtered)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Alfred/tests/test_console_api.py", line 278, in test_restricted_action_state_and_metadata_are_filtered
+    self.assertEqual(state['actions'], [])
+AssertionError: Lists differ: [{'id': 'restricted-inbox', 'actor': 'demo[617 chars]lse}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'id': 'restricted-inbox', 'actor': 'demo-owner', 'capability': 'vault.inbox_note', 'parameters': {'path': 'ALFRED/Inbox/Private-destination-marker.md', 'precondition': 'create_only_destination_absent', 'sha256': '2aee027c1da69398068e71cbc87d3e8e4e11e7c690b234fde4a52f98c42c5785', 'source': 'demo-source', 'text': 'Private-draft-marker\n', 'vault_id': '41219a323b0b03e2be1f5634'}, 'fingerprint': '0fee836636e17c8dcdff3efe897c3afbfe8148d9181fd284e969397d54f480d9', 'expires_at': 1791002313, 'state': 'proposed', 'proof': None, 'effect': 'vault_inbox_note_create_only_not_sent', 'created_at': 1791001413, 'event_seq': None, 'evidence_current': True, 'mine': False}
+
+Diff is 815 characters long. Set self.maxDiff to None to see it.
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.553s
+
+FAILED (failures=3)

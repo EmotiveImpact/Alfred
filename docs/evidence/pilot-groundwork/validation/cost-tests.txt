@@ -1,0 +1,9 @@
+test_credit_cannot_subsidise_staff_and_post_credit_cost_is_visible (tests.test_platform_costs.CostTests.test_credit_cannot_subsidise_staff_and_post_credit_cost_is_visible) ... ok
+test_invalid_rates_are_refused (tests.test_platform_costs.CostTests.test_invalid_rates_are_refused) ... ok
+test_rounding_and_optional_free_tier (tests.test_platform_costs.CostTests.test_rounding_and_optional_free_tier) ... ok
+test_tokens_idle_capacity_and_backups_are_independent_of_headcount (tests.test_platform_costs.CostTests.test_tokens_idle_capacity_and_backups_are_independent_of_headcount) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.000s
+
+OK

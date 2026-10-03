@@ -1,0 +1,17 @@
+{
+  "checks": [
+    "the copy is not indexed: the twenty demo notes remain twenty",
+    "the map draws one node per indexed note",
+    "the existing issue view names the copy as a sync conflict copy",
+    "text that exists only in the copy is not searchable",
+    "no uncaught JavaScript errors"
+  ],
+  "count": 5,
+  "errors": [],
+  "session": "reader",
+  "transport": "real loopback HTTP",
+  "database": "real SQLite",
+  "inputs": "fictional demo vault plus one Syncthing-named copy",
+  "sync_client": false,
+  "live_model": false
+}

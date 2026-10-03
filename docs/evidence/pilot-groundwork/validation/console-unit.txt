@@ -1,0 +1,12 @@
+
+> @alfred/obsidian-console@0.1.0 test
+> vitest run
+
+
+ RUN  v4.1.11 /workspace/Alfred/console
+
+
+ Test Files  13 passed (13)
+      Tests  143 passed (143)
+   Start at  05:30:29
+   Duration  2.36s (transform 662ms, setup 0ms, import 2.81s, tests 279ms, environment 1ms)

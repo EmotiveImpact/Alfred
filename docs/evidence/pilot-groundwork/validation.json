@@ -1,0 +1,381 @@
+{
+  "checked_on": "2026-10-03",
+  "scope": "local synthetic combined acceptance; no model/provider/physical-device acceptance",
+  "code_checkpoint": "b83acd62bd5260f541f5249fc65fac016dda02bc",
+  "runtime_suite": {
+    "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+    "tests": 1157,
+    "exit_code": 0,
+    "seconds": 131.789,
+    "log": "docs/evidence/pilot-groundwork/validation/backend-tests.txt"
+  },
+  "source_tree_equivalence": {
+    "alfred": {
+      "tested_at": "284bf87b0c915526745f98e2cb3c0744f123e044",
+      "tested_tree": "e9cadce98b6659497771fbe15f2ab206fd95fa33",
+      "code_checkpoint_tree": "e9cadce98b6659497771fbe15f2ab206fd95fa33",
+      "identical": true
+    },
+    "tests": {
+      "tested_at": "284bf87b0c915526745f98e2cb3c0744f123e044",
+      "tested_tree": "61607bc1ac6992eea067971120d3a0892e2ce1a3",
+      "code_checkpoint_tree": "61607bc1ac6992eea067971120d3a0892e2ce1a3",
+      "identical": true
+    },
+    "web": {
+      "tested_at": "284bf87b0c915526745f98e2cb3c0744f123e044",
+      "tested_tree": "dbd542f0fee87c68b2bdcde422dac2a87b7d6195",
+      "code_checkpoint_tree": "dbd542f0fee87c68b2bdcde422dac2a87b7d6195",
+      "identical": true
+    },
+    "console": {
+      "tested_at": "330201abef437efbf50ff62d55f91499087910f6",
+      "tested_tree": "2da1348ce6ab6e5caa9f909d2e7efeec55b97a27",
+      "code_checkpoint_tree": "2da1348ce6ab6e5caa9f909d2e7efeec55b97a27",
+      "identical": true
+    }
+  },
+  "console": {
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6",
+    "typecheck_build": 0,
+    "unit_tests": 143,
+    "unit_files": 13,
+    "browser_tests": 29,
+    "browser_exit": 0,
+    "standalone_exit": 0,
+    "existing_chunk_size_warning": true
+  },
+  "python_browser": {
+    "workflows": 14,
+    "assertions": 474,
+    "entries": [
+      {
+        "check": "desk",
+        "exit_code": 0,
+        "assertions": 33,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_desk_browser.py",
+        "script_sha256": "48b202fd4fcb0f27095858380f80617305d14c9c95a53cb0236721e96f68adbd",
+        "report": "docs/evidence/pilot-groundwork/browser/desk.json",
+        "report_sha256": "b2eafee657801a22cb095fabb4796374c80edce22915a87265c63643e15da97d",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "knowledge",
+        "exit_code": 0,
+        "assertions": 25,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_knowledge_browser.py",
+        "script_sha256": "5cb7f1a0171ebdf1e6df90e5d02ef960ba1a9842bf094c1523bba2b119542ef8",
+        "report": "docs/evidence/pilot-groundwork/browser/knowledge.json",
+        "report_sha256": "b54362266a6680bc967dee77d10e3a9f5e37453125dd7d3a024b3e5626b4855b",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "grounded",
+        "exit_code": 0,
+        "assertions": 23,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_grounded_browser.py",
+        "script_sha256": "3c204ce23be857819d7ca32c9b8b26f543cfd9f754ba8d3d9d3d269d95ac3494",
+        "report": "docs/evidence/pilot-groundwork/browser/grounded.json",
+        "report_sha256": "07c830cd3c72b00179854e2aaa7149e4640e7e6ca659b5d0788665ce03119042",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "os",
+        "exit_code": 0,
+        "assertions": 35,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_os_browser.py",
+        "script_sha256": "de286771991fa1dd48403b3f123f397a81ba23bb7d88adc54234c2de08fd7029",
+        "report": "docs/evidence/pilot-groundwork/browser/os.json",
+        "report_sha256": "e34450386805a987c7978e06bc310e163226fd5d1732275538ceb05d6ae59f3a",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "conversation",
+        "exit_code": 0,
+        "assertions": 25,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_conversation_browser.py",
+        "script_sha256": "0588a877c04cd25f80fc19339b23464411f56a97942a94375879fcd32deb3e1c",
+        "report": "docs/evidence/pilot-groundwork/browser/conversation.json",
+        "report_sha256": "5fa56ebd635019fa30299463ce3d214a9b1981eae31a5b9aedb1aa5c7b2455ca",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "memory",
+        "exit_code": 0,
+        "assertions": 30,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_memory_browser.py",
+        "script_sha256": "aace557bb772651c708a07214fb0237c16bdc5f5568c1f9d3678e48dabbf2b6f",
+        "report": "docs/evidence/pilot-groundwork/browser/memory.json",
+        "report_sha256": "d3e26ee09743be6b0c6dabce64b9a3c13abad21f2a272c445eab59271961b9bd",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "memory-context",
+        "exit_code": 0,
+        "assertions": 24,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_memory_context_browser.py",
+        "script_sha256": "8182a18f0110189d29932b8a5269918d2891a681776b7b3d07109aae967cb3fd",
+        "report": "docs/evidence/pilot-groundwork/browser/memory-context.json",
+        "report_sha256": "2c952517a50a6a8cb22f2478e1f159e57caf262e91259cefcca9530019b88189",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "connected",
+        "exit_code": 0,
+        "assertions": 100,
+        "tested_commit": "b83acd62bd5260f541f5249fc65fac016dda02bc",
+        "revision_method": "tested immediately before commit; exact script SHA matches the committed file; runtime/test/console trees unchanged",
+        "script": "tools/check_console_connected_browser.py",
+        "script_sha256": "cfa5d6521abd461cb1e6c2a5b9d088b1ddc149f1507016ec1504c8f9f36ad384",
+        "report": "docs/evidence/pilot-groundwork/browser/connected.json",
+        "report_sha256": "d45f2dd488c701bbb646b7dfb6b440d81a04310d9b1e17dc916363c4a7a6c65b",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "executive",
+        "exit_code": 0,
+        "assertions": 45,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_executive_browser.py",
+        "script_sha256": "d46d3f4d269ba7850717920dd4f2d8614e9b685852303d203b304ff3b45f31e6",
+        "report": "docs/evidence/pilot-groundwork/browser/executive.json",
+        "report_sha256": "44ac0a5d05d60dd239d093389bcee75770e98b8c1bada898068f80deabaa2742",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "voice",
+        "exit_code": 0,
+        "assertions": 12,
+        "tested_commit": "1cadb272b7dbc3ad06dcd069dabd94536471b02d",
+        "revision_method": "tested at stated commit; script and runtime/console are unchanged at code checkpoint",
+        "script": "tools/check_voice_browser.py",
+        "script_sha256": "43956f55742a73d9c1118a7a37d46fefcf2ca6ed0d568f0ba13be595c6b2c690",
+        "report": "docs/evidence/pilot-groundwork/browser/voice.json",
+        "report_sha256": "98229e6d802ebda5238d699ba086ef9990bd8d2cc344b05960915dcedc52d484",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "sync",
+        "exit_code": 0,
+        "assertions": 5,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_sync_conflict_browser.py",
+        "script_sha256": "f77f7ab9ee2c0fc9ba644995d0dd6bb7cc98edaef3374b60d0322a81055e50b3",
+        "report": "docs/evidence/pilot-groundwork/browser/sync.json",
+        "report_sha256": "62ae337e244915afa4de3b25d0cb4cfe8a071fa5fcea66a028eee89e22c0c2a3",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "temporal",
+        "exit_code": 0,
+        "assertions": 50,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_temporal_review_browser.py",
+        "script_sha256": "75af30119a2f886e59895846e3db740166a40432d47a1b5ba4e78292b075fef9",
+        "report": "docs/evidence/pilot-groundwork/browser/temporal.json",
+        "report_sha256": "e356a80d2ee6dfa5e9061bd71cb09b62557a25a9f6b9fd3b39f2b25f85124806",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "routines",
+        "exit_code": 0,
+        "assertions": 52,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_routines_browser.py",
+        "script_sha256": "554e25342f0973e62fd48867a38d22007862aa4c85a820177229967f6e7662b3",
+        "report": "docs/evidence/pilot-groundwork/browser/routines.json",
+        "report_sha256": "97c1b7d887926193a52004b7f292a89901fec31e474f31bc2fcf571f8d9ba5dd",
+        "tested_script_matches_checkpoint": true
+      },
+      {
+        "check": "pilot-loop",
+        "exit_code": 0,
+        "assertions": 15,
+        "tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044",
+        "revision_method": "tested at stated clean commit",
+        "script": "tools/check_pilot_loop_browser.py",
+        "script_sha256": "b6f6e13c0359f4fb20e04b513e169147779eb7b7b833168c29d6172b8fbdfe0d",
+        "report": "docs/evidence/pilot-groundwork/browser/pilot-loop.json",
+        "report_sha256": "6f4a7b5f909fefe1e61c3d5e9b98e3cfd38ab869ee46d713e874a913f4909b9a",
+        "tested_script_matches_checkpoint": true
+      }
+    ]
+  },
+  "additional_checks": {
+    "archive_test_cases": 21,
+    "plan_selftest_cases": 12,
+    "register_selftest_cases": 11,
+    "current_cost_test_cases": 4,
+    "file_contract_test_cases": 6,
+    "node_contract_test_cases": 4,
+    "real_offline_cli_cases": 2,
+    "systemd_analyze_verify": {
+      "exit_code": 0,
+      "installed": false,
+      "enabled": false,
+      "note": "Syntax verification only; sandbox SO_PASSCRED restriction resolved by authorised builder escalation; local hardware/OS service acceptance unrun."
+    },
+    "final_plan_consistency_exit": 0,
+    "final_register_consistency_exit": 0,
+    "cost_output_reproduction": "byte-exact comparison of fresh calculator output with the tracked JSON: exit 0"
+  },
+  "tools": {
+    "python": "3.12.14",
+    "node": "24.19.0",
+    "npm_during_build_and_browser": "11.9.0",
+    "configured_install_npm": "11.20.0",
+    "playwright": "1.57.0",
+    "pillow": "11.3.0",
+    "chromium": "151.0.7922.173",
+    "rendering": "software SwiftShader; not physical-device certification",
+    "runtime_tmpdir": "/var/tmp/alfred-cloud",
+    "hosted_workflow_node": "22",
+    "hosted_workflow_npm": "11.20.0"
+  },
+  "publication": {
+    "branch": "feat/alfred-pilot-groundwork-2026-10-03",
+    "pushed_code_checkpoint": "b83acd62bd5260f541f5249fc65fac016dda02bc",
+    "main": "75947b8dd59a3161c862d2533850a032994778e2",
+    "pr19": "open/unmerged at publication recheck",
+    "pr19_head": "3fe9d25c87058499887ce4b0d8c90ccecc6954e9",
+    "new_pr": null,
+    "pr_creation_error": "GitHub GraphQL POST Forbidden; Git HTTPS push succeeds",
+    "hosted_ci": {
+      "url": "https://github.com/EmotiveImpact/Alfred/actions/runs/37102086932",
+      "commit": "b83acd62bd5260f541f5249fc65fac016dda02bc",
+      "status": "Success",
+      "checked_at_utc": "2026-10-03T06:21:10.621083+00:00",
+      "source": "public workflow summary, not authenticated logs",
+      "title": "test and research: finish pilot browser acceptance and verify current\u2026 \u00b7 EmotiveImpact/Alfred@b83acd6 \u00b7 GitHub",
+      "jobs": {
+        "core-and-sources": "passed",
+        "backend-browser": "passed",
+        "console": "passed",
+        "console-connected": "passed"
+      },
+      "total_duration": "8m 41s",
+      "logs_access": "public summary readable; authenticated logs not read",
+      "warnings": "Existing action runtime deprecation and future ubuntu-latest image notices; no failing job."
+    },
+    "merged": false,
+    "deployed": false
+  },
+  "failures_retained": "docs/evidence/pilot-groundwork/failures",
+  "artifacts": {
+    "docs/evidence/pilot-groundwork/validation/ancestry.json": {
+      "bytes": 982,
+      "sha256": "17c149effd5ee00b563c7dbfd5f007f974006abbe4abc1406d244489a6042fa7"
+    },
+    "docs/evidence/pilot-groundwork/validation/archive-extension.json": {
+      "bytes": 79,
+      "sha256": "f385ceebc200dcbe0ebacb6c636945fb446f1d322dd0288129b7ab38b839372c"
+    },
+    "docs/evidence/pilot-groundwork/validation/archive-library.json": {
+      "bytes": 145,
+      "sha256": "56193ec4a1b35338ef7a3dba41d91521faec66bf5eba6c5eaa1bf3c0de2f8896"
+    },
+    "docs/evidence/pilot-groundwork/validation/archive-original.json": {
+      "bytes": 60,
+      "sha256": "0f5b9e53a566cc4f1f9c39ee66ab81170023dd9d264426ed2edf50b59265f821"
+    },
+    "docs/evidence/pilot-groundwork/validation/archive-tests.txt": {
+      "bytes": 2124,
+      "sha256": "beac9a88750f40114ae7bd61ed695b81c944d615ecc9c44c55420a1c15bf4251"
+    },
+    "docs/evidence/pilot-groundwork/validation/backend-tests.txt": {
+      "bytes": 143630,
+      "sha256": "5a7e72d2eb3eae4fdd2b942ec614ebbef3399f5325d7d8167309e13661572479"
+    },
+    "docs/evidence/pilot-groundwork/validation/connected-browser.txt": {
+      "bytes": 35,
+      "sha256": "abf17b295f00b3a7ac5738da7b112cff860601e8ec16d6bae224e735737927cc"
+    },
+    "docs/evidence/pilot-groundwork/validation/console-browser.txt": {
+      "bytes": 3364,
+      "sha256": "f946b154d6eb2ce176bea6a8cec14e7c2bf5128b5df514c18f73d4c08f234160"
+    },
+    "docs/evidence/pilot-groundwork/validation/console-build.txt": {
+      "bytes": 782,
+      "sha256": "2b5a09c3cce38fe4248abade49bc8ca21cd2753e8a96401c62f4d2565f55007a"
+    },
+    "docs/evidence/pilot-groundwork/validation/console-standalone.txt": {
+      "bytes": 60,
+      "sha256": "f37db658be06e5ee5a1764dd2752ad1d77db4a9fa3a963ee4e22378fdd843770"
+    },
+    "docs/evidence/pilot-groundwork/validation/console-unit.txt": {
+      "bytes": 268,
+      "sha256": "8deac4aaf630adc0873c71eda7c919772f10df0da40940395d79ca9d714872c6"
+    },
+    "docs/evidence/pilot-groundwork/validation/cost-tests.txt": {
+      "bytes": 682,
+      "sha256": "2c16817ff6734e94a6cf69c9950b1a18d7ce4a567025ccd9eaf9fb2993e635c1"
+    },
+    "docs/evidence/pilot-groundwork/validation/file-contract.txt": {
+      "bytes": 1078,
+      "sha256": "5b28b60e5fead9fe9c43162d63c2e02fff2bdb97bba5ae2264aaeca108ea107e"
+    },
+    "docs/evidence/pilot-groundwork/validation/lifecycle-final.txt": {
+      "bytes": 10060,
+      "sha256": "38e15fdbd99d9486444df2fb87fcc0c894b4cb31788a7300946f191de534c87e"
+    },
+    "docs/evidence/pilot-groundwork/validation/node-contract.txt": {
+      "bytes": 770,
+      "sha256": "c460ec5aac1b5782f88544711f4817193484a08d1ed6b1317f1f67188e08d8ac"
+    },
+    "docs/evidence/pilot-groundwork/validation/offline-cli.txt": {
+      "bytes": 422,
+      "sha256": "1755c163a2fad43958e46a5a62e9edac3484b9746b607095be19a797830b5b9c"
+    },
+    "docs/evidence/pilot-groundwork/validation/plan-selftest.txt": {
+      "bytes": 1013,
+      "sha256": "86b74109a811fe9d52c6b5fa1ec423f8425ddce9b19a6db16b2a8f9523e08629"
+    },
+    "docs/evidence/pilot-groundwork/validation/register-selftest.txt": {
+      "bytes": 1035,
+      "sha256": "7331112bd41f99d3180c4105fab9e31ec44ad8b8862dd1589a7e1b995a281b41"
+    },
+    "docs/evidence/pilot-groundwork/validation/voice-browser.txt": {
+      "bytes": 31,
+      "sha256": "3bcf0c59c5bfbb0b44d65c02ba51215f23da48a9ce6860fa0f1ac4c8c056480f"
+    },
+    "docs/evidence/pilot-groundwork/validation/plan-report.json": {
+      "bytes": 4518,
+      "sha256": "681a76f0c80cddf00d7517307d796288967e0747c60f7cd570b8f7eb2826b63d"
+    },
+    "docs/evidence/pilot-groundwork/validation/register-report.json": {
+      "bytes": 726,
+      "sha256": "8aef3ffb8a3c5ef0da0594673af684299dceb8fb25a2acabaaf6aaf970d7958b"
+    }
+  },
+  "retained_output_format": {
+    "normalised_files": [
+      "failures/connected-initial.txt",
+      "failures/voice-initial.txt",
+      "validation/console-unit.txt"
+    ],
+    "normalisation": "Trailing spaces and extra EOF blank lines removed from new readable evidence only; test content/outcomes unchanged. Original raw logs remain outside checkout.",
+    "original_sha256": {
+      "failures/connected-initial.txt": "16bae5b7e88a0c05fc97d85ddb3544527be2ad1c7e82da877b0b06a8d84289d3",
+      "failures/voice-initial.txt": "6f1bc8ede4bdb2bb6ef4caffe3f81b154f5881f3b09d4f5f152efc373abb7f3b",
+      "validation/console-unit.txt": "b0db5081662e7a48a5f02c5acb0f153cae8b41548933dddb37fb9b9893ca1a1c"
+    }
+  }
+}

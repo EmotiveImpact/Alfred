@@ -1,0 +1,18 @@
+
+> @alfred/obsidian-console@0.1.0 build
+> tsc --noEmit && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 5057 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                     0.66 kB │ gzip:   0.41 kB
+dist/assets/index-D1Q331br.css     65.02 kB │ gzip:  13.56 kB
+dist/assets/index-DV3Vt4Bv.js   1,592.40 kB │ gzip: 443.45 kB │ map: 6,583.08 kB
+
+(!) Some chunks are larger than 1400 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.43s

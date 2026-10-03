@@ -1,0 +1,153 @@
+[
+  {
+    "check": "console-browser",
+    "command": [
+      "npm",
+      "run",
+      "test:browser"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 198.29,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "desk",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_desk_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 11.05,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "knowledge",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_knowledge_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 17.41,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "grounded",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_grounded_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 16.83,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "os",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_os_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 16.98,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "conversation",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_conversation_browser.py"
+    ],
+    "exit_code": 1,
+    "duration_seconds": 10.57,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "memory",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_memory_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 11.96,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "memory-context",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_memory_context_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 10.16,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "connected",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_console_connected_browser.py"
+    ],
+    "exit_code": 1,
+    "duration_seconds": 46.89,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "executive",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_executive_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 50.21,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "voice",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_voice_browser.py"
+    ],
+    "exit_code": 1,
+    "duration_seconds": 19.33,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "sync",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_sync_conflict_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 1.98,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "temporal",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_temporal_review_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 50.8,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "routines",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_routines_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 55.74,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  },
+  {
+    "check": "pilot-loop",
+    "command": [
+      "/workspace/alfred-browser/bin/python",
+      "tools/check_pilot_loop_browser.py"
+    ],
+    "exit_code": 0,
+    "duration_seconds": 28.16,
+    "tested_commit": "330201abef437efbf50ff62d55f91499087910f6"
+  }
+]

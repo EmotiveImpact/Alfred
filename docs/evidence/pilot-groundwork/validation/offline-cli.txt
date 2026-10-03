@@ -1,0 +1,7 @@
+test_offline_migration_choices_and_repeat_preserve_no_model_or_write (tests.test_permission_defaults.MigrationCLI.test_offline_migration_choices_and_repeat_preserve_no_model_or_write) ... ok
+test_running_host_lock_blocks_migration (tests.test_permission_defaults.MigrationCLI.test_running_host_lock_blocks_migration) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.468s
+
+OK

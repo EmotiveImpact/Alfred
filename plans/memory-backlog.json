@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "updated_on": "2026-10-02",
+  "updated_on": "2026-10-03",
   "whole_product_register": "plans/requirement-register.json",
   "scope": "implementation-tracking",
-  "baseline_commit": "8398c7437cb0ef1386d8dc4ff1f9e92fb2557ca2",
+  "baseline_commit": "75947b8dd59a3161c862d2533850a032994778e2",
   "runtime_changes": true,
   "programme_issue": 11,
   "private_pilot_requires": [
@@ -43,7 +43,11 @@
     "docs/evidence/memory-m04/RECEIPT.md",
     "docs/evidence/memory-m05/RECEIPT.md",
     "docs/evidence/memory-m06/RECEIPT.md",
-    "docs/evidence/executive/RECEIPT.md"
+    "docs/evidence/executive/RECEIPT.md",
+    "docs/NEXT_STAGE.md",
+    "docs/KEY_CUSTODY_PILOT.md",
+    "research/PILOT_PLATFORM_2026-10-03.md",
+    "docs/evidence/pilot-groundwork/RECEIPT.md"
   ],
   "jobs": [
     {
@@ -103,17 +107,22 @@
         "Permission filtering happens before ranking, traversal and egress",
         "Mid-request revocation prevents disallowed result persistence/display"
       ],
-      "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
+      "delivery_status": "PR18 baseline merged; PILOT-GROUNDWORK extension on b83acd62bd5260f541f5249fc65fac016dda02bc; runtime suite tested at 284bf87b0c915526745f98e2cb3c0744f123e044 with identical current runtime/test trees; browser details in the stage receipt; extension unmerged and not deployed",
       "evidence": [
         "tests/test_memory_programme_wip.py",
         "tests/test_identity_workflows.py",
         "docs/evidence/memory-programme-wip/RECEIPT.md",
-        "docs/evidence/memory-m02/RECEIPT.md"
+        "docs/evidence/memory-m02/RECEIPT.md",
+        "docs/evidence/pilot-groundwork/RECEIPT.md",
+        "tests/test_permission_defaults.py",
+        "docs/evidence/pilot-groundwork/A1.md",
+        "docs/evidence/pilot-groundwork/A2.md"
       ],
       "limitations": [
-        "Multi-owner administration and team roles are not built; device review histories remain separate",
-        "Full access-loss, persistence/display and lifecycle acceptance unfinished; legacy scope policy remains default"
-      ]
+        "Multi-owner/team roles, shared person/device history and remote worker identity remain incomplete",
+        "Strict defaults/offline legacy migration pass synthetic tests; encryption/custody and a selected private-data pilot remain gated"
+      ],
+      "prior_delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed"
     },
     {
       "id": "M03",
@@ -224,7 +233,19 @@
       ],
       "evidence": [
         "tests/test_memory_lifecycle.py",
-        "docs/evidence/memory-m05/RECEIPT.md"
+        "docs/evidence/memory-m05/RECEIPT.md",
+        "docs/evidence/pilot-groundwork/RECEIPT.md",
+        "tests/test_export.py",
+        "tests/test_pilot_recovery.py",
+        "tools/check_pilot_loop_browser.py",
+        "docs/evidence/pilot-groundwork/A3.md",
+        "docs/KEY_CUSTODY_PILOT.md"
+      ],
+      "prior_delivery_status": "historical checkpoint; see Git history",
+      "delivery_status": "PR18 baseline merged; PILOT-GROUNDWORK extension on b83acd62bd5260f541f5249fc65fac016dda02bc; runtime suite tested at 284bf87b0c915526745f98e2cb3c0744f123e044 with identical current runtime/test trees; browser details in the stage receipt; extension unmerged and not deployed",
+      "limitations": [
+        "No application or backup/export encryption; key custody is a proposal",
+        "Moved/copy exports, old media/snapshots and secure erasure remain outside application control"
       ]
     },
     {
@@ -255,17 +276,23 @@
         "Report recall, irrelevant context, latency and permission leakage separately",
         "Keep answer keys outside request context; no new model experiment implied"
       ],
-      "delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed",
+      "delivery_status": "PR18 baseline merged; PILOT-GROUNDWORK extension on b83acd62bd5260f541f5249fc65fac016dda02bc; runtime suite tested at 284bf87b0c915526745f98e2cb3c0744f123e044 with identical current runtime/test trees; browser details in the stage receipt; extension unmerged and not deployed",
       "evidence": [
         "tests/test_retrieval_evaluation.py",
         "tools/evaluate_retrieval.py",
         "docs/evidence/memory-m06/RECEIPT.md",
-        "docs/evidence/memory-m06/report.json"
+        "docs/evidence/memory-m06/report.json",
+        "docs/evidence/pilot-groundwork/RECEIPT.md",
+        "tools/evaluate_relevance.py",
+        "tests/test_relevance_selection.py",
+        "docs/evidence/pilot-groundwork/relevance.json",
+        "docs/evidence/pilot-groundwork/A4.md"
       ],
       "limitations": [
-        "Authorised-subset FTS5 code and synthetic filtering checks only",
-        "Support-labelled current-versus-FTS comparison, recall/irrelevance/latency/leakage report not yet implemented"
-      ]
+        "Small same-author synthetic source-selection tests, not reasoning/entailment or production acceptance",
+        "Precision improved with one frozen-set support lost; relevance/latency/scalability need broader measured evidence"
+      ],
+      "prior_delivery_status": "paused WIP checkpoint for master conversation; acceptance incomplete; not merged or deployed"
     },
     {
       "id": "M07",
@@ -472,7 +499,10 @@
     }
   ],
   "product_category": "operational and executive intelligence",
-  "integration_branch": "main",
+  "integration_branch": "feat/alfred-pilot-groundwork-2026-10-03",
   "previous_baseline_commit": "73a255a10cb43f55a14aaf45165800bd17e60553",
-  "planning_baseline_commit": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed"
+  "planning_baseline_commit": "03e946fc3fb6fe0b540abe5ff52204de6f0f99ed",
+  "historical_baseline_commit": "8398c7437cb0ef1386d8dc4ff1f9e92fb2557ca2",
+  "stage_code_commit": "b83acd62bd5260f541f5249fc65fac016dda02bc",
+  "stage_runtime_tested_commit": "284bf87b0c915526745f98e2cb3c0744f123e044"
 }

@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/workspace/Alfred/tools/check_voice_browser.py", line 123, in <module>
+    check('exactly the text shown is the text spoken', spoken == [shown] and shown.startswith('You asked: What still needs confirming?'))
+  File "/workspace/Alfred/tools/check_voice_browser.py", line 47, in check
+    assert condition, name
+           ^^^^^^^^^
+AssertionError: exactly the text shown is the text spoken

@@ -102,3 +102,10 @@ For each change record requirement IDs, exact revision, what was actually exerci
 At task limits, commit or preserve a usable diff and update SESSION_HANDOFF.md with the next executable step. Use the task's actual repository/PR tools; report missing access rather than pretending to push. Do not promise background work after the task ends. This stage does not automatically authorise a main merge.
 
 **Cloud-agent launcher:** [CODEX_NEXT_STAGE_PROMPT.md](CODEX_NEXT_STAGE_PROMPT.md). No old ZIP or manual multi-document assembly is required once this branch is available to the task.
+
+**Stage delivery:** the [PILOT-GROUNDWORK receipt](evidence/pilot-groundwork/RECEIPT.md)
+records current Track A engineering, Track B recommendations/prototypes, exact
+test outcomes and separate publication/merge/deployment states. The
+[platform decision package](../research/PILOT_PLATFORM_2026-10-03.md) and
+[custody proposal](KEY_CUSTODY_PILOT.md) prepare later decisions; this delivery
+does not activate any promotion gate above. Continue from SESSION_HANDOFF.md.

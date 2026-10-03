@@ -1,0 +1,17 @@
+test_post_rename_failure_accounts_for_a_readable_copy_as_unknown (tests.test_export.ExportTests.test_post_rename_failure_accounts_for_a_readable_copy_as_unknown) ... FAIL
+
+======================================================================
+FAIL: test_post_rename_failure_accounts_for_a_readable_copy_as_unknown (tests.test_export.ExportTests.test_post_rename_failure_accounts_for_a_readable_copy_as_unknown)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Alfred/tests/test_export.py", line 46, in test_post_rename_failure_accounts_for_a_readable_copy_as_unknown
+    self.assertEqual(db.execute('SELECT status FROM lifecycle_exports').fetchone()[0], 'publication_unknown')
+AssertionError: 'failed' != 'publication_unknown'
+- failed
++ publication_unknown
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.151s
+
+FAILED (failures=1)

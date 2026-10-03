@@ -1,0 +1,11 @@
+Traceback (most recent call last):
+  File "/workspace/Alfred/tools/check_conversation_browser.py", line 64, in <module>
+    if __name__=='__main__':main()
+                            ^^^^^^
+  File "/workspace/Alfred/tools/check_conversation_browser.py", line 51, in main
+    page.select_option('#conversation-mode','local_model');page.fill('#conversation-question','Summarise the equipment collection.');page.locator('#conversation-send').click();expect(page.locator('#conversation-status')).to_contain_text('working',timeout=15000);check('model request is queued rather than blocking HTTP',model.started.wait(2))
+                                                                                                                                                                                                                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Alfred/tools/check_conversation_browser.py", line 27, in check
+    if not condition:raise AssertionError(label)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: model request is queued rather than blocking HTTP
