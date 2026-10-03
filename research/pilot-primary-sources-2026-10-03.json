@@ -1,0 +1,309 @@
+{
+  "checked_on": "2026-10-03",
+  "method": "official repositories, pinned Git HEAD and HTTPS raw source; no candidate installed or executed",
+  "read_sources": [
+    {
+      "repo": "tauri-apps/tauri",
+      "commit": "30da1fd6e17de6107ecc850c95dfb16b5729f2dd",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/30da1fd6e17de6107ecc850c95dfb16b5729f2dd/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 6055,
+      "sha256": "db8ff4de3e034289f335c1ae5527d41f3142b2ea9c2002967be5cf5f0e7d39d7"
+    },
+    {
+      "repo": "tauri-apps/tauri",
+      "commit": "30da1fd6e17de6107ecc850c95dfb16b5729f2dd",
+      "path": "LICENSE-MIT",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri/30da1fd6e17de6107ecc850c95dfb16b5729f2dd/LICENSE-MIT",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 1090,
+      "sha256": "9dd42ea92cff2ede5cd477cbfcce051b2d0115c0ac7f368ee88cb545055dff1d"
+    },
+    {
+      "repo": "electron/electron",
+      "commit": "df79406cecfd393f38d5a18b83379d4ba85cc29b",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/electron/electron/df79406cecfd393f38d5a18b83379d4ba85cc29b/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 1096,
+      "sha256": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d"
+    },
+    {
+      "repo": "electron/electron",
+      "commit": "df79406cecfd393f38d5a18b83379d4ba85cc29b",
+      "path": "docs/tutorial/security.md",
+      "url": "https://raw.githubusercontent.com/electron/electron/df79406cecfd393f38d5a18b83379d4ba85cc29b/docs/tutorial/security.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 32555,
+      "sha256": "9bec21b1e4e451fb710685d09e0cdfd1770df02ffd44ad6afebf976f4cbac50a"
+    },
+    {
+      "repo": "electron/electron",
+      "commit": "df79406cecfd393f38d5a18b83379d4ba85cc29b",
+      "path": "docs/tutorial/process-model.md",
+      "url": "https://raw.githubusercontent.com/electron/electron/df79406cecfd393f38d5a18b83379d4ba85cc29b/docs/tutorial/process-model.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 10348,
+      "sha256": "f4c00bac9e25afe87dad781eb9a6bdaee798ed533dd58cb138692fe9a30cb961"
+    },
+    {
+      "repo": "e2b-dev/E2B",
+      "commit": "a9e893bcb9b44cc53778a45975c58fdfa0f0da7e",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/e2b-dev/E2B/a9e893bcb9b44cc53778a45975c58fdfa0f0da7e/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 11347,
+      "sha256": "b4ef1bf811cb4095229fb86b574199e467c78f0ac4078cf8be62189e1fbd0818"
+    },
+    {
+      "repo": "e2b-dev/E2B",
+      "commit": "a9e893bcb9b44cc53778a45975c58fdfa0f0da7e",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/e2b-dev/E2B/a9e893bcb9b44cc53778a45975c58fdfa0f0da7e/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 4187,
+      "sha256": "5951729113017efbe02952b197a3ad61d0014cfaba3e6b1aad37a25a5b97b0c2"
+    },
+    {
+      "repo": "NVIDIA/OpenShell",
+      "commit": "48d9ab3d0d9a343365dea1b0cd87565050ac658e",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/NVIDIA/OpenShell/48d9ab3d0d9a343365dea1b0cd87565050ac658e/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 11437,
+      "sha256": "c4be3acebe12527d7de689933d98329b4065f8c50cd929d0365584eafe6c20dd"
+    },
+    {
+      "repo": "NVIDIA/OpenShell",
+      "commit": "48d9ab3d0d9a343365dea1b0cd87565050ac658e",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/NVIDIA/OpenShell/48d9ab3d0d9a343365dea1b0cd87565050ac658e/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 8050,
+      "sha256": "b28bf8191159a5ceb4800f30f44ba5979e7900e87975f8fbcf81e10f40c88883"
+    },
+    {
+      "repo": "tailscale/tailscale",
+      "commit": "9128778b6515f32e13d92e7380044fe025f9b08e",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/tailscale/tailscale/9128778b6515f32e13d92e7380044fe025f9b08e/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 1515,
+      "sha256": "a7ca6186a7963a0a60740f6047760eecd7a0234e8c38bd7e1e0bbcb324bda45b"
+    },
+    {
+      "repo": "tailscale/tailscale",
+      "commit": "9128778b6515f32e13d92e7380044fe025f9b08e",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/tailscale/tailscale/9128778b6515f32e13d92e7380044fe025f9b08e/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 2977,
+      "sha256": "962187747e61973ef5743bfe64831ebf730ab6f79f5b2a9ee5ac1c00a1642a6d"
+    },
+    {
+      "repo": "juanfont/headscale",
+      "commit": "eeaac680bef26585c8cc1569f949e26d0d6aba80",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/juanfont/headscale/eeaac680bef26585c8cc1569f949e26d0d6aba80/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 1517,
+      "sha256": "e77c52635a2043a215a2905d3cf5288562acdf119a32bc8fd794d45b542c9fd8"
+    },
+    {
+      "repo": "juanfont/headscale",
+      "commit": "eeaac680bef26585c8cc1569f949e26d0d6aba80",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/juanfont/headscale/eeaac680bef26585c8cc1569f949e26d0d6aba80/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 6520,
+      "sha256": "1f8b0b523e685dede505cabc08eeb42b6278e3fd4440e284cc698ef3fc54e299"
+    },
+    {
+      "repo": "netbirdio/netbird",
+      "commit": "88b26bb74f50f12f25ad7b5db8eddb171d91a1e5",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/netbirdio/netbird/88b26bb74f50f12f25ad7b5db8eddb171d91a1e5/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 1787,
+      "sha256": "7e232c7ad5ae5bf0c7e0fa49a02d56196e4e8a55a27393492f7bdf90bc6049f7"
+    },
+    {
+      "repo": "netbirdio/netbird",
+      "commit": "88b26bb74f50f12f25ad7b5db8eddb171d91a1e5",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/netbirdio/netbird/88b26bb74f50f12f25ad7b5db8eddb171d91a1e5/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 13969,
+      "sha256": "bd90a9ce9bb3b2fba3b48558d4c5099f1034d22e3210c8308549ce453c7db1e5"
+    },
+    {
+      "repo": "cloudflare/cloudflare-docs",
+      "commit": "36706c5fd9c704ca10e440bab9ed0d58521577b9",
+      "path": "src/content/docs/r2/pricing.mdx",
+      "url": "https://raw.githubusercontent.com/cloudflare/cloudflare-docs/36706c5fd9c704ca10e440bab9ed0d58521577b9/src/content/docs/r2/pricing.mdx",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 10811,
+      "sha256": "bee9f44fb8feaf6331039d32eb24aaad864aaa83e3c1488277a7a0e1cc22e6b7"
+    },
+    {
+      "repo": "cloudflare/cloudflare-docs",
+      "commit": "36706c5fd9c704ca10e440bab9ed0d58521577b9",
+      "path": "src/content/docs/r2/buckets/object-lifecycles.mdx",
+      "url": "https://raw.githubusercontent.com/cloudflare/cloudflare-docs/36706c5fd9c704ca10e440bab9ed0d58521577b9/src/content/docs/r2/buckets/object-lifecycles.mdx",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 7451,
+      "sha256": "e6ba6219b59567666d56fec4d0faccd71f343945cb6654e6a60ff84fcaf0210d"
+    },
+    {
+      "repo": "juicedata/juicefs",
+      "commit": "adcca1cc61bb4d668a945d64b2e176b44ac8e5b5",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/juicedata/juicefs/adcca1cc61bb4d668a945d64b2e176b44ac8e5b5/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 11358,
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    {
+      "repo": "juicedata/juicefs",
+      "commit": "adcca1cc61bb4d668a945d64b2e176b44ac8e5b5",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/juicedata/juicefs/adcca1cc61bb4d668a945d64b2e176b44ac8e5b5/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 14781,
+      "sha256": "3879fa8e1def7ebf587144513cc3001760ab8cf86920967cc2bf5ee97908a047"
+    },
+    {
+      "repo": "rclone/rclone",
+      "commit": "9e27583e8045bfffd9016e231fa8bfcc215ef006",
+      "path": "COPYING",
+      "url": "https://raw.githubusercontent.com/rclone/rclone/9e27583e8045bfffd9016e231fa8bfcc215ef006/COPYING",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 1095,
+      "sha256": "8cd2e9e750b90a04b7d82dbbca3930c696ae0309d7c10464f90a44f45754cd04"
+    },
+    {
+      "repo": "rclone/rclone",
+      "commit": "9e27583e8045bfffd9016e231fa8bfcc215ef006",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/rclone/rclone/9e27583e8045bfffd9016e231fa8bfcc215ef006/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 11653,
+      "sha256": "635cd9b26984cf48b088afc160dd45d73060efa6826058aa7ec6214831586a2d"
+    },
+    {
+      "repo": "seaweedfs/seaweedfs",
+      "commit": "68df7511f63fc9f6fdc45b0ef2b2b13d2b225f2b",
+      "path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/seaweedfs/seaweedfs/68df7511f63fc9f6fdc45b0ef2b2b13d2b225f2b/LICENSE",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 11337,
+      "sha256": "d789d433cc11da163273d1e39be2e8fa67642f9a58ef220d3f258fa9c14ef613"
+    },
+    {
+      "repo": "seaweedfs/seaweedfs",
+      "commit": "68df7511f63fc9f6fdc45b0ef2b2b13d2b225f2b",
+      "path": "README.md",
+      "url": "https://raw.githubusercontent.com/seaweedfs/seaweedfs/68df7511f63fc9f6fdc45b0ef2b2b13d2b225f2b/README.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 32909,
+      "sha256": "0859c45ce0b750010e2eeea06ccfbacfc933bfd06fff01c96fe025dde1132f84"
+    },
+    {
+      "repo": "tauri-apps/tauri-docs",
+      "commit": "a2d811ee85b0a5fbb683fee2a3a5173278bc2c68",
+      "path": "src/content/docs/develop/sidecar.mdx",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri-docs/a2d811ee85b0a5fbb683fee2a3a5173278bc2c68/src/content/docs/develop/sidecar.mdx",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 8353,
+      "sha256": "60c6579674b97a93fe6c53dde1713e8cd7bac0a95c1ade2c9411656512c1bccf"
+    },
+    {
+      "repo": "tauri-apps/tauri-docs",
+      "commit": "a2d811ee85b0a5fbb683fee2a3a5173278bc2c68",
+      "path": "src/content/docs/security/capabilities.mdx",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri-docs/a2d811ee85b0a5fbb683fee2a3a5173278bc2c68/src/content/docs/security/capabilities.mdx",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 7677,
+      "sha256": "d8b2ca7f01dbc78c71c4a8e1e8212fc7ef52a3f5a060be5869a79739be7c6c5e"
+    },
+    {
+      "repo": "tauri-apps/tauri-docs",
+      "commit": "a2d811ee85b0a5fbb683fee2a3a5173278bc2c68",
+      "path": "src/content/docs/distribute/Sign/macos.mdx",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri-docs/a2d811ee85b0a5fbb683fee2a3a5173278bc2c68/src/content/docs/distribute/Sign/macos.mdx",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 9870,
+      "sha256": "04d52e8f424b42e1d4170052533d75e4d9803020fcb2d4159dc289715a5fea17"
+    },
+    {
+      "repo": "tauri-apps/tauri-docs",
+      "commit": "a2d811ee85b0a5fbb683fee2a3a5173278bc2c68",
+      "path": "src/content/docs/plugin/updater.mdx",
+      "url": "https://raw.githubusercontent.com/tauri-apps/tauri-docs/a2d811ee85b0a5fbb683fee2a3a5173278bc2c68/src/content/docs/plugin/updater.mdx",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "bytes": 27060,
+      "sha256": "7cdbce20a4c098c10149fda1bd33be4832021a27a7148c1f66da1ae9d15c1865"
+    },
+    {
+      "repo": "e2b-dev/infra",
+      "commit": "92197909dce5a1bef33e764ae4af76f0732fd7a8",
+      "path": "README.md",
+      "checked_on": "2026-10-03",
+      "url": "https://raw.githubusercontent.com/e2b-dev/infra/92197909dce5a1bef33e764ae4af76f0732fd7a8/README.md",
+      "status": "read",
+      "bytes": 9178,
+      "sha256": "3d55d2dd8014bb3f7b3bf0cf6038fc351c5482afa52152fa7499d48765320416"
+    },
+    {
+      "repo": "e2b-dev/infra",
+      "commit": "92197909dce5a1bef33e764ae4af76f0732fd7a8",
+      "path": "LICENSE",
+      "checked_on": "2026-10-03",
+      "url": "https://raw.githubusercontent.com/e2b-dev/infra/92197909dce5a1bef33e764ae4af76f0732fd7a8/LICENSE",
+      "status": "read",
+      "bytes": 11347,
+      "sha256": "b4ef1bf811cb4095229fb86b574199e467c78f0ac4078cf8be62189e1fbd0818"
+    }
+  ],
+  "unavailable_sources": [
+    {
+      "url": "https://raw.githubusercontent.com/cloudflare/cloudflare-docs/36706c5fd9c704ca10e440bab9ed0d58521577b9/src/content/docs/r2/data-location.mdx",
+      "reason": "HTTPError: HTTP Error 404: Not Found"
+    }
+  ],
+  "vendor_website_status": {
+    "v2.tauri.app": "HTTP 403 egress restriction; official docs repository used",
+    "developers.cloudflare.com": "HTTP 403 egress restriction; official docs repository used",
+    "www.hetzner.com": "HTTP 403 egress restriction; no current hosting price verified"
+  },
+  "network_draft": "additive research domains saved; saving has not changed this runtime",
+  "limits": "Snapshots establish published claims and exact root licences, not independent product acceptance or service pricing."
+}
