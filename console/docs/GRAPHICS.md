@@ -1,5 +1,16 @@
 # ALFRED graphics implementation: refinement 02
 
+3 October 2026 extension: [Refinement 09](REFINEMENT_09.md) adds
+PresenceField inside the existing Canvas and RenderPipeline. At most 980
+points (490 balanced) sample the unchanged deck JPEG. Time changes positions
+only; exposure and point brightness do not pulse. Observable composing,
+retrieval and explicit playback gather the swarm into the supplied mark.
+Pause/reduced motion/hidden tabs/context loss retain demand rendering.
+Consciousness uses a front-facing camera and restores the globe's orientation
+on return; quality/view changes retain the renderer. DOM surface flights are
+bounded to 24 edge particles, cancel on pause/hidden tabs, and copy no text.
+Current validation is in ../design-qa.md and the Refinement 09 receipt.
+
 This replaces the v0.1 graphics description, retained verbatim under `archive/GRAPHICS-v01.md`. That older version describes a time-varying brightness effect which is no longer used.
 
 ## Components and rendering ownership

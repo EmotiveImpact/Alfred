@@ -43,3 +43,16 @@ Visual QA compares isolated, network-blocked renders of the supplied HTML
 with the actual app at 1648×928 / DPR 1, plus the deck logo crop and mobile
 interaction checks. Software-rendered evidence is not a device performance
 or physical-display flicker certification.
+
+## Local review commands
+
+From `console/`: `npm run build`, `npm test`, `node tools/standalone.mjs`,
+then `npm run test:browser`. The cloud builder uses
+`ALFRED_CHROMIUM_PATH=/usr/bin/chromium` and
+`PLAYWRIGHT_BROWSERS_PATH=/workspace/alfred-playwright` (the prepared FFmpeg
+cache is needed for recordings). Preview binds `127.0.0.1:4173` only.
+`ALFRED-Console.html` is a generated, self-contained fictional-data preview.
+Choose **Consciousness**, type in the composer, pause/resume, open/close a
+panel, and return to **Globe** to inspect sources. It requests no microphone
+or voice bridge. Use the existing Python server's `/console/` for authenticated
+source data; the HTML download is not a backend installation.

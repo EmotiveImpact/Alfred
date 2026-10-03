@@ -98,15 +98,27 @@ jobs:
           git rev-parse HEAD > evidence/TESTED_COMMIT.txt
           npm ls --depth=0 > evidence/dependency-versions.txt
           npm audit --json > evidence/dependency-audit.json || true
-      - name: Typecheck, build and test the preserved premium console
+      - name: Typecheck, build and unit-test the preserved premium console
         working-directory: console
         run: |
           set -euo pipefail
           npm run build 2>&1 | tee evidence/build.txt
           npm test 2>&1 | tee evidence/unit-tests.txt
           node tools/standalone.mjs
+      - name: Install console browser testing tools
+        working-directory: console
+        run: |
+          set -euo pipefail
           npx playwright install --with-deps chromium
+      - name: Browser acceptance of the preserved premium console
+        working-directory: console
+        run: |
+          set -euo pipefail
           npm run test:browser 2>&1 | tee evidence/browser-tests.txt
+      - name: Publish compact browser result for reviewers
+        if: always()
+        working-directory: console
+        run: node tools/browser-ci-summary.mjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:

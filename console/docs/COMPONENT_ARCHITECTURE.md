@@ -1,5 +1,16 @@
 # ALFRED console: exact component architecture
 
+Current 3 October 2026 extension: [Refinement 09](REFINEMENT_09.md).
+ConsoleProvider now owns a visual presentation choice and observable activity;
+PresenceField shares KnowledgeSphere's single Canvas/RenderPipeline. A
+SurfaceMotion provider owns bounded DOM edge flights; SurfaceTrace marks the
+rail, executive panel, command bar, inspector and dialogs without copying
+their text. ReadAloud reports actual start/stop events to presentation only.
+The unchanged deck JPEG is the current brand, replacing the old SVG in the
+rail/favicon/standalone preview. This older architecture below is historical;
+the real authenticated DeskClient/backend connection is documented in
+CONNECTED_CONSOLE.md. It is already implemented, not a proposed endpoint.
+
 Revision 02, 27 September 2026. This describes the implemented presentation architecture, except where a connection is explicitly marked as proposed.
 
 ## Source and scope
