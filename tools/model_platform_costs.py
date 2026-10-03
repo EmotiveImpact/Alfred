@@ -84,10 +84,39 @@ def report():
                      'illustrative_credit_1000': base | {'credit_usd': 1000},
                      'illustrative_discount_20pct': base | {'negotiated_discount': .2},
                      'illustrative_gbp_tax': base | {'tax_fraction': .2, 'usd_to_reporting_currency': .75, 'reporting_currency': 'GBP'}}
+    # Current vendor references remain separate from the illustrative whole-stack
+    # rates. EUR and USD, GB and GiB, usage and subscriptions are not conflated.
+    provider_examples = {
+        'boxd': {'source': 'https://boxd.sh/pricing/', 'currency': 'EUR', 'tax': 'excludes VAT',
+                 'vcpu_hour_running': .049, 'resident_gib_hour_running_or_standby': .015,
+                 'written_gib_hour_all_states': .0001,
+                 'running_2vcpu_2gib_ram_20gib_written_hour': round(2*.049+2*.015+20*.0001,4),
+                 'same_shape_720h_running': round((2*.049+2*.015+20*.0001)*720,2),
+                 '20gib_written_720h_hibernated_disk_only': round(20*.0001*720,2),
+                 'credit': 'published EUR30 requires a payment method; default EUR20 auto top-up after credit exhaustion; not applied',
+                 'limits': 'Actual metered written/resident bytes required; memory dumps/snapshots/egress and custom terms need confirmation.'},
+        'e2b': {'source': 'https://e2b.dev/pricing', 'currency': 'USD',
+                'vcpu_second': .000014, 'gib_ram_second': .0000045, 'pro_month': 150,
+                '2vcpu_4gib_hour': round((2*.000014+4*.0000045)*3600,4),
+                '720_running_hours_plus_pro_month': round((2*.000014+4*.0000045)*3600*720+150,2),
+                'concurrency_addons_month': {'600':500,'1100':1000},
+                'published_session_limits': 'Hobby up to 1h, Pro up to 24h, Enterprise multi-day/persistent; availability not tested',
+                'credit': 'published one-time USD100 Hobby credit; not applied and eligibility not established',
+                'limits': 'Running-sandbox rate, not a durable Core quote. Provider-specific pause/snapshot/storage billing needs acceptance.'},
+        'nebius': {'source': 'https://www.nebius.com/prices', 'currency': 'USD',
+                   'effective_on': '2026-10-01', 'tax': 'excludes applicable taxes',
+                   'h100_gpu_hour':4.5,'h200_gpu_hour':5.4,'b200_gpu_hour':8.5,
+                   '720_h100_gpu_hours':3240,
+                   'limits': 'Use the effective-October-1 column, not the older adjacent rates. GPU-hours are not an instance quote; minimum shape, region and availability unverified. Spot prices fluctuate.'},
+        'pcloud': {'source':'https://www.pcloud.com/cloud-storage-pricing-plans','currency':'USD',
+                   'observed_lifetime_promotions':{'500GB':219,'2TB':499,'10TB':1499},
+                   'limits':'Observed one-time promotional display, not GB-month economics, reseller rights, a backend file-tier quote or a purchase recommendation.'}}
+    sensitivity = {k: estimate(deepcopy(w)) for k,w in sensitivities.items()}
+    sensitivity['nebius_public_h100_idle_720h'] = estimate(base | {'idle_gpu_hours':720}, RATES | {'gpu_hour_usd':4.5})
     return {'checked_on': '2026-10-03', 'provider_selected': False, 'rates': RATES,
             'rate_evidence': {'r2_standard': {'status': 'verified_list_price', 'source': R2_SOURCE,
                             'free_tier_applied_in_base': False, 'egress_from_r2_itself_usd': 0},
-                             'other_rates': 'illustrative assumptions, not vendor list prices or quotes',
+                             'other_rates': 'whole-stack rates are illustrative assumptions; separate current provider examples below are not selections or quotes',
                              'credits_discounts_currency_tax': 'scenario assumptions, no eligibility or live FX established'},
             'limits': ['Not a quote, capacity benchmark, approved budget or product valuation.',
                        'All backups modelled in one R2 account; separate providers and accounts need separate billing.',
@@ -95,7 +124,7 @@ def report():
                        'Credits assumed fully eligible only in labelled sensitivity; tax on vendor costs only.',
                        'Staff cost is explicit; commercial rent, legal, compliance, support escalation and margins are unpriced.'],
             'scenarios': {k: estimate(deepcopy(w)) for k, w in scenarios.items()},
-            'sensitivity_100_active': {k: estimate(deepcopy(w)) for k, w in sensitivities.items()}}
+            'sensitivity_100_active': sensitivity, 'current_provider_examples': provider_examples}
 
 
 def main():

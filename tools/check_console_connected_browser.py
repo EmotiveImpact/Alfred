@@ -42,6 +42,9 @@ if not (DIST / 'index.html').is_file():
 with tempfile.TemporaryDirectory() as temp:
     root = Path(temp); home = root / 'demo'; keys = init_demo(home)
     store = KnowledgeStore(home / 'desk.sqlite')
+    # Demo readers are deliberately granted the demo source. Use a fresh person
+    # to prove strict defaults and the later invitation redemption flow.
+    ungranted_reader = store.provision('demo-production', 'ungranted-reader', 'reader')
     sup = KnowledgeSupervisor(store, keys['owner'], keys['source'], home / 'project', vault=home / 'vault', interval=.2)
     sup.cycle(); sup.start()
     jobs, halt_jobs = start_local_jobs(store, keys['owner'], home)
@@ -473,7 +476,7 @@ with tempfile.TemporaryDirectory() as temp:
             check('revocation returns to sign-in and closes open dialogs', page.get_by_role('dialog').count() == 0)
             check('revocation clears every record', '0 records' in page.locator('.graph-view-label').inner_text() and 'Sample film' not in page.locator('body').inner_text())
             # Under strict grants another person sees nothing until granted. Counts leak nothing.
-            page.get_by_label('Access key').fill(keys['reader']); page.get_by_role('button', name='Sign in').click()
+            page.get_by_label('Access key').fill(ungranted_reader); page.get_by_role('button', name='Sign in').click()
             expect(page.locator('.connection-state')).to_have_text('Connected')
             expect(page.locator('.graph-view-label')).to_contain_text('0 records')
             check('a person without grants sees no records, names or counts', 'Sample film' not in page.locator('body').inner_text())

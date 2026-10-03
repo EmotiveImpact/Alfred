@@ -305,5 +305,241 @@
     "www.hetzner.com": "HTTP 403 egress restriction; no current hosting price verified"
   },
   "network_draft": "additive research domains saved; saving has not changed this runtime",
-  "limits": "Snapshots establish published claims and exact root licences, not independent product acceptance or service pricing."
+  "limits": "Snapshots establish published claims and exact root licences, not independent product acceptance or service pricing.",
+  "vendor_site_checks": [
+    {
+      "url": "https://boxd.sh/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://boxd.sh/",
+      "bytes": 262145,
+      "truncated": true,
+      "sha256": "3a4a08392172e03566456d6faea433173e86ef0ec250068cddbe9efa9237bdf7"
+    },
+    {
+      "url": "https://docs.boxd.sh/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://docs.boxd.sh/",
+      "bytes": 262145,
+      "truncated": true,
+      "sha256": "9c3fd38ef93e1a8bc71a9ae583e0c81960b661604ea9bbc63952afeebdce1a52"
+    },
+    {
+      "url": "https://space.computer/",
+      "checked_on": "2026-10-03",
+      "status": "unavailable",
+      "reason": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "url": "https://docs.space.computer/",
+      "checked_on": "2026-10-03",
+      "status": "unavailable",
+      "reason": "HTTP Error 503: Service Unavailable"
+    },
+    {
+      "url": "https://www.pcloud.com/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://www.pcloud.com/",
+      "bytes": 262145,
+      "truncated": true,
+      "sha256": "efacb21ed0451f4e54c12d89fb5d30faf680622ec9f7561942b7031990a15f0a"
+    },
+    {
+      "url": "https://help.pcloud.com/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://help.pcloud.com/",
+      "bytes": 58927,
+      "truncated": false,
+      "sha256": "a7dc7b01e851a2e0ab60e332e3deba48d14362e30feb46d9699147bbea03f68f"
+    },
+    {
+      "url": "https://e2b.dev/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://e2b.dev/",
+      "bytes": 262145,
+      "truncated": true,
+      "sha256": "3071fc2810be0f4467c07dbf93e2e3ac5b82fc8332755dfa0efe66bb188c9980"
+    },
+    {
+      "url": "https://www.ovhcloud.com/",
+      "checked_on": "2026-10-03",
+      "status": "unavailable",
+      "reason": "<urlopen error Tunnel connection failed: 403 Forbidden>"
+    },
+    {
+      "url": "https://www.scaleway.com/",
+      "checked_on": "2026-10-03",
+      "status": "unavailable",
+      "reason": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://www.digitalocean.com/",
+      "checked_on": "2026-10-03",
+      "status": "unavailable",
+      "reason": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://www.backblaze.com/",
+      "checked_on": "2026-10-03",
+      "status": "unavailable",
+      "reason": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://www.nebius.com/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://nebius.com/",
+      "bytes": 262145,
+      "truncated": true,
+      "sha256": "48a81b3af1b8ae2c1d13d4baf12b8e475b11af70680606fd60a72a11bda7f5e7"
+    },
+    {
+      "url": "https://www.nscale.com/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://www.nscale.com/",
+      "bytes": 128313,
+      "truncated": false,
+      "sha256": "662a80a606c5282975733762ad270317c4ef7cecf78ed72a605dc147d91f662e"
+    },
+    {
+      "url": "https://www.telehouse.net/",
+      "checked_on": "2026-10-03",
+      "status": "unavailable",
+      "reason": "HTTP Error 403: Forbidden"
+    },
+    {
+      "url": "https://www.digitalrealty.com/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://www.digitalrealty.com/",
+      "bytes": 262145,
+      "truncated": true,
+      "sha256": "eef956f50f25c4d9a374b987486101dad3054affd9c6b3ff8c1a3bc60625cbf2"
+    }
+  ],
+  "vendor_detail_checks": [
+    {
+      "url": "https://boxd.sh/pricing/",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://boxd.sh/pricing/",
+      "bytes": 84581,
+      "truncated": false,
+      "sha256": "98b4105652c457bbc5fc19e9e38418de5ee95b59388b39caeaf49d937cf3cf2d"
+    },
+    {
+      "url": "https://docs.boxd.sh/guides/fork.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://docs.boxd.sh/guides/fork.md",
+      "bytes": 4571,
+      "truncated": false,
+      "sha256": "b6bf996c5b89fb7c31603d235d2e0b323b524d14931cd5c4b751b42bfc4f2175"
+    },
+    {
+      "url": "https://docs.boxd.sh/guides/snapshots.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://docs.boxd.sh/guides/snapshots.md",
+      "bytes": 5728,
+      "truncated": false,
+      "sha256": "39023f1be537c452eb07012342e1cf7088612bc46b82dcb584767743ae3e6a07"
+    },
+    {
+      "url": "https://docs.boxd.sh/guides/resources.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://docs.boxd.sh/guides/resources.md",
+      "bytes": 3150,
+      "truncated": false,
+      "sha256": "16863dac3b320919894b4f948ccb44bd6fab310e15d592442b5a26fb754a8b61"
+    },
+    {
+      "url": "https://docs.boxd.sh/guides/disaster-recovery.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://docs.boxd.sh/guides/disaster-recovery.md",
+      "bytes": 6375,
+      "truncated": false,
+      "sha256": "d2ea6a001a79cc644b65d5508d7772266cc73edcf0a9001e4f67662d7286e83c"
+    },
+    {
+      "url": "https://docs.boxd.sh/guides/egress-allowlist.md",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://docs.boxd.sh/guides/egress-allowlist.md",
+      "bytes": 3022,
+      "truncated": false,
+      "sha256": "83da3e87b999a25f553f928b5c29fdd52fcd96b12c4efafe22162a4cf174208d"
+    },
+    {
+      "url": "https://www.pcloud.com/features/synchronization",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://www.pcloud.com/features/synchronization",
+      "bytes": 116706,
+      "truncated": false,
+      "sha256": "64c1bf72439b441aa6e5311a03032e2abd23959e692e49115c126ddd0f982266"
+    },
+    {
+      "url": "https://www.pcloud.com/cloud-storage-pricing-plans",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://www.pcloud.com/cloud-storage-pricing-plans",
+      "bytes": 237387,
+      "truncated": false,
+      "sha256": "537ca4ae8504d923b9ed8f661424493c66a445601b36839029f702d254beaaff"
+    },
+    {
+      "url": "https://www.pcloud.com/terms_and_conditions",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://www.pcloud.com/terms_and_conditions",
+      "bytes": 170130,
+      "truncated": false,
+      "sha256": "b049ae4c315831f6f9ef584a35774b92c40425b9afe655ac4bf5b6e68690fb28"
+    },
+    {
+      "url": "https://e2b.dev/pricing",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://e2b.dev/pricing",
+      "bytes": 204581,
+      "truncated": false,
+      "sha256": "6d468a7a2611773cdeceda895a7377ac6a27c1cf3b78755fff5271d2c2a3e99a"
+    },
+    {
+      "url": "https://www.nebius.com/prices",
+      "checked_on": "2026-10-03",
+      "status": "read",
+      "http_status": 200,
+      "final_url": "https://nebius.com/prices",
+      "bytes": 269826,
+      "truncated": false,
+      "sha256": "6ba819ef0e09ce07b166695a47ac9e6d72874a80223b157610b0211f86912c17"
+    }
+  ]
 }

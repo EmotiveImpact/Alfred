@@ -21,7 +21,7 @@
       "free_tier_applied_in_base": false,
       "egress_from_r2_itself_usd": 0
     },
-    "other_rates": "illustrative assumptions, not vendor list prices or quotes",
+    "other_rates": "whole-stack rates are illustrative assumptions; separate current provider examples below are not selections or quotes",
     "credits_discounts_currency_tax": "scenario assumptions, no eligibility or live FX established"
   },
   "limits": [
@@ -613,6 +613,116 @@
       "monthly_total_usd": 1991.4,
       "post_credit_monthly_total_usd": 1991.4,
       "monthly_reporting_currency": 1493.55
+    },
+    "nebius_public_h100_idle_720h": {
+      "workload": {
+        "active_users": 100,
+        "sessions_per_user": 15,
+        "model_calls_per_session": 3,
+        "input_tokens_per_call": 3000,
+        "output_tokens_per_call": 600,
+        "jobs_per_session": 2,
+        "cpu_seconds_per_job": 60,
+        "gpu_seconds_per_job": 0,
+        "idle_cpu_hours": 24,
+        "idle_gpu_hours": 720,
+        "core_instances": 2,
+        "stored_gb_per_user": 2,
+        "backup_copies": 2,
+        "additional_file_replicas": 0,
+        "class_a_requests_per_session": 20,
+        "class_b_requests_per_session": 100,
+        "other_egress_gb_per_user": 0.1,
+        "staff_hours": 40,
+        "native_signing_annual_usd": 0,
+        "r2_free_tier": false,
+        "credit_usd": 0,
+        "negotiated_discount": 0,
+        "tax_fraction": 0,
+        "usd_to_reporting_currency": 1.0,
+        "reporting_currency": "USD"
+      },
+      "monthly_sessions": 1500,
+      "monthly_model_calls": 4500,
+      "monthly_input_mtokens": 13.5,
+      "monthly_output_mtokens": 2.7,
+      "billable_r2": {
+        "gb_month": 600,
+        "class_a_millions": 1,
+        "class_b_millions": 1
+      },
+      "vendor_line_items_usd": {
+        "model_input": 13.5,
+        "model_output": 10.8,
+        "worker_cpu_active_and_idle": 4.44,
+        "worker_gpu_active_and_idle": 3240.0,
+        "core_reserved": 96.0,
+        "storage_with_backups_and_replicas": 9.0,
+        "rounded_class_a_requests": 4.5,
+        "rounded_class_b_requests": 0.36,
+        "other_service_egress": 0.9,
+        "monitoring": 20.0,
+        "native_signing": 0.0
+      },
+      "vendor_list_usd": 3399.5,
+      "vendor_discounted_usd": 3399.5,
+      "credit_applied_usd": 0,
+      "staff_usd": 1800.0,
+      "monthly_total_usd": 5199.5,
+      "post_credit_monthly_total_usd": 5199.5,
+      "monthly_reporting_currency": 5199.5
+    }
+  },
+  "current_provider_examples": {
+    "boxd": {
+      "source": "https://boxd.sh/pricing/",
+      "currency": "EUR",
+      "tax": "excludes VAT",
+      "vcpu_hour_running": 0.049,
+      "resident_gib_hour_running_or_standby": 0.015,
+      "written_gib_hour_all_states": 0.0001,
+      "running_2vcpu_2gib_ram_20gib_written_hour": 0.13,
+      "same_shape_720h_running": 93.6,
+      "20gib_written_720h_hibernated_disk_only": 1.44,
+      "credit": "published EUR30 requires a payment method; default EUR20 auto top-up after credit exhaustion; not applied",
+      "limits": "Actual metered written/resident bytes required; memory dumps/snapshots/egress and custom terms need confirmation."
+    },
+    "e2b": {
+      "source": "https://e2b.dev/pricing",
+      "currency": "USD",
+      "vcpu_second": 1.4e-05,
+      "gib_ram_second": 4.5e-06,
+      "pro_month": 150,
+      "2vcpu_4gib_hour": 0.1656,
+      "720_running_hours_plus_pro_month": 269.23,
+      "concurrency_addons_month": {
+        "600": 500,
+        "1100": 1000
+      },
+      "published_session_limits": "Hobby up to 1h, Pro up to 24h, Enterprise multi-day/persistent; availability not tested",
+      "credit": "published one-time USD100 Hobby credit; not applied and eligibility not established",
+      "limits": "Running-sandbox rate, not a durable Core quote. Provider-specific pause/snapshot/storage billing needs acceptance."
+    },
+    "nebius": {
+      "source": "https://www.nebius.com/prices",
+      "currency": "USD",
+      "effective_on": "2026-10-01",
+      "tax": "excludes applicable taxes",
+      "h100_gpu_hour": 4.5,
+      "h200_gpu_hour": 5.4,
+      "b200_gpu_hour": 8.5,
+      "720_h100_gpu_hours": 3240,
+      "limits": "Use the effective-October-1 column, not the older adjacent rates. GPU-hours are not an instance quote; minimum shape, region and availability unverified. Spot prices fluctuate."
+    },
+    "pcloud": {
+      "source": "https://www.pcloud.com/cloud-storage-pricing-plans",
+      "currency": "USD",
+      "observed_lifetime_promotions": {
+        "500GB": 219,
+        "2TB": 499,
+        "10TB": 1499
+      },
+      "limits": "Observed one-time promotional display, not GB-month economics, reseller rights, a backend file-tier quote or a purchase recommendation."
     }
   }
 }
