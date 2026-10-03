@@ -408,6 +408,10 @@ with tempfile.TemporaryDirectory() as temp:
             page.get_by_label('Access key').fill(keys['owner']); page.get_by_role('button', name='Sign in').click()
             expect(page.locator('.connection-state')).to_have_text('Connected')
             # M02: the owner manages grants and invites another person, from the console.
+            # The demo's deliberate model grant is independent of its read grant.
+            # Revoke it explicitly before exercising the UI's grant flow.
+            policy.grant(keys['owner'], 'demo-source', 'model', store.now() + 3600,
+                         policy.view(keys['owner'])['epoch'], revoke=True)
             page.get_by_role('button', name='Data and permissions').click()
             security = page.get_by_role('dialog')
             expect(security).to_contain_text('Explicit grants', timeout=15000)

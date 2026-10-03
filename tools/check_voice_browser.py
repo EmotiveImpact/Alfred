@@ -120,7 +120,7 @@ with tempfile.TemporaryDirectory() as temp:
             ask.locator('.spoken-text summary').click()
             shown = ask.locator('.spoken-text p').inner_text().strip()
             spoken = page.evaluate('window.__spoken')
-            check('exactly the text shown is the text spoken', spoken == [shown] and shown.startswith('You asked: What still needs confirming?'))
+            check('exactly the text shown is the text spoken', spoken == [shown] and shown.startswith('You asked: What needs equipment collection confirmation?'))
             check('the spoken text says it is the notes read aloud, not a generated answer', shown.endswith('not a generated answer.'))
             check('played is recorded as a device report, not as heard',
                   settled(lambda: [r['outcome'] for r in records()] == ['ended']) and records()[0]['acknowledged'] is None)
