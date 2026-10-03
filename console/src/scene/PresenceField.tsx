@@ -68,7 +68,9 @@ export function PresenceField({activity,moving,reduced,high}:{activity:PresenceA
   useFrame((_,dt)=>{
     const live=material.current?.uniforms;if(!live)return;
     const bounds=viewport.getCurrentViewport(camera,origin);
-    live.uRadius.value=Math.min(bounds.height*.23,bounds.width*.28);live.uDpr.value=gl.getPixelRatio();
+    // The loose swarm is wider than the mark. Fit both into narrow viewports,
+    // interpolating the fit with the actual gather to avoid a scale jump on focus.
+    live.uRadius.value=Math.min(bounds.height*.23,bounds.width*(.21+.07*live.uGather.value));live.uDpr.value=gl.getPixelRatio();
     if(moving){time.current+=Math.min(dt,.05);live.uTime.value=time.current;live.uGather.value+=(target-live.uGather.value)*(1-Math.exp(-Math.min(dt,.5)*4));}
   });
   return <points geometry={geometry} frustumCulled={false} renderOrder={10}><shaderMaterial ref={material} vertexShader={vertex} fragmentShader={fragment} uniforms={uniforms} transparent depthWrite={false} depthTest={false}/></points>;

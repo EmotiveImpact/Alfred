@@ -83,7 +83,11 @@ test('offline Consciousness preview makes no HTTP or capture requests',async({pa
   await page.waitForTimeout(800);expect(requests).toEqual([]);expect(errors).toEqual([]);
 });
 test('mobile view tools remain reachable without horizontal overflow',async({page})=>{
-  await page.setViewportSize({width:390,height:844});await page.goto('/');
+  await page.setViewportSize({width:390,height:844});
+  // Some Chromium builds clamp the old off-viewport pointer to the rail when
+  // resizing. Begin outside it after resizing, as the other portrait checks do.
+  await page.mouse.move(380,10);await page.goto('/');
+  await expect(page.locator('.navigation-rail')).not.toHaveClass(/is-expanded/);
   await page.getByRole('button',{name:'Consciousness',exact:true}).click();
   await expect(page.getByRole('button',{name:'Browse',exact:true})).toBeInViewport();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
