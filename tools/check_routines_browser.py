@@ -378,7 +378,7 @@ with tempfile.TemporaryDirectory() as temp:
 
             # 8. Access withdrawn: cited values and the procedure disappear from view.
             policy = IdentityPolicy(store)
-            policy.enable(owner, policy.view(owner)['epoch'])
+            policy.grant(owner, 'demo-source', 'read', store.now()+1, policy.view(owner)['epoch'], revoke=True)
             expect(page.locator('.toast')).to_contain_text('Access changed', timeout=15000)
             dialog = open_routines('Nominations')
             decided = dialog.get_by_label('Decided nominations')

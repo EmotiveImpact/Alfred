@@ -35,11 +35,11 @@ class Fixture(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name);self.clock=[1000]
         self.store=KnowledgeStore(self.root/'desk.db',clock=lambda:self.clock[0])
-        self.owner=self.store.provision('work','owner','owner',ttl=200000)
-        self.reader=self.store.provision('work','reader','reader',ttl=200000)
-        self.other=self.store.provision('work','another-owner','owner',ttl=200000)
-        self.foreign=self.store.provision('elsewhere','foreign','owner',ttl=200000)
-        self.source=self.store.provision('work','source','source',ttl=200000)
+        self.owner=self.store.provision('work','owner','owner',ttl=200000, legacy_scope=True)
+        self.reader=self.store.provision('work','reader','reader',ttl=200000, legacy_scope=True)
+        self.other=self.store.provision('work','another-owner','owner',ttl=200000, legacy_scope=True)
+        self.foreign=self.store.provision('elsewhere','foreign','owner',ttl=200000, legacy_scope=True)
+        self.source=self.store.provision('work','source','source',ttl=200000, legacy_scope=True)
         self.vault=self.root/'vault';self.vault.mkdir();self.file=self.vault/'Record.md'
         self.file.write_text('# Original record\nThe original assignment names Mina.\nAn alternative assignment names Sam.\nThe recorded stage is planning.\n')
         self.scanner=MarkdownVault(self.store,self.source,self.vault);self.scanner.scan()

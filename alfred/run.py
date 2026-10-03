@@ -16,6 +16,9 @@ def demonstration():
         core=LocalCore(path)
         owner=core.provision('demo','demo-owner','owner')
         source=core.provision('demo','demo-feed','source')
+        from .policy import IdentityPolicy
+        policy = IdentityPolicy(core)
+        policy.grant(owner,'demo-feed','read',core.now()+600,policy.view(owner)['epoch'])
         now=int(time.time())
         print('Synthetic workspace. Real local persistence; no live AI or external messages.')
         print(json.dumps(core.ingest(source,{'id':'brief-1','subject':'production','kind':'briefing.changed',

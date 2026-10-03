@@ -50,12 +50,12 @@ class Base(unittest.TestCase):
         self.db_path = self.root / 'ledger.db'
         self.store = self.open_store()
         provision = self.store.provision
-        self.owner = provision('work', 'owner', 'owner', ttl=100000)
-        self.second = provision('work', 'owner-2', 'owner', ttl=100000)
-        self.reader = provision('work', 'reader', 'reader', ttl=100000)
-        self.source = provision('work', 'source', 'source', ttl=100000)
-        self.hidden = provision('work', 'hidden', 'source', ttl=100000)
-        self.foreign = provision('other', 'foreign', 'owner', ttl=100000)
+        self.owner = provision('work', 'owner', 'owner', ttl=100000, legacy_scope=True)
+        self.second = provision('work', 'owner-2', 'owner', ttl=100000, legacy_scope=True)
+        self.reader = provision('work', 'reader', 'reader', ttl=100000, legacy_scope=True)
+        self.source = provision('work', 'source', 'source', ttl=100000, legacy_scope=True)
+        self.hidden = provision('work', 'hidden', 'source', ttl=100000, legacy_scope=True)
+        self.foreign = provision('other', 'foreign', 'owner', ttl=100000, legacy_scope=True)
         self.vault = self.root / 'vault'
         self.vault.mkdir()
         (self.vault / 'Plan.md').write_text(PLAN)

@@ -21,9 +21,9 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name); self.clock = [1000]
         self.store = KnowledgeStore(self.root / 'desk.sqlite', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=2592000, legacy_scope=True)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas launches in spring.\n')
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()

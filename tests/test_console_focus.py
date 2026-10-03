@@ -20,16 +20,16 @@ class FocusTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name); self.clock = [1000]
         self.store = KnowledgeStore(root / 'desk.db', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=100000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=100000, legacy_scope=True)
         self.vault = root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas project\nAtlas launches after the review.\n[[Budget]]\n')
         (self.vault / 'Budget.md').write_text('# Budget\nThe budget is provisional.\n')
         (self.vault / 'Weather.md').write_text('# Weather\nRain expected on Tuesday.\n')
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
-        other_source = self.store.provision('elsewhere', 'other-source', 'source', ttl=100000)
-        self.other_owner = self.store.provision('elsewhere', 'other-owner', 'owner', ttl=100000)
+        other_source = self.store.provision('elsewhere', 'other-source', 'source', ttl=100000, legacy_scope=True)
+        self.other_owner = self.store.provision('elsewhere', 'other-owner', 'owner', ttl=100000, legacy_scope=True)
         other = root / 'other'; other.mkdir(); (other / 'Secret.md').write_text('# Secret\nAnother workspace.\n')
         MarkdownVault(self.store, other_source, other).scan()
         self.memory = ReviewedMemory(self.store)
@@ -69,7 +69,7 @@ class FocusTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'focus_not_available')
 
     def test_ungranted_source_cannot_be_focused_under_strict_policy(self):
-        hidden_source = self.store.provision('work', 'hidden-source', 'source', ttl=100000)
+        hidden_source = self.store.provision('work', 'hidden-source', 'source', ttl=100000, legacy_scope=True)
         folder = Path(self.tmp.name) / 'hidden'; folder.mkdir(); (folder / 'Private.md').write_text('# Private\nUngranted.\n')
         MarkdownVault(self.store, hidden_source, folder).scan()
         private = self.note('Private')['id']

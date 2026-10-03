@@ -84,7 +84,7 @@ class DeskTests(unittest.TestCase):
     def test_revoked_source_invalidates_read_view(self):
         self.store.revoke('demo-source');self.assertTrue(all(e['status']=='source_unavailable' for e in self.state()['events']))
     def test_scope_is_resolved_from_reader_key(self):
-        other=self.store.provision('other','other-reader','reader');self.assertEqual(self.store.desk_state(other)['events'],[])
+        other=self.store.provision('other','other-reader','reader', legacy_scope=True);self.assertEqual(self.store.desk_state(other)['events'],[])
         with self.assertRaises(Fault):self.store.evidence(other,self.event()['seq'])
     def test_reader_cannot_propose(self):
         with self.assertRaises(Fault):self.store.propose_from_evidence(self.keys['reader'],{'event_seq':self.event()['seq'],'text':'hello','request_id':'x'})

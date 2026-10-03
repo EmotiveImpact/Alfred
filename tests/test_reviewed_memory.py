@@ -11,9 +11,9 @@ from alfred.reviewed_memory import ReviewedMemory
 class MemoryTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=Path(self.tmp.name);self.clock=[1000]
-        self.store=KnowledgeStore(self.root/'db',clock=lambda:self.clock[0]);self.owner=self.store.provision('personal','owner','owner',ttl=100000)
-        self.other=self.store.provision('personal','other','owner');self.reader=self.store.provision('personal','reader','reader');self.source=self.store.provision('personal','source','source',ttl=100000)
-        self.foreign=self.store.provision('other-scope','foreign','owner');self.vault=self.root/'vault';self.vault.mkdir()
+        self.store=KnowledgeStore(self.root/'db',clock=lambda:self.clock[0]);self.owner=self.store.provision('personal','owner','owner',ttl=100000, legacy_scope=True)
+        self.other=self.store.provision('personal','other','owner', legacy_scope=True);self.reader=self.store.provision('personal','reader','reader', legacy_scope=True);self.source=self.store.provision('personal','source','source',ttl=100000, legacy_scope=True)
+        self.foreign=self.store.provision('other-scope','foreign','owner', legacy_scope=True);self.vault=self.root/'vault';self.vault.mkdir()
         self.file=self.vault/'Atlas.md';self.file.write_text('# Atlas\nMina is responsible for Atlas.\nAtlas is in planning.\nThe alternative report names Sam.\n')
         self.scan=MarkdownVault(self.store,self.source,self.vault);self.scan.scan();self.memory=ReviewedMemory(self.store)
         for eid,kind,name in [('atlas','project','Atlas'),('mina','person','Mina'),('sam','person','Sam')]:self.memory.create_entity(self.owner,{'id':eid,'kind':kind,'name':name})

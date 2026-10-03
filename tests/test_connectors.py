@@ -58,9 +58,9 @@ class Base(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.clock = [1_790_000_000]
         self.store = KnowledgeStore(self.root / 'desk.sqlite', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
-        self.vault_key = self.store.provision('work', 'vault', 'source', ttl=2592000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000, legacy_scope=True)
+        self.vault_key = self.store.provision('work', 'vault', 'source', ttl=2592000, legacy_scope=True)
         vault = self.root / 'vault'
         vault.mkdir()
         (vault / 'Atlas.md').write_text('# Atlas\nAtlas is a sample project.\n')
@@ -155,8 +155,8 @@ class ContractTests(unittest.TestCase):
     def test_legacy_scope_policy_never_permits_connector_reads(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = KnowledgeStore(Path(tmp) / 'desk.sqlite')
-            owner = store.provision('legacy', 'owner', 'owner')
-            store.provision('legacy', 'feed', 'source')
+            owner = store.provision('legacy', 'owner', 'owner', legacy_scope=True)
+            store.provision('legacy', 'feed', 'source', legacy_scope=True)
             with store.connection() as db:
                 p = store.authenticate(db, owner, {'owner'})
                 self.assertTrue(permitted(db, p, 'feed', store.now(), 'read'))
@@ -496,7 +496,7 @@ class AccessTests(Base):
         self.refused('unauthorised', self.run_import, self.bearer, calendar(event('a@example.org', 'Planning review')))
 
     def test_another_workspace_sees_and_reaches_nothing(self):
-        stranger = self.store.provision('elsewhere', 'stranger', 'owner', ttl=2592000)
+        stranger = self.store.provision('elsewhere', 'stranger', 'owner', ttl=2592000, legacy_scope=True)
         self.assertEqual(self.store.knowledge(stranger)['nodes'], [])
         self.assertEqual(connectors.status(self.store, stranger)['connectors'], [])
         self.refused('connector_not_found', connectors.run_import, self.store, stranger, self.bearer, self.export(calendar(), 'x.ics'))
@@ -566,7 +566,7 @@ class ConsoleHTTPTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name) / 'demo'
-        self.keys = init_demo(self.home)
+        self.keys = init_demo(self.home, legacy_scope=True)
         self.store = KnowledgeStore(self.home / 'desk.sqlite')
         self.sup = KnowledgeSupervisor(self.store, self.keys['owner'], self.keys['source'], self.home / 'project', vault=self.home / 'vault')
         self.sup.cycle()
@@ -669,7 +669,7 @@ class CommandTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.home = Path(self.tmp.name) / 'demo'
-        self.keys = init_demo(self.home)
+        self.keys = init_demo(self.home, legacy_scope=True)
         self.store = KnowledgeStore(self.home / 'desk.sqlite')
         policy = IdentityPolicy(self.store)
         policy.enable(self.keys['owner'], 0)
@@ -738,7 +738,7 @@ class CommandTests(unittest.TestCase):
         listed = run('connectors')
         self.assertEqual((listed.returncode, listed.stdout.strip()), (0, 'No connector sources. Create one with connector-add.'))
         legacy = Path(self.tmp.name) / 'legacy'
-        init_demo(legacy)
+        init_demo(legacy, legacy_scope=True)
         refused = subprocess.run([sys.executable, '-m', 'alfred.desk', 'connector-add', '--connector', 'ics-export',
                                   '--connector-label', 'Calendar export', '--data-dir', str(legacy)],
                                  cwd=REPOSITORY, capture_output=True, text=True, timeout=60)
@@ -756,7 +756,7 @@ class KeyLifecycleTests(unittest.TestCase):
         self.path = Path(self.tmp.name)
         self.clock = [1_790_000_000]
         self.store = KnowledgeStore(self.path / 'desk.sqlite', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000, legacy_scope=True)
         IdentityPolicy(self.store).enable(self.owner, 0)
         stored = connectors.load_connector_keys(self.path)
         self.source = connectors.create_instance(self.store, self.owner, 'ics-export', 'Calendar export',

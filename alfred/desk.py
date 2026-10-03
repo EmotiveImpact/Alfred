@@ -29,7 +29,7 @@ def private_home(path):
     return path
 
 
-def init_demo(path):
+def init_demo(path, *, legacy_scope=False):
     # Live files never go where a sync tool, Git or a vault could hold them (MEM-014).
     check_data_directory(path)
     path = private_home(path)
@@ -37,7 +37,16 @@ def init_demo(path):
     if config.exists() or config.is_symlink() or (path / 'desk.sqlite').exists():
         raise Fault('desk_already_initialised', 409)
     store = DeskStore(path / 'desk.sqlite')
-    credentials = {role: store.provision('demo-production', 'demo-' + role, role) for role in ('owner', 'reader', 'source')}
+    credentials = {role: store.provision('demo-production', 'demo-' + role, role, legacy_scope=legacy_scope) for role in ('owner', 'reader', 'source')}
+    # Deliberate demonstration grants, never inherited whole-workspace access.
+    with store.transaction() as db:
+        source = db.execute("SELECT id,expires FROM credentials WHERE id='demo-source'").fetchone()
+        for role in ('owner','reader'):
+            p = store.authenticate(db,credentials[role],{role})
+            capabilities = ('read','model') if role == 'owner' else ('read',)
+            for capability in (() if legacy_scope else capabilities):
+                db.execute('INSERT INTO source_grants VALUES (?,?,?,?,?)',
+                           (p['scope'],p['person_id'],source['id'],capability,source['expires']))
     fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w') as stream:
         json.dump(credentials, stream)
@@ -160,7 +169,9 @@ def start_local_jobs(store, owner, path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
-                                            'connector-add', 'connector-import', 'connectors'))
+                                            'connector-add', 'connector-import', 'connectors', 'migrate-grants'))
+    parser.add_argument('--preserve-legacy-reads', action='store_true',
+                        help='For migrate-grants only: explicitly retain recorded legacy read access; model/write access is not migrated')
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
@@ -195,6 +206,16 @@ def main():
         elif args.command == 'access':
             # Explicit secret-reveal command, never used in CI logs or screenshots.
             print(load_keys(path)[args.role])
+        elif args.command == 'migrate-grants':
+            from .policy import IdentityPolicy
+            from .connectors import offline
+            with offline(path):
+                store = DeskStore(path / 'desk.sqlite')
+                owner = load_keys(path)['owner']
+                policy = IdentityPolicy(store)
+                receipt = policy.migrate_legacy(owner,policy.view(owner)['epoch'],
+                                                preserve_reads=args.preserve_legacy_reads)
+                print(json.dumps(receipt,sort_keys=True))
         elif args.command == 'backup':
             from .lifecycle import backup
             manifest = backup(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], path / 'backups')

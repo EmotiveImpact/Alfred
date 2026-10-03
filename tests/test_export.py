@@ -36,10 +36,10 @@ class ExportTests(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name); self.clock = [1_000_000]
         self.store = KnowledgeStore(self.root / 'desk.sqlite', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
-        self.other = self.store.provision('work', 'other', 'source', ttl=2592000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=2592000, legacy_scope=True)
+        self.other = self.store.provision('work', 'other', 'source', ttl=2592000, legacy_scope=True)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\n'
                                              'The opening is monochrome.\nThe opening is now in colour.\n'

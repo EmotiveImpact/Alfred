@@ -19,7 +19,7 @@ from alfred.desk_http import DeskHTTPServer
 class JobsHTTPTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        home = Path(self.tmp.name) / 'demo'; self.keys = init_demo(home)
+        home = Path(self.tmp.name) / 'demo'; self.keys = init_demo(home, legacy_scope=True)
         self.store = KnowledgeStore(home / 'desk.sqlite')
         sup = KnowledgeSupervisor(self.store, self.keys['owner'], self.keys['source'], home / 'project', vault=home / 'vault'); sup.cycle()
         self.jobs, halt = start_local_jobs(self.store, self.keys['owner'], home)

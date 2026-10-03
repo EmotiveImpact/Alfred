@@ -281,7 +281,7 @@ with tempfile.TemporaryDirectory() as temp:
             tasks.get_by_label('Close panel').click()
             # Access is rechecked when a brief is assembled.
             policy = IdentityPolicy(store)
-            policy.enable(owner, policy.view(owner)['epoch'])
+            policy.grant(owner, 'demo-source', 'read', store.now()+1, policy.view(owner)['epoch'], revoke=True)
             expect(page.locator('.toast')).to_contain_text('Access changed', timeout=15000)
             command.fill('tasks'); command.press('Enter')
             tasks = page.get_by_role('dialog')

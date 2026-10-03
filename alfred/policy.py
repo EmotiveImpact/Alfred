@@ -1,7 +1,7 @@
 """Explicit local person/device enrolment and source capability decisions.
 
-Legacy workspaces retain their documented coarse scope policy until an owner
-enables grants. Enabling is fail closed. Names never link people. Device review
+New workspaces are default-deny. Legacy access is a bounded migration snapshot,
+never a grant to new credentials or sources. Names never link people. Device review
 ledgers remain separate even after explicit enrolment into the same person.
 """
 import hashlib
@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS identity_devices(
  credential TEXT PRIMARY KEY REFERENCES credentials(id), person TEXT NOT NULL,
  device TEXT UNIQUE NOT NULL, generation INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS source_policy(scope TEXT PRIMARY KEY, strict INTEGER NOT NULL, epoch INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS source_policy_migrations(scope TEXT PRIMARY KEY, mode TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS source_legacy_access(
+ scope TEXT NOT NULL, credential TEXT NOT NULL, source TEXT NOT NULL, expires INTEGER NOT NULL,
+ PRIMARY KEY(scope,credential,source));
 CREATE TABLE IF NOT EXISTS source_grants(
  scope TEXT NOT NULL, person TEXT NOT NULL, source TEXT NOT NULL, capability TEXT NOT NULL,
  expires INTEGER NOT NULL, PRIMARY KEY(scope,person,source,capability));
@@ -35,10 +39,33 @@ CREATE TABLE IF NOT EXISTS memory_tombstones(
 
 def initialise(db):
     db.executescript(SCHEMA)
-    # Each old credential becomes a different person. This is a migration, not
-    # an assertion about the identity of its bearer.
-    for row in db.execute('SELECT id FROM credentials').fetchall():
-        enrol(db, row['id'])
+    # Capture compatibility once, atomically. Reopening/adding a credential must
+    # never enlarge this snapshot. Expiry/revocation still apply at every read.
+    db.execute('BEGIN IMMEDIATE')
+    try:
+        for row in db.execute('SELECT id FROM credentials').fetchall():
+            enrol(db, row['id'])
+        for workspace in db.execute('SELECT id FROM workspaces').fetchall():
+            scope = workspace['id']
+            if db.execute('SELECT 1 FROM source_policy_migrations WHERE scope=?', (scope,)).fetchone():
+                continue
+            policy = db.execute('SELECT strict FROM source_policy WHERE scope=?', (scope,)).fetchone()
+            db.execute('INSERT OR IGNORE INTO source_policy VALUES (?,0,0)', (scope,))
+            legacy = not policy or not policy['strict']
+            if legacy:
+                snapshot_legacy(db, scope)
+            db.execute('INSERT INTO source_policy_migrations VALUES (?,?,0)',
+                       (scope, 'legacy_snapshot' if legacy else 'explicit_existing'))
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+
+
+def snapshot_legacy(db, scope):
+    db.execute('''INSERT OR IGNORE INTO source_legacy_access
+        SELECT a.scope,a.id,s.id,min(a.expires,s.expires) FROM credentials a JOIN credentials s ON s.scope=a.scope
+        WHERE a.scope=? AND a.role IN ('owner','reader') AND s.role='source' AND a.revoked=0 AND s.revoked=0''', (scope,))
 
 
 def enrol(db, credential):
@@ -52,9 +79,16 @@ def permitted(db, principal, source, now, capability='read'):
     row = db.execute('SELECT scope,role,revoked,expires FROM credentials WHERE id=?', (source,)).fetchone()
     if not row or row['scope'] != principal['scope'] or row['role'] != 'source' or row['revoked'] or row['expires'] <= now:
         return False
+    actor = db.execute('SELECT scope,role,revoked,expires FROM credentials WHERE id=?', (principal['id'],)).fetchone()
+    if not actor or actor['scope'] != principal['scope'] or actor['role'] not in {'owner','reader'} or actor['revoked'] or actor['expires'] <= now:
+        return False
     policy = db.execute('SELECT strict FROM source_policy WHERE scope=?', (principal['scope'],)).fetchone()
-    if not policy or not policy['strict']:
-        return capability in {'read', 'model'}
+    if not policy:
+        return False
+    if not policy['strict']:
+        return capability in {'read', 'model'} and bool(db.execute(
+            'SELECT 1 FROM source_legacy_access WHERE scope=? AND credential=? AND source=? AND expires>?',
+            (principal['scope'],principal['id'],source,now)).fetchone())
     device = db.execute('SELECT person FROM identity_devices WHERE credential=?', (principal['id'],)).fetchone()
     return bool(device and db.execute('''SELECT 1 FROM source_grants WHERE scope=? AND person=?
         AND source=? AND capability=? AND expires>?''',
@@ -69,6 +103,7 @@ class IdentityPolicy:
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
             row = db.execute('SELECT * FROM source_policy WHERE scope=?', (p['scope'],)).fetchone()
+            migration = db.execute('SELECT mode,at FROM source_policy_migrations WHERE scope=?',(p['scope'],)).fetchone()
             now = self.store.now()
             grants = [dict(r) for r in db.execute('''SELECT source,capability,expires FROM source_grants
                 WHERE scope=? AND person=? AND expires>? ORDER BY source,capability''',
@@ -95,6 +130,7 @@ class IdentityPolicy:
             return {'person_id':p['person_id'], 'device_id':p['device_id'], 'generation':p['generation'],
                     'scope':p['scope'], 'role':p['role'], 'mode':'explicit_grants' if row and row['strict'] else 'legacy_scope',
                     'epoch':row['epoch'] if row else 0, 'grants':grants, 'sources':sources, 'devices':devices,
+                    'migration':dict(migration) if migration else None,
                     'device_reviews_shared':False}
 
     def offer_pairing(self, bearer, role):
@@ -223,6 +259,37 @@ class IdentityPolicy:
         row = db.execute('SELECT epoch FROM source_policy WHERE scope=?', (p['scope'],)).fetchone()
         if (row['epoch'] if row else 0) != expected:
             raise Fault('policy_changed', 409)
+
+    def migrate_legacy(self, bearer, epoch, *, preserve_reads):
+        """Offline owner decision: retain recorded reads or deny ungranted access.
+
+        Never migrates implicit model egress, sync or writes. Explicit grants
+        remain; only active snapshot participants acquire read grants.
+        """
+        if type(preserve_reads) is not bool:
+            raise Fault('invalid_migration_policy')
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner'})
+            self._epoch(db, p, epoch)
+            policy = db.execute('SELECT strict FROM source_policy WHERE scope=?', (p['scope'],)).fetchone()
+            if policy and policy['strict']:
+                return {'migrated': False, 'mode': 'explicit_grants', 'read_grants_added': 0}
+            added = 0
+            if preserve_reads:
+                for row in db.execute('''SELECT l.source,l.expires,d.person FROM source_legacy_access l
+                    JOIN credentials a ON a.id=l.credential JOIN credentials s ON s.id=l.source
+                    JOIN identity_devices d ON d.credential=a.id
+                    WHERE l.scope=? AND l.expires>? AND a.revoked=0 AND s.revoked=0 AND a.expires>? AND s.expires>?''',
+                    (p['scope'],self.store.now(),self.store.now(),self.store.now())).fetchall():
+                    added += db.execute('INSERT OR IGNORE INTO source_grants VALUES (?,?,?,?,?)',
+                                        (p['scope'],row['person'],row['source'],'read',row['expires'])).rowcount
+            db.execute('INSERT INTO source_policy VALUES (?,1,1) ON CONFLICT(scope) DO UPDATE SET strict=1,epoch=epoch+1', (p['scope'],))
+            db.execute('UPDATE source_policy_migrations SET mode=?,at=? WHERE scope=?',
+                       ('explicit_migrated',self.store.now(),p['scope']))
+            db.execute('DELETE FROM source_legacy_access WHERE scope=?', (p['scope'],))
+            self.store.log(db,p['scope'],p['id'],'policy.migrated',p['scope'])
+            return {'migrated':True,'mode':'explicit_grants','read_grants_added':added,
+                    'model_egress_migrated':False,'writes_migrated':False}
 
     def grant(self, bearer, source, capability, expires, epoch, *, revoke=False):
         ident(source); timestamp(expires)

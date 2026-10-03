@@ -19,8 +19,8 @@ class M01Tests(unittest.TestCase):
         self.vault = self.root / 'vault'
         self.vault.mkdir()
         self.store = KnowledgeStore(self.root / 'db', clock=lambda:1000)
-        self.owner = self.store.provision('work', 'owner', 'owner')
-        self.source = self.store.provision('work', 'source', 'source')
+        self.owner = self.store.provision('work', 'owner', 'owner', legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', legacy_scope=True)
         self.scanner = MarkdownVault(self.store, self.source, self.vault)
 
     def write(self, path, body):
@@ -87,7 +87,7 @@ class M01Tests(unittest.TestCase):
         self.assertEqual(self.data()['nodes'], [])
 
     def test_missing_selection_visible_before_first_scan(self):
-        second = self.store.provision('work', 'second', 'source')
+        second = self.store.provision('work', 'second', 'source', legacy_scope=True)
         scanner = MarkdownVault(self.store, second, self.root / 'absent')
         self.assertEqual(scanner.health['status'], 'unavailable')
         source = next(s for s in self.data()['sources'] if s['source']=='second')
@@ -231,7 +231,7 @@ class M01Tests(unittest.TestCase):
 
     def test_same_external_id_in_distinct_vaults_remains_distinct(self):
         self.adopt_ids(); self.write('a.md', '---\nalfred_id: x\n---\n# A'); self.scan(); first=self.node('a.md')
-        source = self.store.provision('work','second','source'); other=self.root/'other'; other.mkdir()
+        source = self.store.provision('work','second','source', legacy_scope=True); other=self.root/'other'; other.mkdir()
         (other/'a.md').write_text('---\nalfred_id: x\n---\n# A')
         scanner=MarkdownVault(self.store,source,other,id_key='alfred_id'); scanner.scan()
         nodes=self.data()['nodes']; self.assertEqual(len(nodes),2)
@@ -261,7 +261,7 @@ class M01Tests(unittest.TestCase):
 
     def test_database_inside_vault_rejected(self):
         store=KnowledgeStore(self.vault/'runtime.db')
-        source=store.provision('work','inside','source')
+        source=store.provision('work','inside','source', legacy_scope=True)
         with self.assertRaises(Fault) as error: MarkdownVault(store,source,self.vault)
         self.assertEqual(error.exception.code,'database_must_be_outside_vault')
 
@@ -272,7 +272,7 @@ class M01Tests(unittest.TestCase):
 
     def test_direct_pipeline_rejects_unsafe_and_duplicate_paths_atomically(self):
         good=parse_note('a.md',b'# A'); good['modified']=0
-        other=self.store.provision('work','direct','source')
+        other=self.store.provision('work','direct','source', legacy_scope=True)
         self.store.replace_notes(other,'Direct',[good],[])
         for notes in ([good,dict(good)], [dict(good,path='../outside.md')]):
             with self.assertRaises(Fault):self.store.replace_notes(other,'Direct',notes,[])

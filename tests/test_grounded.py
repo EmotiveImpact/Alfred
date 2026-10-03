@@ -29,8 +29,8 @@ class Fixture(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.home=Path(self.tmp.name);self.now=1000
         self.store=KnowledgeStore(self.home/'test.sqlite',clock=lambda:self.now)
-        self.owner=self.store.provision('work','owner','owner');self.reader=self.store.provision('work','reader','reader')
-        self.source=self.store.provision('work','source','source');self.other=self.store.provision('other','other','owner')
+        self.owner=self.store.provision('work','owner','owner', legacy_scope=True);self.reader=self.store.provision('work','reader','reader', legacy_scope=True)
+        self.source=self.store.provision('work','source','source', legacy_scope=True);self.other=self.store.provision('other','other','owner', legacy_scope=True)
         self.docs={'MAP.md':'# Knowledge map\n[[Projects/Film]]',
                    'Projects/Film.md':'---\ntype: project\n---\n# Opening treatment\nThe opening treatment is monochrome.\n[[Decisions/Opening]]\n[[People/Ada]]',
                    'Decisions/Opening.md':'# Approved look\nMonochrome was approved for the opening.',

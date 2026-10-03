@@ -18,10 +18,10 @@ class LocalTests(unittest.TestCase):
         self.path=Path(self.temp.name)/'state.sqlite'
         self.now=100
         self.core=LocalCore(self.path,lambda:self.now)
-        self.owner=self.core.provision('work','owner','owner',ttl=1000)
-        self.source=self.core.provision('work','source','source',ttl=1000)
-        self.reader=self.core.provision('work','reader','reader',ttl=1000)
-        self.other=self.core.provision('other','other-owner','owner',ttl=1000)
+        self.owner=self.core.provision('work','owner','owner',ttl=1000, legacy_scope=True)
+        self.source=self.core.provision('work','source','source',ttl=1000, legacy_scope=True)
+        self.reader=self.core.provision('work','reader','reader',ttl=1000, legacy_scope=True)
+        self.other=self.core.provision('other','other-owner','owner',ttl=1000, legacy_scope=True)
     def tearDown(self): self.temp.cleanup()
     def event(self,**kw):
         return dict(id='e1',subject='project',kind='briefing.changed',basis='reported',
@@ -109,7 +109,7 @@ class LocalTests(unittest.TestCase):
         self.fault('approval_mismatch',self.core.approve,self.owner,'a1','0'*64)
     def test_wrong_owner_cannot_approve(self):
         self.core.propose(self.owner,self.proposal())
-        second=self.core.provision('work','owner-two','owner')
+        second=self.core.provision('work','owner-two','owner', legacy_scope=True)
         self.fault('not_found',self.core.approve,second,'a1','0'*64)
     def test_cross_scope_action_not_found(self):
         p=self.core.propose(self.owner,self.proposal())
@@ -142,14 +142,14 @@ class LocalTests(unittest.TestCase):
         self.assertEqual(self.core.state(self.owner)['counts']['drafts'],1)
     def test_revocation_rechecked_at_claim(self):
         self.queue(); self.core.revoke('owner')
-        worker=self.core.provision('work','worker','owner')
+        worker=self.core.provision('work','worker','owner', legacy_scope=True)
         self.assertEqual(self.core.tick(worker)['state'],'blocked')
         self.assertEqual(self.core.state(worker)['counts']['drafts'],0)
     def test_expiry_rechecked_at_claim(self):
         self.queue(); self.now=300
         self.assertEqual(self.core.tick(self.owner)['state'],'blocked')
     def test_revocation_rechecked_before_effect(self):
-        self.queue(); worker=self.core.provision('work','worker','owner')
+        self.queue(); worker=self.core.provision('work','worker','owner', legacy_scope=True)
         job=self.core.claim(worker); self.core.revoke('owner')
         self.fault('authority_revoked_or_expired',self.core.execute_local,worker,job)
     def test_cancel_before_execution(self):

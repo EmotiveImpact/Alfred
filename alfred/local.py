@@ -161,10 +161,11 @@ class LocalCore:
         return timestamp(int(self.clock()))
 
     def provision(self, scope: str, credential_id: str, role: str, *, ttl: int = 86400,
-                  simulation: bool = True) -> str:
+                  simulation: bool = True, legacy_scope: bool = False) -> str:
         """Offline administrator only. Not exposed by HTTP; creates a random bearer."""
         ident(scope); ident(credential_id)
-        if role not in {'owner', 'reader', 'source'} or type(simulation) is not bool:
+        if (role not in {'owner', 'reader', 'source'} or type(simulation) is not bool
+                or type(legacy_scope) is not bool or (legacy_scope and not simulation)):
             raise Fault('invalid_provisioning')
         if type(ttl) is not int or not 1 <= ttl <= 2592000:
             raise Fault('invalid_ttl')
@@ -174,6 +175,10 @@ class LocalCore:
             if prior and prior['simulation'] != int(simulation):
                 raise Fault('workspace_mode_conflict', 409)
             db.execute('INSERT OR IGNORE INTO workspaces VALUES (?,?)', (scope, int(simulation)))
+            if not prior:
+                db.execute('INSERT INTO source_policy VALUES (?,?,0)', (scope,0 if legacy_scope else 1))
+                db.execute('INSERT INTO source_policy_migrations VALUES (?,?,?)',
+                           (scope,'synthetic_legacy_fixture' if legacy_scope else 'explicit_new',self.now()))
             if db.execute('SELECT count(*) FROM credentials').fetchone()[0] >= 128:
                 raise Fault('credential_capacity', 409)
             try:
@@ -181,6 +186,13 @@ class LocalCore:
                            (credential_id, scope, role, hashlib.sha256(bearer.encode()).hexdigest(), self.now()+ttl))
                 from .policy import enrol
                 enrol(db, credential_id)
+                if legacy_scope:
+                    # Explicit synthetic compatibility fixtures only. Normal
+                    # provisioning, including in a legacy workspace, grants nothing.
+                    from .policy import snapshot_legacy
+                    policy = db.execute('SELECT strict FROM source_policy WHERE scope=?', (scope,)).fetchone()
+                    if policy and not policy['strict']:
+                        snapshot_legacy(db,scope)
             except sqlite3.IntegrityError:
                 raise Fault('credential_exists', 409) from None
             self.log(db, scope, credential_id, 'credential.provisioned', credential_id)

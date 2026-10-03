@@ -25,7 +25,7 @@ class FakeModel:
 class ConversationTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.clock=[1000]
-        self.store=KnowledgeStore(self.root/'desk.db',clock=lambda:self.clock[0]);self.owner=self.store.provision('work','owner','owner');self.reader=self.store.provision('work','reader','reader');self.source=self.store.provision('work','source','source')
+        self.store=KnowledgeStore(self.root/'desk.db',clock=lambda:self.clock[0]);self.owner=self.store.provision('work','owner','owner', legacy_scope=True);self.reader=self.store.provision('work','reader','reader', legacy_scope=True);self.source=self.store.provision('work','source','source', legacy_scope=True)
         self.vault=self.root/'vault';self.vault.mkdir();(self.vault/'Equipment.md').write_text('# Equipment collection\nMorgan owns equipment collection.\nCollection is booked for 10:00.\n')
         self.scanner=MarkdownVault(self.store,self.source,self.vault);self.scanner.scan();self.model=FakeModel();self.service=ConversationService(self.store,self.model,'work')
         self.sid=self.service.create(self.owner,{'title':'Equipment'})['id'];self.seq=0
@@ -82,7 +82,7 @@ class ConversationTests(unittest.TestCase):
         self.run_turn();t=self.run_turn(question='Who owns that?',mode='local_model',follow=True)
         self.assertEqual(t['result']['status'],'model_interpretation');self.assertEqual(len(self.model.packets[0]['conversation_questions']),1)
     def test_actor_private_not_just_workspace(self):
-        other=self.store.provision('work','another-owner','owner')
+        other=self.store.provision('work','another-owner','owner', legacy_scope=True)
         with self.assertRaises(Fault):self.service.view(other,self.sid)
         self.assertEqual(self.service.listing(other)['sessions'],[])
     def test_reader_has_own_sources_only_conversation(self):
@@ -90,7 +90,7 @@ class ConversationTests(unittest.TestCase):
         body={'question':'equipment','mode':'local_model','follow_up':False,'request_id':'r','after':0}
         with self.assertRaises(Fault):self.service.submit(self.reader,sid,body)
     def test_cross_scope_cannot_read(self):
-        other=self.store.provision('private','private-owner','owner')
+        other=self.store.provision('private','private-owner','owner', legacy_scope=True)
         with self.assertRaises(Fault):self.service.view(other,self.sid)
     def test_source_role_cannot_create(self):
         with self.assertRaises(Fault):self.service.create(self.source,{'title':'x'})
@@ -171,7 +171,7 @@ class ConversationTests(unittest.TestCase):
 
 class ConversationHTTPTests(unittest.TestCase):
     def setUp(self):
-        self.tmp=tempfile.TemporaryDirectory();self.store=KnowledgeStore(Path(self.tmp.name)/'db');self.key=self.store.provision('w','owner','owner')
+        self.tmp=tempfile.TemporaryDirectory();self.store=KnowledgeStore(Path(self.tmp.name)/'db');self.key=self.store.provision('w','owner','owner', legacy_scope=True)
         class Supervisor:
             scope='w'
             def view(self,scope):return {'configured':False}

@@ -19,7 +19,7 @@ from alfred.policy import IdentityPolicy
 class ConsoleProjectionHTTPTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        root = Path(self.tmp.name); self.home = root / 'demo'; self.keys = init_demo(self.home)
+        root = Path(self.tmp.name); self.home = root / 'demo'; self.keys = init_demo(self.home, legacy_scope=True)
         self.store = KnowledgeStore(self.home / 'desk.sqlite')
         self.sup = KnowledgeSupervisor(self.store, self.keys['owner'], self.keys['source'], self.home / 'project', vault=self.home / 'vault')
         self.sup.cycle()
@@ -120,8 +120,8 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
         self.assertEqual(w['workspaces'], [{'id': 'demo-production', 'label': 'Demo production', 'role': 'reader', 'synthetic': True}])
 
     def test_other_workspace_is_excluded_from_records_counts_and_inspection(self):
-        other_owner = self.store.provision('other-workspace', 'other-owner', 'owner')
-        other_source = self.store.provision('other-workspace', 'other-source', 'source')
+        other_owner = self.store.provision('other-workspace', 'other-owner', 'owner', legacy_scope=True)
+        other_source = self.store.provision('other-workspace', 'other-source', 'source', legacy_scope=True)
         vault = self.root / 'other-vault'; vault.mkdir()
         (vault / 'Hidden.md').write_text('# Zephyrmarker project\nBelongs to another workspace.\n')
         MarkdownVault(self.store, other_source, vault).scan()
@@ -132,7 +132,7 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
         self.assertEqual(self.req('/desk/console/records/source:other-source')[0], 404)
 
     def test_ungranted_source_leaks_no_label_count_or_link_under_strict_policy(self):
-        hidden_source = self.store.provision('demo-production', 'hidden-source', 'source')
+        hidden_source = self.store.provision('demo-production', 'hidden-source', 'source', legacy_scope=True)
         vault = self.root / 'hidden-vault'; vault.mkdir()
         (vault / 'Secret.md').write_text('# Classifiedmarker\nUngranted synthetic record. [[Sample film]]\n')
         MarkdownVault(self.store, hidden_source, vault, label='Classified label').scan()

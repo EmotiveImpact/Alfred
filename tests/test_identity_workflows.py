@@ -21,7 +21,9 @@ from alfred.policy import IdentityPolicy
 class IdentityHTTPTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        self.home = Path(self.tmp.name) / 'demo'; self.keys = init_demo(self.home)
+        # Explicit pre-migration compatibility fixture; new installation coverage
+        # lives in test_permission_defaults, without this synthetic legacy option.
+        self.home = Path(self.tmp.name) / 'demo'; self.keys = init_demo(self.home, legacy_scope=True)
         self.store = KnowledgeStore(self.home / 'desk.sqlite')
         self.sup = KnowledgeSupervisor(self.store, self.keys['owner'], self.keys['source'], self.home / 'project', vault=self.home / 'vault'); self.sup.cycle()
         self.server = DeskHTTPServer(self.store, self.sup, port=0)
@@ -95,7 +97,7 @@ class IdentityHTTPTests(unittest.TestCase):
     def test_other_workspace_cannot_redeem(self):
         self.login('owner')
         invitation = self.req('owner', '/desk/identity/invitations', {'source': 'demo-source', 'capability': 'read', 'days': 1, 'epoch': 0})[1]
-        stranger = self.store.provision('elsewhere', 'stranger', 'owner')
+        stranger = self.store.provision('elsewhere', 'stranger', 'owner', legacy_scope=True)
         with self.assertRaises(Fault) as caught:
             IdentityPolicy(self.store).redeem(stranger, invitation['code'])
         self.assertEqual(caught.exception.code, 'invitation_not_valid')

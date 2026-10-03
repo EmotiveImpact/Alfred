@@ -104,19 +104,36 @@ def _model(server, p):
 def health(server, bearer):
     """What the host is doing now, in plain fields. Readers see the same state; only owners may pause."""
     store = server.store
-    p = store.principal(bearer, {'owner', 'reader'})
+    p, _, before = _authority(store,bearer)
     supervisor = server.supervisor.view(p['scope'])
     knowledge = supervisor.get('knowledge') or {'configured': False}
+    # Read the permission-aware service outside the write transaction below.
+    authorised = store.knowledge(bearer) if hasattr(store,'knowledge') else None
     with store.transaction() as db:
+        q = store.authenticate(db,bearer,{'owner','reader'})
+        if grant_revision(db,q,store.now()) != before:
+            raise Fault('projection_authority_changed',409)
         backup = db.execute('SELECT created,file FROM lifecycle_backups ORDER BY created DESC LIMIT 1').fetchone() \
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='lifecycle_backups'").fetchone() else None
-        job_counts = {r[0]: r[1] for r in db.execute('SELECT state,count(*) FROM jobs WHERE scope=? GROUP BY state', (p['scope'],))} \
-            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='jobs'").fetchone() else {}
+        readable = store.readable_sources(db,p)
+        source_visible = getattr(getattr(server.supervisor,'source',None),'principal',{}).get('id') in readable
+        # Scanner totals are global; return the caller's permitted graph totals.
+        if authorised is not None:
+            knowledge = {'configured':bool(authorised['sources']),
+                         'status':'ready' if authorised['sources'] else 'unavailable',
+                         'notes':len(authorised['nodes']),
+                         'errors':[e for s in authorised['sources'] for e in s['errors']],
+                         'last_scan':max((s['checked'] for s in authorised['sources']),default=None)}
+        job_counts = {}
+        if server.jobs is not None:
+            for row in db.execute('SELECT * FROM jobs WHERE scope=?',(p['scope'],)):
+                if server.jobs._visible(db,p,row):
+                    job_counts[row['state']] = job_counts.get(row['state'],0)+1
     from .lifecycle import entries, journal_path
     conversations = getattr(server, 'conversations', None)
     return {'checkedAt': _iso(store.now()), 'paused': store.paused(p['scope']), 'role': p['role'],
             'host': {'status': supervisor.get('status'), 'lastCycle': _iso(supervisor['last_cycle']) if supervisor.get('last_cycle') else None,
-                     'intervalSeconds': supervisor.get('interval_seconds'), 'error': supervisor.get('error'),
+                     'intervalSeconds': supervisor.get('interval_seconds'), 'error': supervisor.get('error') if source_visible else None,
                      'foregroundProcessRequired': True, 'installedService': False},
             'vault': {'configured': bool(knowledge.get('configured')), 'status': knowledge.get('status'),
                       'lastScan': _iso(knowledge['last_scan']) if knowledge.get('last_scan') else None,

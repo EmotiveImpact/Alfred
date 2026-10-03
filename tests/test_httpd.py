@@ -12,9 +12,9 @@ class HTTPTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()
         self.core=LocalCore(Path(self.temp.name)/'api.sqlite',lambda:100)
-        self.owner=self.core.provision('work','owner','owner')
-        self.source=self.core.provision('work','source','source')
-        self.reader=self.core.provision('work','reader','reader')
+        self.owner=self.core.provision('work','owner','owner', legacy_scope=True)
+        self.source=self.core.provision('work','source','source', legacy_scope=True)
+        self.reader=self.core.provision('work','reader','reader', legacy_scope=True)
         self.server=make_server(self.core,0)
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True)
         self.thread.start()

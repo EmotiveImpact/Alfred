@@ -66,9 +66,9 @@ def _accept(memory, owner, request, subject, predicate, value, note, line, *, va
 def build(root, clock):
     """The fixed corpus, statements and grants on a controlled clock. Returns (store, owner)."""
     store = KnowledgeStore(root / 'desk.sqlite', clock=lambda: clock[0])
-    owner = store.provision('evaluation', 'owner', 'owner', ttl=2592000)
-    main = store.provision('evaluation', 'notes', 'source', ttl=2592000)
-    hidden = store.provision('evaluation', 'restricted', 'source', ttl=2592000)
+    owner = store.provision('evaluation', 'owner', 'owner', ttl=2592000, legacy_scope=True)
+    main = store.provision('evaluation', 'notes', 'source', ttl=2592000, legacy_scope=True)
+    hidden = store.provision('evaluation', 'restricted', 'source', ttl=2592000, legacy_scope=True)
     vault, other = root / 'vault', root / 'restricted'
     for folder, notes, bearer in ((vault, NOTES, main), (other, RESTRICTED, hidden)):
         folder.mkdir()

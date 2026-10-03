@@ -9,8 +9,8 @@ from alfred.local import Fault
 class KnowledgeLimitTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.store=KnowledgeStore(Path(self.temp.name)/'db.sqlite')
-        self.owner=self.store.provision('work','owner','owner')
-        self.source=self.store.provision('work','source','source');self.second=self.store.provision('work','second','source')
+        self.owner=self.store.provision('work','owner','owner', legacy_scope=True)
+        self.source=self.store.provision('work','source','source', legacy_scope=True);self.second=self.store.provision('work','second','source', legacy_scope=True)
     def tearDown(self):self.temp.cleanup()
     def notes(self,count):
         values=[]

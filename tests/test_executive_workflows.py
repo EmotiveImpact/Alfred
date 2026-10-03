@@ -25,10 +25,10 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name); self.clock = [T]
         self.store = KnowledgeStore(root / 'desk.sqlite', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
-        self.other = self.store.provision('work', 'owner-two', 'owner', ttl=2592000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000, legacy_scope=True)
+        self.other = self.store.provision('work', 'owner-two', 'owner', ttl=2592000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=2592000, legacy_scope=True)
         self.vault = root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('---\ntitle: Atlas\ntype: project\n---\n# Atlas\n\nLaunch review on Friday.\nBudget sign-off pending.\n')
         (self.vault / 'Borealis.md').write_text('---\ntitle: Borealis\ntype: project\n---\n# Borealis\n\nA second fictional project.\n')
@@ -474,7 +474,7 @@ class MigrationTests(unittest.TestCase):
     def test_version_one_records_upgrade_in_place(self):
         with tempfile.TemporaryDirectory() as temp:
             store = KnowledgeStore(Path(temp) / 'desk.sqlite')
-            owner = store.provision('work', 'owner', 'owner')
+            owner = store.provision('work', 'owner', 'owner', legacy_scope=True)
             with store.connection() as db:
                 db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
                 db.execute("INSERT INTO executive_records VALUES ('exec-old','work','owner','old','x','decision','Old decision','',"

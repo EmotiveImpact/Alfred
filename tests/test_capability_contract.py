@@ -12,8 +12,8 @@ class ContractTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.clock = [1_000_000]
         self.store = DeskStore(Path(self.tmp.name) / 'desk.db', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('exercise', 'owner', 'owner')
-        self.feed = self.store.provision('exercise', 'specialist-synthetic-exercise', 'source')
+        self.owner = self.store.provision('exercise', 'owner', 'owner', legacy_scope=True)
+        self.feed = self.store.provision('exercise', 'specialist-synthetic-exercise', 'source', legacy_scope=True)
         self.adapter = SyntheticExerciseAdapter(self.clock[0])
 
     def bridge(self, adapter=None, bearer=None):
@@ -69,7 +69,7 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(caught.exception.code, 'action_not_enabled')
 
     def test_a_product_cannot_write_as_another_product(self):
-        other = self.store.provision('exercise', 'specialist-other', 'source')
+        other = self.store.provision('exercise', 'specialist-other', 'source', legacy_scope=True)
         with self.assertRaises(Fault) as caught:
             self.bridge(bearer=other)
         self.assertEqual(caught.exception.code, 'adapter_credential_mismatch')

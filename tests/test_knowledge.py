@@ -46,8 +46,8 @@ class KnowledgeTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.vault=self.root/'vault';self.vault.mkdir()
         self.clock=[1000];self.store=KnowledgeStore(self.root/'db.sqlite',clock=lambda:self.clock[0])
-        self.owner=self.store.provision('work','owner','owner');self.reader=self.store.provision('work','reader','reader');self.source=self.store.provision('work','source','source')
-        self.foreign=self.store.provision('other','foreign','owner')
+        self.owner=self.store.provision('work','owner','owner', legacy_scope=True);self.reader=self.store.provision('work','reader','reader', legacy_scope=True);self.source=self.store.provision('work','source','source', legacy_scope=True)
+        self.foreign=self.store.provision('other','foreign','owner', legacy_scope=True)
         self.connector=MarkdownVault(self.store,self.source,self.vault)
     def tearDown(self):self.tmp.cleanup()
     def write(self,path,body):

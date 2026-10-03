@@ -165,11 +165,13 @@ class Handler(BaseHTTPRequestHandler):
             return policy.enable(bearer, body['epoch'])
         if path == '/desk/identity/grants':
             exact(body, {'source', 'capability', 'days', 'epoch', 'revoke'})
+            store.principal(bearer, {'owner'})
             if body['revoke'] is True:
                 return policy.grant(bearer, body['source'], body['capability'], store.now() + 1, body['epoch'], revoke=True)
             return policy.grant(bearer, body['source'], body['capability'], expiry(body['source'], body['days']), body['epoch'])
         if path == '/desk/identity/invitations':
             exact(body, {'source', 'capability', 'days', 'epoch'})
+            store.principal(bearer, {'owner'})
             return policy.invite(bearer, body['source'], body['capability'], expiry(body['source'], body['days']), body['epoch'])
         if path == '/desk/identity/invitations/redeem':
             exact(body, {'code'})

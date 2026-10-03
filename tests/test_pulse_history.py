@@ -10,7 +10,7 @@ from alfred.local import Fault
 class HistoryTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.home=Path(self.tmp.name)/'demo';init_demo(self.home);self.clock=[1800000000]
-        self.store=KnowledgeStore(self.home/'desk.sqlite',clock=lambda:self.clock[0]);self.keys={r:self.store.provision('work','key-'+r,r,ttl=2592000) for r in ['owner','reader','source']}
+        self.store=KnowledgeStore(self.home/'desk.sqlite',clock=lambda:self.clock[0]);self.keys={r:self.store.provision('work','key-'+r,r,ttl=2592000, legacy_scope=True) for r in ['owner','reader','source']}
         self.sup=KnowledgeSupervisor(self.store,self.keys['owner'],self.keys['source'],self.home/'project',vault=self.home/'vault');self.pulse=Pulse(self.store,self.sup);self.sup.vault.scan()
     def fill(self,n=100,age=172800,status='completed'):
         with self.store.transaction() as db:

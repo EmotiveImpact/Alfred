@@ -508,9 +508,9 @@ def _retrieve_all(*, repeats, warmup, fts5):
         _write(root / 'vault', CORPUS)
         _write(root / 'restricted', RESTRICTED)
         store = KnowledgeStore(root / 'ledger.db', clock=lambda: FIXED_NOW)
-        owner = store.provision(WORKSPACE, 'eval-owner', 'owner', ttl=CREDENTIAL_TTL)
-        main = store.provision(WORKSPACE, MAIN_SOURCE, 'source', ttl=CREDENTIAL_TTL)
-        hidden = store.provision(WORKSPACE, RESTRICTED_SOURCE, 'source', ttl=CREDENTIAL_TTL)
+        owner = store.provision(WORKSPACE, 'eval-owner', 'owner', ttl=CREDENTIAL_TTL, legacy_scope=True)
+        main = store.provision(WORKSPACE, MAIN_SOURCE, 'source', ttl=CREDENTIAL_TTL, legacy_scope=True)
+        hidden = store.provision(WORKSPACE, RESTRICTED_SOURCE, 'source', ttl=CREDENTIAL_TTL, legacy_scope=True)
         health = {MAIN_SOURCE: MarkdownVault(store, main, root / 'vault', 'Synthetic evaluation notes').scan(),
                   RESTRICTED_SOURCE: MarkdownVault(store, hidden, root / 'restricted', 'Synthetic restricted notes').scan()}
         legacy = store.knowledge(owner)

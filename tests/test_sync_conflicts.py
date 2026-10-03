@@ -79,9 +79,9 @@ class ScannerConflictTests(unittest.TestCase):
         self.vault.mkdir()
         self.clock = [1000]
         self.store = KnowledgeStore(self.root / 'db', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=100000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=100000, legacy_scope=True)
         self.scanner = MarkdownVault(self.store, self.source, self.vault)
 
     def write(self, path, body):

@@ -89,7 +89,7 @@ class DeskHTTPTests(unittest.TestCase):
         self.login();h=self.request('/desk/state')[2];self.assertEqual(h['Cache-Control'],'no-store')
     def test_permissions_policy_disables_microphone(self):self.assertIn('microphone=()',self.request('/')[2]['Permissions-Policy'])
     def test_cross_scope_evidence_denied(self):
-        seq=self.store.desk_state(self.keys['owner'])['events'][0]['seq'];self.keys['other']=self.store.provision('other','other-owner','owner');self.login('other')
+        seq=self.store.desk_state(self.keys['owner'])['events'][0]['seq'];self.keys['other']=self.store.provision('other','other-owner','owner', legacy_scope=True);self.login('other')
         self.assertEqual(self.request('/desk/evidence/'+str(seq))[0],404)
     def test_whole_socket_approval_flow(self):
         self.login();seq=self.request('/desk/state')[1]['events'][0]['seq']

@@ -40,9 +40,9 @@ class ProcedureBase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name); self.clock = [T]
         self.store = KnowledgeStore(self.root / 'desk.sqlite', clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=2592000, legacy_scope=True)
         (self.root / 'project').mkdir()
         self.vault = self.root / 'vault'; (self.vault / 'procedures').mkdir(parents=True)
         (self.vault / 'procedures' / 'Release shortcut.md').write_text(SHORTCUT)

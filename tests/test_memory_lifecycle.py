@@ -23,10 +23,10 @@ class LifecycleTests(unittest.TestCase):
         self.root = Path(self.tmp.name); self.clock = [1000]
         self.db = self.root / 'desk.sqlite'
         self.store = KnowledgeStore(self.db, clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=100000)
-        self.other = self.store.provision('work', 'other', 'source', ttl=100000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=100000, legacy_scope=True)
+        self.other = self.store.provision('work', 'other', 'source', ttl=100000, legacy_scope=True)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\n')
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
@@ -227,7 +227,7 @@ class SourceForgetTests(LifecycleTests):
 
     def test_adding_the_folder_again_never_revives_old_reviews(self):
         lifecycle.forget_source(self.store, self.owner, 'source')
-        fresh = self.store.provision('work', 'source-2', 'source', ttl=100000)
+        fresh = self.store.provision('work', 'source-2', 'source', ttl=100000, legacy_scope=True)
         MarkdownVault(self.store, fresh, self.vault).scan()
         self.assertEqual(len(self.store.knowledge(self.owner)['nodes']), 1)
         self.assertEqual({c['state'] for c in self.memory.view(self.owner)['claims']}, {'invalidated'})
@@ -249,7 +249,7 @@ class SourceForgetTests(LifecycleTests):
             with self.assertRaises(Fault) as caught:
                 lifecycle.forget_source(self.store, bearer, source)
             self.assertEqual(caught.exception.code, code)
-        elsewhere = self.store.provision('elsewhere', 'elsewhere-source', 'source')
+        elsewhere = self.store.provision('elsewhere', 'elsewhere-source', 'source', legacy_scope=True)
         with self.assertRaises(Fault) as caught:
             lifecycle.forget_source(self.store, self.owner, 'elsewhere-source')
         self.assertEqual(caught.exception.code, 'source_not_available')

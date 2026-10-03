@@ -30,12 +30,12 @@ class TemporalBase(unittest.TestCase):
         self.root = Path(self.tmp.name); self.clock = [1000]
         self.db = self.root / 'desk.sqlite'
         self.store = KnowledgeStore(self.db, clock=lambda: self.clock[0])
-        self.owner = self.store.provision('work', 'owner', 'owner', ttl=900000)
-        self.owner2 = self.store.provision('work', 'owner2', 'owner', ttl=900000)
-        self.reader = self.store.provision('work', 'reader', 'reader', ttl=900000)
-        self.source = self.store.provision('work', 'source', 'source', ttl=900000)
-        self.other = self.store.provision('work', 'other', 'source', ttl=900000)
-        self.elsewhere = self.store.provision('elsewhere', 'elsewhere-owner', 'owner', ttl=900000)
+        self.owner = self.store.provision('work', 'owner', 'owner', ttl=900000, legacy_scope=True)
+        self.owner2 = self.store.provision('work', 'owner2', 'owner', ttl=900000, legacy_scope=True)
+        self.reader = self.store.provision('work', 'reader', 'reader', ttl=900000, legacy_scope=True)
+        self.source = self.store.provision('work', 'source', 'source', ttl=900000, legacy_scope=True)
+        self.other = self.store.provision('work', 'other', 'source', ttl=900000, legacy_scope=True)
+        self.elsewhere = self.store.provision('elsewhere', 'elsewhere-owner', 'owner', ttl=900000, legacy_scope=True)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text(ATLAS)
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
@@ -217,7 +217,7 @@ class MigrationTests(TemporalBase):
     def test_migration_reconstructs_from_audit_and_marks_unknown_times(self):
         second_vault = self.root / 'second'; second_vault.mkdir()
         (second_vault / 'Borealis.md').write_text('# Borealis\nBorealis is planning.\n')
-        second = self.store.provision('work', 'second', 'source', ttl=900000)
+        second = self.store.provision('work', 'second', 'source', ttl=900000, legacy_scope=True)
         MarkdownVault(self.store, second, second_vault).scan()
         status = self.propose('s1', 'status', 2, value='planning')
         self.at(2000); self.review(status, 'accept'); self.at(3000); self.review(status, 'dispute'); self.at(4000); self.review(status, 'accept')

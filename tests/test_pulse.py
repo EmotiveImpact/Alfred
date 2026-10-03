@@ -21,7 +21,7 @@ class PulseTests(unittest.TestCase):
         self.now=[1800000000]
         # Use freshly provisioned keys relative to the injectable clock.
         self.store=KnowledgeStore(self.home/'desk.sqlite',clock=lambda:self.now[0])
-        self.keys={role:self.store.provision('pulse-space','pulse-'+role,role,ttl=2592000) for role in ('owner','reader','source')}
+        self.keys={role:self.store.provision('pulse-space','pulse-'+role,role,ttl=2592000, legacy_scope=True) for role in ('owner','reader','source')}
         self.sup=KnowledgeSupervisor(self.store,self.keys['owner'],self.keys['source'],self.home/'project',vault=self.home/'vault')
         self.pulse=Pulse(self.store,self.sup);self.sup.pulse=self.pulse
         self.sup.vault.scan()
@@ -76,12 +76,12 @@ class PulseTests(unittest.TestCase):
         self.now[0]+=2592001
         with self.assertRaises(Fault):self.run_report()
     def test_other_scope_has_no_history(self):
-        self.run_report();other=self.store.provision('other','other-reader','reader');v=self.pulse.view(other);self.assertFalse(v['configured']);self.assertEqual(v['runs'],[])
+        self.run_report();other=self.store.provision('other','other-reader','reader', legacy_scope=True);v=self.pulse.view(other);self.assertFalse(v['configured']);self.assertEqual(v['runs'],[])
     def test_other_scope_cannot_run(self):
-        other=self.store.provision('other','other-owner','owner')
+        other=self.store.provision('other','other-owner','owner', legacy_scope=True)
         with self.assertRaises(Fault):self.pulse.manual(other,'memory-health',{'request_id':'x'})
     def test_other_owner_cannot_reassign_running_host(self):
-        other=self.store.provision('pulse-space','second-owner','owner')
+        other=self.store.provision('pulse-space','second-owner','owner', legacy_scope=True)
         with self.assertRaises(Fault):self.pulse.configure(other,'memory-health',{'enabled':True,'interval_seconds':60})
     def test_extra_fields_cannot_execute_scripts(self):
         with self.assertRaises(Fault):self.pulse.manual(self.keys['owner'],'memory-health',{'request_id':'x','command':'echo forbidden'})

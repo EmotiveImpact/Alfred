@@ -18,7 +18,7 @@ class ModelFixture:
 class PipelineTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);root=Path(self.tmp.name)
-        self.store=KnowledgeStore(root/'db');self.owner=self.store.provision('test','owner','owner');source=self.store.provision('test','source','source')
+        self.store=KnowledgeStore(root/'db');self.owner=self.store.provision('test','owner','owner', legacy_scope=True);source=self.store.provision('test','source','source', legacy_scope=True)
         v=root/'vault';v.mkdir();(v/'Inspection.md').write_text('# Harbour inspection\nThe harbour inspection is at 14:25.\nLeena coordinates it.\n')
         MarkdownVault(self.store,source,v).scan()
     def sync(self,q,reply):return ask(self.store,self.owner,{'question':q,'mode':'local_model'},ModelFixture(reply),'test')
