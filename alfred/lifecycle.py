@@ -21,7 +21,7 @@ import time
 from .local import Fault
 
 JOURNAL_SUFFIX = '.lifecycle.jsonl'
-KINDS = {'claim_forgotten', 'entity_forgotten', 'credential_revoked', 'grant_revoked', 'source_forgotten', 'policy_strict'}
+KINDS = {'claim_forgotten', 'entity_forgotten', 'credential_revoked', 'grant_revoked', 'source_forgotten', 'policy_strict', 'export_intent'}
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS lifecycle_receipts(
  id TEXT PRIMARY KEY, scope TEXT NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL,
@@ -305,6 +305,13 @@ def apply_entry(db, entry, now, origin='recorded'):
     History rows for a replay carry the time the journal recorded, never a value."""
     kind, scope = entry['kind'], entry['scope']
     at = entry.get('at', now) if origin == 'replayed' else now
+    if kind == 'export_intent':
+        db.execute('INSERT OR IGNORE INTO lifecycle_exports VALUES (?,?,?,?,?,?,?,?,?)',
+                   (entry['subject'],scope,entry['actor'],at,entry['directory'],entry['manifest_sha256'],
+                    json.dumps(entry['sources']),json.dumps(entry['claims']),'publication_unknown'))
+        db.execute("UPDATE lifecycle_exports SET status='publication_unknown' WHERE id=? AND status='writing'",
+                   (entry['subject'],))
+        return {}
     if kind == 'source_forgotten':
         return forget_source_db(db, scope, entry['subject'], now, origin=origin, at=at)
     if kind == 'credential_revoked':
@@ -407,6 +414,8 @@ def restore(backup_file, database, now=None) -> dict:
     db = sqlite3.connect(staging, isolation_level=None)
     db.row_factory = sqlite3.Row
     try:
+        # A verified older backup may predate export/redaction accounting tables.
+        initialise(db)
         db.execute('BEGIN IMMEDIATE')
         withdrawn = {'conversation_answers_withdrawn': 0, 'pending_actions_cancelled': []}
         for entry in journal:

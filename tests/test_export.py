@@ -32,6 +32,34 @@ FILES = {'README.md', 'manifest.json', 'statements.json', 'captures.json', 'exec
 
 
 class ExportTests(unittest.TestCase):
+    def test_post_rename_failure_accounts_for_a_readable_copy_as_unknown(self):
+        destination = self.root / 'uncertain-export'
+        original = self.store.log
+        def fail_receipt(db, scope, actor, kind, subject):
+            if kind == 'export.written':
+                raise RuntimeError('synthetic receipt write interruption')
+            return original(db, scope, actor, kind, subject)
+        with patch.object(self.store, 'log', side_effect=fail_receipt), self.assertRaises(RuntimeError):
+            export(self.store, self.owner, destination)
+        self.assertTrue((destination / 'statements.json').is_file())
+        with self.store.connection() as db:
+            self.assertEqual(db.execute('SELECT status FROM lifecycle_exports').fetchone()[0], 'publication_unknown')
+
+    def test_export_after_backup_remains_accounted_for_after_restore(self):
+        from alfred import lifecycle
+        saved = lifecycle.backup(self.store, self.owner, self.root / 'backups')
+        destination = self.root / 'later-export'
+        copied = export(self.store, self.owner, destination)
+        claim = next(c for c in self.memory.view(self.owner)['claims'] if c['id'] == self.status)
+        self.memory.forget(self.owner, self.status, {'version': claim['version']})
+        lifecycle.restore(self.root / 'backups' / saved['file'], self.store.path)
+        restored = KnowledgeStore(self.store.path, clock=lambda: self.clock[0])
+        with restored.connection() as db:
+            row = db.execute('SELECT status FROM lifecycle_exports WHERE id=?', (copied['export_id'],)).fetchone()
+            self.assertIsNotNone(row)
+            self.assertEqual(row['status'], 'retained_copy_review')
+        self.assertTrue((destination / 'statements.json').is_file())
+
     def test_forget_accounts_for_an_export_without_deleting_the_copy(self):
         destination=self.root/'accounted-export'
         manifest=export(self.store,self.owner,destination)

@@ -329,11 +329,19 @@ def export(store, bearer, destination, *, vaults=()):
         p = store.authenticate(db, bearer, {'owner', 'reader'})
         note_ids = {s['source']['note_id'] for s in bundle['statements']}
         sources = {r[0] for n in note_ids for r in db.execute('SELECT source FROM knowledge_notes WHERE scope=? AND id=?',(p['scope'],n))}
+        # Preserve copy accounting even when a backup predates this export.
+        # Intent is conservative: a crash may leave a readable copy or staging.
+        from .lifecycle import append
+        append(store, {'kind':'export_intent','scope':p['scope'],'actor':p['id'],'at':store.now(),
+                      'subject':manifest['export_id'],'directory':str(Path(destination).absolute()),
+                      'manifest_sha256':hashlib.sha256(files['manifest.json']).hexdigest(),
+                      'sources':sorted(sources),'claims':[s['id'] for s in bundle['statements']]})
         db.execute('INSERT INTO lifecycle_exports VALUES (?,?,?,?,?,?,?,?,?)',
                    (manifest['export_id'],p['scope'],p['id'],store.now(),str(Path(destination).absolute()),
                     hashlib.sha256(files['manifest.json']).hexdigest(),json.dumps(sorted(sources)),
                     json.dumps([s['id'] for s in bundle['statements']]),'writing'))
 
+    renamed = [False]
     @contextmanager
     def guard():
         with store.transaction() as db:
@@ -357,12 +365,14 @@ def export(store, bearer, destination, *, vaults=()):
                 if not row or row['version'] != record['version']:
                     raise Fault('export_data_changed',409)
             yield
+            renamed[0] = True
             db.execute("UPDATE lifecycle_exports SET status='published' WHERE id=?",(manifest['export_id'],))
             store.log(db,q['scope'],q['id'],'export.written',manifest['export_id'])
     try:
         target = write(destination,files,vaults,publication_guard=guard)
     except BaseException:
         with store.transaction() as db:
-            db.execute("UPDATE lifecycle_exports SET status='failed' WHERE id=?",(manifest['export_id'],))
+            db.execute('UPDATE lifecycle_exports SET status=? WHERE id=?',
+                       ('publication_unknown' if renamed[0] else 'failed',manifest['export_id']))
         raise
     return manifest | {'directory': str(target)}
