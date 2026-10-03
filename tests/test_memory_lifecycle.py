@@ -134,7 +134,8 @@ class LifecycleTests(unittest.TestCase):
         self.grant('source'); self.grant('source', revoke=True)
         self.store.revoke('reader')
         result = lifecycle.restore(self.root / 'backups' / manifest['file'], self.db)
-        self.assertEqual(result['journal_entries_replayed'], 4); self.assertEqual(result['integrity_check'], 'ok')
+        self.assertEqual(result['journal_entries_replayed'], 5); self.assertEqual(result['integrity_check'], 'ok')
+        self.assertIn('policy_strict',{e['kind'] for e in lifecycle.entries(lifecycle.journal_path(self.store))})
         restored = KnowledgeStore(self.db, clock=lambda: self.clock[0]); memory = ReviewedMemory(restored)
         claims = {c['id']: c for c in memory.view(self.owner)['claims']}
         self.assertEqual(claims[self.status]['state'], 'forgotten'); self.assertIsNone(claims[self.status]['value'])
@@ -152,12 +153,13 @@ class LifecycleTests(unittest.TestCase):
             lifecycle.restore(target, self.db)
         self.assertEqual(caught.exception.code, 'backup_hash_mismatch')
 
-    def test_corrupt_journal_stops_restore_but_torn_tail_is_tolerated(self):
+    def test_corrupt_or_torn_journal_stops_restore_without_dropping_intent(self):
         manifest = lifecycle.backup(self.store, self.owner, self.root / 'backups')
         journal = lifecycle.journal_path(self.store)
         self.store.revoke('reader')
         with journal.open('a') as f: f.write('{"kind":"credential_rev')
-        self.assertEqual(len(lifecycle.entries(journal)), 1)
+        with self.assertRaises(Fault):
+            lifecycle.entries(journal)
         journal.write_text('not json\n' + journal.read_text())
         with self.assertRaises(Fault):
             lifecycle.restore(self.root / 'backups' / manifest['file'], self.db)
@@ -165,6 +167,24 @@ class LifecycleTests(unittest.TestCase):
     def test_backup_requires_owner(self):
         with self.assertRaises(Fault):
             lifecycle.backup(self.store, self.reader, self.root / 'backups')
+
+    def test_restart_replays_a_durable_forget_before_reads(self):
+        lifecycle.append(self.store,{'kind':'claim_forgotten','scope':'work','actor':'owner',
+                                     'subject':self.status,'at':self.store.now()})
+        # Simulate termination after the intent fsync and before its DB commit.
+        restarted=KnowledgeStore(self.db,clock=lambda:1000)
+        view=ReviewedMemory(restarted).view(self.owner)
+        claim=next(c for c in view['claims'] if c['id']==self.status)
+        self.assertEqual((claim['state'],claim['value']),('forgotten',None))
+
+    def test_restore_before_strict_transition_cannot_revive_legacy_read(self):
+        manifest=lifecycle.backup(self.store,self.owner,self.root/'backups')
+        self.grant('source')
+        self.grant('source',revoke=True)
+        lifecycle.restore(self.root/'backups'/manifest['file'],self.db)
+        restarted=KnowledgeStore(self.db,clock=lambda:1000)
+        self.assertEqual(IdentityPolicy(restarted).view(self.owner)['mode'],'explicit_grants')
+        self.assertEqual(restarted.knowledge(self.owner)['nodes'],[])
 
 
 class SourceForgetTests(LifecycleTests):

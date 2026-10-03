@@ -52,6 +52,8 @@ class DeskStore(LocalCore):
             if db.execute('SELECT version FROM desk_meta').fetchall()[0][0] != 1:
                 raise Fault('unsupported_desk_version')
         self.path.chmod(0o600)
+        from .lifecycle import replay_live
+        replay_live(self)
 
     def principal(self, bearer, roles=frozenset({'owner', 'reader'})):
         with self.connection() as db:

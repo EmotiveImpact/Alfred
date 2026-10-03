@@ -1,0 +1,20 @@
+# Review-only user service example. Not installed or enabled by PILOT-GROUNDWORK.
+# Initialise synthetic data outside Git/vault/sync folders before adapting paths.
+[Unit]
+Description=ALFRED loopback Core (synthetic pilot example)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/src/Alfred
+ExecStart=/usr/bin/python3 -m alfred.desk serve --data-dir %h/.local/share/alfred/development
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=20
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

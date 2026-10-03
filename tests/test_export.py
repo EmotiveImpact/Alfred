@@ -32,6 +32,30 @@ FILES = {'README.md', 'manifest.json', 'statements.json', 'captures.json', 'exec
 
 
 class ExportTests(unittest.TestCase):
+    def test_forget_accounts_for_an_export_without_deleting_the_copy(self):
+        destination=self.root/'accounted-export'
+        manifest=export(self.store,self.owner,destination)
+        claim=next(c for c in self.memory.view(self.owner)['claims'] if c['id']==self.status)
+        receipt=self.memory.forget(self.owner,self.status,{'version':claim['version']})
+        self.assertIn(manifest['export_id'],receipt['known_exports_retained'])
+        self.assertTrue((destination/'statements.json').is_file())
+        with self.store.connection() as db:
+            self.assertEqual(db.execute('SELECT status FROM lifecycle_exports WHERE id=?',(manifest['export_id'],)).fetchone()[0],
+                             'retained_copy_review')
+
+    def test_revocation_after_rendering_stops_publication(self):
+        destination=self.root/'racing-export'
+        original=export_module.write
+        def revoke_then_write(*args,**kwargs):
+            policy=IdentityPolicy(self.store)
+            policy.grant(self.owner,'source','read',self.clock[0]+1,policy.view(self.owner)['epoch'],revoke=True)
+            return original(*args,**kwargs)
+        with patch.object(export_module,'write',side_effect=revoke_then_write),self.assertRaises(Fault) as caught:
+            export(self.store,self.owner,destination)
+        self.assertEqual(caught.exception.code,'export_authority_changed')
+        self.assertFalse(destination.exists())
+        self.assertEqual(list(self.root.glob('.racing-export.partial-*')),[])
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory(); self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name); self.clock = [1_000_000]

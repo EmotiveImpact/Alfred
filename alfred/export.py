@@ -24,6 +24,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+from contextlib import contextmanager, nullcontext
 from .local import Fault
 
 FORMAT, FORMAT_VERSION = 'alfred-portable-export', 1
@@ -274,7 +275,7 @@ def check_destination(destination, vaults=()):
     return target
 
 
-def write(destination, files, vaults=()):
+def write(destination, files, vaults=(), *, publication_guard=nullcontext):
     """Write into a private staging folder, then rename it into place."""
     target = check_destination(destination, vaults)
     staging = target.parent / f'.{target.name}.partial-{secrets.token_hex(6)}'
@@ -297,7 +298,8 @@ def write(destination, files, vaults=()):
             os.close(handle)
         try:
             # rename() replaces only an empty directory; anything that appeared meanwhile stops it.
-            os.rename(staging, target)
+            with publication_guard():
+                os.rename(staging, target)
         except OSError as exc:
             if exc.errno not in (errno.ENOTEMPTY, errno.EEXIST, errno.ENOTDIR, errno.EISDIR):
                 raise
@@ -314,11 +316,53 @@ def write(destination, files, vaults=()):
 
 
 def export(store, bearer, destination, *, vaults=()):
-    """Collect, render and write one export, then note it in the audit log."""
+    """Stage privately, recheck authority/data at publication, account for copies.
+
+    Export copies are readable files. A later forget marks this ledger's copy for
+    review; it cannot recall moved/copied files or claim secure deletion.
+    """
+    from .console_api import grant_revision
     check_destination(destination, vaults)
-    manifest, files = render(collect(store, bearer))
-    target = write(destination, files, vaults)
+    bundle = collect(store,bearer)
+    manifest, files = render(bundle)
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner', 'reader'})
-        store.log(db, p['scope'], p['id'], 'export.written', manifest['export_id'])
+        note_ids = {s['source']['note_id'] for s in bundle['statements']}
+        sources = {r[0] for n in note_ids for r in db.execute('SELECT source FROM knowledge_notes WHERE scope=? AND id=?',(p['scope'],n))}
+        db.execute('INSERT INTO lifecycle_exports VALUES (?,?,?,?,?,?,?,?,?)',
+                   (manifest['export_id'],p['scope'],p['id'],store.now(),str(Path(destination).absolute()),
+                    hashlib.sha256(files['manifest.json']).hexdigest(),json.dumps(sorted(sources)),
+                    json.dumps([s['id'] for s in bundle['statements']]),'writing'))
+
+    @contextmanager
+    def guard():
+        with store.transaction() as db:
+            q = store.authenticate(db,bearer,{'owner','reader'})
+            if q['id'] != bundle['principal']['credential'] or grant_revision(db,q,store.now()) != bundle['grant_revision']:
+                raise Fault('export_authority_changed',409)
+            for statement in bundle['statements']:
+                row = db.execute('SELECT version,state FROM memory_claims WHERE id=? AND scope=? AND actor=?',
+                                 (statement['id'],q['scope'],q['id'])).fetchone()
+                if not row or row['version'] != statement['version'] or row['state'] == 'forgotten':
+                    raise Fault('export_data_changed',409)
+                source = statement['source']
+                if source['state'] == 'current':
+                    note = db.execute("SELECT sha256,revision FROM knowledge_notes WHERE scope=? AND id=? AND status='ready'",
+                                      (q['scope'],source['note_id'])).fetchone()
+                    if not note or (note['sha256'],note['revision']) != (source['sha256'],source['revision']):
+                        raise Fault('export_data_changed',409)
+            for record in bundle['executive_records']:
+                row = db.execute('SELECT version FROM executive_records WHERE id=? AND scope=? AND actor=?',
+                                 (record['id'],q['scope'],q['id'])).fetchone()
+                if not row or row['version'] != record['version']:
+                    raise Fault('export_data_changed',409)
+            yield
+            db.execute("UPDATE lifecycle_exports SET status='published' WHERE id=?",(manifest['export_id'],))
+            store.log(db,q['scope'],q['id'],'export.written',manifest['export_id'])
+    try:
+        target = write(destination,files,vaults,publication_guard=guard)
+    except BaseException:
+        with store.transaction() as db:
+            db.execute("UPDATE lifecycle_exports SET status='failed' WHERE id=?",(manifest['export_id'],))
+        raise
     return manifest | {'directory': str(target)}

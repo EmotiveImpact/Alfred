@@ -133,6 +133,8 @@ class LocalCore:
             from .policy import initialise
             initialise(db)
         self.path.chmod(0o600)
+        from .lifecycle import replay_live
+        replay_live(self)
 
     @contextmanager
     def connection(self):

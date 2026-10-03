@@ -21,7 +21,7 @@ import time
 from .local import Fault
 
 JOURNAL_SUFFIX = '.lifecycle.jsonl'
-KINDS = {'claim_forgotten', 'entity_forgotten', 'credential_revoked', 'grant_revoked', 'source_forgotten'}
+KINDS = {'claim_forgotten', 'entity_forgotten', 'credential_revoked', 'grant_revoked', 'source_forgotten', 'policy_strict'}
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS lifecycle_receipts(
  id TEXT PRIMARY KEY, scope TEXT NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL,
@@ -29,11 +29,19 @@ CREATE TABLE IF NOT EXISTS lifecycle_receipts(
 CREATE TABLE IF NOT EXISTS lifecycle_backups(
  id TEXT PRIMARY KEY, created INTEGER NOT NULL, file TEXT NOT NULL, sha256 TEXT NOT NULL,
  journal_entries INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS lifecycle_exports(
+ id TEXT PRIMARY KEY, scope TEXT NOT NULL, actor TEXT NOT NULL, created INTEGER NOT NULL,
+ directory TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, sources TEXT NOT NULL,
+ claims TEXT NOT NULL, status TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS lifecycle_action_redactions(
+ scope TEXT NOT NULL, action_id TEXT NOT NULL, at INTEGER NOT NULL, reason TEXT NOT NULL,
+ PRIMARY KEY(scope,action_id));
 '''
 REMAINS = ['Audit entries that name the record identifier and time, without its value.',
            'Lineage metadata: note identifier, line range and source hash, without the reviewed value.',
            'Backups taken before this time, until they are rotated; a restore replays this forget.',
            'Completed local drafts, which are not undone by forgetting.',
+           'Readable export copies made before this time, including copies outside ALFRED; review and remove them separately.',
            'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
 
 
@@ -53,10 +61,24 @@ def append(store, entry: dict) -> None:
     line = (json.dumps(entry, sort_keys=True, separators=(',', ':')) + '\n').encode()
     fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     try:
-        os.write(fd, line)
+        import fcntl
+        fcntl.flock(fd,fcntl.LOCK_EX)
+        # Never append behind a torn intent that restore would have to discard.
+        entries(path)
+        pending = memoryview(line)
+        while pending:
+            wrote = os.write(fd,pending)
+            if not wrote:
+                raise Fault('lifecycle_journal_write_failed')
+            pending = pending[wrote:]
         os.fsync(fd)
     finally:
         os.close(fd)
+    parent = os.open(path.parent,os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(parent)
+    finally:
+        os.close(parent)
 
 
 def entries(path: Path) -> list[dict]:
@@ -65,17 +87,15 @@ def entries(path: Path) -> list[dict]:
     if path.is_symlink():
         raise Fault('lifecycle_journal_symlink')
     result = []
-    for number, line in enumerate(path.read_text().splitlines(), 1):
+    for line in path.read_text().splitlines():
         if not line.strip():
             continue
         try:
             value = json.loads(line)
         except ValueError:
-            # A torn final write is the only tolerable damage; anything else stops restore.
-            if number == len(path.read_text().splitlines()):
-                break
+            # Dropping a torn revocation/forget could resurrect access or content.
             raise Fault('lifecycle_journal_corrupt') from None
-        if value.get('kind') not in KINDS:
+        if not isinstance(value,dict) or value.get('kind') not in KINDS:
             raise Fault('lifecycle_journal_corrupt')
         result.append(value)
     return result
@@ -85,9 +105,43 @@ def _has(db, table):
     return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone())
 
 
+def replay_live(store):
+    """Recover durable intents before opening any application read/worker path."""
+    journal = entries(journal_path(store))
+    if journal:
+        with store.transaction() as db:
+            for entry in journal:
+                apply_entry(db,entry,store.now(),origin='replayed')
+
+
+def redact_action(db,scope,action_id,now,reason):
+    row = db.execute('SELECT state,parameters FROM actions WHERE scope=? AND id=?',(scope,action_id)).fetchone()
+    if not row or row['state'] not in ('proposed','queued','cancelled'):
+        return 0
+    params = json.loads(row['parameters'])
+    if params.get('text') == REMOVED:
+        return 0
+    params['text'] = REMOVED
+    db.execute('UPDATE actions SET parameters=? WHERE scope=? AND id=?',(json.dumps(params,sort_keys=True),scope,action_id))
+    if _has(db,'lifecycle_action_redactions'):
+        db.execute('INSERT OR IGNORE INTO lifecycle_action_redactions VALUES (?,?,?,?)',(scope,action_id,now,reason))
+    return 1
+
+
+def mark_exports(db,scope,*,source=None,claims=()):
+    if not _has(db,'lifecycle_exports'):
+        return []
+    retained=[]
+    for row in db.execute('SELECT * FROM lifecycle_exports WHERE scope=?',(scope,)).fetchall():
+        if ((source and source in json.loads(row['sources'])) or set(claims)&set(json.loads(row['claims']))):
+            db.execute("UPDATE lifecycle_exports SET status='retained_copy_review' WHERE id=?",(row['id'],))
+            retained.append(row['id'])
+    return retained
+
+
 def withdraw_dependants(db, scope, actor, claim_ids, now):
     """Clear saved answers and cancel undecided actions bound to forgotten claims."""
-    answers, cancelled, completed = 0, [], []
+    answers, cancelled, completed, redacted = 0, [], [], 0
     if _has(db, 'conversation_turns'):
         for row in db.execute('''SELECT t.id,t.result FROM conversation_turns t JOIN conversations s ON s.id=t.session
                                  WHERE s.scope=? AND s.actor=? AND t.result IS NOT NULL''', (scope, actor)).fetchall():
@@ -106,10 +160,12 @@ def withdraw_dependants(db, scope, actor, claim_ids, now):
                 db.execute("UPDATE actions SET state='cancelled' WHERE scope=? AND id=?", (scope, link['action_id']))
                 db.execute("UPDATE outbox SET state='cancelled' WHERE scope=? AND action_id=?", (scope, link['action_id']))
                 cancelled.append(link['action_id'])
-            elif action:
+                redacted += redact_action(db,scope,link['action_id'],now,'memory_forgotten')
+            elif action and action['state'] != 'cancelled':
                 completed.append(link['action_id'])
     return {'conversation_answers_withdrawn': answers, 'pending_actions_cancelled': cancelled,
-            'completed_actions_not_undone': completed}
+            'completed_actions_not_undone': completed,'action_payloads_redacted':redacted,
+            'known_exports_retained':mark_exports(db,scope,claims=claim_ids)}
 
 
 REMOVED = 'Removed when its source was forgotten.'
@@ -118,10 +174,11 @@ SOURCE_REMAINS = ['Your own files. ALFRED never deletes or edits the files a sou
                   'Reviewed statements that relied on this source, invalidated with their values removed, until you forget them.',
                   'Backups taken before this time, until they are rotated; a restore replays this removal.',
                   'Completed local drafts, which are not undone.',
+                  'Readable export copies and copied backups elsewhere; no authority exists to recall those copies.',
                   'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
 
 
-def _cancel(db, scope, action_ids, counts):
+def _cancel(db, scope, action_ids, counts, now):
     for action_id in sorted(action_ids):
         action = db.execute('SELECT state FROM actions WHERE scope=? AND id=?', (scope, action_id)).fetchone()
         if action and action['state'] in ('proposed', 'queued'):
@@ -130,6 +187,7 @@ def _cancel(db, scope, action_ids, counts):
             counts['pending_actions_cancelled'].append(action_id)
         elif action and action['state'] != 'cancelled':
             counts['completed_actions_not_undone'].append(action_id)
+        counts['action_payloads_redacted'] += redact_action(db,scope,action_id,now,'source_forgotten')
 
 
 def forget_source_db(db, scope, source, now, *, origin='recorded', at=None):
@@ -137,7 +195,8 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None):
     restore can replay it. The person's own files are never read, edited or deleted."""
     counts = {'notes_removed': 0, 'reviewed_statements_invalidated': 0, 'conversation_answers_withdrawn': 0,
               'pending_actions_cancelled': [], 'completed_actions_not_undone': [], 'job_results_deleted': [],
-              'evidence_events_redacted': 0}
+              'evidence_events_redacted': 0,'action_payloads_redacted':0,
+              'known_exports_retained':mark_exports(db,scope,source=source)}
     # Revoked first, so nothing can index or report under this source again.
     db.execute("UPDATE credentials SET revoked=1 WHERE id=? AND scope=? AND role='source'", (source, scope))
     notes = set()
@@ -207,7 +266,7 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None):
         for row in db.execute("SELECT id,parameters FROM actions WHERE scope=? AND capability='vault.inbox_note'", (scope,)).fetchall():
             if json.loads(row['parameters']).get('source') == source:
                 bound.add(row['id'])
-        _cancel(db, scope, bound, counts)
+        _cancel(db, scope, bound, counts, now)
     if _has(db, 'artefacts'):
         for row in db.execute('SELECT sha256,lineage FROM artefacts WHERE scope=?', (scope,)).fetchall():
             if source in json.loads(row['lineage']).get('sources', []):
@@ -251,7 +310,14 @@ def apply_entry(db, entry, now, origin='recorded'):
     if kind == 'credential_revoked':
         db.execute('UPDATE credentials SET revoked=1 WHERE id=?', (entry['subject'],))
         return {}
+    if kind == 'policy_strict':
+        if _has(db,'source_policy'):
+            db.execute('INSERT INTO source_policy VALUES (?,1,1) ON CONFLICT(scope) DO UPDATE SET strict=1,epoch=epoch+1 WHERE strict=0',(scope,))
+        return {}
     if kind == 'grant_revoked':
+        # A backup from before enabling grants must not restore legacy access.
+        if _has(db,'source_policy'):
+            db.execute('INSERT INTO source_policy VALUES (?,1,1) ON CONFLICT(scope) DO UPDATE SET strict=1,epoch=epoch+1 WHERE strict=0',(scope,))
         if _has(db, 'source_grants'):
             db.execute('DELETE FROM source_grants WHERE scope=? AND person=? AND source=? AND capability=?',
                        (scope, entry['person'], entry['subject'], entry['capability']))

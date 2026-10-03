@@ -248,6 +248,8 @@ class IdentityPolicy:
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             self._epoch(db, p, epoch)
+            from .lifecycle import append
+            append(self.store,{'kind':'policy_strict','scope':p['scope'],'at':self.store.now()})
             db.execute('''INSERT INTO source_policy VALUES (?,1,1) ON CONFLICT(scope)
                 DO UPDATE SET strict=1,epoch=epoch+1''', (p['scope'],))
             self.store.log(db, p['scope'], p['id'], 'policy.enabled', p['scope'])
@@ -274,6 +276,8 @@ class IdentityPolicy:
             policy = db.execute('SELECT strict FROM source_policy WHERE scope=?', (p['scope'],)).fetchone()
             if policy and policy['strict']:
                 return {'migrated': False, 'mode': 'explicit_grants', 'read_grants_added': 0}
+            from .lifecycle import append
+            append(self.store,{'kind':'policy_strict','scope':p['scope'],'at':self.store.now()})
             added = 0
             if preserve_reads:
                 for row in db.execute('''SELECT l.source,l.expires,d.person FROM source_legacy_access l
@@ -304,6 +308,10 @@ class IdentityPolicy:
                 raise Fault('source_not_available', 404)
             if not revoke and not self.store.now() < expires <= min(row['expires'], self.store.now()+2592000):
                 raise Fault('invalid_grant_expiry')
+            policy = db.execute('SELECT strict FROM source_policy WHERE scope=?',(p['scope'],)).fetchone()
+            if not policy or not policy['strict']:
+                from .lifecycle import append
+                append(self.store,{'kind':'policy_strict','scope':p['scope'],'at':self.store.now()})
             if revoke:
                 from .lifecycle import append
                 append(self.store, {'kind': 'grant_revoked', 'scope': p['scope'], 'person': p['person_id'], 'subject': source,
