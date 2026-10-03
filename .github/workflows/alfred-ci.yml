@@ -1,7 +1,7 @@
 name: ALFRED unified build
 on:
   push:
-    branches: [main, feat/alfred-pilot-groundwork-2026-10-03]
+    branches: [main, feat/alfred-pilot-groundwork-2026-10-03, feat/alfred-console-refinement-09-2026-10-03]
   pull_request:
     branches: [main]
 permissions:

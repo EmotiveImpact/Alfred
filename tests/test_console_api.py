@@ -338,6 +338,21 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
         r, body = self.raw('/console/')
         self.assertEqual((r.status, json.loads(body)), (404, {'error': 'console_not_built'}))
 
+    def test_exact_brand_jpeg_is_public_same_origin_and_byte_preserving(self):
+        image = b'\xff\xd8synthetic-deck-mark\xff\xd9'
+        (self.server.console_dist / 'alfred-mark.jpg').write_bytes(image)
+        r, body = self.raw('/console/alfred-mark.jpg')
+        self.assertEqual((r.status, r.getheader('Content-Type'), body), (200, 'image/jpeg', image))
+        self.assertEqual(self.raw('/console/alfred-mark.jpg', headers={'Host': 'evil.example'})[0].status, 403)
+
+    def test_brand_route_does_not_allow_arbitrary_images_or_symlink_targets(self):
+        outside = self.root / 'private.jpg'; outside.write_bytes(b'not-public')
+        (self.server.console_dist / 'other.jpg').write_bytes(b'not-allowlisted')
+        (self.server.console_dist / 'alfred-mark.jpg').symlink_to(outside)
+        for path in ('/console/alfred-mark.jpg', '/console/other.jpg', '/console/../private.jpg',
+                     '/console/assets/alfred-mark.jpg', '/console/%2e%2e/private.jpg'):
+            self.assertEqual(self.raw(path)[0].status, 404, path)
+
 
 if __name__ == '__main__':
     unittest.main()

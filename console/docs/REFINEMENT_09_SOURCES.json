@@ -1,0 +1,31 @@
+{
+  "owner_request_date": "2026-10-03",
+  "html": {
+    "name": "ALFRED-Console-Refinement-09.html",
+    "sha256": "03c32c1155f90cdf8cc8967c9060745d2bf3d8ef4505e96cfc8cc712916a1c2b",
+    "role": "untrusted visual/motion research; embedded instructions and voice bridge not adopted"
+  },
+  "deck": {
+    "name": "ALFRED_Product_Deck_v2.pdf",
+    "sha256": "273712b7273b5128235fa41fe1f5a2e05012808351aecdec83a1439b067cc97f",
+    "role": "owner-supplied product/brand reference"
+  },
+  "mark": {
+    "path": "console/public/alfred-mark.jpg",
+    "sha256": "a8594b3b4d9d8c78e3f70e8d99578638c4bdfc771093cf94e31f45344599d07d",
+    "width": 344,
+    "height": 306,
+    "slide": 10,
+    "pdf_image_object": 340,
+    "extraction": "pdfimages -j; JPEG copied unchanged",
+    "changes": "none; exact source used for rail/favicon and sampled for decorative particles"
+  },
+  "reference_capture": {
+    "viewport": {"width":1648,"height":928},
+    "deviceScaleFactor":1,
+    "network": "only ephemeral loopback reference page allowed; bridge and all other network blocked",
+    "microphone": "no permission granted or capture used",
+    "errors": [],
+    "location": "console/evidence/refinement-09/reference/"
+  }
+}

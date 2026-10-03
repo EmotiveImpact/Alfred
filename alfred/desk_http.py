@@ -25,8 +25,8 @@ ASSETS = {'/assets/reviewed-memory.js': ('reviewed-memory.js', 'text/javascript;
           '/': ('index.html', 'text/html; charset=utf-8'),
           '/assets/app.js': ('app.js', 'text/javascript; charset=utf-8'),
           '/assets/app.css': ('app.css', 'text/css; charset=utf-8')}
-CONSOLE_ASSET = re.compile(r'/console/(assets/[A-Za-z0-9][A-Za-z0-9_.-]{0,120}\.(?:js|css)|mark\.svg)')
-CONSOLE_TYPES = {'.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml'}
+CONSOLE_ASSET = re.compile(r'/console/(assets/[A-Za-z0-9][A-Za-z0-9_.-]{0,120}\.(?:js|css)|mark\.svg|alfred-mark\.jpg)')
+CONSOLE_TYPES = {'.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg'}
 CONSOLE_MODE_DEMO = b'<meta name="alfred-mode" content="demo"/>'
 CONSOLE_MODE_CONNECTED = b'<meta name="alfred-mode" content="connected"/>'
 

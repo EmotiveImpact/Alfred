@@ -11,12 +11,12 @@ const voicesSoon=(synth:SpeechSynthesis)=>new Promise<SpeechSynthesisVoice[]>(re
 export function ReadAloud({turnId,question,evidence,memory}:{turnId:string;question:string;evidence:readonly SpokenEvidence[];memory:readonly SpokenStatement[]}){
   const c=useConsole(),[state,setState]=useState<VoiceState>('idle'),[text,setText]=useState(''),[error,setError]=useState('');
   const playback=useRef<string|null>(null),reported=useRef(false),stateRef=useRef<VoiceState>('idle');
-  const move=(next:VoiceState)=>{stateRef.current=next;setState(next);};
+  const move=(next:VoiceState)=>{stateRef.current=next;setState(next);c.setVoicePlaying(next==='playing');};
   const report=async(outcome:'ended'|'stopped'|'error')=>{
     if(reported.current||!playback.current)return;reported.current=true;
     try{await c.live.client.post(`/desk/voice/playbacks/${playback.current}/report`,{outcome});}catch{setError('The playback outcome could not be recorded.');}
   };
-  useEffect(()=>()=>{if(stateRef.current==='playing'||stateRef.current==='generated'){window.speechSynthesis?.cancel();void report('stopped');}},[]);// eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>()=>{c.setVoicePlaying(false);if(stateRef.current==='playing'||stateRef.current==='generated'){window.speechSynthesis?.cancel();void report('stopped');}},[]);// eslint-disable-line react-hooks/exhaustive-deps
   const play=async()=>{
     setError('');const synth=window.speechSynthesis;
     const voices=synth?localVoices(await voicesSoon(synth)):[];

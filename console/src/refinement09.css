@@ -1,0 +1,20 @@
+/* Reference 09: readable surfaces first; bounded geometry motion supplies presence. */
+.console{position:relative}
+.rail-surface{background:#060708}.rail-brand img{height:auto;aspect-ratio:344/306;mix-blend-mode:screen}
+.executive-panel,.inspector,.command-bar,.dialog{position:relative;background:#060708;box-shadow:none}
+.inspector{position:fixed}.dialog{position:fixed}.executive-panel,.inspector,.dialog{isolation:isolate}
+.surface-trace{position:absolute;inset:3px;border-radius:inherit;pointer-events:none;z-index:0;overflow:hidden}
+.surface-trace>i{position:absolute;display:block;background:#d7b37566;transform-origin:left top;animation:edge-form .44s cubic-bezier(.2,.7,.2,1) both}
+.surface-trace>i:nth-child(1){left:0;top:0;width:10px;height:1px}.surface-trace>i:nth-child(2){right:0;top:0;width:1px;height:10px;animation-delay:60ms}
+.surface-trace>i:nth-child(3){right:0;bottom:0;width:10px;height:1px;animation-delay:120ms}.surface-trace>i:nth-child(4){left:0;bottom:0;width:1px;height:10px;animation-delay:180ms}
+.surface-motion{position:fixed;inset:0;pointer-events:none;z-index:35;overflow:hidden;contain:strict}.surface-particle{position:absolute;left:0;top:0;width:2px;height:2px;border-radius:50%;background:#d8cbb0;will-change:transform}
+.presence-label{position:absolute;left:50%;top:21px;transform:translateX(-50%);z-index:2;text-align:left;pointer-events:none}
+.presence-label h1{font-size:11px;font-weight:400;letter-spacing:3px;color:#cdd5d4}.presence-label>span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:1.8px;color:#89969c;margin-top:6px}.presence-label[data-activity=review]>span{color:#d7b375}
+.presence-label .presentation-note{display:block;margin-top:9px;font-size:8px;letter-spacing:.7px;color:#76848a}
+.presence-mode .graph-callouts,.presence-mode .graph-view-label{display:none}
+.graph-tools{gap:9px}.console-view button{padding-left:10px;padding-right:10px}.view-tools{display:flex;align-items:center;gap:9px}
+.command-bar:focus-within{background:#0a0c0d;border-color:#9e895f}.progress-track i{transition:width .35s cubic-bezier(.2,.7,.2,1)}
+@keyframes edge-form{from{transform:scaleX(0) scaleY(0)}to{transform:scale(1)}}
+.console.motion-still .surface-trace>i{animation:none}.console.motion-still .progress-track i{transition:none}
+@media(max-width:700px){.graph-tools{flex-wrap:wrap;justify-content:center;gap:3px;bottom:0;width:calc(100% - 16px);height:auto;max-width:350px}.view-tools{gap:3px}.presence-label{top:12px}.presence-label h1{font-size:9px}.presence-label>span{font-size:8px}.console-view button{font-size:8px;padding:7px 10px}.presence-mode .sphere-stage{inset:42px 0 44px}.sphere-stage{bottom:46px}.graph-view-label{top:8px}.presence-label .presentation-note{font-size:7px}}
+@media(prefers-reduced-motion:reduce){.surface-trace>i{animation:none}.progress-track i{transition:none}}

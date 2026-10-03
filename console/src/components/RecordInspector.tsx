@@ -1,3 +1,4 @@
+import {SurfaceTrace} from './SurfaceMotion';
 import {useEffect,useRef,useState} from 'react';
 import {DeskError} from '../integration/deskClient';
 import {X,LinkSimple,CaretRight,DownloadSimple} from '@phosphor-icons/react';
@@ -85,4 +86,4 @@ function InspectorBody(){
     <section className="inspector-section"><h3>Explicit relationships</h3>{edges.length?edges.map(e=>{const other=neighbour(e);return <button className="linked-record" key={e.id} onClick={()=>other&&selectRecord(other.id)}><LinkSimple size={17}/><span><small>{connected?`${LAYER_LABEL[e.layer??'']} · ${e.relation.replaceAll('_',' ')}`:e.relation.replaceAll('_',' ')}</small>{other?.title}</span><CaretRight size={14}/></button>;}):<p>{connected?'No supported relationships for this record. Background particles are decorative, not relationships.':'No explicit links in this fixture. Background particles are decorative, not relationships.'}</p>}</section>
     <button className="secondary-button export-button" onClick={exportRecord}><DownloadSimple size={17}/>Export record</button></div></>;
 }
-export function RecordInspector(){const{selected}=useConsole();return selected?<aside className="inspector" aria-label="Record inspector"><InspectorBody/></aside>:null;}
+export function RecordInspector(){const{selected}=useConsole();return selected?<aside className="inspector" aria-label="Record inspector"><SurfaceTrace/><InspectorBody/></aside>:null;}

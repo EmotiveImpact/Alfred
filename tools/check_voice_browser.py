@@ -87,6 +87,7 @@ with tempfile.TemporaryDirectory() as temp:
         page.goto(server.origin + '/console/')
         page.get_by_label('Access key').fill(keys['owner']); page.get_by_role('button', name='Sign in').click()
         expect(page.locator('.connection-state')).to_have_text('Connected', timeout=15000)
+        page.get_by_role('button', name='Consciousness', exact=True).click()
         command = page.get_by_label('Command or search')
         command.fill('What needs equipment collection confirmation?'); command.press('Enter')
         ask = page.get_by_role('dialog')
@@ -133,8 +134,12 @@ with tempfile.TemporaryDirectory() as temp:
             earlier = {r['id'] for r in records()}
             ask.get_by_role('button', name='Read again').click()
             expect(ask.get_by_role('status').filter(has_text='Playing on this device')).to_be_visible(timeout=10000)
+            expect(page.locator('.presence-label')).to_have_attribute('data-activity', 'speaking')
+            check('presence reflects real scripted playback start, not generated text alone')
             ask.get_by_role('button', name='Stop').click()
             expect(ask.get_by_role('status').filter(has_text='stopped before the end')).to_be_visible(timeout=10000)
+            expect(page.locator('.presence-label')).not_to_have_attribute('data-activity', 'speaking')
+            check('stopping playback immediately clears the speaking presentation')
             check('a stopped playback is recorded as stopped and cannot be acknowledged',
                   settled(lambda: [r['outcome'] for r in records() if r['id'] not in earlier] == ['stopped'])
                   and ask.get_by_role('button', name='I heard this').count() == 0)

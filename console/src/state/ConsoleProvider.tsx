@@ -4,6 +4,7 @@ import {createDemoSnapshot} from '../domain/fixtures';
 import {initialState,reducer,searchRecords,SCOPES,type Category} from '../domain/model';
 import {parseCommand} from '../domain/commands';
 import {type GraphMode} from '../domain/projection';
+import {presenceActivity} from '../domain/presence';
 import {consoleMode} from '../integration/mode';
 import {emptyConnectedSnapshot} from '../integration/toSnapshot';
 import {useConnection,useRecordDetail} from './useConnection';
@@ -27,6 +28,8 @@ function useController(){
   const[notice,setNotice]=useState(''),[renderer,setRenderer]=useState('Starting graphics');
   const[graphMode,setGraphMode]=useState<GraphMode>('field'),[activeView,setActiveView]=useState<RailView>('home');
   const[renderEpoch,setRenderEpoch]=useState(0);
+  const[presentation,setPresentation]=useState<'globe'|'consciousness'>('globe');
+  const[commandFocused,setCommandFocused]=useState(false),[voicePlaying,setVoicePlaying]=useState(false);
   const[executiveTarget,setExecutiveTarget]=useState<ExecutiveTarget|null>(null);
   const[memoryTab,setMemoryTab]=useState<'queue'|'asof'>('queue');
   // Lost or changed authority closes every view that could still show withdrawn material.
@@ -36,7 +39,7 @@ function useController(){
   const expectAccessChange=useCallback(()=>{expectingAccessChange.current=true;},[]);
   const onAuthorityLost=useCallback((kind:'cleared'|'changed')=>{
     const keep=kind==='changed'&&expectingAccessChange.current;expectingAccessChange.current=false;
-    setModal(m=>keep&&m==='security'?m:null);setQuery('');setProposalId(null);setExecutiveTarget(null);if(!keep)setActiveView('home');resetAsk.current();resetJobs.current();
+    setModal(m=>keep&&m==='security'?m:null);setQuery('');setProposalId(null);setExecutiveTarget(null);setVoicePlaying(false);if(!keep)setActiveView('home');resetAsk.current();resetJobs.current();
     return keep;
   },[]);
   const live=useConnection(mode,dispatch,setNotice,onAuthorityLost);
@@ -78,7 +81,7 @@ function useController(){
   const navigate=(view:RailView)=>{
     setActiveView(view);dispatch({type:'select',id:null});
     if(view==='home'){setGraphMode('field');setModal(null);return;}
-    if(view==='knowledge'){setGraphMode('relationships');setModal(null);return;}
+    if(view==='knowledge'){setPresentation('globe');setGraphMode('relationships');setModal(null);return;}
     if(view==='research'){switchScope('research');setActiveView('research');return;}
     if(view==='systems'){setModal('settings');return;}
     if(view==='search')setQuery('');
@@ -104,7 +107,8 @@ function useController(){
   const recheckAsk=asking.recheck;
   useEffect(()=>{void recheckAsk();},[state.snapshot.dataRevision]);// eslint-disable-line react-hooks/exhaustive-deps
   const askView={state:asking.state,sessionId:asking.state.status==='done'?asking.state.sessionId:null};
-  return{expectAccessChange,mode,connected,live,detail,jobs,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
+  const activity=presenceActivity({connected,ready:live.connection.kind==='ready',typing:commandFocused||command.length>0,waiting:asking.state.status==='waiting',speaking:voicePlaying,reviewing:modal==='review'});
+  return{presentation,setPresentation,activity,setCommandFocused,setVoicePlaying,expectAccessChange,mode,connected,live,detail,jobs,ask:askView,askQuestion,askMode,setAskMode,state,dispatch,modal,setModal,query,setQuery,command,setCommand,proposalId,reviewConsent,setReviewConsent,reviewOutcome,
     notice,setNotice,renderer,onStatus,graphMode,setGraphMode,activeView,navigate,systemReduced,reduced,inputRef,searchRef,
     records,relationships,shownRecords,selected,priorities,proposals,pending,projects,activeProposal,results,selectRecord,closeModal,
     switchScope,openReview,openCategory,runCommand,resetDemo,renderEpoch,retryGraphics:()=>setRenderEpoch(n=>n+1),
