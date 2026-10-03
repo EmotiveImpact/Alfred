@@ -6,14 +6,18 @@ import {markSamples,type PresenceActivity} from '../domain/presence';
 const vertex=`
 attribute float aLight;
 attribute float aSeed;
+attribute float aSpread;
+attribute float aPhase;
 uniform float uTime,uGather,uRadius,uDpr;
 varying float vLight;
 void main(){
   float a=aSeed*6.2831853+uTime*(.12+.045*aLight);
-  float r=.58+fract(aSeed*17.37)*.7;
-  vec3 cloud=vec3(cos(a)*r*1.7,sin(a*2.)*r*.58,sin(a)*.13);
-  vec3 ring=vec3(cos(a)*1.65,sin(a)*.62,sin(a)*.12);
-  vec3 eight=vec3(sin(a)*1.65,sin(a)*cos(a)*.95,cos(a)*.1);
+  float r=.2+sqrt(aSpread)*1.25;
+  vec3 cloud=vec3(cos(a)*r*1.5,sin(a*2.+aPhase*.5)*r*.85,sin(a)*.13);
+  float band=1.3+(aSpread-.5)*.75;
+  vec3 ring=vec3(cos(a)*band,sin(a)*band*.42+sin(aPhase+uTime*.12)*.12,sin(a)*.12);
+  float width=.6+aSpread*.5;
+  vec3 eight=vec3(sin(a)*1.65*width,sin(a)*cos(a)*1.1*width,cos(a)*.1);
   float shape=.5+.5*sin(uTime*.055);
   vec3 loose=mix(mix(cloud,ring,shape),eight,.24+.2*sin(uTime*.041));
   vec3 p=mix(loose,position,uGather)*uRadius;
@@ -48,9 +52,10 @@ export function PresenceField({activity,moving,reduced,high}:{activity:PresenceA
     img.src='./alfred-mark.jpg';return()=>{disposed=true;img.onload=null;};
   },[invalidate]);
   const geometry=useMemo(()=>{
-    const points=high?samples:samples.filter((_,i)=>i%2===0),positions=new Float32Array(points.length*3),light=new Float32Array(points.length),seed=new Float32Array(points.length);
-    points.forEach((p,i)=>{positions.set([p.x,p.y,0],i*3);light[i]=p.light;seed[i]=((high?i:i*2)*.61803398875)%1;});
-    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.setAttribute('aLight',new THREE.BufferAttribute(light,1));g.setAttribute('aSeed',new THREE.BufferAttribute(seed,1));return g;
+    const points=high?samples:samples.filter((_,i)=>i%2===0),positions=new Float32Array(points.length*3),light=new Float32Array(points.length),seed=new Float32Array(points.length),spread=new Float32Array(points.length),phase=new Float32Array(points.length);
+    points.forEach((p,i)=>{const index=high?i:i*2;positions.set([p.x,p.y,0],i*3);light[i]=p.light;seed[i]=(index*.61803398875)%1;
+      const random=Math.sin((index+1)*12.9898)*43758.5453;spread[i]=random-Math.floor(random);phase[i]=((index*.754877666)%1)*Math.PI*2;});
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.setAttribute('aLight',new THREE.BufferAttribute(light,1));g.setAttribute('aSeed',new THREE.BufferAttribute(seed,1));g.setAttribute('aSpread',new THREE.BufferAttribute(spread,1));g.setAttribute('aPhase',new THREE.BufferAttribute(phase,1));return g;
   },[samples,high]);
   useEffect(()=>()=>geometry.dispose(),[geometry]);
   const target=reduced||activity!=='present'?1:0;
