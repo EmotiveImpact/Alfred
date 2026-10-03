@@ -75,6 +75,22 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
     def entity(self, identity, kind, name):
         self.assertEqual(self.req('/desk/memory/entities', {'id': identity, 'kind': kind, 'name': name})[0], 200)
 
+    def test_forgetting_superseded_statement_changes_detail_refresh_revision(self):
+        self.login(self.keys['owner'])
+        self.entity('refresh-project', 'project', 'Refresh project')
+        note = next(n for n in self.store.knowledge(self.keys['owner'])['nodes'] if n['title'] == 'Sample film')
+        old = self.claim('refresh-old', 'refresh-project', 'status', note, 8, value='planning')
+        new = self.claim('refresh-new', 'refresh-project', 'status', note, 8, value='ready', accept=False)
+        self.assertEqual(self.req(f"/desk/memory/claims/{new}/review", {'version': 1,
+            'decision': 'supersede', 'replaces_id': old, 'replaces_version': 2})[0], 200)
+        before = self.projection()
+        prior = next(c for c in self.server.memory.view(self.keys['owner'])['claims'] if c['id'] == old)
+        self.assertEqual(self.req(f"/desk/memory/claims/{old}/forget", {'version': prior['version']})[0], 200)
+        after = self.projection()
+        # Current graph and tallies are unchanged; an open detail still needs refreshing.
+        self.assertEqual(after['nodes'], before['nodes'])
+        self.assertNotEqual(after['dataRevision'], before['dataRevision'])
+
     def claim(self, request, subject, predicate, note, line, obj=None, value=None, accept=True):
         body = {'request_id': request, 'subject_id': subject, 'predicate': predicate, 'object_id': obj, 'value': value,
                 'valid_from': None, 'valid_until': None,

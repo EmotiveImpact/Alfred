@@ -1,0 +1,14 @@
+test_forgetting_superseded_statement_changes_detail_refresh_revision (tests.test_console_api.ConsoleProjectionHTTPTests.test_forgetting_superseded_statement_changes_detail_refresh_revision) ... FAIL
+
+======================================================================
+FAIL: test_forgetting_superseded_statement_changes_detail_refresh_revision (tests.test_console_api.ConsoleProjectionHTTPTests.test_forgetting_superseded_statement_changes_detail_refresh_revision)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Alfred/tests/test_console_api.py", line 92, in test_forgetting_superseded_statement_changes_detail_refresh_revision
+    self.assertNotEqual(after['dataRevision'], before['dataRevision'])
+AssertionError: 'a53aad77e17a4936f44480468bc5de66' == 'a53aad77e17a4936f44480468bc5de66'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.262s
+
+FAILED (failures=1)

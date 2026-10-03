@@ -1,0 +1,1546 @@
+{
+  "model_inference": false,
+  "answer_keys_in_requests": false,
+  "scope": "synthetic lexical evidence selection, not answer correctness",
+  "frozen_baseline_hashes": {
+    "corpus_sha256": "350cfaca007b5aac9830f6c232e3762431b6da128410883fc3854d5af6c29fe6",
+    "queries_sha256": "f83030e6123510d36a58458c3ae1a4ee70267dc9351ea5ece26548f23d70f507",
+    "answer_keys_sha256": "177c83a5036be578dabb0b477c28e0ee7592d8ce1e97c3782b92dad2094d4e19",
+    "frozen_set_sha256": "bf9eb18e8532be8e80e2abb3e6d188ace7371e5cb7e875cbe16bcd3289f7507c"
+  },
+  "heldout_sha256": "e90b74f7f5fefe499b40a747b62a02dd5514aa120da95403a48859bde4591271",
+  "runtime_sha256": "1c3a228628728904d470b804546298cda576ca8587da2825a756fab6b38cc70a",
+  "development": {
+    "baseline": {
+      "queries": 44,
+      "answerable": 40,
+      "support_hits": 46,
+      "support_count": 51,
+      "mean_recall": 0.9229,
+      "precision": 0.2434,
+      "evidence_items": 189,
+      "abstention_controls": 4,
+      "correct_abstentions": 0,
+      "mean_excerpt_characters": 576.5,
+      "latency_ms": {
+        "calls": 132,
+        "p50": 45.17,
+        "p95": 48.05
+      },
+      "denied_evidence_items": 0,
+      "per_query": [
+        {
+          "id": "Q01",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/harbour-lights/harbour-lights.md",
+            "projects/harbour-lights/programme.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/programme.md"
+          ]
+        },
+        {
+          "id": "Q02",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "people/morgan-ellery.md",
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/harbour-lights/harbour-lights.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/budget-approved.md"
+          ]
+        },
+        {
+          "id": "Q03",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "people/morgan-ellery.md",
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/harbour-lights/harbour-lights.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/budget-approved.md"
+          ]
+        },
+        {
+          "id": "Q04",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "people/ines-duarte.md",
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/harbour-lights/volunteers.md"
+          ],
+          "support_paths": [
+            "people/ines-duarte.md",
+            "projects/harbour-lights/volunteers.md"
+          ]
+        },
+        {
+          "id": "Q05",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/harbour-lights/volunteers.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/volunteers.md"
+          ]
+        },
+        {
+          "id": "Q06",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/harbour-lights/risk-register.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/risk-register.md"
+          ]
+        },
+        {
+          "id": "Q07",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/morgan-quill.md",
+            "projects/kestrel/kickoff.md",
+            "projects/lantern/cutover-plan.md",
+            "projects/lantern/kickoff.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": [
+            "projects/lantern/kickoff.md"
+          ]
+        },
+        {
+          "id": "Q08",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/felix-okafor.md",
+            "projects/kestrel/fleet-inspection.md",
+            "projects/kestrel/kestrel.md",
+            "projects/kestrel/kickoff.md",
+            "projects/kestrel/routes.md"
+          ],
+          "support_paths": [
+            "projects/kestrel/kickoff.md"
+          ]
+        },
+        {
+          "id": "Q09",
+          "recall": 0.5,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "people/morgan-quill.md",
+            "projects/lantern/cutover-plan.md",
+            "projects/lantern/data-mapping.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": [
+            "meetings/leadership-2026-02-19.md",
+            "projects/lantern/cutover-plan.md"
+          ]
+        },
+        {
+          "id": "Q10",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/orchid.md",
+            "clients/saltmarsh/saltmarsh.md",
+            "decisions/lantern-ledger-storage.md",
+            "map.md",
+            "projects/lantern/cutover-plan.md"
+          ],
+          "support_paths": [
+            "projects/lantern/cutover-plan.md"
+          ]
+        },
+        {
+          "id": "Q11",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/support-tiers.md",
+            "meetings/leadership-2026-02-05.md",
+            "people/morgan-quill.md",
+            "projects/lantern/standup-2026-02-10.md",
+            "projects/lantern/standup-2026-02-11.md"
+          ],
+          "support_paths": [
+            "projects/lantern/standup-2026-02-11.md"
+          ]
+        },
+        {
+          "id": "Q12",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/lantern/data-mapping.md",
+            "projects/lantern/kickoff.md",
+            "projects/lantern/lantern.md",
+            "projects/lantern/standup-2026-02-10.md",
+            "projects/lantern/standup-2026-02-11.md"
+          ],
+          "support_paths": [
+            "projects/lantern/standup-2026-02-10.md",
+            "projects/lantern/standup-2026-02-11.md"
+          ]
+        },
+        {
+          "id": "Q13",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/morgan-quill.md",
+            "projects/lantern/cutover-plan.md",
+            "projects/lantern/data-mapping.md",
+            "projects/lantern/kickoff.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": [
+            "projects/lantern/data-mapping.md"
+          ]
+        },
+        {
+          "id": "Q14",
+          "recall": 0.6666666666666666,
+          "evidence_paths": [
+            "decisions/northgate-yard-lease.md",
+            "meetings/leadership-2026-02-05.md",
+            "people/felix-okafor.md",
+            "projects/kestrel/kestrel.md",
+            "projects/kestrel/steering-2026-02.md"
+          ],
+          "support_paths": [
+            "decisions/northgate-yard-lease.md",
+            "meetings/leadership-2026-02-19.md",
+            "projects/kestrel/steering-2026-02.md"
+          ]
+        },
+        {
+          "id": "Q15",
+          "recall": 0.0,
+          "evidence_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md",
+            "decisions/northgate-yard-lease.md",
+            "people/felix-okafor.md",
+            "projects/kestrel/kestrel.md",
+            "projects/kestrel/routes.md"
+          ],
+          "support_paths": [
+            "projects/kestrel/fleet-inspection.md"
+          ]
+        },
+        {
+          "id": "Q16",
+          "recall": 1.0,
+          "evidence_paths": [
+            "personal/garden-plan.md",
+            "projects/kestrel/fleet-inspection.md"
+          ],
+          "support_paths": [
+            "projects/kestrel/fleet-inspection.md"
+          ]
+        },
+        {
+          "id": "Q17",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/felix-okafor.md",
+            "projects/kestrel/kestrel.md",
+            "projects/kestrel/kickoff.md",
+            "projects/kestrel/routes.md",
+            "projects/kestrel/steering-2026-02.md"
+          ],
+          "support_paths": [
+            "projects/kestrel/routes.md"
+          ]
+        },
+        {
+          "id": "Q18",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "people/tomasz-wolny.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md",
+            "projects/juniper/removals-contract.md"
+          ],
+          "support_paths": [
+            "projects/juniper/juniper.md",
+            "projects/juniper/removals-contract.md"
+          ]
+        },
+        {
+          "id": "Q19",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "people/tomasz-wolny.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md",
+            "projects/juniper/removals-contract.md"
+          ],
+          "support_paths": [
+            "decisions/juniper-move-date.md",
+            "projects/juniper/new-office.md"
+          ]
+        },
+        {
+          "id": "Q20",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "people/tomasz-wolny.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md",
+            "projects/juniper/removals-contract.md"
+          ],
+          "support_paths": [
+            "decisions/juniper-move-date.md"
+          ]
+        },
+        {
+          "id": "Q21",
+          "recall": 0.0,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "people/priya-raman.md",
+            "people/tomasz-wolny.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md"
+          ],
+          "support_paths": [
+            "projects/juniper/seating-plan.md"
+          ]
+        },
+        {
+          "id": "Q22",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/orchid.md",
+            "clients/orchid/renewal-terms.md",
+            "clients/orchid/support-tiers.md",
+            "clients/saltmarsh/renewal-terms.md",
+            "people/ines-duarte.md"
+          ],
+          "support_paths": [
+            "clients/orchid/renewal-terms.md"
+          ]
+        },
+        {
+          "id": "Q23",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/renewal-terms.md",
+            "clients/saltmarsh/quarterly-review-2026-q1.md",
+            "clients/saltmarsh/renewal-terms.md",
+            "clients/saltmarsh/saltmarsh.md",
+            "map.md"
+          ],
+          "support_paths": [
+            "clients/saltmarsh/renewal-terms.md"
+          ]
+        },
+        {
+          "id": "Q24",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/orchid.md",
+            "clients/orchid/renewal-terms.md",
+            "clients/orchid/support-tiers.md",
+            "decisions/orchid-pricing-2027.md",
+            "people/ines-duarte.md"
+          ],
+          "support_paths": [
+            "clients/orchid/support-tiers.md"
+          ]
+        },
+        {
+          "id": "Q25",
+          "recall": 1.0,
+          "evidence_paths": [
+            "procedures/client-support.md",
+            "projects/lantern/kickoff.md"
+          ],
+          "support_paths": [
+            "procedures/client-support.md"
+          ]
+        },
+        {
+          "id": "Q26",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md",
+            "clients/saltmarsh/renewal-terms.md",
+            "clients/saltmarsh/saltmarsh.md",
+            "map.md",
+            "people/rowan-hale.md"
+          ],
+          "support_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md"
+          ]
+        },
+        {
+          "id": "Q27",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md",
+            "clients/saltmarsh/renewal-terms.md",
+            "clients/saltmarsh/saltmarsh.md",
+            "people/rowan-hale.md",
+            "procedures/incident-review.md"
+          ],
+          "support_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md"
+          ]
+        },
+        {
+          "id": "Q28",
+          "recall": 0.75,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "people/morgan-ellery.md",
+            "projects/harbour-lights/harbour-lights.md",
+            "projects/kestrel/kickoff.md",
+            "projects/lantern/kickoff.md"
+          ],
+          "support_paths": [
+            "people/ada-mensah.md",
+            "projects/harbour-lights/harbour-lights.md",
+            "projects/kestrel/kickoff.md",
+            "projects/lantern/kickoff.md"
+          ]
+        },
+        {
+          "id": "Q29",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/morgan-ellery.md",
+            "people/morgan-quill.md",
+            "projects/lantern/cutover-plan.md",
+            "projects/lantern/data-mapping.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": [
+            "people/morgan-quill.md"
+          ]
+        },
+        {
+          "id": "Q30",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/hybrid-working.md",
+            "people/morgan-ellery.md",
+            "procedures/incident-review.md",
+            "projects/harbour-lights/harbour-lights.md",
+            "projects/harbour-lights/programme.md"
+          ],
+          "support_paths": [
+            "people/morgan-ellery.md"
+          ]
+        },
+        {
+          "id": "Q31",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/priya-raman.md"
+          ],
+          "support_paths": [
+            "people/priya-raman.md"
+          ]
+        },
+        {
+          "id": "Q32",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "people/tomasz-wolny.md",
+            "projects/lantern/standup-2026-02-11.md"
+          ],
+          "support_paths": [
+            "people/tomasz-wolny.md"
+          ]
+        },
+        {
+          "id": "Q33",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "decisions/juniper-move-date.md",
+            "decisions/orchid-pricing-2027.md",
+            "meetings/leadership-2026-02-05.md",
+            "projects/lantern/cutover-plan.md"
+          ],
+          "support_paths": [
+            "decisions/harbour-lights-venue.md"
+          ]
+        },
+        {
+          "id": "Q34",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/lantern-ledger-storage.md",
+            "projects/lantern/cutover-plan.md",
+            "projects/lantern/data-mapping.md",
+            "projects/lantern/kickoff.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": [
+            "decisions/lantern-ledger-storage.md"
+          ]
+        },
+        {
+          "id": "Q35",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/orchid.md",
+            "clients/orchid/renewal-terms.md",
+            "clients/orchid/support-tiers.md",
+            "decisions/orchid-pricing-2027.md",
+            "people/ines-duarte.md"
+          ],
+          "support_paths": [
+            "decisions/orchid-pricing-2027.md"
+          ]
+        },
+        {
+          "id": "Q36",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/hybrid-working.md",
+            "people/morgan-ellery.md",
+            "procedures/incident-review.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md"
+          ],
+          "support_paths": [
+            "decisions/hybrid-working.md"
+          ]
+        },
+        {
+          "id": "Q37",
+          "recall": 1.0,
+          "evidence_paths": [
+            "daily/2026-02-06.md",
+            "personal/running-log.md",
+            "procedures/expense-claims.md"
+          ],
+          "support_paths": [
+            "procedures/expense-claims.md"
+          ]
+        },
+        {
+          "id": "Q38",
+          "recall": 1.0,
+          "evidence_paths": [
+            "procedures/visitor-sign-in.md"
+          ],
+          "support_paths": [
+            "procedures/visitor-sign-in.md"
+          ]
+        },
+        {
+          "id": "Q39",
+          "recall": 1.0,
+          "evidence_paths": [
+            "meetings/leadership-2026-02-05.md",
+            "meetings/leadership-2026-02-19.md",
+            "projects/harbour-lights/programme.md",
+            "projects/lantern/cutover-plan.md"
+          ],
+          "support_paths": [
+            "meetings/leadership-2026-02-05.md",
+            "meetings/leadership-2026-02-19.md"
+          ]
+        },
+        {
+          "id": "Q40",
+          "recall": 1.0,
+          "evidence_paths": [
+            "personal/garden-plan.md"
+          ],
+          "support_paths": [
+            "personal/garden-plan.md"
+          ]
+        },
+        {
+          "id": "U01",
+          "recall": null,
+          "evidence_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md",
+            "clients/saltmarsh/renewal-terms.md",
+            "clients/saltmarsh/saltmarsh.md",
+            "map.md",
+            "people/rowan-hale.md"
+          ],
+          "support_paths": []
+        },
+        {
+          "id": "U02",
+          "recall": null,
+          "evidence_paths": [
+            "decisions/hybrid-working.md",
+            "decisions/juniper-move-date.md",
+            "people/tomasz-wolny.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md"
+          ],
+          "support_paths": []
+        },
+        {
+          "id": "U03",
+          "recall": null,
+          "evidence_paths": [
+            "people/priya-raman.md",
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/kestrel/fleet-inspection.md",
+            "projects/kestrel/kestrel.md"
+          ],
+          "support_paths": []
+        },
+        {
+          "id": "U04",
+          "recall": null,
+          "evidence_paths": [
+            "decisions/lantern-ledger-storage.md",
+            "projects/lantern/cutover-plan.md",
+            "projects/lantern/data-mapping.md",
+            "projects/lantern/kickoff.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": []
+        }
+      ]
+    },
+    "relevant": {
+      "queries": 44,
+      "answerable": 40,
+      "support_hits": 45,
+      "support_count": 51,
+      "mean_recall": 0.8958,
+      "precision": 0.5422,
+      "evidence_items": 83,
+      "abstention_controls": 4,
+      "correct_abstentions": 2,
+      "mean_excerpt_characters": 259.4,
+      "latency_ms": {
+        "calls": 132,
+        "p50": 45.17,
+        "p95": 47.54
+      },
+      "denied_evidence_items": 0,
+      "per_query": [
+        {
+          "id": "Q01",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/harbour-lights/programme.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/programme.md"
+          ]
+        },
+        {
+          "id": "Q02",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/harbour-lights/harbour-lights.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/budget-approved.md"
+          ]
+        },
+        {
+          "id": "Q03",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/harbour-lights/harbour-lights.md",
+            "projects/harbour-lights/programme.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/budget-approved.md"
+          ]
+        },
+        {
+          "id": "Q04",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md",
+            "people/ines-duarte.md",
+            "projects/harbour-lights/budget-approved.md",
+            "projects/harbour-lights/budget-draft.md",
+            "projects/harbour-lights/volunteers.md"
+          ],
+          "support_paths": [
+            "people/ines-duarte.md",
+            "projects/harbour-lights/volunteers.md"
+          ]
+        },
+        {
+          "id": "Q05",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/harbour-lights/volunteers.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/volunteers.md"
+          ]
+        },
+        {
+          "id": "Q06",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/harbour-lights/risk-register.md"
+          ],
+          "support_paths": [
+            "projects/harbour-lights/risk-register.md"
+          ]
+        },
+        {
+          "id": "Q07",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/kestrel/kickoff.md",
+            "projects/lantern/kickoff.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": [
+            "projects/lantern/kickoff.md"
+          ]
+        },
+        {
+          "id": "Q08",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/kestrel/fleet-inspection.md",
+            "projects/kestrel/kickoff.md"
+          ],
+          "support_paths": [
+            "projects/kestrel/kickoff.md"
+          ]
+        },
+        {
+          "id": "Q09",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "meetings/leadership-2026-02-05.md",
+            "meetings/leadership-2026-02-19.md",
+            "projects/lantern/cutover-plan.md",
+            "projects/lantern/lantern.md"
+          ],
+          "support_paths": [
+            "meetings/leadership-2026-02-19.md",
+            "projects/lantern/cutover-plan.md"
+          ]
+        },
+        {
+          "id": "Q10",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/lantern/cutover-plan.md"
+          ],
+          "support_paths": [
+            "projects/lantern/cutover-plan.md"
+          ]
+        },
+        {
+          "id": "Q11",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/lantern/standup-2026-02-10.md",
+            "projects/lantern/standup-2026-02-11.md"
+          ],
+          "support_paths": [
+            "projects/lantern/standup-2026-02-11.md"
+          ]
+        },
+        {
+          "id": "Q12",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/lantern/standup-2026-02-10.md",
+            "projects/lantern/standup-2026-02-11.md"
+          ],
+          "support_paths": [
+            "projects/lantern/standup-2026-02-10.md",
+            "projects/lantern/standup-2026-02-11.md"
+          ]
+        },
+        {
+          "id": "Q13",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/lantern/data-mapping.md"
+          ],
+          "support_paths": [
+            "projects/lantern/data-mapping.md"
+          ]
+        },
+        {
+          "id": "Q14",
+          "recall": 0.3333333333333333,
+          "evidence_paths": [
+            "meetings/leadership-2026-02-05.md",
+            "projects/kestrel/kestrel.md",
+            "projects/kestrel/steering-2026-02.md"
+          ],
+          "support_paths": [
+            "decisions/northgate-yard-lease.md",
+            "meetings/leadership-2026-02-19.md",
+            "projects/kestrel/steering-2026-02.md"
+          ]
+        },
+        {
+          "id": "Q15",
+          "recall": 0.0,
+          "evidence_paths": [],
+          "support_paths": [
+            "projects/kestrel/fleet-inspection.md"
+          ]
+        },
+        {
+          "id": "Q16",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/kestrel/fleet-inspection.md"
+          ],
+          "support_paths": [
+            "projects/kestrel/fleet-inspection.md"
+          ]
+        },
+        {
+          "id": "Q17",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/kestrel/kestrel.md",
+            "projects/kestrel/routes.md"
+          ],
+          "support_paths": [
+            "projects/kestrel/routes.md"
+          ]
+        },
+        {
+          "id": "Q18",
+          "recall": 0.5,
+          "evidence_paths": [
+            "projects/juniper/juniper.md"
+          ],
+          "support_paths": [
+            "projects/juniper/juniper.md",
+            "projects/juniper/removals-contract.md"
+          ]
+        },
+        {
+          "id": "Q19",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md"
+          ],
+          "support_paths": [
+            "decisions/juniper-move-date.md",
+            "projects/juniper/new-office.md"
+          ]
+        },
+        {
+          "id": "Q20",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/juniper-move-date.md",
+            "projects/juniper/juniper.md"
+          ],
+          "support_paths": [
+            "decisions/juniper-move-date.md"
+          ]
+        },
+        {
+          "id": "Q21",
+          "recall": 0.0,
+          "evidence_paths": [
+            "people/priya-raman.md",
+            "projects/juniper/juniper.md",
+            "projects/juniper/new-office.md"
+          ],
+          "support_paths": [
+            "projects/juniper/seating-plan.md"
+          ]
+        },
+        {
+          "id": "Q22",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/orchid.md",
+            "clients/orchid/renewal-terms.md",
+            "clients/orchid/support-tiers.md",
+            "clients/saltmarsh/renewal-terms.md"
+          ],
+          "support_paths": [
+            "clients/orchid/renewal-terms.md"
+          ]
+        },
+        {
+          "id": "Q23",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/renewal-terms.md",
+            "clients/saltmarsh/renewal-terms.md"
+          ],
+          "support_paths": [
+            "clients/saltmarsh/renewal-terms.md"
+          ]
+        },
+        {
+          "id": "Q24",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/orchid.md",
+            "clients/orchid/support-tiers.md"
+          ],
+          "support_paths": [
+            "clients/orchid/support-tiers.md"
+          ]
+        },
+        {
+          "id": "Q25",
+          "recall": 1.0,
+          "evidence_paths": [
+            "procedures/client-support.md",
+            "projects/lantern/kickoff.md"
+          ],
+          "support_paths": [
+            "procedures/client-support.md"
+          ]
+        },
+        {
+          "id": "Q26",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md",
+            "clients/saltmarsh/saltmarsh.md"
+          ],
+          "support_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md"
+          ]
+        },
+        {
+          "id": "Q27",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md",
+            "clients/saltmarsh/saltmarsh.md"
+          ],
+          "support_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md"
+          ]
+        },
+        {
+          "id": "Q28",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/ada-mensah.md",
+            "projects/harbour-lights/harbour-lights.md",
+            "projects/kestrel/kickoff.md",
+            "projects/kestrel/steering-2026-02.md",
+            "projects/lantern/kickoff.md"
+          ],
+          "support_paths": [
+            "people/ada-mensah.md",
+            "projects/harbour-lights/harbour-lights.md",
+            "projects/kestrel/kickoff.md",
+            "projects/lantern/kickoff.md"
+          ]
+        },
+        {
+          "id": "Q29",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/morgan-ellery.md",
+            "people/morgan-quill.md"
+          ],
+          "support_paths": [
+            "people/morgan-quill.md"
+          ]
+        },
+        {
+          "id": "Q30",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/hybrid-working.md",
+            "people/morgan-ellery.md"
+          ],
+          "support_paths": [
+            "people/morgan-ellery.md"
+          ]
+        },
+        {
+          "id": "Q31",
+          "recall": 0.0,
+          "evidence_paths": [],
+          "support_paths": [
+            "people/priya-raman.md"
+          ]
+        },
+        {
+          "id": "Q32",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/tomasz-wolny.md"
+          ],
+          "support_paths": [
+            "people/tomasz-wolny.md"
+          ]
+        },
+        {
+          "id": "Q33",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/harbour-lights-venue.md"
+          ],
+          "support_paths": [
+            "decisions/harbour-lights-venue.md"
+          ]
+        },
+        {
+          "id": "Q34",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/lantern-ledger-storage.md"
+          ],
+          "support_paths": [
+            "decisions/lantern-ledger-storage.md"
+          ]
+        },
+        {
+          "id": "Q35",
+          "recall": 1.0,
+          "evidence_paths": [
+            "clients/orchid/renewal-terms.md",
+            "decisions/orchid-pricing-2027.md"
+          ],
+          "support_paths": [
+            "decisions/orchid-pricing-2027.md"
+          ]
+        },
+        {
+          "id": "Q36",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/hybrid-working.md"
+          ],
+          "support_paths": [
+            "decisions/hybrid-working.md"
+          ]
+        },
+        {
+          "id": "Q37",
+          "recall": 1.0,
+          "evidence_paths": [
+            "procedures/expense-claims.md"
+          ],
+          "support_paths": [
+            "procedures/expense-claims.md"
+          ]
+        },
+        {
+          "id": "Q38",
+          "recall": 1.0,
+          "evidence_paths": [
+            "procedures/visitor-sign-in.md"
+          ],
+          "support_paths": [
+            "procedures/visitor-sign-in.md"
+          ]
+        },
+        {
+          "id": "Q39",
+          "recall": 1.0,
+          "evidence_paths": [
+            "meetings/leadership-2026-02-05.md",
+            "meetings/leadership-2026-02-19.md"
+          ],
+          "support_paths": [
+            "meetings/leadership-2026-02-05.md",
+            "meetings/leadership-2026-02-19.md"
+          ]
+        },
+        {
+          "id": "Q40",
+          "recall": 1.0,
+          "evidence_paths": [
+            "personal/garden-plan.md"
+          ],
+          "support_paths": [
+            "personal/garden-plan.md"
+          ]
+        },
+        {
+          "id": "U01",
+          "recall": null,
+          "evidence_paths": [
+            "clients/saltmarsh/quarterly-review-2026-q1.md"
+          ],
+          "support_paths": []
+        },
+        {
+          "id": "U02",
+          "recall": null,
+          "evidence_paths": [],
+          "support_paths": []
+        },
+        {
+          "id": "U03",
+          "recall": null,
+          "evidence_paths": [
+            "people/priya-raman.md"
+          ],
+          "support_paths": []
+        },
+        {
+          "id": "U04",
+          "recall": null,
+          "evidence_paths": [],
+          "support_paths": []
+        }
+      ]
+    }
+  },
+  "heldout": {
+    "baseline": {
+      "queries": 18,
+      "answerable": 14,
+      "support_hits": 14,
+      "support_count": 14,
+      "mean_recall": 1.0,
+      "precision": 0.2456,
+      "evidence_items": 57,
+      "abstention_controls": 4,
+      "correct_abstentions": 1,
+      "mean_excerpt_characters": 178.8,
+      "latency_ms": {
+        "calls": 54,
+        "p50": 10.78,
+        "p95": 11.43
+      },
+      "denied_evidence_items": 0,
+      "per_query": [
+        {
+          "id": "H01",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "personal/garden.md",
+            "projects/meridian-budget.md",
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "projects/meridian.md"
+          ]
+        },
+        {
+          "id": "H02",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "projects/meridian-budget.md",
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "projects/permits.md"
+          ]
+        },
+        {
+          "id": "H03",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/cobalt.md",
+            "people/robin-west.md",
+            "projects/cobalt-draft.md",
+            "projects/cobalt-renewal.md",
+            "projects/cobalt.md"
+          ],
+          "support_paths": [
+            "projects/cobalt.md"
+          ]
+        },
+        {
+          "id": "H04",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/cobalt.md",
+            "people/robin-west.md",
+            "projects/cobalt-draft.md",
+            "projects/cobalt-renewal.md",
+            "projects/cobalt.md"
+          ],
+          "support_paths": [
+            "projects/cobalt-draft.md"
+          ]
+        },
+        {
+          "id": "H05",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "people/robin-west.md",
+            "projects/meridian-budget.md",
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "people/robin-east.md"
+          ]
+        },
+        {
+          "id": "H06",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "people/robin-west.md"
+          ],
+          "support_paths": [
+            "people/robin-west.md"
+          ]
+        },
+        {
+          "id": "H07",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/cobalt.md",
+            "people/robin-west.md",
+            "projects/cobalt-draft.md",
+            "projects/cobalt-renewal.md",
+            "projects/cobalt.md"
+          ],
+          "support_paths": [
+            "decisions/cobalt.md"
+          ]
+        },
+        {
+          "id": "H08",
+          "recall": 1.0,
+          "evidence_paths": [
+            "personal/garden.md"
+          ],
+          "support_paths": [
+            "personal/garden.md"
+          ]
+        },
+        {
+          "id": "H09",
+          "recall": 1.0,
+          "evidence_paths": [
+            "procedures/travel.md"
+          ],
+          "support_paths": [
+            "procedures/travel.md"
+          ]
+        },
+        {
+          "id": "H10",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/amber.md"
+          ],
+          "support_paths": [
+            "projects/amber.md"
+          ]
+        },
+        {
+          "id": "H11",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/cobalt.md",
+            "people/robin-west.md",
+            "projects/cobalt-draft.md",
+            "projects/cobalt-renewal.md",
+            "projects/cobalt.md"
+          ],
+          "support_paths": [
+            "projects/cobalt-renewal.md"
+          ]
+        },
+        {
+          "id": "H12",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "projects/meridian-budget.md",
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "projects/meridian-budget.md"
+          ]
+        },
+        {
+          "id": "H13",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "personal/garden.md",
+            "projects/meridian-budget.md",
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "projects/permits.md"
+          ]
+        },
+        {
+          "id": "H14",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "people/robin-west.md"
+          ],
+          "support_paths": [
+            "people/robin-east.md"
+          ]
+        },
+        {
+          "id": "H15",
+          "recall": null,
+          "evidence_paths": [
+            "personal/garden.md"
+          ],
+          "support_paths": []
+        },
+        {
+          "id": "H16",
+          "recall": null,
+          "evidence_paths": [],
+          "support_paths": []
+        },
+        {
+          "id": "H17",
+          "recall": null,
+          "evidence_paths": [
+            "projects/amber.md"
+          ],
+          "support_paths": []
+        },
+        {
+          "id": "H18",
+          "recall": null,
+          "evidence_paths": [
+            "decisions/cobalt.md",
+            "people/robin-west.md",
+            "projects/cobalt-draft.md",
+            "projects/cobalt-renewal.md",
+            "projects/cobalt.md"
+          ],
+          "support_paths": []
+        }
+      ]
+    },
+    "relevant": {
+      "queries": 18,
+      "answerable": 14,
+      "support_hits": 14,
+      "support_count": 14,
+      "mean_recall": 1.0,
+      "precision": 0.6087,
+      "evidence_items": 23,
+      "abstention_controls": 4,
+      "correct_abstentions": 4,
+      "mean_excerpt_characters": 74.9,
+      "latency_ms": {
+        "calls": 54,
+        "p50": 10.87,
+        "p95": 12.3
+      },
+      "denied_evidence_items": 0,
+      "per_query": [
+        {
+          "id": "H01",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "projects/meridian.md"
+          ]
+        },
+        {
+          "id": "H02",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "projects/permits.md"
+          ]
+        },
+        {
+          "id": "H03",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/cobalt-draft.md",
+            "projects/cobalt.md"
+          ],
+          "support_paths": [
+            "projects/cobalt.md"
+          ]
+        },
+        {
+          "id": "H04",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/cobalt-draft.md",
+            "projects/cobalt.md"
+          ],
+          "support_paths": [
+            "projects/cobalt-draft.md"
+          ]
+        },
+        {
+          "id": "H05",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md"
+          ],
+          "support_paths": [
+            "people/robin-east.md"
+          ]
+        },
+        {
+          "id": "H06",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "people/robin-west.md"
+          ],
+          "support_paths": [
+            "people/robin-west.md"
+          ]
+        },
+        {
+          "id": "H07",
+          "recall": 1.0,
+          "evidence_paths": [
+            "decisions/cobalt.md",
+            "people/robin-west.md"
+          ],
+          "support_paths": [
+            "decisions/cobalt.md"
+          ]
+        },
+        {
+          "id": "H08",
+          "recall": 1.0,
+          "evidence_paths": [
+            "personal/garden.md"
+          ],
+          "support_paths": [
+            "personal/garden.md"
+          ]
+        },
+        {
+          "id": "H09",
+          "recall": 1.0,
+          "evidence_paths": [
+            "procedures/travel.md"
+          ],
+          "support_paths": [
+            "procedures/travel.md"
+          ]
+        },
+        {
+          "id": "H10",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/amber.md"
+          ],
+          "support_paths": [
+            "projects/amber.md"
+          ]
+        },
+        {
+          "id": "H11",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/cobalt-renewal.md"
+          ],
+          "support_paths": [
+            "projects/cobalt-renewal.md"
+          ]
+        },
+        {
+          "id": "H12",
+          "recall": 1.0,
+          "evidence_paths": [
+            "projects/meridian-budget.md"
+          ],
+          "support_paths": [
+            "projects/meridian-budget.md"
+          ]
+        },
+        {
+          "id": "H13",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md",
+            "projects/meridian.md",
+            "projects/permits.md"
+          ],
+          "support_paths": [
+            "projects/permits.md"
+          ]
+        },
+        {
+          "id": "H14",
+          "recall": 1.0,
+          "evidence_paths": [
+            "people/robin-east.md"
+          ],
+          "support_paths": [
+            "people/robin-east.md"
+          ]
+        },
+        {
+          "id": "H15",
+          "recall": null,
+          "evidence_paths": [],
+          "support_paths": []
+        },
+        {
+          "id": "H16",
+          "recall": null,
+          "evidence_paths": [],
+          "support_paths": []
+        },
+        {
+          "id": "H17",
+          "recall": null,
+          "evidence_paths": [],
+          "support_paths": []
+        },
+        {
+          "id": "H18",
+          "recall": null,
+          "evidence_paths": [],
+          "support_paths": []
+        }
+      ]
+    }
+  }
+}

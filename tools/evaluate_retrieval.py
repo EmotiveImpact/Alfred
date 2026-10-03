@@ -482,7 +482,9 @@ def _request(store, bearer, question, ranking, log):
     request = {'question': question, 'ranking': ranking, 'purpose': 'read'}
     log.append(dict(request))
     started = time.perf_counter()
-    packet = retrieve(store, bearer, request['question'], purpose=request['purpose'], ranking=request['ranking'])
+    # Keep the historical packet-selection comparator frozen, even as the
+    # application's default selection improves. No labels enter this call.
+    packet = retrieve(store, bearer, request['question'], purpose=request['purpose'], ranking=request['ranking'], selection_policy='baseline')
     return packet, (time.perf_counter() - started) * 1000, request
 
 

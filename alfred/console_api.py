@@ -326,8 +326,13 @@ def projection(server, bearer):
                       'attentionCount': len(attention['items']), 'snoozedCount': len(attention['snoozed']),
                       'derivedInsights': [{'rule': i['rule'], 'statement': i['statement'], 'recordIds': ['exec:' + x['id'] for x in i['records']],
                                            'basis': i['basis']} for i in derived[:6]]}
+    # An unaccepted/superseded statement can change without changing graph tallies.
+    # Include this caller's ledger versions so open details discard forgotten values.
+    # The hash contains no values and no other credential's private ledger.
+    reviewed_revision = [(c['id'], c['version'], c['state'], bool(c.get('withheld')))
+                         for c in reviewed['claims']]
     return {'kind': 'authorised_projection', 'schemaVersion': SCHEMA_VERSION, 'workspaceId': scope,
-            'dataRevision': _digest([content, executive_view])[:32], 'grantRevision': before, 'observedAt': _iso(now),
+            'dataRevision': _digest([content, executive_view, reviewed_revision])[:32], 'grantRevision': before, 'observedAt': _iso(now),
             **content,
             'executive': executive_view,
             'sources': [{'id': 'source:' + s['source'], 'label': s['label'], 'status': s['status'],

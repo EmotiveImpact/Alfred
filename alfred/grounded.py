@@ -67,11 +67,17 @@ def parse_focus(focus):
     return (match[1], match[2]) if match[1] else (match[3], match[4])
 
 
-def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', focus=None):
+def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', focus=None, selection_policy='relevant'):
+    if selection_policy not in ('baseline','relevant'):
+        raise Fault('unsupported_selection_policy')
+    from .console_api import grant_revision
+    with store.transaction() as db:
+        principal=store.authenticate(db,bearer,{'owner','reader'})
+        before=grant_revision(db,principal,store.now())
     terms = question_terms(question)
     focus_kind, focus_id = parse_focus(focus)
     graph = store.knowledge(bearer, purpose=purpose)
-    ranked, notes, skipped = [], {}, []
+    ranked, notes, skipped, coverage = [], {}, [], {}
     for meta in graph['nodes']:
         try:
             note = store.knowledge_note(bearer, meta['id'], purpose=purpose)
@@ -86,6 +92,7 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
         body = note['body'].casefold()
         matched = sum(t in body or t in title for t in terms)
         score = matched * 4 + sum(t in title for t in terms) * 3
+        coverage[meta['id']] = (matched,score)
         if matched:
             ranked.append((score, meta['path'], meta['id']))
     ranked.sort(key=lambda x: (-x[0], x[1], x[2]))
@@ -94,6 +101,12 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
         ranked = fts_rank(notes, terms)
     elif ranking != 'keywords':
         raise Fault('unsupported_ranking')
+    if selection_policy == 'relevant':
+        # No packet filling from a weak singleton match on a longer question.
+        # This is lexical relevance, not an entailment or answer-quality claim.
+        required=max(1,(len(terms)+1)//2)
+        floor=max((score for matched,score in coverage.values() if matched>=required),default=0)*.5
+        ranked=[r for r in ranked if coverage[r[2]][0]>=required and coverage[r[2]][1]>=floor]
     if focus_kind == 'note' and focus_id not in notes:
         # Removed, changed during this read, or not permitted for this purpose.
         raise Fault('focus_not_available', 409)
@@ -101,13 +114,25 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
     if focus_kind == 'note':
         seeds = [focus_id] + [s for s in seeds if s != focus_id][:2]
     selection = [(identity, 'selected_record' if identity == focus_id and focus_kind == 'note' else 'keyword_match', None) for identity in seeds]
+    if selection_policy == 'relevant':
+        # An independently relevant target may already be a seed. Preserve the
+        # actual authored-link route, without adding irrelevant adjacent notes.
+        selection=[(identity,'explicit_link_from_match',next(link['source'] for link in graph['links']
+                    if link['target']==identity and link['source'] in seeds and link['source']!=identity))
+                   if reason!='selected_record' and any(link['target']==identity and link['source'] in seeds and link['source']!=identity
+                                                        for link in graph['links']) else (identity,reason,origin)
+                   for identity,reason,origin in selection]
     # Follow only explicit graph edges from retrieved notes. A link supplies context,
     # not evidence that the target is true or that it entails the answer.
     candidates = []
     for link in graph['links']:
         if link['source'] in seeds and link['target'] in notes and link['target'] not in seeds:
-            candidates.append((notes[link['target']][0]['path'], link['target'], link['source']))
-    for _, identity, origin in sorted(candidates):
+            if (selection_policy=='relevant' and link['source']!=focus_id
+                    and (coverage[link['target']][0]<required or coverage[link['target']][1]<floor)):
+                continue
+            priority=-coverage[link['target']][1] if selection_policy=='relevant' else 0
+            candidates.append((priority,notes[link['target']][0]['path'], link['target'], link['source']))
+    for _, _, identity, origin in sorted(candidates):
         if identity not in {s[0] for s in selection} and len(selection) < MAX_SOURCES:
             selection.append((identity, 'explicit_link_from_match', origin))
     for _, _, identity in ranked[3:]:
@@ -186,8 +211,13 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
                   'basis':'user_selection_context_not_authority'}
     elif focus_kind=='entity':
         selected={'record_id':'entity:'+focus_id,'label':entities[focus_id]['name'],'basis':'user_selection_context_not_authority'}
+    with store.transaction() as db:
+        current=store.authenticate(db,bearer,{'owner','reader'})
+        if grant_revision(db,current,store.now()) != before:
+            raise Fault('retrieval_authority_changed',409)
     return {'question': question.strip(), 'scope': graph['scope'], 'indexed_at': graph['now'], 'focus': selected,
             'purpose':purpose, 'ranking':ranking,
+            'selection_policy':selection_policy,
             'terms': terms, 'evidence': evidence, 'skipped': skipped[:32],
             'memory':memory, 'memory_ambiguities':ambiguities, 'memory_withheld':dict(sorted(withheld.items())),
             'memory_basis':'user_reviewed_statements_not_verified_facts', 'authority_granted':False,
