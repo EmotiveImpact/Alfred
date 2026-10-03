@@ -331,6 +331,25 @@ class KnowledgeStore(DeskStore):
             view['effect'] = 'vault_inbox_note_create_only_not_sent'
         return view
 
+    def action_visible(self, db, principal, row):
+        if not super().action_visible(db, principal, row):
+            return False
+        from .policy import permitted
+        from . import inbox
+        if row['capability'] == inbox.CAPABILITY:
+            return permitted(db, principal, json.loads(row['parameters'])['source'], self.now(), 'read')
+        if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversation_action_sources'").fetchone():
+            link = db.execute('SELECT references_json FROM conversation_action_sources WHERE scope=? AND action_id=?',
+                              (row['scope'], row['id'])).fetchone()
+            if link:
+                binding = json.loads(link['references_json'])
+                refs = binding if isinstance(binding, list) else binding['sources']
+                for ref in refs:
+                    source = db.execute('SELECT source FROM knowledge_notes WHERE scope=? AND id=?', (row['scope'], ref['note_id'])).fetchone()
+                    if not source or not permitted(db, principal, source['source'], self.now(), 'read'):
+                        return False
+        return True
+
     def execute_local(self, bearer, job):
         from . import inbox
         with self.connection() as db:

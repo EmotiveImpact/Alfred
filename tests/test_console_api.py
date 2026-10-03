@@ -228,6 +228,72 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
                          ('console-draft', 'proposed', 'Synthetic crew update.', made['fingerprint']))
         self.assertTrue(approval['evidenceCurrent']); self.assertEqual(approval['effect'], 'local_draft_only_not_sent')
 
+    def restricted_inbox_action(self):
+        from alfred.inbox import propose
+        policy = IdentityPolicy(self.store)
+        for capability in ('read', 'inbox.write'):
+            policy.grant(self.keys['owner'], 'demo-source', capability, self.store.now() + 3600,
+                         policy.view(self.keys['owner'])['epoch'])
+        return propose(self.store, self.keys['owner'], {
+            'request_id': 'restricted-inbox', 'source': 'demo-source',
+            'filename': 'Private-destination-marker.md', 'content': 'Private-draft-marker'})
+
+    def test_restricted_approval_is_absent_for_another_person_in_same_workspace(self):
+        action = self.restricted_inbox_action()
+        peer = self.store.provision('demo-production', 'other-person', 'reader')
+        self.login(self.keys['owner'])
+        self.assertEqual(self.projection()['approvals'][0]['fingerprint'], action['fingerprint'])
+        self.login(peer)
+        projection = self.projection()
+        self.assertEqual(projection['counts']['notes'], 0)
+        self.assertEqual(projection['approvals'], [])
+        state = self.req('/desk/state')[1]
+        self.assertEqual(state['actions'], [])
+        self.assertEqual(state['counts']['actions'], 0)
+        for response in (projection, state):
+            encoded = json.dumps(response)
+            for marker in ('Private-draft-marker', 'Private-destination-marker', 'restricted-inbox',
+                           action['fingerprint'], 'demo-source'):
+                self.assertNotIn(marker, encoded)
+        self.assertEqual(self.req('/desk/actions/restricted-inbox/approve',
+                                  {'fingerprint': action['fingerprint']})[0], 403)
+
+    def test_own_approval_is_withheld_after_source_read_revocation(self):
+        action = self.restricted_inbox_action()
+        self.login(self.keys['owner'])
+        self.assertEqual(len(self.projection()['approvals']), 1)
+        policy = IdentityPolicy(self.store)
+        policy.grant(self.keys['owner'], 'demo-source', 'read', self.store.now() + 3600,
+                     policy.view(self.keys['owner'])['epoch'], revoke=True)
+        projection = self.projection()
+        self.assertEqual(projection['approvals'], [])
+        self.assertEqual(self.req('/desk/state')[1]['actions'], [])
+        self.assertNotIn(action['fingerprint'], json.dumps(projection))
+
+    def test_restricted_action_state_and_metadata_are_filtered(self):
+        action = self.restricted_inbox_action()
+        peer = self.store.provision('demo-production', 'state-reader', 'reader')
+        self.login(peer)
+        state = self.req('/desk/state')[1]
+        self.assertEqual(state['actions'], [])
+        self.assertEqual(state['events'], [])
+        self.assertEqual(state['documents'], [])
+        self.assertEqual(state['counts'], {'events': 0, 'actions': 0, 'drafts': 0})
+        for marker in ('demo-source', action['id'], action['fingerprint'],
+                       'Private-draft-marker', 'Private-destination-marker'):
+            self.assertNotIn(marker, json.dumps(state))
+
+    def test_read_grant_does_not_share_another_persons_approval(self):
+        self.restricted_inbox_action()
+        policy = IdentityPolicy(self.store)
+        invitation = policy.invite(self.keys['owner'], 'demo-source', 'read', self.store.now() + 1800,
+                                   policy.view(self.keys['owner'])['epoch'])
+        policy.redeem(self.keys['reader'], invitation['code'])
+        self.login(self.keys['reader'])
+        self.assertEqual(self.projection()['counts']['notes'], 20)
+        self.assertEqual(self.projection()['approvals'], [])
+
+
     def test_authority_change_during_assembly_returns_conflict_not_stale_data(self):
         self.login(self.keys['owner'])
         original = self.server.memory.view

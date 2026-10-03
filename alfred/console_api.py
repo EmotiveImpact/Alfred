@@ -159,7 +159,9 @@ def projection(server, bearer):
         if len(bodies) != len(expected):
             raise Fault('projection_data_changed', 409)
         approvals = []
-        for row in db.execute('SELECT * FROM actions WHERE scope=? ORDER BY created DESC,id DESC LIMIT ?', (scope, MAX_APPROVALS)):
+        for row in db.execute('SELECT * FROM actions WHERE scope=? AND actor=? ORDER BY created DESC,id DESC', (scope,p['id'])):
+            if not store.action_visible(db, p, row):
+                continue
             view = store.action_view(row)
             text = view['parameters'].get('text') if isinstance(view['parameters'], dict) else None
             path = view['parameters'].get('path') if isinstance(view['parameters'], dict) else None
@@ -168,6 +170,8 @@ def projection(server, bearer):
                               'fingerprint': view['fingerprint'], 'createdAt': _iso(row['created']),
                               'expiresAt': _iso(view['expires_at']), 'evidenceCurrent': bool(store.evidence_valid(db, row)),
                               'mine': row['actor'] == p['id'], 'effect': view['effect']})
+            if len(approvals) == MAX_APPROVALS:
+                break
     nodes, edges = [], []
     sources = {s['source']: s for s in knowledge['sources']}
     with store.transaction() as db:

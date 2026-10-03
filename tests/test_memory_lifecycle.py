@@ -206,7 +206,11 @@ class SourceForgetTests(LifecycleTests):
             self.assertNotIn('awaiting review', str([tuple(r) for r in db.execute('SELECT * FROM memory_claims')]))
         self.assertEqual({(c['state'], c['value']) for c in self.memory.view(self.owner)['claims']}, {('invalidated', None)})
         self.assertEqual(service.view(self.owner, sid)['turns'][0]['state'], 'source_forgotten')
-        self.assertEqual(self.store.desk_state(self.owner)['actions'][0]['state'], 'cancelled')
+        # Retain the cancelled record internally, without disclosing a removed
+        # source's action ID, path or proposed content through the read API.
+        self.assertEqual(self.store.desk_state(self.owner)['actions'], [])
+        with self.store.connection() as db:
+            self.assertEqual(db.execute('SELECT state FROM actions WHERE id=?', (draft['id'],)).fetchone()[0], 'cancelled')
         self.assertFalse(cache.contains(result))
         with self.assertRaises(Fault):
             jobs.artefact(self.owner, result)

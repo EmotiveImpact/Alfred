@@ -162,12 +162,17 @@ class DeskStore(LocalCore):
     def evidence(self, bearer, seq):
         with self.connection() as db:
             p = self.authenticate(db, bearer, {'owner', 'reader'})
+            row, _ = self._evidence(db, p['scope'], seq)
+            if row['source'] not in self.readable_sources(db, p):
+                raise Fault('not_found', 404)
             return self.evidence_view(db, p['scope'], seq, p['id'])
 
     def acknowledge(self, bearer, seq):
         with self.transaction() as db:
             p = self.authenticate(db, bearer, {'owner', 'reader'})
-            self._evidence(db, p['scope'], seq)
+            row, _ = self._evidence(db, p['scope'], seq)
+            if row['source'] not in self.readable_sources(db, p):
+                raise Fault('not_found', 404)
             changed = db.execute('INSERT OR IGNORE INTO desk_ack VALUES (?,?,?,?)', (p['scope'], p['id'], seq, self.now())).rowcount
             if changed:
                 self.log(db, p['scope'], p['id'], 'evidence.acknowledged', str(seq))
@@ -179,6 +184,8 @@ class DeskStore(LocalCore):
         with self.transaction() as db:
             p = self.authenticate(db, bearer, {'owner'})
             event, status = self._evidence(db, p['scope'], value['event_seq'])
+            if event['source'] not in self.readable_sources(db, p):
+                raise Fault('not_found', 404)
             if status != 'current':
                 raise Fault('evidence_not_current', 409)
             action_id = value['request_id']
@@ -204,7 +211,20 @@ class DeskStore(LocalCore):
         if not link:
             return False
         event, status = self._evidence(db, row['scope'], link['event_seq'])
-        return status == 'current' and event['fingerprint'] == link['event_fingerprint']
+        from .policy import permitted
+        principal = {'scope': row['scope'], 'id': row['actor']}
+        return (status == 'current' and event['fingerprint'] == link['event_fingerprint']
+                and permitted(db, principal, event['source'], self.now(), 'read'))
+
+    def action_visible(self, db, principal, row):
+        if not super().action_visible(db, principal, row):
+            return False
+        link = db.execute('SELECT e.source FROM desk_action_evidence a JOIN events e ON e.seq=a.event_seq '
+                          'WHERE a.scope=? AND a.action_id=?', (row['scope'], row['id'])).fetchone()
+        if link:
+            from .policy import permitted
+            return permitted(db, principal, link['source'], self.now(), 'read')
+        return True
 
     def valid_origin(self, db, row):
         paused = db.execute('SELECT paused FROM desk_settings WHERE scope=?', (row['scope'],)).fetchone()
@@ -246,20 +266,27 @@ class DeskStore(LocalCore):
             args = [scope]
             if before is not None:
                 query += ' AND seq<?'; args.append(before)
-            rows = db.execute(query + ' ORDER BY seq DESC LIMIT ?', (*args, limit + 1)).fetchall()
+            readable = self.readable_sources(db, p)
+            rows = [r for r in db.execute(query.replace('SELECT seq', 'SELECT seq,source') + ' ORDER BY seq DESC', args)
+                    if r['source'] in readable][:limit + 1]
             events = [self.evidence_view(db, scope, r[0], p['id']) for r in rows[:limit]]
             actions = []
-            for r in db.execute('SELECT * FROM actions WHERE scope=? ORDER BY created DESC,id DESC LIMIT 100', (scope,)):
+            visible_actions = [r for r in db.execute('SELECT * FROM actions WHERE scope=? AND actor=? ORDER BY created DESC,id DESC', (scope,p['id']))
+                               if self.action_visible(db,p,r)]
+            for r in visible_actions[:100]:
                 link = db.execute('SELECT event_seq FROM desk_action_evidence WHERE scope=? AND action_id=?', (scope, r['id'])).fetchone()
                 actions.append({**self.action_view(r), 'created_at': r['created'], 'event_seq': link[0] if link else None,
                                 'evidence_current': self.evidence_valid(db, r), 'mine': r['actor'] == p['id']})
-            documents = [dict(r) for r in db.execute('SELECT document_id,filename,title,revision,status,checked,source FROM desk_documents WHERE scope=? ORDER BY title', (scope,))]
+            documents = [dict(r) for r in db.execute('SELECT document_id,filename,title,revision,status,checked,source FROM desk_documents WHERE scope=? ORDER BY title', (scope,))
+                         if r['source'] in readable]
             paused = db.execute('SELECT paused FROM desk_settings WHERE scope=?', (scope,)).fetchone()
             return {'version': '0.3.0-dev', 'scope': scope, 'role': p['role'], 'actor': p['id'],
                     'synthetic_workspace': bool(db.execute('SELECT simulation FROM workspaces WHERE id=?', (scope,)).fetchone()[0]),
                     'now': self.now(), 'paused': bool(paused and paused[0]), 'events': events, 'actions': actions,
                     'next_cursor': rows[limit - 1][0] if len(rows) > limit else None, 'documents': documents,
-                    'counts': {name: db.execute('SELECT count(*) FROM ' + name + ' WHERE scope=?', (scope,)).fetchone()[0] for name in ('events', 'actions', 'drafts')},
-                    'audit': [dict(r) for r in db.execute('SELECT seq,actor,kind,subject,at FROM audit WHERE scope=? ORDER BY seq DESC LIMIT 100', (scope,))],
+                    'counts': {'events':sum(r['source'] in readable for r in db.execute('SELECT source FROM events WHERE scope=?',(scope,))),
+                               'actions':len(visible_actions),
+                               'drafts':sum(bool(db.execute('SELECT 1 FROM drafts WHERE scope=? AND action_id=?',(scope,r['id'])).fetchone()) for r in visible_actions)},
+                    'audit': self.visible_audit(db,p),
                     'live_ai': False, 'microphone': False, 'external_effects': False,
                     'action_window_limit': 100, 'audit_window_limit': 100}

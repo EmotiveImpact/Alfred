@@ -293,6 +293,38 @@ class LocalCore:
                 'proof':json.loads(row['proof']) if row['proof'] else None,
                 'effect':'local_draft_only_not_sent'}
 
+    def action_visible(self, db, principal, row) -> bool:
+        """Drafts/approval receipts are credential-private, like review ledgers.
+
+        A source read grant does not share a person's proposed text or approval.
+        Subclasses additionally check the bound sources. This is read visibility,
+        independent of whether an effect may still be approved or dispatched.
+        """
+        return row['scope'] == principal['scope'] and row['actor'] == principal['id']
+
+    def readable_sources(self, db, principal):
+        from .policy import permitted
+        return {r['id'] for r in db.execute("SELECT id FROM credentials WHERE scope=? AND role='source'",
+                                            (principal['scope'],))
+                if permitted(db, principal, r['id'], self.now(), 'read')}
+
+    def visible_audit(self, db, principal, limit=100):
+        """No workspace-wide activity feed or opaque restricted source/action IDs."""
+        from .policy import permitted
+        result = []
+        for row in db.execute('SELECT seq,actor,kind,subject,at FROM audit WHERE scope=? AND actor=? ORDER BY seq DESC',
+                              (principal['scope'], principal['id'])):
+            source = db.execute("SELECT id FROM credentials WHERE id=? AND role='source'", (row['subject'],)).fetchone()
+            if source and not permitted(db, principal, source['id'], self.now(), 'read'):
+                continue
+            action = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (principal['scope'], row['subject'])).fetchone()
+            if action and not self.action_visible(db, principal, action):
+                continue
+            result.append(dict(row))
+            if len(result) == limit:
+                break
+        return result
+
     def owned_action(self, db, bearer, action_id):
         ident(action_id)
         p = self.authenticate(db,bearer,{'owner'})
@@ -425,12 +457,18 @@ class LocalCore:
             p=self.authenticate(db,bearer,{'owner','reader'}); scope=p['scope']
             sim=db.execute('SELECT simulation FROM workspaces WHERE id=?',(scope,)).fetchone()[0]
             events=[]
-            for row in db.execute('SELECT * FROM events WHERE scope=? ORDER BY seq DESC LIMIT 100',(scope,)):
+            readable = self.readable_sources(db, p)
+            visible_events = [r for r in db.execute('SELECT * FROM events WHERE scope=? ORDER BY seq DESC', (scope,))
+                              if r['source'] in readable]
+            for row in visible_events[:100]:
                 events.append({**json.loads(row['body']),'source':row['source'],'received_at':row['received'],
                                'route':row['route'],'reason':row['reason'],'stale':row['expires']<=self.now()})
-            actions=[self.action_view(r) for r in db.execute('SELECT * FROM actions WHERE scope=? ORDER BY created DESC,id LIMIT 100',(scope,))]
-            audit=[dict(r) for r in db.execute('SELECT seq,actor,kind,subject,at FROM audit WHERE scope=? ORDER BY seq DESC LIMIT 100',(scope,))]
+            visible_actions = [r for r in db.execute('SELECT * FROM actions WHERE scope=? AND actor=? ORDER BY created DESC,id', (scope,p['id']))
+                               if self.action_visible(db,p,r)]
+            actions=[self.action_view(r) for r in visible_actions[:100]]
+            audit=self.visible_audit(db,p)
+            drafts=sum(bool(db.execute('SELECT 1 FROM drafts WHERE scope=? AND action_id=?', (scope,r['id'])).fetchone()) for r in visible_actions)
             return {'version':'0.2.0-dev','scope':scope,'synthetic_workspace':bool(sim),
                     'events':events,'actions':actions,'audit':audit,'window_limit':100,
-                    'counts':{name:db.execute('SELECT count(*) FROM '+name+' WHERE scope=?',(scope,)).fetchone()[0] for name in ('events','actions','drafts','audit')},
+                    'counts':{'events':len(visible_events),'actions':len(visible_actions),'drafts':drafts,'audit':len(audit)},
                     'live_ai':False,'external_effects':False}
