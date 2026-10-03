@@ -1,0 +1,210 @@
+{
+  "checked_on": "2026-10-03",
+  "scope": "synthetic local backend + real rendered console; no physical device, microphone or provider acceptance",
+  "code_checkpoint": "9bf6b254f398c4392a02cd17f17f6fc6143bade4",
+  "included_pilot_checkpoint": "10d10ac2eab012b02444d328027ae96707ba5570",
+  "main_verified": "75947b8dd59a3161c862d2533850a032994778e2",
+  "pr19_verified": "open; its 3fe9d25c87058499887ce4b0d8c90ccecc6954e9 is preserved as an ancestor",
+  "identities_by_revision": {
+    "alfred": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "6f5a95b151f6dd26f6f4e46107afedb39630881f",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "6f5a95b151f6dd26f6f4e46107afedb39630881f",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "6f5a95b151f6dd26f6f4e46107afedb39630881f",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "6f5a95b151f6dd26f6f4e46107afedb39630881f"
+    },
+    "tests": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "ca458771017c1a5ef556d1db27a6007ff66eee78",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "ca458771017c1a5ef556d1db27a6007ff66eee78",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "ca458771017c1a5ef556d1db27a6007ff66eee78",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "ca458771017c1a5ef556d1db27a6007ff66eee78"
+    },
+    "web": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "dbd542f0fee87c68b2bdcde422dac2a87b7d6195",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "dbd542f0fee87c68b2bdcde422dac2a87b7d6195",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "dbd542f0fee87c68b2bdcde422dac2a87b7d6195",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "dbd542f0fee87c68b2bdcde422dac2a87b7d6195"
+    },
+    "tools": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "6ba87b572c97c41782ab7cac14efae98c4389f31",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "6ba87b572c97c41782ab7cac14efae98c4389f31",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "6ba87b572c97c41782ab7cac14efae98c4389f31",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "6ba87b572c97c41782ab7cac14efae98c4389f31"
+    },
+    "console/src": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "8e041abfc23ddacf0acb9200458a7f23ac2566a0",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "ccfa45137a5fce5d0171d773f670fd52e8f74025",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "d4e4a6847b9707368f5594d12d12c48b5d370457",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "d4e4a6847b9707368f5594d12d12c48b5d370457"
+    },
+    "console/public": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "7ee853573d562ede3e206a61496602a0b3662a34",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "7ee853573d562ede3e206a61496602a0b3662a34",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "7ee853573d562ede3e206a61496602a0b3662a34",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "7ee853573d562ede3e206a61496602a0b3662a34"
+    },
+    "console/e2e": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "ce54d4a4c8737c4394c17129d449c9a932a3717f",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "ce54d4a4c8737c4394c17129d449c9a932a3717f",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "52138e447981ee3cd64d583068e927f2616d1a92",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "76ae561e840dcbade9bc4554e5a1c6b4e2d1f7db"
+    },
+    "console/package.json": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "f2e1d6628dd1834b4517e8ecae06d30ff4d930cb",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "f2e1d6628dd1834b4517e8ecae06d30ff4d930cb",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "f2e1d6628dd1834b4517e8ecae06d30ff4d930cb",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "f2e1d6628dd1834b4517e8ecae06d30ff4d930cb"
+    },
+    "console/package-lock.json": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "0be269ff8bcf2eaa5e44d5c02ea67ea81295bf03",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "0be269ff8bcf2eaa5e44d5c02ea67ea81295bf03",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "0be269ff8bcf2eaa5e44d5c02ea67ea81295bf03",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "0be269ff8bcf2eaa5e44d5c02ea67ea81295bf03"
+    },
+    "console/tools/standalone.mjs": {
+      "fb85e4abd4a4341449f45f60b8c540b9d5c6378b": "738ff8c88959a60ef5fdb90ef29e52563ecd13cb",
+      "30413b80fe1f9b9473528c37451929516c9c781d": "738ff8c88959a60ef5fdb90ef29e52563ecd13cb",
+      "c0295fb2c18d1a91a1ea29b24ac7af74050a5794": "738ff8c88959a60ef5fdb90ef29e52563ecd13cb",
+      "9bf6b254f398c4392a02cd17f17f6fc6143bade4": "738ff8c88959a60ef5fdb90ef29e52563ecd13cb"
+    }
+  },
+  "backend": {
+    "tested_commit": "fb85e4abd4a4341449f45f60b8c540b9d5c6378b",
+    "tests": 1159,
+    "seconds": 112.437,
+    "exit_code": 0,
+    "method": "full suite before initial implementation commit; committed backend/tests bytes unchanged at checkpoint",
+    "log": "validation/backend-tests.txt"
+  },
+  "console": {
+    "build_and_unit_tested_commit": "c0295fb2c18d1a91a1ea29b24ac7af74050a5794",
+    "source_identical_at_checkpoint": true,
+    "build_exit": 0,
+    "unit_tests": 147,
+    "unit_files": 14,
+    "standalone_exit": 0,
+    "first_browser_suite": {
+      "tested_commit": "fb85e4abd4a4341449f45f60b8c540b9d5c6378b",
+      "passed": 36,
+      "failed": 1,
+      "failure": "recording-tool ffmpeg path absent; not an application failure",
+      "retained_report": "failures/full-browser-first.json"
+    },
+    "recording_rerun": {
+      "tested_commit": "fb85e4abd4a4341449f45f60b8c540b9d5c6378b",
+      "passed": 1,
+      "exit_code": 0,
+      "change": "PLAYWRIGHT_BROWSERS_PATH=/workspace/alfred-playwright; source unchanged",
+      "log": "validation/browser-recorder-rerun.txt"
+    },
+    "spread_motion_regression": {
+      "tested_commit": "30413b80fe1f9b9473528c37451929516c9c781d",
+      "passed": 8,
+      "exit_code": 0,
+      "log": "validation/refinement-browser-final.txt"
+    },
+    "portrait_motion_regression": {
+      "tested_commit": "c0295fb2c18d1a91a1ea29b24ac7af74050a5794",
+      "passed": 4,
+      "exit_code": 0,
+      "log": "validation/portrait-browser-final.txt"
+    },
+    "final_mobile_fixture": {
+      "tested_commit": "9bf6b254f398c4392a02cd17f17f6fc6143bade4",
+      "passed": 1,
+      "exit_code": 0,
+      "log": "validation/mobile-fixture-final.txt"
+    },
+    "chunk_warning": "existing build exceeds configured 1400kB warning; no new dependency added"
+  },
+  "python_browser": {
+    "tested_commit": "fb85e4abd4a4341449f45f60b8c540b9d5c6378b",
+    "workflows": 4,
+    "assertions": 178,
+    "entries": [
+      {
+        "name": "connected",
+        "assertions": 104,
+        "exit_code": 0,
+        "uncaught_page_errors": 0,
+        "script": "tools/check_console_connected_browser.py",
+        "script_sha256": "d3d667105f458d15da0ab7696fd25150025bc1b5fda8032c4e3ceddf8d981266",
+        "script_identical_at_checkpoint": true,
+        "report": "browser/connected.json",
+        "report_sha256": "96133eaaebc4d1ee1e443fb08595c765314ce20fb778479e48b42e7bd0b5800c"
+      },
+      {
+        "name": "voice",
+        "assertions": 14,
+        "exit_code": 0,
+        "uncaught_page_errors": 0,
+        "script": "tools/check_voice_browser.py",
+        "script_sha256": "90aecb7a09c297a58b7af00d2339645d086db2ff3b1e05bcfc49c5d3e1c155a9",
+        "script_identical_at_checkpoint": true,
+        "report": "browser/voice.json",
+        "report_sha256": "e1a3781d57fcb1cbba419ac141f083d573e6aa3a2b7b08267dae56a865b039b5"
+      },
+      {
+        "name": "pilot-loop",
+        "assertions": 15,
+        "exit_code": 0,
+        "uncaught_page_errors": 0,
+        "script": "tools/check_pilot_loop_browser.py",
+        "script_sha256": "b6f6e13c0359f4fb20e04b513e169147779eb7b7b833168c29d6172b8fbdfe0d",
+        "script_identical_at_checkpoint": true,
+        "report": "browser/pilot-loop.json",
+        "report_sha256": "6f4a7b5f909fefe1e61c3d5e9b98e3cfd38ab869ee46d713e874a913f4909b9a"
+      },
+      {
+        "name": "executive",
+        "assertions": 45,
+        "exit_code": 0,
+        "uncaught_page_errors": 0,
+        "script": "tools/check_executive_browser.py",
+        "script_sha256": "d46d3f4d269ba7850717920dd4f2d8614e9b685852303d203b304ff3b45f31e6",
+        "script_identical_at_checkpoint": true,
+        "report": "browser/executive.json",
+        "report_sha256": "44ac0a5d05d60dd239d093389bcee75770e98b8c1bada898068f80deabaa2742"
+      }
+    ]
+  },
+  "visual": {
+    "tested_commit": "c0295fb2c18d1a91a1ea29b24ac7af74050a5794",
+    "app_source_identical_at_checkpoint": true,
+    "capture": "app/capture.json",
+    "viewport": {
+      "width": 1648,
+      "height": 928
+    },
+    "dpr": 1,
+    "portrait": {
+      "width": 390,
+      "height": 844
+    },
+    "motion_capture_external": "/workspace/alfred-evidence/refinement-09/app/ALFRED-Refinement-09.webm",
+    "qa": "console/design-qa.md",
+    "software_chromium": "151.0.7922.173; SwiftShader",
+    "uncaught_page_errors": 0
+  },
+  "hosted_ci": {
+    "run": 37110515963,
+    "commit": "9bf6b254f398c4392a02cd17f17f6fc6143bade4",
+    "status": "Success",
+    "jobs_passed": 4,
+    "console_browser_passed": 37,
+    "receipt": "hosted-ci.json",
+    "documentation_head": "later receipt/docs commit; runtime/test/dependency/workflow source identical to checkpoint"
+  },
+  "publication": {
+    "branch": "feat/alfred-console-refinement-09-2026-10-03",
+    "git_push": "verified",
+    "pull_request": "not created: GitHub GraphQL Forbidden; ready body and published branch",
+    "merge": "not_merged",
+    "deployment": "not_deployed"
+  },
+  "consistency": {
+    "plan": "validation/plan-report.json",
+    "register": "validation/register-report.json",
+    "requirements": 33,
+    "classification": "8 bounded implemented / 24 partial / 1 unstarted; no classification promotion or deployment claim"
+  }
+}

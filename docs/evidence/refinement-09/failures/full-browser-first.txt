@@ -1,0 +1,85 @@
+
+> @alfred/obsidian-console@0.1.0 test:browser
+> playwright test
+
+
+Running 37 tests using 1 worker
+
+(node:28749) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   1 e2e/console.spec.ts:4:1 › real desktop render, readable full executive panel and no browser errors (7.6s)
+  ✓   2 e2e/console.spec.ts:11:1 › hover expansion is an overlay with no canvas resize (7.9s)
+  ✓   3 e2e/console.spec.ts:12:1 › keyboard rail expansion, Escape and pin work (5.8s)
+  ✓   4 e2e/console.spec.ts:13:1 › five scopes preserve graph context and prevent cross-scope search (5.4s)
+  ✓   5 e2e/console.spec.ts:14:1 › scoped keyboard search opens exact source inspector (7.0s)
+  ✓   6 e2e/console.spec.ts:15:1 › four graph callouts and category filters work (9.2s)
+  ✓   7 e2e/console.spec.ts:16:1 › review and decline both require the exact confirmation; no HTTP writes (7.5s)
+  ✓   8 e2e/console.spec.ts:17:1 › priority changes and reset are local (5.7s)
+  ✓   9 e2e/console.spec.ts:18:1 › command router never treats text as code (5.7s)
+  ✓  10 e2e/console.spec.ts:19:1 › voice is off and does not request capture (2.9s)
+  ✓  11 e2e/console.spec.ts:20:1 › quality changes preserve the same canvas and renderer (5.5s)
+  ✓  12 e2e/console.spec.ts:21:1 › reduced motion and focus remain functional (3.7s)
+  ✓  13 e2e/console.spec.ts:22:1 › no WebGL preserves record access (1.2s)
+  ✓  14 e2e/console.spec.ts:23:144 › responsive 1920x1080 (7.2s)
+  ✓  15 e2e/console.spec.ts:23:144 › responsive 1440x900 (4.7s)
+  ✓  16 e2e/console.spec.ts:23:144 › responsive 1280x800 (4.0s)
+  ✓  17 e2e/console.spec.ts:23:144 › responsive 1024x768 (4.8s)
+  ✓  18 e2e/console.spec.ts:23:144 › responsive 390x844 (2.8s)
+  ✓  19 e2e/console.spec.ts:24:1 › offline preview has no network dependency (3.0s)
+  ✓  20 e2e/delivery.spec.ts:3:1 › no promotional slogans or false live-state text on the home screen (3.4s)
+  ✘  21 e2e/delivery.spec.ts:4:1 › record the real console interaction (684ms)
+(node:29752) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  22 e2e/graphics.spec.ts:9:1 › a real record mesh opens the right provenance (6.6s)
+  ✓  23 e2e/graphics.spec.ts:16:1 › paused pixels remain identical; resume changes the field (8.7s)
+  ✓  24 e2e/graphics.spec.ts:21:1 › drag rotates a paused view (12.9s)
+  ✓  25 e2e/graphics.spec.ts:26:1 › animated frames have no large exposure or black-frame jumps in this capture (24.1s)
+  ✓  26 e2e/graphics.spec.ts:39:1 › ordinary UI state changes preserve the renderer (8.0s)
+  ✓  27 e2e/graphics.spec.ts:44:1 › context loss is visible; record browsing remains available (4.5s)
+  ✓  28 e2e/graphics.spec.ts:50:1 › context can recover and resume real rendering (7.4s)
+  ✓  29 e2e/navigation.spec.ts:4:1 › rail geometry follows hover and keyboard state without a stale overlay (5.5s)
+  ✓  30 e2e/refinement09.spec.ts:7:1 › rail and favicon use the unchanged mark from the product deck (3.2s)
+  ✓  31 e2e/refinement09.spec.ts:15:1 › switching Consciousness and Globe retains one renderer and real record browsing (14.5s)
+  ✓  32 e2e/refinement09.spec.ts:34:1 › typing gathers the supplied silhouette, then pause freezes its pixels (16.1s)
+  ✓  33 e2e/refinement09.spec.ts:49:1 › reduced motion is a stationary exact silhouette and still supports search (4.6s)
+  ✓  34 e2e/refinement09.spec.ts:57:1 › rotating the globe cannot tilt the brand silhouette in Consciousness (8.0s)
+  ✓  35 e2e/refinement09.spec.ts:66:1 › surface flights are bounded, cancel on pause, and retain no removed content (6.5s)
+  ✓  36 e2e/refinement09.spec.ts:76:1 › offline Consciousness preview makes no HTTP or capture requests (4.2s)
+  ✓  37 e2e/refinement09.spec.ts:85:1 › mobile view tools remain reachable without horizontal overflow (2.7s)
+
+
+  1) e2e/delivery.spec.ts:4:1 › record the real console interaction ────────────────────────────────
+
+    Error: browserContext.newPage: Executable doesn't exist at /home/agent/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux
+    ╔═════════════════════════════════════════════════════════════════╗
+    ║ Video rendering requires ffmpeg binary.                         ║
+    ║ Downloading it will not affect any of the system-wide settings. ║
+    ║ Please run the following command:                               ║
+    ║                                                                 ║
+    ║     npx playwright install ffmpeg                               ║
+    ║                                                                 ║
+    ║ <3 Playwright Team                                              ║
+    ╚═════════════════════════════════════════════════════════════════╝
+
+      3 | test('no promotional slogans or false live-state text on the home screen',async({page})=>{await page.goto('/');const text=await page.locator('body').innerText();for(const unwanted of['Clarity creates leverage','Find signal','Build understanding','Sources before certainty','Evidence before action','All systems online','ONLINE | SECURE'])expect(text.toLowerCase()).not.toContain(unwanted.toLowerCase());});
+      4 | test('record the real console interaction',async({browser})=>{
+    > 5 |   const context=await browser.newContext({viewport:{width:1648,height:928},recordVideo:{dir:'evidence',size:{width:1648,height:928}}});const page=await context.newPage();await page.goto('http://127.0.0.1:4173');await expect(page.locator('canvas')).toHaveAttribute('data-render-frame',/\d+/);await page.waitForTimeout(1800);
+        |                                                                                                                                                                 ^
+      6 |   await page.getByRole('navigation').getByRole('button',{name:'Home',exact:true}).hover();await page.waitForTimeout(700);await page.mouse.move(1000,40);await page.waitForTimeout(500);
+      7 |   const box=await page.locator('canvas').boundingBox();if(!box)throw new Error('Missing canvas');await page.mouse.move(box.x+box.width*.5,box.y+box.height*.5);await page.mouse.down();await page.mouse.move(box.x+box.width*.60,box.y+box.height*.51,{steps:25});await page.mouse.up();await page.waitForTimeout(750);
+      8 |   await page.getByRole('button',{name:'Explore projects',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:/Velvet Accademy/}).click();await expect(page.getByRole('complementary',{name:'Record inspector'})).toHaveCSS('opacity','1');await page.waitForTimeout(1400);await page.getByRole('button',{name:'Close record inspector'}).click();await page.waitForTimeout(650);
+        at /workspace/Alfred/console/e2e/delivery.spec.ts:5:161
+
+    Error Context: test-results/delivery-record-the-real-console-interaction/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/delivery-record-the-real-console-interaction/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/delivery-record-the-real-console-interaction/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    e2e/delivery.spec.ts:4:1 › record the real console interaction ─────────────────────────────────
+  36 passed (4.1m)

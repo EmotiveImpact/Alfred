@@ -1,0 +1,23 @@
+{
+  "passed": 14,
+  "checks": [
+    "without an on-device voice nothing is spoken and nothing is recorded",
+    "no microphone was requested by the real-API page",
+    "exactly the text shown is the text spoken",
+    "the spoken text says it is the notes read aloud, not a generated answer",
+    "played is recorded as a device report, not as heard",
+    "acknowledgement is a separate, explicit record",
+    "the server holds a hash and length, never the spoken text",
+    "presence reflects real scripted playback start, not generated text alone",
+    "stopping playback immediately clears the speaking presentation",
+    "a stopped playback is recorded as stopped and cannot be acknowledged",
+    "the voice dialog says nothing is listening",
+    "no microphone was requested by the scripted page",
+    "no requests leave the loopback origin",
+    "no uncaught page errors"
+  ],
+  "page_errors": [],
+  "audio_hardware_tested": false,
+  "synthesiser": "scripted on-device stub in the second context; real speech API in the first",
+  "microphone": "never requested"
+}

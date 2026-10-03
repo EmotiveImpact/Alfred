@@ -1,0 +1,15 @@
+
+Running 8 tests using 1 worker
+
+(node:32721) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/refinement09.spec.ts:7:1 › rail and favicon use the unchanged mark from the product deck (3.9s)
+  ✓  2 e2e/refinement09.spec.ts:15:1 › switching Consciousness and Globe retains one renderer and real record browsing (14.3s)
+  ✓  3 e2e/refinement09.spec.ts:34:1 › typing gathers the supplied silhouette, then pause freezes its pixels (17.4s)
+  ✓  4 e2e/refinement09.spec.ts:49:1 › reduced motion is a stationary exact silhouette and still supports search (4.7s)
+  ✓  5 e2e/refinement09.spec.ts:57:1 › rotating the globe cannot tilt the brand silhouette in Consciousness (8.2s)
+  ✓  6 e2e/refinement09.spec.ts:66:1 › surface flights are bounded, cancel on pause, and retain no removed content (6.4s)
+  ✓  7 e2e/refinement09.spec.ts:76:1 › offline Consciousness preview makes no HTTP or capture requests (4.7s)
+  ✓  8 e2e/refinement09.spec.ts:85:1 › mobile view tools remain reachable without horizontal overflow (2.5s)
+
+  8 passed (1.1m)

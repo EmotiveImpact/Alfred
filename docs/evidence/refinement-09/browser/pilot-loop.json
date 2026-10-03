@@ -1,0 +1,28 @@
+{
+  "count": 15,
+  "checks": [
+    "select a project and inspect its original authored lines",
+    "ask uses the selected project while preserving source mode",
+    "answer source inspection returns the original record",
+    "remember remains a proposal before explicit acceptance",
+    "accepted proposal is usable with its original evidence",
+    "correct through an explicit replacement with retained lineage",
+    "corrected value is recalled through browser-to-backend retrieval",
+    "forget both current and superseded values with receipts",
+    "forget preserves the user-owned authored note",
+    "restart replays deletion before serving",
+    "restore an older backup without reviving reviewed values",
+    "restored source mode still distinguishes authored text from forgotten memory",
+    "no model, external traffic or JavaScript errors",
+    "no effects or inbox files were created",
+    "bearer and private browser storage stay out of rendered output"
+  ],
+  "errors": [],
+  "foreign_requests": [],
+  "browser": "151.0.7922.173",
+  "transport": "real loopback HTTP",
+  "database": "real SQLite",
+  "restart": "server process objects reopened; SIGKILL covered separately",
+  "model_inference": false,
+  "inputs": "synthetic project only"
+}

@@ -1,0 +1,70 @@
+{
+  "verified_at_utc": "2026-10-03T08:52:49.654146+00:00",
+  "method": "public GitHub run summary and public console result annotation; authenticated logs not accessible",
+  "run": 37110515963,
+  "url": "https://github.com/EmotiveImpact/Alfred/actions/runs/37110515963",
+  "commit": "9bf6b254f398c4392a02cd17f17f6fc6143bade4",
+  "overall_status": "Success",
+  "jobs_passed": 4,
+  "jobs": [
+    {
+      "name": "core-and-sources",
+      "id": 111167347739,
+      "status": "Success"
+    },
+    {
+      "name": "backend-browser",
+      "id": 111167347906,
+      "status": "Success"
+    },
+    {
+      "name": "console",
+      "id": 111167347910,
+      "status": "Success"
+    },
+    {
+      "name": "console-connected",
+      "id": 111167347855,
+      "status": "Success"
+    }
+  ],
+  "console_annotation": {
+    "tested_commit": "9bf6b254f398c4392a02cd17f17f6fc6143bade4",
+    "passed": 37,
+    "failed": 0,
+    "skipped": 0,
+    "flaky": 0
+  },
+  "prior_runs": [
+    {
+      "run": 37106809542,
+      "commit": "fb85e4abd4a4341449f45f60b8c540b9d5c6378b",
+      "status": "Failure",
+      "jobs_passed": 3,
+      "console": "combined frontend acceptance failed; detailed logs inaccessible; not relabelled or used as success"
+    },
+    {
+      "run": 37107793511,
+      "commit": "78acd60e309c2769f0ca3cdefed71fdb601823a7",
+      "status": "Failure",
+      "jobs_passed": 3,
+      "console": "separate frontend browser acceptance failed; public summary added but authenticated summaries inaccessible"
+    },
+    {
+      "run": 37108774475,
+      "commit": "30413b80fe1f9b9473528c37451929516c9c781d",
+      "status": "Failure",
+      "jobs_passed": 3,
+      "console": "public annotation: 36 passed, 1 mobile test failed because expanded rail intercepted the selector"
+    },
+    {
+      "run": 37109750801,
+      "commit": "c0295fb2c18d1a91a1ea29b24ac7af74050a5794",
+      "status": "Failure",
+      "jobs_passed": 3,
+      "console": "public annotation: 36 passed, 1 mobile fixture failed its collapsed-rail assertion; pointer now moved after navigation at final code commit"
+    }
+  ],
+  "source_readback_sha256": "cb73fcdb0bd0b154fda2943ae8319bbf25d2d24f15fb495c13783563281cd8b7",
+  "documentation_head": "subsequent receipt/docs commit needs its own CI status; runtime/dependency/test/workflow bytes match the green checkpoint"
+}

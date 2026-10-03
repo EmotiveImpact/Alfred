@@ -26,6 +26,6 @@
     "network": "only ephemeral loopback reference page allowed; bridge and all other network blocked",
     "microphone": "no permission granted or capture used",
     "errors": [],
-    "location": "console/evidence/refinement-09/reference/"
+    "location": "docs/evidence/refinement-09/reference/"
   }
 }

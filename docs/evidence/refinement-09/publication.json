@@ -1,0 +1,15 @@
+{
+  "attempted_on": "2026-10-03",
+  "branch": "feat/alfred-console-refinement-09-2026-10-03",
+  "code_commit": "9bf6b254f398c4392a02cd17f17f6fc6143bade4",
+  "git_push": "succeeded; remote readback verified",
+  "review_url": "https://github.com/EmotiveImpact/Alfred/compare/main...feat/alfred-console-refinement-09-2026-10-03",
+  "draft_pr": "not created",
+  "attempt": "gh pr create --draft --base main --head feat/alfred-console-refinement-09-2026-10-03 --body-file docs/evidence/refinement-09/PR_BODY.md",
+  "rejection": "Post https://api.github.com/graphql: Forbidden",
+  "origin": "GitHub API access; not automatic approval review",
+  "log": "validation/pr-publication.txt",
+  "next_executable_step": "With restored existing GitHub API access, create the prepared draft using PR_BODY.md and attach its URL. Do not merge automatically.",
+  "merge": "not_merged",
+  "deployment": "not_deployed"
+}

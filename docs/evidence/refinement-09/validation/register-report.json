@@ -1,0 +1,37 @@
+{
+  "scope": "register consistency only, not capability proof",
+  "requirements": 33,
+  "implementation": {
+    "not_started": 1,
+    "partial": 24,
+    "implemented_on_branch": 8,
+    "accepted_implementation": 0
+  },
+  "integration": {
+    "not_applicable": 1,
+    "isolated": 1,
+    "fixture_connected": 0,
+    "backend_connected": 31,
+    "externally_connected": 0
+  },
+  "merge": {
+    "not_merged": 1,
+    "branch_only": 0,
+    "main_partial": 0,
+    "main_partial_branch_extended": 15,
+    "merged_to_main": 17
+  },
+  "deployment": {
+    "not_deployed": 33
+  },
+  "sources": 23,
+  "owner_decisions_needed": [
+    "CON-001",
+    "OPS-002",
+    "RUN-002",
+    "RUN-003",
+    "SYS-002",
+    "SYS-003",
+    "VOI-001"
+  ]
+}

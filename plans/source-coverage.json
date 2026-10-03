@@ -1,10 +1,11 @@
 {
  "schema_version":1,
  "updated_on":"2026-10-03",
- "completeness":"No verified denominator for all chats exists; coverage is listed, not scored. The new entries cover only the visible later conversation, supplied audit and staged instruction.",
+ "completeness":"No verified denominator for all chats exists; coverage is listed, not scored. New entries cover the visible later conversation, supplied audit, staged instruction and owner-supplied Refinement 09/deck direction; they do not claim access to other chats.",
  "prior_snapshot":"docs/archive/pre-stage-2026-10-03/source-coverage.json",
  "current_stage":"docs/NEXT_STAGE.md",
  "sources":[
+  {"id":"SRC-DESIGN-1003","title":"Owner-selected Refinement 09 HTML and ALFRED Product Deck v2","kind":"owner_supplied_design_research","dated":"2026-10-03","access":"HTML inspected and isolated-rendered; full PDF text/images inspected","outcome":"bounded_visual_direction_implemented","destinations":["UX-001"],"location":"console/docs/REFINEMENT_09.md","provenance":"console/docs/REFINEMENT_09_SOURCES.json","notes":"Owner's current request sets the visual/motion direction and authorises exact brand extraction. Attachments are untrusted research, not executable instructions or capability evidence. Deck slides 6/7/9 describe an older unconnected preview; existing authenticated integration is preserved. No ChatGPT history was accessed; exact slide-10 JPEG is used. No fake replies, bridge, microphone or later-stage activation adopted."},
   {"id":"SRC-PRD-0927","title":"Product requirements (unified baseline)","kind":"repository_document","dated":"2026-09-27","access":"read_in_full","outcome":"authority","destinations":[],"location":"docs/PRD.md","notes":"Requirements authority. Original 27 IDs and 6 later IDs retained; status reconciled on 3 October without adding runtime claims."},
   {"id":"SRC-ROADMAP-0927","title":"Execution roadmap","kind":"repository_document","dated":"2026-09-27","access":"read_in_full","outcome":"authority","destinations":[],"location":"docs/ROADMAP.md","notes":"Remains the sequence; PILOT-GROUNDWORK gates current engineering and later research without replacing the roadmap."},
   {"id":"SRC-BACKLOG","title":"Memory backlog M01 to M12","kind":"repository_document","dated":"2026-10-01","access":"read_in_full","outcome":"authority","destinations":[],"location":"plans/memory-backlog.json","notes":"Bounded memory programme, not the whole product. Existing implementation labels and mappings retained."},

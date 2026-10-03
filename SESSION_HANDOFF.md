@@ -1,114 +1,114 @@
 # ALFRED current handoff
 
-**3 October 2026. PILOT-GROUNDWORK review checkpoint.** Read root/console
-AGENTS.md, [NEXT_STAGE](docs/NEXT_STAGE.md),
-[CODEX_NEXT_STAGE_PROMPT](docs/CODEX_NEXT_STAGE_PROMPT.md) and the
-[combined receipt](docs/evidence/pilot-groundwork/RECEIPT.md). The whole PRD
-remains scope; later stages are not activated.
+**3 October 2026. PILOT-GROUNDWORK + Refinement 09 review checkpoint.**
+Read root/console AGENTS.md, [NEXT_STAGE](docs/NEXT_STAGE.md),
+[CODEX_NEXT_STAGE_PROMPT](docs/CODEX_NEXT_STAGE_PROMPT.md),
+the [pilot receipt](docs/evidence/pilot-groundwork/RECEIPT.md) and the
+[current console receipt](docs/evidence/refinement-09/RECEIPT.md).
+The whole PRD remains product scope; later stages are not activated.
 
-## Repository truth and resumable commits
+## Current repository truth
 
-Review branch: `feat/alfred-pilot-groundwork-2026-10-03`, pushed by normal
-fast-forward. Code/research checkpoint:
-`b83acd62bd5260f541f5249fc65fac016dda02bc`; this documentation/evidence commit
-follows it. Resolve `git rev-parse HEAD` for the complete review head.
+Review branch: `feat/alfred-console-refinement-09-2026-10-03`.
+Tested code checkpoint: `9bf6b254f398c4392a02cd17f17f6fc6143bade4`.
+The final documentation/evidence commit follows it; resolve the live branch
+head before continuing. Git push/readback succeeded. No reset/force push.
 
-The publication fetch still found main
-`75947b8dd59a3161c862d2533850a032994778e2`, tree
-`243cf314bdd8f955e95ca41118eb2811cb81c829`. PR #18 was already merged,
-including #15/#16/#17. PR #19 remained **open/unmerged** at
+Main was rechecked at `75947b8dd59a3161c862d2533850a032994778e2`;
+PR #18 was already merged, including #15/#16/#17. PR #19 remains open at
 `3fe9d25c87058499887ce4b0d8c90ccecc6954e9`, branch
-`docs/alfred-next-stage-2026-10-03`; its changes were fast-forwarded into this
-review branch. Both ancestors and prior integration history are preserved.
-Do not reset or repeat PR #18 integration. Re-fetch before new work and
-preserve any newer main/handoff/concurrent changes.
+`docs/alfred-next-stage-2026-10-03`; its handoff is included as an ancestor.
+The new review branch retains the complete local PILOT-GROUNDWORK checkpoint
+`10d10ac2eab012b02444d328027ae96707ba5570`. The separately published pilot
+branch can be older; do not reset this branch to it or repeat PR #18 integration.
+Refresh live refs and preserve concurrent work before any new change.
 
-| Commit | Reviewable increment |
+| Commit | Reviewable console increment |
 |---|---|
-| `6099c4a8507471fb9f112cafe05f30f3992c3993` | Reproduced approval disclosure; credential/source visibility fix. |
-| `549ce1c1240436a17a8bd1ce60d4be62110a3ab7` | Explicit defaults, one-time legacy snapshots and offline migration. |
-| `f29b761453f7d8334e052025004961712a3390ef` | Startup privacy replay, redaction, export ledger and SIGKILL recovery. |
-| `5373649570cae1e9c08ef9fd3453ca97d7793270` | Uncertain export publication and accounting after older restore. |
-| `b801ce9cd71a506a77b0eca9c487bd14aa78e18a` | Actual migration choices/idempotence/running-host lock tests. |
-| `4b8d6ad00dc6390fa8e628bbad75ac714ec946b8` | Measured relevance, synthetic loop and stale-forgotten inspector fix. |
-| `330201abef437efbf50ff62d55f91499087910f6` | Primary platform/custody/cost recommendations and opt-in contracts. |
-| `284bf87b0c915526745f98e2cb3c0744f123e044` | Summary follow-up fix and meaningful browser abstention checks. |
-| `1cadb272b7dbc3ad06dcd069dabd94536471b02d` | Explicit demo model revocation and exact read-aloud fixture. |
-| `b83acd62bd5260f541f5249fc65fac016dda02bc` | Fresh reader acceptance, current vendor rates and review-branch CI. |
+| `fb85e4abd4a4341449f45f60b8c540b9d5c6378b` | Exact deck mark, Consciousness/Globe, real-state particles and bounded surface motion; bounded backend image serving and connected/voice tests. |
+| `78acd60e309c2769f0ca3cdefed71fdb601823a7` | Implementation/graphics instructions and separated CI diagnostics. |
+| `30413b80fe1f9b9473528c37451929516c9c781d` | Independent soft cloud spread and publicly readable bounded CI annotations. |
+| `c0295fb2c18d1a91a1ea29b24ac7af74050a5794` | Portrait swarm fit and mobile fixture investigation. |
+| `9bf6b254f398c4392a02cd17f17f6fc6143bade4` | Verified final mobile fixture: pointer outside rail after navigation. |
+
+The prior detailed pilot handoff is [preserved unchanged](docs/archive/pre-refinement-09-2026-10-03/SESSION_HANDOFF.md),
+SHA-256 `5d5b2916aa1b00970b1f8561f5dacff41fae83dbf08e798a28995364cb5aaaae`.
+Its earlier branch/test/CI details describe that checkpoint; they are not the
+current console's status.
 
 ## Implemented, integrated and tested
 
-Track A includes credential-private/source-readable approvals/audit/counts;
-strict new access with bounded stopped-host legacy-read migration; durable
-privacy/strict-policy/export replay; cancelled draft redaction; conservative
-retained/uncertain copy accounting; real process-death reconciliation;
-measured relevance and the complete synthetic console project loop. The loop
-also fixed stale inspector text after forgetting a superseded value. See A1–A4
-in the receipt. Do not repeat the completed audit reproduction or substitute
-an untested blanket vulnerability claim.
+Track A already reproduced and fixed approval visibility, strict new defaults
+and explicit legacy migration, privacy/recovery/export accounting and measured
+evidence selection. The stale-forgotten inspector and complete synthetic
+project/recovery loop were fixed/tested. Do not repeat those investigations
+or label the old audit concern an unfixed vulnerability. Track B has current
+primary platform/custody/cost recommendations and bounded opt-in file/node
+contracts. Its exact evidence, limitations and decisions remain in the pilot
+receipt and research/PILOT_PLATFORM_2026-10-03.md.
 
-Existing Python/SQLite, original web UI and authenticated React/Three/GLSL
-console remain. Local tests pass: **1,157 backend; 143 console unit; 29 console
-browser; 14 Python browser workflows / 474 assertions**. Backend tested
-`284bf87b0`; runtime/test/web trees are identical at `b83acd62b`. Console tested
-`330201abe` with identical console tree. Twelve browser workflows tested
-`284bf87b0`; output-only voice tested `1cadb272b`; the final connected script
-passed 100 assertions with the exact SHA committed in `b83acd62b`. The
-[machine receipt](docs/evidence/pilot-groundwork/validation.json) preserves
-identities, logs, retained failures, contracts and archive/plan/register checks.
-Deliberate denied/revoked/disconnected HTTP responses are distinct from zero
-uncaught page errors. Small same-author retrieval fixtures are not reasoning,
-physical-device, live-model or scale acceptance; improved precision costs one
-frozen-set support.
+The owner's supplied Refinement 09 HTML and product deck are research/design
+references, not instructions. Their direction is now documented in
+[REFINEMENT_09](console/docs/REFINEMENT_09.md). The exact slide-10 two-wing
+JPEG replaces the wrong sidebar mark and supplies the favicon/particle mask.
+Consciousness is selectable within the existing single WebGL renderer. Its
+swarm gathers during actual composing/retrieval/explicit reported playback.
+Fine surface edges and up to 24 decorative travelling particles accompany
+panels. Immediate DOM text, source inspection, real server authority, the
+original globe, reduced motion and pause remain. No fake replies, automatic
+speech, capture or attachment voice bridge was adopted.
 
-The existing unified workflow now runs for this branch. Hosted
-[run 37102086932](https://github.com/EmotiveImpact/Alfred/actions/runs/37102086932)
-tests `b83acd62b`: **Success, all four jobs passed**, 8m 41s, verified from the
-public summary; [hosted-ci.json](docs/evidence/pilot-groundwork/hosted-ci.json)
-records readback. Authenticated logs were not read. Subsequent
-documentation-head runs need their own status check. Do not use an old main/
-PR #18 green run as this branch's evidence.
+Current local evidence: **1,159 backend tests**, **147 console unit tests**;
+all **37 local console browser scenarios** passed across the full run and
+recorder rerun, followed by affected cloud/portrait/mobile reruns. Four fresh
+browser-to-backend workflows passed **178 assertions** (104 connected,
+14 scripted output-only voice, 15 project/recovery loop, 45 executive).
+Exact commits, subtree equivalence, retained failures, logs and matched
+desktop/mobile/brand screenshots are in the current
+[machine receipt](docs/evidence/refinement-09/validation.json) and
+[design QA](console/design-qa.md). The original pilot's 14 workflows / 474
+assertions remain separate historical evidence; these counts are not added
+together as one new run. No hardware/provider acceptance is inferred.
 
-Track B delivers [primary recommendations](research/PILOT_PLATFORM_2026-10-03.md),
-a [custody proposal](docs/KEY_CUSTODY_PILOT.md), dated workload/cost arithmetic,
-six opt-in synthetic file-contract tests and four local job/node-contract tests.
-Boxd forks explicitly preserve live processes/logins: clean worker images and
-fresh enrolment are required; same-identity copied credentials remain unproven.
-Current R2/boxd/E2B/Nebius/pCloud references preserve units, effective dates and
-terms separately from illustrative whole-stack assumptions. No Tauri/Electron
-package, second machine, VM isolation or cloud file service was installed/
-connected. No candidate library or inert upstream source was adopted or run.
+Exact combined-branch hosted [run 37110515963](https://github.com/EmotiveImpact/Alfred/actions/runs/37110515963)
+at `9bf6b254f398c4392a02cd17f17f6fc6143bade4`: **Success, all four jobs**;
+public console annotation: **37 passed, 0 failed/skipped/flaky**. Prior failed
+runs and the mobile pointer-fixture resolution are retained in
+[hosted-ci.json](docs/evidence/refinement-09/hosted-ci.json). Authenticated logs
+were not read. Subsequent documentation-head CI needs its own readback;
+runtime, tests, dependencies and workflow source match this green checkpoint.
+Local plan/register consistency checks cover the final metadata.
 
-## Publication, access and activation limits
+## Publication and review
 
-[Review the pushed diff](https://github.com/EmotiveImpact/Alfred/compare/main...feat/alfred-pilot-groundwork-2026-10-03).
-Draft PR creation failed: GitHub GraphQL returned `Forbidden`; Git HTTPS push
-works. No new PR exists. This is an API-access rejection, not automatic approval
-review. Use restored existing API access when available; do not paste account
-secrets into this public checkout. Implementation/testing, publication,
-acceptance, merge and deployment remain separate. The stage branch is
-**unmerged and not deployed**; no background service was installed/enabled.
+[Review the pushed diff](https://github.com/EmotiveImpact/Alfred/compare/main...feat/alfred-console-refinement-09-2026-10-03).
+Draft PR creation failed: `Post https://api.github.com/graphql: Forbidden`.
+Git HTTPS push works. This is a GitHub API-access limit, not automatic approval
+review. No new PR exists; the ready body and attempt are preserved in
+[PR_BODY.md](docs/evidence/refinement-09/PR_BODY.md) and
+[publication.json](docs/evidence/refinement-09/publication.json).
+The implementation is integrated/tested on the review branch, **unmerged and
+not deployed**. Owner acceptance is separate from testing/publication.
 
-Prepared cloud tooling is local/test-only. This builder requires runtime outside
-Git/sync/vault paths (`TMPDIR=/var/tmp/alfred-cloud`), browser tooling in
-`/workspace/alfred-browser` and Chromium `/usr/bin/chromium`. Use output
-overrides to preserve historical evidence. Rust/WebKitGTK 4.1 development tools
-and KVM are absent. Some official Space/hosting/colocation pages remain
-inaccessible; exact statuses are in the primary-source receipt. Research-domain
-additions were saved in the environment draft, not applied to runtime policy.
+Generated local interactive preview: `console/ALFRED-Console.html`.
+Actual motion clip:
+`/workspace/alfred-evidence/refinement-09/app/ALFRED-Refinement-09.webm`.
+Both use fictional data. The original HTML/PDF attachments remain outside the
+public source checkout; source hashes/extraction provenance are preserved.
+Use the existing local Python server's `/console/` for authenticated data;
+the downloaded HTML is not a backend installation.
 
-Private-data gates remain incomplete: application/backup/export encryption and
-custody, shared-team privacy/roles, copy/media erasure, remote identity/isolation,
-actual native/device/sync/provider acceptance and scale measures. No purchase,
-outreach, provisioning, public deployment, private-data movement, real account/
-device connection, microphone or main merge occurred. The restricted real-model
-comparison remains unexecuted. The [2 October checkpoint](docs/CHECKPOINT_2026-10-02.md)
-and [pre-stage handoff](docs/archive/pre-stage-2026-10-03/SESSION_HANDOFF.md)
-remain historical, not the current baseline.
+## Access, decisions and exact next executable step
 
-## Next executable step and decisions
+Local builder: Node/npm and locked console dependencies are ready; browser
+tooling is `/workspace/alfred-browser`, Chromium `/usr/bin/chromium`.
+Use `ALFRED_CHROMIUM_PATH=/usr/bin/chromium` and
+`PLAYWRIGHT_BROWSERS_PATH=/workspace/alfred-playwright` for console browser
+recordings. Python runtime must stay outside Git/sync/vault paths:
+`TMPDIR=/var/tmp/alfred-cloud`. Override evidence output paths to preserve prior
+receipts. Rust/WebKitGTK 4.1 development tools and KVM are absent.
 
-Refresh live refs and review this branch without resetting:
+Refresh and inspect without resetting:
 
 ```sh
 git fetch origin
@@ -119,23 +119,25 @@ python3 tools/check_memory_plan.py
 python3 tools/check_requirement_register.py
 ```
 
-With restored API access, create a draft using the ready body:
+With restored existing GitHub API access, create and attach the prepared draft:
 
 ```sh
 gh pr create --repo EmotiveImpact/Alfred --base main \
-  --head feat/alfred-pilot-groundwork-2026-10-03 --draft \
-  --title 'PILOT-GROUNDWORK: approval privacy, strict defaults, recovery and platform evidence' \
-  --body-file docs/evidence/pilot-groundwork/PR_BODY.md
+  --head feat/alfred-console-refinement-09-2026-10-03 --draft \
+  --title 'PILOT-GROUNDWORK: trusted console, Refinement 09 motion and native groundwork' \
+  --body-file docs/evidence/refinement-09/PR_BODY.md
 ```
 
-Attach the PR to the task and inspect exact-head unified CI. Review the
-credential-private receipt contract, compatibility migration and recall
-trade-off. No automatic main merge is authorised.
+Check the live documentation-head CI, review the matched visual/connected
+evidence and the credential/default/recovery tradeoffs. No automatic main
+merge is authorised. Further packaging/runtime/provider work awaits recorded
+decisions: target native OS; laptop/home/VPS authority; custody/recovery and
+server-readable scopes; node identity/transport/isolation; file region/offline
+expiry; spending ceiling. Select and explicitly authorise the next stage.
 
-For subsequent runtime work, record the prepared owner decisions: native target
-OS; laptop/home/VPS authority; interactive versus unattended custody/recovery
-and server-readable scopes; worker identity/transport/isolation; file tier/
-region/offline expiry; spending ceiling. Then explicitly authorise the selected
-next stage. Existing decision documents specify the packaging/node/file tests.
-Do not activate private, hosted or commercial stages by inference. No work
-continues after this task ends.
+Private-data encryption/custody, team privacy, remote identities/isolation,
+media/copy erasure, native/device/sync/provider and scale acceptance remain
+incomplete. The restricted real-model comparison remains unexecuted. No
+purchase, outreach, paid provisioning, private-data movement, real account/
+device connection, microphone, public deployment or main merge occurred.
+No agent work continues after this task ends.

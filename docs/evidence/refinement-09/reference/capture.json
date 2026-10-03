@@ -1,0 +1,14 @@
+{
+  "source": "/workspace/attachments/1acb41c9-4613-4a41-b33d-6eea4d68e0b0/ALFRED-Console-Refinement-09.html",
+  "viewport": {
+    "width": 1648,
+    "height": 928
+  },
+  "deviceScaleFactor": 1,
+  "blocked_network": [
+    "http://127.0.0.1:5577/health",
+    "http://127.0.0.1:5577/health"
+  ],
+  "page_errors": [],
+  "microphone_permissions": []
+}

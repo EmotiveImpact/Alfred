@@ -1,0 +1,8 @@
+
+Running 1 test using 1 worker
+
+(node:35525) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 e2e/refinement09.spec.ts:85:1 › mobile view tools remain reachable without horizontal overflow (4.1s)
+
+  1 passed (5.0s)
