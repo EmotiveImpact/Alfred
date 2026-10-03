@@ -83,8 +83,11 @@ Local plan/register consistency checks cover the final metadata.
 
 [Review the pushed diff](https://github.com/EmotiveImpact/Alfred/compare/main...feat/alfred-console-refinement-09-2026-10-03).
 Draft PR creation failed: `Post https://api.github.com/graphql: Forbidden`.
-Git HTTPS push works. This is a GitHub API-access limit, not automatic approval
-review. No new PR exists; the ready body and attempt are preserved in
+Git HTTPS push works. Follow-up probes confirmed the cloud environment's
+network proxy rejects the HTTPS tunnel to api.github.com with 403 before
+reaching GitHub. This is not a repository permission verdict or automatic
+approval review. API credentials cannot be validated through the blocked
+connection. No new PR exists; the ready body and attempt are preserved in
 [PR_BODY.md](docs/evidence/refinement-09/PR_BODY.md) and
 [publication.json](docs/evidence/refinement-09/publication.json).
 The implementation is integrated/tested on the review branch, **unmerged and
@@ -119,7 +122,8 @@ python3 tools/check_memory_plan.py
 python3 tools/check_requirement_register.py
 ```
 
-With restored existing GitHub API access, create and attach the prepared draft:
+Enable api.github.com access through the cloud environment's network policy,
+then validate existing API access and create/attach the prepared draft:
 
 ```sh
 gh pr create --repo EmotiveImpact/Alfred --base main \

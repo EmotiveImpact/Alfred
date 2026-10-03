@@ -140,7 +140,10 @@ microphone, public deployment or automatic main merge occurred.
 ## Exact next step
 
 Read SESSION_HANDOFF.md, fetch live refs and preserve concurrent work. Inspect
-the published diff and exact-source CI. With working GitHub API access, create
+the published diff and exact-source CI. The cloud environment's network proxy
+rejects the HTTPS tunnel to api.github.com before GitHub receives the request;
+enable that endpoint in the environment network policy, then validate existing
+API access. With working GitHub API access, create
 the prepared draft using [PR_BODY.md](PR_BODY.md), attach its URL to the task,
 and review the visual/connected evidence. Do not merge automatically. Runtime
 or provider work after this stage still requires the recorded host/custody/

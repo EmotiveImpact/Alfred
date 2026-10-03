@@ -66,5 +66,11 @@
     }
   ],
   "source_readback_sha256": "cb73fcdb0bd0b154fda2943ae8319bbf25d2d24f15fb495c13783563281cd8b7",
-  "documentation_head": "subsequent receipt/docs commit needs its own CI status; runtime/dependency/test/workflow bytes match the green checkpoint"
+  "documentation_head": "subsequent receipt/docs commit needs its own CI status; runtime/dependency/test/workflow bytes match the green checkpoint",
+  "documentation_run": {
+    "run": 37111434682,
+    "commit": "9336a146625ade51bc9c03a0caf83313878b16d1",
+    "status": "Success",
+    "method": "public run summary verified when diagnosing API access; no authenticated logs read"
+  }
 }
