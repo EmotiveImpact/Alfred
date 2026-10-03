@@ -5,6 +5,8 @@ These use normal provisioning, not the explicit historical synthetic fixtures.
 import json
 from pathlib import Path
 import tempfile
+import subprocess
+import sys
 import unittest
 from alfred.console_api import projection, health
 from alfred.desk import init_demo
@@ -15,6 +17,40 @@ from alfred.jobs import JobCoordinator
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy, permitted
+
+
+class MigrationCLI(unittest.TestCase):
+    def test_offline_migration_choices_and_repeat_preserve_no_model_or_write(self):
+        for preserve in (False, True):
+            with self.subTest(preserve=preserve), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary) / 'demo'; keys = init_demo(home, legacy_scope=True)
+                command = [sys.executable, '-m', 'alfred.desk', 'migrate-grants', '--data-dir', str(home)]
+                if preserve:
+                    command.append('--preserve-legacy-reads')
+                first = subprocess.run(command, capture_output=True, text=True, timeout=15)
+                self.assertEqual(first.returncode, 0, first.stderr)
+                receipt = json.loads(first.stdout); self.assertTrue(receipt['migrated'])
+                self.assertFalse(receipt['model_egress_migrated']); self.assertFalse(receipt['writes_migrated'])
+                store = KnowledgeStore(home / 'desk.sqlite')
+                with store.transaction() as db:
+                    p = store.authenticate(db, keys['owner'], {'owner'})
+                    self.assertEqual(permitted(db, p, 'demo-source', store.now(), 'read'), preserve)
+                    for capability in ('model', 'inbox.write'):
+                        self.assertFalse(permitted(db, p, 'demo-source', store.now(), capability))
+                again = subprocess.run(command, capture_output=True, text=True, timeout=15)
+                self.assertEqual(again.returncode, 0, again.stderr); self.assertFalse(json.loads(again.stdout)['migrated'])
+                self.assertNotIn(keys['owner'], first.stdout + first.stderr + again.stdout + again.stderr)
+
+    def test_running_host_lock_blocks_migration(self):
+        import fcntl
+        with tempfile.TemporaryDirectory() as temporary:
+            home = Path(temporary) / 'demo'; init_demo(home, legacy_scope=True)
+            with (home / 'desk.lock').open('a') as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                result = subprocess.run([sys.executable, '-m', 'alfred.desk', 'migrate-grants', '--data-dir', str(home)],
+                                        capture_output=True, text=True, timeout=15)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('stop_alfred_before_grant_migration', result.stdout + result.stderr)
 
 
 class PermissionDefaults(unittest.TestCase):

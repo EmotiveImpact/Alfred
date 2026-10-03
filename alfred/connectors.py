@@ -448,15 +448,15 @@ def status(store, bearer):
 
 
 @contextmanager
-def offline(path):
-    """Connector administration runs only while the desk host is stopped."""
+def offline(path, *, blocked_code='stop_alfred_before_connector_changes'):
+    """Offline administration runs only while the desk host is stopped."""
     import fcntl
     fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise Fault('stop_alfred_before_connector_changes', 409) from None
+            raise Fault(blocked_code, 409) from None
         yield
     finally:
         os.close(fd)

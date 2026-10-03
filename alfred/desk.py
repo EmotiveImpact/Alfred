@@ -209,7 +209,7 @@ def main():
         elif args.command == 'migrate-grants':
             from .policy import IdentityPolicy
             from .connectors import offline
-            with offline(path):
+            with offline(path, blocked_code='stop_alfred_before_grant_migration'):
                 store = DeskStore(path / 'desk.sqlite')
                 owner = load_keys(path)['owner']
                 policy = IdentityPolicy(store)
