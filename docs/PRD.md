@@ -1,12 +1,8 @@
 # ALFRED product requirements
 
-<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+**Current category: operational and executive intelligence. Planning revision: 3 October 2026.** The requirements remain the product source of truth. [ROADMAP.md](ROADMAP.md) gives the sequence, [REMAINING_BUILD_PLAN.md](REMAINING_BUILD_PLAN.md) the work packages, [the requirement register](../plans/requirement-register.json) their delivery states, and [NEXT_STAGE.md](NEXT_STAGE.md) the current execution and activation gates. M01-M12 is a bounded memory programme, not the whole application.
 
-**Current product category: operational and executive intelligence.** See [positioning](PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
-
-Planning revision: 27 September 2026. Product baseline: local application v0.8 and the functional, separately tested React/Three.js fixture console, consolidated in main. This is a requirements update, not a v0.9 runtime release.
-
-This is the current product source of truth. Implementation sequencing is in [ROADMAP.md](ROADMAP.md) and [the machine-readable memory backlog](../plans/memory-backlog.json). Older documents under archive/ retain historical decisions, not current completion claims.
+Main `75947b8dd59a3161c862d2533850a032994778e2` merged PR #18, including #15/#16/#17. The console is now authenticated and backend-connected. This documentation revision reconciles that fact and the later staged instruction; it changes no runtime, dependencies or deployment. The [previous PRD](archive/pre-stage-2026-10-03/PRD.md) is preserved verbatim, including its earlier checkpoints. Historical status wording is not present completion evidence.
 
 ## Product and problem
 
@@ -18,106 +14,96 @@ Product identity remains ALFRED. Emotive Impact versus Black State ownership is 
 
 ## Executive and operational outcomes
 
-Executive intelligence covers priorities, planning, decision briefs, commitments, preparation and follow-up. Operational intelligence covers current state, source health, changes, coordination and traceable authorised outcomes. Personal knowledge and everyday usefulness remain central. Existing requirement IDs continue to apply; this positioning does not invent completed functionality.
+Executive intelligence covers priorities, planning, decision briefs, commitments, preparation and follow-up. Operational intelligence covers current state, source health, changes, coordination and traceable authorised outcomes. Personal knowledge and everyday usefulness remain central. All 33 existing requirement IDs are retained; the stage adds no invented completed functionality or competing product catalogue.
 
 ## Users and operating contexts
 
 Begin with an individual founder/producer using a non-sensitive project and explicitly selected sources. Extend to personal life, home devices and small teams only after the relevant access and deployment gates. Operational scenarios begin with synthetic replay and supervised non-critical exercises, not safety reliance.
 
-Personal, company and each client/operation are separate workspaces with separate grants, retention and provider-egress settings. Working context can be temporary. Private mode must make capture and processing status visible. Offline is a capability condition, not permission to describe cached information as current. A shared team workspace must not disclose the person's private memory.
+Personal, company and each client/operation are separate workspaces with separate grants, retention and provider-egress settings. Working context can be temporary. Private mode must make capture and processing status visible. Offline is a capability condition, not permission to describe cached information as current. A shared team workspace must not disclose the person's private memory. The current one-workspace-per-credential implementation is not yet that complete team/multi-workspace experience.
 
-## Baseline: implemented versus planned
+## Implemented baseline versus release readiness
 
-Implemented v0.8: local SQLite records; credential-scoped browser access; read-only Markdown/project scanning; explicit note links; source excerpts; saved bounded conversations; optional tool-free local-model adapter; separate manually reviewed entities/statements; exact approval and local draft execution; bounded local report routines and history controls.
+The merged implementation includes the local Python/SQLite core, original web interface, authenticated React/Three.js console projection, selected-vault identity, reviewed-memory context, preview/review capture, approved create-only inbox writes, temporal review/history, executive records, routines, device pairing/grants, bounded local jobs/cache, read-only calendar/contact export importers, read-aloud output, host health and index rebuild.
 
-Not yet implemented: automatic reviewed-memory context injection; dependable general reasoning; automatic memory capture/extraction; full Obsidian compatibility; safe note write-back; mature person/device pairing; fine-grained source grants; application-level encryption; live account/device/voice connectors; production hosting or cross-device runtime synchronisation.
+Individual requirements remain partial where specified in the register. Current source, original support, independent authority, test scope and the [audit](AUDIT_2026-10-03.md) take precedence over a polished screenshot or an old draft-PR label. The approval-visibility concern is an investigation request, not a proven exploit. No private-data, native application, live account, microphone, second-node, sandbox, cloud-storage or commercial deployment is established by this merge.
 
-The v0.7 small-model experiment has documented relevance, abstention and conflict-handling failures. v0.8 added narrow literal evidence checks, not a semantic verifier. The previously blocked model-comparison operation remains blocked and must not be rerouted by this plan. No stronger-model result is claimed.
-
-The newer React/TypeScript/Three.js console is now present in main. Its fictional fixtures are not real backend data. Preserve this functional frontend and the existing backend-connected web interface while implementing their authenticated adapter. The internal Obsidian console name is not an Obsidian note-app integration.
-
-## M01 implementation checkpoint, 30 September 2026
-
-The bounded selected-vault/read slice is implemented on a draft review branch from current main. [M01 acceptance and limits](evidence/memory-m01/RECEIPT.md) and the [read contract](OBSIDIAN_INTEGRATION.md) record catalogue identity, conservative rename/revision continuity, opt-in IDs, validated supported anchors, exclusions and availability. This advances MEM-001/002/003/012 for Markdown without claiming complete sync, deletion/restore, native Obsidian, private-vault or model-context acceptance. M02-M12 remain planned.
+The optional local-model adapter is tool-free. A dependable general reasoning runtime and semantic answer-quality evaluation remain outstanding. Literal support accounting and reviewed-memory correctness are not semantic verification. The previously blocked live-model comparison remains blocked and must not be rerouted.
 
 ## First complete personal-memory experience
 
-The 1 October 2026 M03 draft checkpoint now supplies relevant accepted/current reviewed statements to source-backed questions and bounded conversations. [Acceptance and limits](evidence/memory-m03/RECEIPT.md) cover exact original support, review/temporal basis, namesakes, explicit replacements and final review/source checks. This is an implementation on the review branch, not a main merge or complete remember/correct/forget loop. M02 and M04-M12 remain planned; M02/M05 still gate private data.
+1. The user selects an allowed vault/project and can inspect what will be indexed. Obsidian is optional.
+2. A question retrieves authorised source passages and relevant accepted statements, with original support, dates and uncertainty visible.
+3. 'Remember this' proposes small, editable memory with source, scope, type and retention; nothing is silently promoted to fact.
+4. Acceptance records the judgement. A separate exact approval may create a note under ALFRED/Inbox without overwriting human content.
+5. Source changes are visible and invalidate affected context or require renewed review.
+6. Correction/forgetting removes old values from current retrieval and reports remaining permitted metadata, backups and exports honestly.
+7. Work follows the existing separate proposal, authority, approval, execution and result path. Remembering never grants permission.
 
-1. The user selects an allowed local vault/project and can inspect what will be indexed. Obsidian is optional.
-2. The user asks a question. ALFRED retrieves authorised source passages and relevant accepted statements, with dates and uncertainty visible.
-3. The user says 'remember this'. ALFRED proposes a small, editable memory with a source, scope, memory type and retention policy. Nothing is silently promoted to permanent fact.
-4. The user accepts it. ALFRED records the judgement and optionally writes an explicitly approved note to its own inbox area, without overwriting unrelated human writing.
-5. A relevant source changes. ALFRED shows the difference, invalidates affected context and asks for a fresh review where necessary.
-6. The user corrects or forgets it. Current retrieval stops using the old value; the UI reports what remains in permitted audit metadata or backups.
-7. A follow-up asks for work. The existing separate authority, approval, execution and result path applies. Remembering something never grants permission to act on it.
-
-This is a target workflow. Some steps exist separately, but the complete loop is not shipped by this planning update.
+Substantial parts are integrated, but private-pilot acceptance still requires the remaining identity, storage and lifecycle safeguards plus selected real-data authorisation. Test the complete flow, not merely each button.
 
 ## Memory requirements
 
-| ID | Requirement | Current status / acceptance |
+| ID | Requirement | Acceptance direction |
 |---|---|---|
-| MEM-001 | Optional human-owned Markdown vaults, readable without ALFRED or Obsidian. | Partial: bounded read-only scanner exists. Harden configuration, exclusions and source health. |
-| MEM-002 | Stable document identity and revision history across edits, renames, deletes and sync conflicts. | Planned extension: do not infer identity from a filename or same display name alone; duplicate IDs require review. |
-| MEM-003 | Preserve source location, revision/hash and evidence basis on every derived memory. | Partial: note/claim provenance exists. Extend to all derived records and new document types. |
-| MEM-004 | Keep working, episodic, semantic, preference, commitment and procedural memory distinct. | Partial bounded conversations/manual statements; policies and automatic capture remain planned. |
-| MEM-005 | Proposed memories are inspectable, editable and reviewable before durable promotion. | Manual statement review exists; explicit capture and extraction proposals are planned. |
-| MEM-006 | Use reviewed statements in questions only while accepted, authorised, current, unambiguous and relevant. | Planned bridge; keep original evidence and human-judgement labels. |
-| MEM-007 | Preserve changing relationships using valid time and recorded time, disputes and supersession. | Partial narrow validity/conflict rules; full temporal history/query contract remains planned. |
-| MEM-008 | Hybrid retrieval earns its complexity against a lexical baseline. | Current simple keyword/link retrieval. FTS5, optional embeddings and reranking are planned experiments. |
-| MEM-009 | Apply identity/source access before retrieval, traversal, embeddings, reranking and provider egress; recheck before response. | Coarse credential/workspace checks exist; finer grants and opaque-leakage tests are required. |
-| MEM-010 | Correct/delete/revoke through dependent statements, snippets, indexes, summaries, vectors and caches. | Partial current-source invalidation. Complete deletion receipts, tombstones and backup accounting are planned. |
-| MEM-011 | Any vault write is a separate capability with exact content, destination, precondition and approval. | Not implemented. Start new notes in ALFRED/Inbox only; no unrestricted agent edits. |
-| MEM-012 | Search indexes and graph projections can be rebuilt without losing source or review history. | Some index rebuild exists; complete reconciliation and migration tests are required. |
-| MEM-013 | Provide portable, inspectable exports and clear retention settings. | Partial exports exist. Redaction, scope-limited manifests and lifecycle completeness remain planned. |
-| MEM-014 | Sync files without conflating file sync with identity, memory-ledger or runtime sync. | Not implemented. One selected sync client per device, explicit conflicts and restore rules. |
-| MEM-015 | Procedures are reviewed descriptions/workflow proposals, never executable instructions merely because retrieved. | Boundary retained; workflow learning and versioned procedure registry are future work. |
-| MEM-016 | Keep authored note links, reviewed claims and speculative suggestions visually distinct. | Separate v0.8 graphs exist. Bind future sphere/console views to real scoped data and truthful states. |
+| MEM-001 | Optional human-owned Markdown vaults, readable without ALFRED or Obsidian. | Preserve the bounded scanner; configuration, exclusions, source health, compatibility and documents remain explicit. |
+| MEM-002 | Stable document identity and revision history across edits, renames, deletes and sync conflicts. | Do not infer identity from filename or shared display name; retain rename evidence and duplicate-ID review. |
+| MEM-003 | Preserve source location, revision/hash and evidence basis on every derived memory. | Extend the implemented note/claim provenance to every derived record and new document type. |
+| MEM-004 | Keep working, episodic, semantic, preference, commitment and procedural memory distinct. | Preserve bounded conversations/manual types; capture policies and automatic proposals must remain explicit. |
+| MEM-005 | Proposed memories are inspectable, editable and reviewable before durable promotion. | Preserve preview and separate acceptance; extraction never silently accepts itself. |
+| MEM-006 | Use reviewed statements in questions only while accepted, authorised, current, unambiguous and relevant. | Preserve the implemented bridge, exact original evidence and human-judgement labels. |
+| MEM-007 | Preserve changing relationships using valid time and recorded time, disputes and supersession. | Preserve temporal review/history and explicit lineage; state the limits of as-of queries and historical validity. |
+| MEM-008 | Hybrid retrieval earns its complexity against a lexical baseline. | Keep frozen evaluation, evidence recall, irrelevant context, abstention, latency and access tests. No automatic new engine. |
+| MEM-009 | Apply identity/source access before retrieval, traversal, embeddings, reranking and provider egress; recheck before response. | Default-deny migration, opaque-leakage and mid-request revocation tests, including projections and action visibility. |
+| MEM-010 | Correct/delete/revoke through dependent statements, snippets, indexes, summaries, vectors and caches. | Complete receipts, tombstones, dependent deletion and backup/restore accounting; no unsupported secure-erasure claim. |
+| MEM-011 | Any vault write is a separate capability with exact content, destination, precondition and approval. | Preserve approved create-only ALFRED/Inbox writes; any broader write has independent acceptance. |
+| MEM-012 | Search indexes and graph projections can be rebuilt without losing source or review history. | Preserve atomic rebuild, catalogue/review history and migration tests; extend deliberately to new sources. |
+| MEM-013 | Provide portable, inspectable exports and clear retention settings. | Scope-limited manifests, redaction, history/lifecycle completeness, encryption and explicit exclusions. |
+| MEM-014 | Sync files without conflating file sync with identity, memory-ledger or runtime sync. | One selected file-sync policy per device, conflict/freshness and restore tests; no live database folder sync. |
+| MEM-015 | Procedures are reviewed descriptions/workflow proposals, never executable instructions merely because retrieved. | Preserve read-only registry and no-execution boundary; learning/versioned workflows remain reviewed future work. |
+| MEM-016 | Keep authored note links, reviewed claims and speculative suggestions visually distinct. | Preserve the real scoped graph layers; no decorative counts or fabricated suggestion layer. |
 
 ## Whole-product requirements retained
 
 | ID | Requirement | Acceptance direction |
 |---|---|---|
-| SYS-001 | Persistent person identity, paired devices, scoped credentials and revocation. | Migrate from credential-private history without automatically joining different people. |
+| SYS-001 | Persistent person identity, paired devices, scoped credentials and revocation. | Mature pairing and source defaults; migrate credential-private history without joining different people. |
 | SYS-002 | Private storage, secrets, exports, backups and restore lifecycle. | Approved key custody, deletion accounting and tested recovery before sensitive data. |
 | INT-001 | Replaceable reasoning/session runtime and bounded context assembly. | One authoritative executor; no model holds connector-wide credentials. |
-| INT-002 | Evaluate answer support, missing facts, contradictions and multi-turn context. | Publish failed cases and denominators; schema-valid citations are insufficient. |
-| ACT-001 | Exact action approvals, outbox, capability-specific idempotency and result verification. | Local drafts exist; each future connector needs its own effect/reconciliation acceptance. |
-| ATT-001 | Task-aware attention and durable, explicitly authorised routines. | Fixed routines exist; learned relevance remains advisory until measured. |
-| CON-001 | Official account/device connectors with least access and observable freshness. | Read-only test account first, then one harmless approved write. |
-| VOI-001 | Voice shares context without confusing generated, played and acknowledged speech. | Visible push-to-talk first; interruption/reconnect tests on actual hardware. |
-| OPS-001 | Role-limited team and operational workspaces, specialist-engine adapters. | Read actual ENDSTATE/Noir contracts; keep simulation distinct from observation. |
-| UX-001 | Premium operational and executive intelligence console, not an admin-dashboard default. | Preserve the approved black/graphite/ivory, sparse-amber direction and concurrent console work; do not claim implementation matches the target before inspection. |
-| RUN-001 | Explicit host lifecycle, pause, recovery, bounded offline capability and health. | Local process exists; no always-on deployment or native background-device claim yet. |
+| INT-002 | Evaluate answer support, missing facts, contradictions and multi-turn context. | Publish failed cases and denominators; schema-valid citations and word coverage are insufficient. |
+| ACT-001 | Exact action approvals, outbox, capability-specific idempotency and result verification. | Preserve local machinery; each external effect needs separate visibility, dispatch and reconciliation acceptance. |
+| ATT-001 | Task-aware attention and durable, explicitly authorised routines. | Preserve stated rules, budgets and pause; learned relevance advisory until measured, delivery modes explicit. |
+| CON-001 | Official account/device connectors with least access and observable freshness. | Existing export importers are not live accounts; read-only test account first, then a harmless approved write. |
+| VOI-001 | Voice shares context without confusing generated, played and acknowledged speech. | Existing read-aloud is output only; visible push-to-talk needs approval and actual interruption/reconnect hardware tests. |
+| OPS-001 | Role-limited team and operational workspaces, specialist-engine adapters. | Read actual interfaces, preserve tenancy and distinguish simulation from observation. |
+| UX-001 | Premium operational and executive intelligence console, not an admin-dashboard default. | Preserve approved black/graphite/ivory, sparse amber, interactive sphere and actual connected acceptance. |
+| RUN-001 | Explicit host lifecycle, pause, recovery, bounded offline capability and health. | Foreground host exists; managed service, native client and remote hosting have separate tests and activation gates. |
 
 ## Whole-product requirements added 2 October 2026
 
-Reconciled from the owner-supplied [plan reconciliation v1.1 and whole-product mandate](RECONCILIATION_2026-10-02.md). These are additional requirement IDs with traceable origins, not a second roadmap. Delivery state for every requirement is kept separately in [the requirement register](../plans/requirement-register.json); provider and architecture choices that need the owner are listed there and are not implied by these rows.
+Origins remain the [earlier reconciliation](RECONCILIATION_2026-10-02.md) and preserved sources. The [later conversation](sources/2026-10-03/LATER_CHAT_RECONCILIATION.md) clarifies the deployment research without choosing providers or relocating data by implication.
 
 | ID | Requirement | Acceptance direction |
 |---|---|---|
-| UX-002 | Project-centred focus: selecting a record sets a stable, visible working context that the inspector, graph and next question share; changing workspace or authority clears or revalidates it. Origin: reconciliation 3B and 3C. | Select a project, open its exact source, follow a supported relationship, ask a contextual question and clear it. Shared names or ownership never create edges. Unavailable, empty and denied states are truthful, never fixtures. |
-| ATT-002 | Executive records: goals, priorities, commitments, decisions, project milestones, preparation and follow-up held as authoritative records, with sources, owners and dates. Origin: reconciliation 3D and 4D. | The executive panel and graph read the same records. Inferred priorities are labelled recommendations, never silent obligations. Progress needs defined inputs. Cross-project insight requires permitted support from every contributing scope. |
-| RUN-002 | Distributed operation across enrolled trusted computers and an optional always-on coordinator, with one authority per job. Origin: 29 September infrastructure discussion via reconciliation 4A and 8. | Explicit enrolment and revocation; declared node capabilities; deliberate placement; one durable job identity; cancellation, bounded retries and reconciled outcomes; visible freshness when offline. No live database synchronised through a generic folder. |
-| RUN-003 | Isolated execution of bounded jobs on local or remote workers, with persistent and disposable lifecycles evaluated separately. Origin: reconciliation 4B and 8.4. | Declared inputs, limited file and tool permissions, scoped short-lived credentials, runtime and cost limits, logs, cancellation and verifiable outputs. A worker result is validated, never treated as permission. Forks never duplicate authority, credentials or effects. |
-| SYS-003 | Expandable file access: authorised on-demand reads, a bounded local cache, explicit offline availability, revisions, conflicts, quotas, export and recovery. Origin: reconciliation 4B and 8.4. | Authorised files are readable without a full local copy; revoked or unapproved files are excluded; cache size is enforced; authoritative databases, secrets, durable files, indexes and scratch space stay distinct. |
-| OPS-002 | Common capability contract for independent specialist products (ENDSTATE, 8BALL, Noir/Black State, Loc8, God's Eye). Origin: 27 September specialist discussion via reconciliation 4C. | Identity, capabilities, stable record IDs, observation basis, original timestamps, freshness, simulation or replay state, permissions, supported actions and receipts. A read-only adapter first; a contract is not proof that any adapter exists. |
+| UX-002 | Project-centred focus: selecting a record sets a stable, visible working context that the inspector, graph and next question share; changing workspace or authority clears or revalidates it. | Select, inspect, follow supported links, ask contextually and clear focus. Shared names never create edges; unavailable/denied states never fall back to fixtures. |
+| ATT-002 | Executive records: goals, priorities, commitments, decisions, project milestones, preparation and follow-up held as authoritative records, with sources, owners and dates. | Panel and graph read the same records; recommendations are not obligations, progress has defined inputs, cross-project insight requires permitted support. |
+| RUN-002 | Distributed operation across enrolled trusted computers and an optional always-on coordinator, with one authority per job. | Enrolment/revocation, node capabilities, placement, durable jobs, cancellation, bounded retries, reconciliation and offline freshness; no shared writable database file. |
+| RUN-003 | Isolated execution of bounded jobs on local or remote workers, with persistent and disposable lifecycles evaluated separately. | Limited inputs/files/tools, scoped credentials, resource/cost limits, cancellation and verifiable outputs; forks never duplicate authority or effects. |
+| SYS-003 | Expandable file access: authorised on-demand reads, a bounded local cache, explicit offline availability, revisions, conflicts, quotas, export and recovery. | Read without a full local copy, exclude revoked/unapproved files, enforce cache bounds and separate database/secrets/files/indexes/scratch. |
+| OPS-002 | Common capability contract for independent specialist products (ENDSTATE, 8BALL, Noir/Black State, Loc8, God's Eye). | Stable identity, capabilities, observation basis, original timestamps, freshness, simulation/replay, permissions and receipts. Contract v1/synthetic adapter is not real product integration. |
 
 ## Acceptance and evaluation
 
-Evaluate the complete remember/retrieve/correct/forget/action loop with invented data before private-data pilot. Mandatory negative cases include wrong workspace, same-name people, duplicate document IDs, lost source, revoked permission during model work, disputed memory, changed source during approval, sync conflict, stale backup restoration and a source note containing hostile instructions.
+Evaluate the complete loop with invented data before private pilot. Mandatory negative cases include wrong workspace, same-name people, duplicate IDs, lost source, revoked permission during model work, disputed memory, changed source during approval, sync conflict, stale backup restoration and hostile source instructions.
 
-Report evidence recall, unsupported-answer rate, appropriate abstention, temporal/conflict handling, stale-memory use, deletion completion, p50/p95 retrieval latency, model tokens and indexing resource costs. Separate correctness from responsiveness. Initial retrieval budget is no larger than the existing bounded packet until a measured change is approved. Set performance targets against named hardware and data volumes, not invented product-wide numbers.
+Report evidence recall, unsupported-answer rate, appropriate abstention, temporal/conflict handling, stale-memory use, deletion completion, p50/p95 retrieval latency, tokens and indexing resources on named configurations. Separate correctness from responsiveness. Do not enlarge bounded packets without measured justification.
 
-LongMemEval and LongMemEval-V2 are evaluation references, not proof that ALFRED passes them. No new model evaluation is launched by this document. A later permitted evaluation must keep answer keys out of model inputs, record frozen datasets/configuration, and respect the earlier tool restriction.
+LongMemEval and LongMemEval-V2 remain evaluation references, not proof ALFRED passes them. A permitted future evaluation keeps answer keys out of inputs and records frozen data/configuration. No new model evaluation or bypass of the earlier restriction is authorised by this document.
 
 ## Scope and non-goals
 
-Do not train a foundation model, rewrite a note editor, require a graph server, install every memory framework or introduce custom hardware to prove the first loop. Do not store everything forever. No covert audio/screen collection, unattended financial/security-sensitive control, autonomous use of force or safety-critical availability claim.
+Do not train a foundation model, rewrite a note editor, require a graph server, install every framework or introduce custom hardware to prove the first loop. Do not store everything forever. No covert audio/screen capture, unattended financial/security-sensitive control, autonomous use of force or safety-critical availability claim.
 
-Obsidian is the recommended optional editor, not a mandatory dependency. Third-party capabilities are candidates until version, licence, data egress, deletion and failure behaviour are tested. Code, model, plugin and hosted-service terms require separate review. A root permissive licence is not blanket clearance.
+Obsidian is optional. Code, model, plugin and service terms need separate review. Third-party candidates require pinned source/licence, egress, deletion and failure testing before adoption. Tauri, always-on VPS Core and Cloud/Private/Sovereign are research proposals with separate promotion gates, not runtime facts. Commercial provider/ownership research stays groundwork; no partner relationship, validated valuation or spend authority is implied.
 
-## Delivery status for this revision
-
-This revision changes research, requirements and execution plans. It does not connect a real vault, install memory engines, add external actions or upgrade the runtime. Existing source/tests and separate console work must be preserved. See [memory architecture](MEMORY_ARCHITECTURE.md), [Obsidian integration](OBSIDIAN_INTEGRATION.md), [repository landscape](../research/MEMORY_LANDSCAPE_2026-09-27.md) and [architecture decision](adr/MEMORY-001.md).
+The full PRD remains. Under PILOT-GROUNDWORK, build current-product trust/reliability and prepare later native/distributed/commercial work; do not automatically activate later stages because a task or PR passes.

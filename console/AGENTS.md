@@ -1,25 +1,15 @@
-# ALFRED console refinement instructions
+# ALFRED connected console instructions
 
-Read root AGENTS.md and brain SESSION_HANDOFF.md, then docs/COMPONENT_ARCHITECTURE.md,
-docs/BUILD_BRIEF.md, docs/NEXT_BUILDER.md and the latest refinement delivery receipt.
+Read root AGENTS.md, SESSION_HANDOFF.md and docs/NEXT_STAGE.md (paths from repository root), then console/docs/CONNECTED_CONSOLE.md, BUILD_BRIEF.md, COMPONENT_ARCHITECTURE.md and GRAPHICS.md. Older refinement handoffs are historical, not current backend-connection status.
 
-This presentation lane extends merged main 03e946fc3fb6fe0b540abe5ff52204de6f0f99ed.
-Older console PR13 is merged. Refresh actual remote heads; do not overwrite concurrent work.
-Preserve alfred/, web/, the memory programme and inert third-party archives.
+PR #18 merged the authenticated console with the Python backend in main 75947b8dd59a3161c862d2533850a032994778e2. Refresh current refs and preserve concurrent work. Keep alfred/, web/, the memory programme and inert archives intact. The real DeskClient and console API exist; do not rebuild them from a fixture-only assumption.
 
-Owner-selected interface: small metallic ALFRED mark in a slim icon rail; hover/focus/click
-expands labels as an overlay, never resizing the globe. True black, graphite, ivory, sparse
-amber. One executive panel, large knowledge sphere, bottom command input. No slogans,
-backdrop photos, distressed textures, fake telemetry or stock-dashboard redesign.
+Owner-selected interface: small metallic ALFRED mark in a slim icon rail; hover/focus/click expands labels as an overlay, never resizing the globe. True black, graphite, ivory, sparse amber. One executive panel, large knowledge sphere, bottom command input. No slogans, backdrop photos, distressed textures, fake telemetry or stock-dashboard redesign.
 
-Keep React/TypeScript, Three.js/R3F and original GLSL. DOM for accessible UI. No temporal
-brightness pulses, repeated canvas remounts or multiple final render owners. Measure
-actual frame behaviour and physical-device performance before claiming perfection.
+Keep React/TypeScript, Three.js/R3F and original GLSL. DOM for accessible text/forms. No temporal brightness pulses, repeated canvas remounts or multiple final render owners. Software-browser evidence is not physical-device performance certification. Native shell research is a separate client task, not a UI rewrite.
 
-Demo state is fictional and transient. Record and edge counts exclude decoration.
-Relationship mode shows only explicit records/links. No UI action grants server authority.
-ConsoleReadPort is a proposed interface, not an implemented HTTP client. Do not guess
-endpoints or weaken Origin/Host/loopback checks. No real model/audio/accounts in this lane.
+Demo mode remains fictional. Connected mode reads authorised backend data; decoration never counts as records. Preserve relationship layers, original evidence, scope/revision checks and truthful disconnected states. No UI state grants server authority. Investigate the audit's approval-visibility concern with a negative test before claiming it is fixed.
 
-Build, run all domain tests and real-browser acceptance. Preserve failures and screenshots.
-Publish normal source and exact branch/commit/PR receipt. No automatic merge or deployment.
+Read-aloud is output only and its previous tests used scripted synthesis. No microphone, live account or remote-host capability is implied. Keep Origin/Host/CSRF/loopback boundaries. No unapproved deployment or provider activation.
+
+Run typecheck/build, domain tests and real-browser acceptance for affected changes. Retain failures, actual screenshots and exact tested commits. Publish reviewable source without force-push or automatic merge.

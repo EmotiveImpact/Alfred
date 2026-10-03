@@ -1,0 +1,1058 @@
+{
+ "schema_version": 1,
+ "updated_on": "2026-10-02",
+ "authority": {
+  "requirements": "docs/PRD.md",
+  "sequence": "docs/ROADMAP.md",
+  "memory_programme": "plans/memory-backlog.json",
+  "sources": "plans/source-coverage.json"
+ },
+ "vocabulary": {
+  "decision": [
+   "accepted",
+   "clarified",
+   "proposal",
+   "research_candidate",
+   "deferred"
+  ],
+  "implementation": [
+   "not_started",
+   "partial",
+   "implemented_on_branch",
+   "accepted_implementation"
+  ],
+  "integration": [
+   "not_applicable",
+   "isolated",
+   "fixture_connected",
+   "backend_connected",
+   "externally_connected"
+  ],
+  "merge": [
+   "not_merged",
+   "branch_only",
+   "main_partial",
+   "main_partial_branch_extended",
+   "merged_to_main"
+  ],
+  "deployment": [
+   "not_deployed"
+  ]
+ },
+ "meanings": {
+  "implemented_on_branch": "Its stated acceptance passes on the integration branch; not merged or deployed.",
+  "accepted_implementation": "Owner-accepted after review. No requirement holds this state yet.",
+  "main_partial": "Part of the behaviour exists in main; the requirement is not complete.",
+  "main_partial_branch_extended": "Part exists in main and the integration branch extends it.",
+  "branch_only": "The relevant code exists only on the integration branch."
+ },
+ "workstreams": {
+  "console": "Premium console and its truthful connected states",
+  "memory": "M01 to M12 memory programme",
+  "executive": "Executive records and attention",
+  "reasoning": "Reasoning and agent runtime",
+  "actions": "Proposal, approval, outbox and results",
+  "connectors": "Account and device connectors",
+  "runtime": "Host lifecycle, distributed nodes, workers and files",
+  "specialist": "Independent specialist products",
+  "voice": "Voice and native interaction"
+ },
+ "no_completion_percentage": "There is no verified denominator for the whole product; none is claimed.",
+ "requirements": [
+  {
+   "id": "MEM-001",
+   "title": "Optional human-owned Markdown vaults",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M01",
+    "M08"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_m01.py",
+    "docs/evidence/memory-m01/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Read-only scanner in main; M01 selected-vault identity integrated on the branch. Full Obsidian compatibility, documents and sync unfinished."
+  },
+  {
+   "id": "MEM-002",
+   "title": "Stable document identity and revision history",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M01"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_m01.py",
+    "docs/evidence/memory-m01/RECEIPT.md",
+    "tests/test_sync_conflicts.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Markdown identity, rename continuity and duplicate rejection implemented on the branch. Two sync-conflict identity defects fixed and tested (a renamed original no longer moves its identity into the conflict copy; a copy carrying the same adopted ID no longer makes the vault unavailable); copies from unrecognised tools remain separate notes."
+  },
+  {
+   "id": "MEM-003",
+   "title": "Source location, revision and basis on every derived memory",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M01",
+    "M03",
+    "M08",
+    "M11"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_m03.py",
+    "docs/evidence/memory-m03/RECEIPT.md",
+    "tests/test_console_api.py",
+    "tools/check_console_connected_browser.py",
+    "docs/evidence/console-connected/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Notes, reviewed claims, conversation packets, the console projection and connector imports carry revision and hash. Documents pending."
+  },
+  {
+   "id": "MEM-004",
+   "title": "Distinct memory types",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M03",
+    "M04",
+    "M10"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_routines_procedures.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Bounded conversations and manual statements exist; memory type is recorded at capture. Commitment-typed statements feed the commitment review routine; procedural ones only the read-only procedure registry; other types are not used by routines. Automatic capture policies remain pending."
+  },
+  {
+   "id": "MEM-005",
+   "title": "Inspectable, editable proposals before promotion",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M04"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_capture_inbox.py",
+    "docs/evidence/memory-m04/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Explicit remember-this capture with preview, separate review and retention. The review queue in the console now accepts with a valid period, accepts as a replacement, disputes and withdraws (docs/evidence/temporal-review/RECEIPT.md)."
+  },
+  {
+   "id": "MEM-006",
+   "title": "Use reviewed statements only while accepted, authorised, current and relevant",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M03"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [
+    "MEM-009"
+   ],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_m03.py",
+    "docs/evidence/memory-m03/RECEIPT.md",
+    "tests/test_console_focus.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "M03 bridge integrated on the branch; console focus reuses it. Private data still gated by M02/M05."
+  },
+  {
+   "id": "MEM-007",
+   "title": "Valid time, recorded time, disputes and supersession",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M03",
+    "M07"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_m03.py",
+    "docs/evidence/memory-m03/RECEIPT.md",
+    "tests/test_memory_temporal.py",
+    "console/tests/temporal.test.ts",
+    "tools/check_temporal_review_browser.py",
+    "docs/evidence/temporal-review/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "First-party temporal review on the branch: a value-free recorded history of every review transition (with migration of earlier statements, unknown times marked), valid periods set at proposal, capture or the first decision and fixed afterwards, disputes, withdrawal and supersession with lineage both ways, withheld and restored support recorded as observations, and a deterministic as-of report over ALFRED's own records. Console review queue, statement history and as-of view. Limits: supersession does not keep the replaced statement true for an earlier period; history is not in exports; not a semantic conflict detector or general temporal query language; the optional external adapter decision stays with M07."
+  },
+  {
+   "id": "MEM-008",
+   "title": "Hybrid retrieval earns its complexity against a lexical baseline",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M06",
+    "M07"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "isolated",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_retrieval_evaluation.py",
+    "docs/evidence/memory-m06/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "M06 measured keywords against authorised-subset FTS5 on 44 frozen synthetic questions: keywords recall 0.92, FTS5 0.90, zero leakage under strict grants, about 76 per cent irrelevant context from packet assembly. Keywords stay default. Hybrid retrieval not built."
+  },
+  {
+   "id": "MEM-009",
+   "title": "Access applied before retrieval, traversal and egress; recheck before response",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M02",
+    "M07"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "docs/evidence/console-connected/RECEIPT.md",
+    "docs/evidence/memory-m02/RECEIPT.md",
+    "tests/test_console_api.py",
+    "tests/test_identity_workflows.py",
+    "tests/test_memory_programme_wip.py",
+    "tools/check_console_connected_browser.py",
+    "tests/test_jobs_http.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Strict source grants, policy epochs and model purpose from PR #17; console projection filters before counting. Enrolment/admin HTTP workflows unfinished. Losing a grant now withholds reviews and their values instead of destroying them. Job history, events and controls are also hidden from anyone who cannot read every bound source (the submitter keeps their own history; results stay gated)."
+  },
+  {
+   "id": "MEM-010",
+   "title": "Correct, delete and revoke through all dependents",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M05",
+    "M08"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_lifecycle.py",
+    "docs/evidence/memory-m05/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided. Forgetting and source removal now leave value-free history rows; restore replays a forget at the journal time."
+  },
+  {
+   "id": "MEM-011",
+   "title": "Vault writes are a separate approved capability",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M04"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_capture_inbox.py",
+    "docs/evidence/memory-m04/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Create-only inbox notes under ALFRED/Inbox with an explicit inbox.write grant, exact fingerprinted approval and read-back verification."
+  },
+  {
+   "id": "MEM-012",
+   "title": "Rebuildable indexes and projections without losing history",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M01",
+    "M05"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_m01.py",
+    "docs/evidence/memory-m01/RECEIPT.md",
+    "tests/test_rebuild.py",
+    "docs/evidence/memory-rebuild/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Knowledge history catalogue, plus an offline rebuild-index command that rebuilds note, link and anchor projections atomically from the canonical files and the durable catalogue, keeping every identity, revision and review, reporting changes, never reviving invalidated reviews, and tested across a version 1 to 2 schema migration. No rebuild for connector sources (re-import instead), over HTTP or on a schedule."
+  },
+  {
+   "id": "MEM-013",
+   "title": "Portable exports and retention settings",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M05"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_export.py",
+    "docs/SYNC.md",
+    "docs/evidence/memory-m14/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Credential-scoped portable export (plain JSON and Markdown, hashed manifest, explicit exclusions, private files, never inside a vault) on the branch. Missing: redaction inside records, encryption, export of the index or receipts, export over HTTP or from the console. Statement review history is not yet included in portable exports."
+  },
+  {
+   "id": "MEM-014",
+   "title": "File sync distinct from identity, ledger and runtime sync",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M09"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [
+    "SYS-003",
+    "RUN-002"
+   ],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_sync_conflicts.py",
+    "tests/test_placement.py",
+    "tools/check_sync_conflict_browser.py",
+    "docs/SYNC.md",
+    "docs/evidence/memory-m14/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Syncthing, Dropbox and Nextcloud/ownCloud conflict copies are recognised by exact name, recorded beside their originals, kept out of the index and surfaced in the knowledge view, the console projection and the console inspector; init, serve and restore refuse a data directory in a recognised sync folder, Git working tree or vault (marker detection only, no override); docs/SYNC.md separates the four kinds of sync. Missing: OneDrive, iCloud, Obsidian Sync and Git conflicts, network filesystem detection, acceptance with real sync clients."
+  },
+  {
+   "id": "MEM-015",
+   "title": "Procedures are reviewed descriptions, never executable because retrieved",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M10"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_routines_procedures.py",
+    "tools/check_routines_browser.py",
+    "docs/evidence/routines/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Read-only procedure registry with source and review state, plus authored procedure notes marked not reviewed. Tests feed instruction-like procedure text through routines, retrieval, answers, the conversation queue, a job, Pulse and approval dispatch and show no grant, credential, approval, setting, job or file changes. A versioned procedure workflow and workflow learning remain future work."
+  },
+  {
+   "id": "MEM-016",
+   "title": "Authored links, reviewed claims and suggestions visually distinct",
+   "workstream": "console",
+   "memory_jobs": [
+    "M03",
+    "M12"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_console_api.py",
+    "tools/check_console_connected_browser.py",
+    "docs/evidence/console-connected/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Console projection has separate note_reference, reviewed_claim and review_support layers. No speculative suggestion layer exists yet, so none is shown."
+  },
+  {
+   "id": "SYS-001",
+   "title": "Persistent person identity, paired devices, scoped credentials, revocation",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M02"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "docs/evidence/memory-m02/RECEIPT.md",
+    "tests/test_identity_workflows.py",
+    "tests/test_memory_programme_wip.py",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Person/device records, strict grants and epochs from PR #17, plus HTTP grant management, single-use invitations for another person, offline rotation, and device pairing by single-use code (own key per device, bounded authority and expiry, own-device revocation, documented recovery). Missing: multi-owner administration, team roles, shared review history across devices, strict grants by default."
+  },
+  {
+   "id": "SYS-002",
+   "title": "Private storage, secrets, exports, backups and restore",
+   "workstream": "memory",
+   "memory_jobs": [
+    "M05"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_lifecycle.py",
+    "docs/evidence/memory-m05/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Consistent backups and journal-replaying restore without resurrection are implemented. Application encryption and key custody are not.",
+   "owner_decision_needed": "Key custody approach for application encryption (OS keychain versus passphrase) before private data."
+  },
+  {
+   "id": "INT-001",
+   "title": "Replaceable reasoning runtime and bounded context assembly",
+   "workstream": "reasoning",
+   "memory_jobs": [
+    "M03",
+    "M07"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_memory_m03.py",
+    "docs/evidence/memory-m03/RECEIPT.md",
+    "tests/test_console_focus.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Bounded packets and an optional tool-free local model adapter. No dependable reasoning runtime selected. Console questions use the existing queue."
+  },
+  {
+   "id": "INT-002",
+   "title": "Evaluate answer support, missing facts, contradictions and context",
+   "workstream": "reasoning",
+   "memory_jobs": [
+    "M06",
+    "M07"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_retrieval_evaluation.py",
+    "docs/evidence/memory-m06/RECEIPT.md",
+    "tests/test_answer_support.py",
+    "tests/test_answer_evaluation.py",
+    "tools/evaluate_answers.py",
+    "docs/evidence/int-002/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Literal evidence checks plus a per-answer support report (word coverage, withheld reviewed statements by reason, skipped sources, follow-up context, model review findings) shown beside every console answer, and a deterministic source-mode evaluation with denominators and published failed cases. The blocked live-model comparison remains blocked and is not rerouted; no semantic or model-quality evaluation exists."
+  },
+  {
+   "id": "ACT-001",
+   "title": "Exact approvals, outbox, idempotency and result verification",
+   "workstream": "actions",
+   "memory_jobs": [
+    "M04",
+    "M11"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "docs/evidence/console-connected/RECEIPT.md",
+    "docs/evidence/memory-m04/RECEIPT.md",
+    "tests/test_console_api.py",
+    "tests/test_memory_capture_inbox.py",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Local drafts with exact fingerprints in main; the console now proposes, approves and cancels through the same ledger. No external effects. A second capability, vault.inbox_note, uses the same ledger with create-only execution and read-back reconciliation."
+  },
+  {
+   "id": "ATT-001",
+   "title": "Task-aware attention and authorised routines",
+   "workstream": "executive",
+   "memory_jobs": [
+    "M10"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial_branch_extended",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_executive_workflows.py",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md",
+    "tests/test_routines.py",
+    "tools/check_routines_browser.py",
+    "docs/evidence/routines/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Fixed Pulse routines with bounded history; in-app attention by four stated rules with authored snooze; three derived insight rules. Authored routines (commitment review and morning brief) now have schedules, run and nomination budgets, quiet hours, a show-now or hold-for-brief choice, per-routine and workspace pause, authority rechecked inside every run, and inspectable run outcomes holding citations and counts only. Reminders are accepted, accepted with a follow-up or dismissed; a draft offer only proposes a message.draft that still needs exact approval. In-app only; learned relevance unmeasured; fixed UTC offsets without daylight saving (owner decision)."
+  },
+  {
+   "id": "CON-001",
+   "title": "Official account and device connectors with least access",
+   "workstream": "connectors",
+   "memory_jobs": [
+    "M11"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [
+    "SYS-001",
+    "SYS-002"
+   ],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_connectors.py",
+    "tests/test_connector_formats.py",
+    "docs/CONNECTORS.md",
+    "docs/evidence/connectors/RECEIPT.md",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Read-only contract and owner-selected .ics and .vcf export importers through the unchanged note pipeline; explicit connector.read to import; least-access scopes; freshness through GET /desk/connectors, the connectors command and the console access panel, which also offers the connector.read switch; imported items are labelled as unchecked export reports. No live account, device, mail, token or write at any origin.",
+   "owner_decision_needed": "Which account (provider) for the first read-only test connector, and a synthetic test account."
+  },
+  {
+   "id": "VOI-001",
+   "title": "Voice with honest generated, played and acknowledged states",
+   "workstream": "voice",
+   "memory_jobs": [
+    "M12"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_voice.py",
+    "console/tests/voice.test.ts",
+    "tools/check_voice_browser.py",
+    "docs/evidence/voice/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Output only: read-aloud with on-device voices only, the exact spoken text shown, and generated, played (device report) and acknowledged (explicit action) recorded separately with a hash, never the text. No microphone is ever requested; no hardware or audio test; push-to-talk needs the owner decision.",
+   "owner_decision_needed": "Whether ALFRED may ever listen (visible push-to-talk first), and acceptance testing on real devices."
+  },
+  {
+   "id": "OPS-001",
+   "title": "Role-limited team and operational workspaces; specialist adapters",
+   "workstream": "specialist",
+   "memory_jobs": [
+    "M12"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [
+    "OPS-002"
+   ],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "not_started",
+   "integration": "not_applicable",
+   "merge": "not_merged",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Not started. The OPS-002 contract now exists for future read-only specialist adapters, but no ENDSTATE, Noir or other specialist interface has been made available, and role-limited team workspaces wait on M02 identity and grants."
+  },
+  {
+   "id": "UX-001",
+   "title": "Premium operational and executive console",
+   "workstream": "console",
+   "memory_jobs": [
+    "M12"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_console_api.py",
+    "tools/check_console_connected_browser.py",
+    "docs/evidence/console-connected/RECEIPT.md",
+    "docs/evidence/integration-2026-10-02/RECEIPT.md",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "PR #15 refinement integrated and connected to real records. Software rendering only; target-device visual, pointer and recovery checks remain for release."
+  },
+  {
+   "id": "RUN-001",
+   "title": "Explicit host lifecycle, pause, recovery, offline and health",
+   "workstream": "runtime",
+   "memory_jobs": [
+    "M09",
+    "M12"
+   ],
+   "origin": [
+    "SRC-PRD-0927"
+   ],
+   "depends_on": [],
+   "owner": "unassigned",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "main_partial",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_console_api.py",
+    "tools/check_console_connected_browser.py"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Foreground local process with pause; no managed or installed service. The host runs one local job worker thread, stopped with the desk. The connected console shows the host's own health report (host state, last cycle, vault scan, waiting questions, jobs, last backup for owners) and lets the owner pause and resume with confirmation. No offline-first operation or service manager."
+  },
+  {
+   "id": "UX-002",
+   "title": "Project-centred focus shared by inspector, graph and next question",
+   "workstream": "console",
+   "memory_jobs": [],
+   "origin": [
+    "SRC-RECON-V11",
+    "SRC-MANDATE-1002"
+   ],
+   "depends_on": [
+    "UX-001",
+    "MEM-016",
+    "INT-001"
+   ],
+   "owner": "build-session-2026-10-02",
+   "decision": "clarified",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_console_api.py",
+    "tools/check_console_connected_browser.py",
+    "docs/evidence/console-connected/RECEIPT.md",
+    "tests/test_console_focus.py",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "One workspace per credential, so workspace switching is exercised through grant change and revocation. Executive records are graph records linked to their project. The inspector now loads executive record detail (the client previously refused exec: identifiers)."
+  },
+  {
+   "id": "ATT-002",
+   "title": "Executive records: goals, priorities, commitments, decisions, milestones, follow-up",
+   "workstream": "executive",
+   "memory_jobs": [],
+   "origin": [
+    "SRC-RECON-V11",
+    "SRC-MANDATE-1002",
+    "SRC-MASTER-1001"
+   ],
+   "depends_on": [
+    "MEM-003",
+    "ACT-001"
+   ],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "implemented_on_branch",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_executive.py",
+    "tools/check_console_connected_browser.py",
+    "docs/evidence/executive/RECEIPT.md",
+    "tests/test_executive_workflows.py",
+    "console/tests/executive.test.ts",
+    "tools/check_executive_browser.py",
+    "docs/evidence/executive-2/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Authored, actor-private, version-checked records with responsible labels (optionally linked to a visible person record), decision options with explicit decide and reopen trails, deterministic preparation briefs assembled from current permitted material, in-app attention with snooze, and derived cross-project insights, in the backend and the connected console. Not built: a meeting record kind and meeting preparation, links from follow-ups to drafted actions, any delivery outside the app."
+  },
+  {
+   "id": "RUN-002",
+   "title": "Distributed operation across trusted nodes with one job authority",
+   "workstream": "runtime",
+   "memory_jobs": [],
+   "origin": [
+    "SRC-CHAT-0929-INFRA",
+    "SRC-RECON-V11",
+    "SRC-MANDATE-1002"
+   ],
+   "depends_on": [
+    "SYS-001"
+   ],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_jobs.py",
+    "tests/test_jobs_http.py",
+    "docs/JOBS.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Single-host stage 0: one durable job authority with leases, heartbeats, cancellation, bounded retries, effect_unknown reconciliation and reconnectable event cursors. No second node, mesh or enrolment of another computer.",
+   "owner_decision_needed": "Where the authoritative database and coordinator live; mesh control plane and key expiry policy (research/INFRASTRUCTURE_2026-10-02.md 7.3, decisions 1 and 2)."
+  },
+  {
+   "id": "RUN-003",
+   "title": "Isolated bounded jobs on local or remote workers",
+   "workstream": "runtime",
+   "memory_jobs": [],
+   "origin": [
+    "SRC-CHAT-0929-INFRA",
+    "SRC-RECON-V11",
+    "SRC-MANDATE-1002"
+   ],
+   "depends_on": [
+    "RUN-002",
+    "ACT-001"
+   ],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_jobs.py",
+    "tests/test_jobs_http.py",
+    "docs/JOBS.md",
+    "docs/evidence/console-connected/RECEIPT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Local-subprocess backend only: allowlisted first-party kinds, declared permitted inputs, wall-clock and output limits, no credentials. Not a sandbox, VM or remote worker. The connected console can run a job on the exact inspected note revision, follow its events and read the result back after a reload; job history follows strict per-person grants.",
+   "owner_decision_needed": "Compute vendor commitment (E2B Cloud, boxd, Modal or self-host only) and whether forks may hold ALFRED material (7.3 decision 5); confirm OpenShell identity (decision 8)."
+  },
+  {
+   "id": "SYS-003",
+   "title": "Expandable file access with bounded cache and explicit offline availability",
+   "workstream": "runtime",
+   "memory_jobs": [],
+   "origin": [
+    "SRC-CHAT-0929-INFRA",
+    "SRC-RECON-V11",
+    "SRC-MANDATE-1002"
+   ],
+   "depends_on": [
+    "SYS-002"
+   ],
+   "owner": "build-session-2026-10-02",
+   "decision": "accepted",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_jobs.py",
+    "tests/test_jobs_http.py",
+    "docs/JOBS.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Bounded content-addressed cache with a hard limit, LRU eviction, pins for offline availability and hash verification. No cloud storage.",
+   "owner_decision_needed": "Object storage vendor, region and spending ceiling; which scopes may leave the primary machine (7.3 decisions 3, 4 and 6)."
+  },
+  {
+   "id": "OPS-002",
+   "title": "Common capability contract for independent specialist products",
+   "workstream": "specialist",
+   "memory_jobs": [],
+   "origin": [
+    "SRC-CHAT-0927-SPECIALIST",
+    "SRC-RECON-V11",
+    "SRC-MANDATE-1002"
+   ],
+   "depends_on": [],
+   "owner": "build-session-2026-10-02",
+   "decision": "proposal",
+   "implementation": "partial",
+   "integration": "backend_connected",
+   "merge": "branch_only",
+   "deployment": "not_deployed",
+   "acceptance_evidence": [
+    "tests/test_capability_contract.py",
+    "docs/CAPABILITY_CONTRACT.md"
+   ],
+   "delivery": {
+    "branch": "claude/alfred-development-qpgxhg",
+    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+   },
+   "notes": "Contract version 1 (manifest and observation validation, simulation and assessment labelling, per-product source credential, actions declared but never enabled) feeds the existing evidence pipeline through a clearly fictional simulation adapter. No real product adapter: no ENDSTATE, 8BALL, Noir/Black State, Loc8 or God's Eye interface has been made available.",
+   "owner_decision_needed": "Accept or amend the contract; supply each product's real interface and terms before any adapter is written."
+  }
+ ]
+}

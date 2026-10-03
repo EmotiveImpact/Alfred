@@ -1,83 +1,80 @@
 # ALFRED architecture and current system boundaries
 
-<!-- ALFRED unified operational/executive baseline: 2026-09-27 -->
+Updated 3 October 2026. Category: operational and executive intelligence. Main `75947b8dd59a3161c862d2533850a032994778e2` integrates the core and authenticated console through PR #18. This document reconciles present boundaries and separates them from [next-stage research](NEXT_STAGE.md). It does not adopt a provider, a native framework or a new runtime. [Earlier architecture](archive/pre-stage-2026-10-03/ARCHITECTURE.md) is retained verbatim.
 
-**Current product category: operational and executive intelligence.** See [positioning](PRODUCT_POSITIONING.md). The owner-authorised development PR stack is now merged into `main`; start new work there. The real local backend and the newer React/Three.js console are both preserved, but the console still uses fictional fixtures and needs its authenticated backend adapter. Consolidation is not deployment, external integration or completion of the planned memory jobs. The broad source-library catalogue, not earlier archive counts, is the current inventory.
+## One intelligence, not one omnipotent model
 
-Updated 27 September 2026. Current requirements: [PRD.md](PRD.md). Memory specification: [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md). The original architecture is preserved in [archive/ARCHITECTURE-v01.md](archive/ARCHITECTURE-v01.md).
-
-## One personal intelligence, not one omnipotent model
-
-The model proposes. ALFRED assembles authorised context. Independently enforced policy authorises. Connectors execute. A durable ledger records intent, receipt and supported outcome. Replaceable voice, reasoning, extraction and retrieval components fit inside this boundary; they do not independently acquire every account credential.
+The model proposes. ALFRED assembles authorised context. Independent policy authorises. Capabilities execute. Durable records distinguish intent, receipt, supported outcome and acknowledgement. Replaceable voice/reasoning/extraction/retrieval components do not inherit every account credential.
 
 ```text
-Person / paired devices / optional Obsidian editor
-                    |
-             ALFRED console + sessions
-                    |
-          context and attention coordinator
-            /                       \
-  governed memory gateway      reasoning/runtime adapter
-            |                       |
-   sources, claims, indexes     typed action proposal
-                                    |
-                          authority and exact approval
-                                    |
-                        durable outbox + connector host
-                                    |
-                         receipt / result / audit ledger
+Current local installation
+  React/Three.js console + original web client
+                     |
+        same-origin session/CSRF boundary
+                     |
+       Python core + SQLite on local disk
+        /          |          |         \
+ sources/reviews  executive  actions    jobs
+        |          |          |         |
+ graph/context   routines   approvals  local first-party subprocess
+                     |
+          current host must remain running
 ```
 
-## Implemented baseline
+## Implemented boundaries
 
-The first-party Python service persists local data in SQLite and exposes an authenticated loopback browser interface. `KnowledgeStore` builds on the local service; conversation workers and fixed Pulse routines share the existing local host lifecycle. Markdown/project sources are read-only. The only action effect is an approved draft in ALFRED's own database, not an external message.
+The same loopback server serves `/console/` and its authenticated API. DeskClient reads permitted workspaces, graph projection and original record detail. Meaningful nodes come from existing source, reviewed-memory and executive services; decoration is not data. Authored, reviewed and executive relationship layers remain distinguishable. One workspace per credential is the current implementation, not the final multi-workspace/team model.
 
-Manual reviewed statements are stored separately from the authored note graph and have provenance/review/conflict/invalidity rules. They are not yet automatically included in model context. Model mode is optional and tool-free; current evidence rejection rules are limited heuristics. No general agent framework from the source archive has been fully integrated.
+Selected-vault identity, bounded reviewed-memory context and capture/review/inbox writing are integrated. Only accepted/current/relevant authorised statements enter context. Retain original support, IDs, review/validity/source bindings and final checks. Saved context reconstructs current values rather than copying permission into a model. Namesakes do not silently merge.
 
-The M01/M03 draft review branch extends that baseline with a bounded, actor-private reviewed-memory bridge. Only accepted/current/relevant/non-conflicting statements enter context; their exact original support shares the existing source budget. Namesakes retain distinct IDs and block model use pending clarification. Review/source/temporal/conflict bindings are rechecked at model egress, return, conversation persistence/display and separate draft approval/dispatch. Saved conversations reconstruct current values from review bindings rather than copying them. This is not a main merge, fine-grained grants, deletion/restore accounting or a graph-engine adoption. See [M03 evidence](evidence/memory-m03/RECEIPT.md).
+The approved effects remain local: drafts, create-only ALFRED/Inbox notes and bounded report/review/executive/job records. The action ledger owns exact approval and dispatch reconciliation. The job coordinator is separate execution bookkeeping with one authority, leases/events and bounded first-party jobs. Worker output does not grant permission or prove semantic correctness. LocalSubprocessBackend is not an untrusted-code sandbox or second machine.
 
-The functional React/Three.js `console/` implementation is preserved alongside `web/`. The console runs fictional fixture interactions; do not infer a live backend, note-app integration or deployment from the merge. This planning revision changes no application or UI source.
+Pairing, grants, revocation and source-dependent lifecycle checks exist but are incomplete. The audit's approval-projection visibility concern remains to be reproduced. Application encryption and key custody are not implemented. Backup/restore and forget controls do not prove secure erasure of every copy. Export importers are not live accounts; read-aloud is not microphone input; the specialist contract has only a synthetic adapter.
 
-## Memory integration decision
+## Storage and authority
 
-Markdown is a human knowledge surface, not an action database. Retain original source references for imported account/document data. Keep working episodes, accepted semantic statements, preferences, commitments and procedures distinct. Use the existing review and authority store as the source of truth for status; graph/vector engines provide rebuildable projections and proposed extraction.
+Keep user-owned Markdown as a human authoring surface, separate from the action/memory database. Keep original sources and reviewed claims distinguishable. Use the existing authoritative records; any future graph/vector engine is a replaceable projection unless deliberately justified otherwise.
 
-The proposed memory gateway is the only context route for conversation, attention and later ENDSTATE requests. It filters permissions before ranking and graph traversal, preserves source and review basis, enforces a context budget and rechecks grants/revisions before output. Interfaces and lifecycle are detailed in [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md).
+SQLite remains on one host's local disk at a time. File sync is not database/ledger/runtime sync. Keep credentials, databases, durable user files, rebuildable indexes, cache, backups and scratch distinct. A content-addressed cache and a filesystem mount do not enforce grants without ALFRED's policy layer.
 
-## Storage and deployment
+PostgreSQL/pgvector remains a later concurrency/deployment option, not a mandatory rewrite. Do not deploy a fleet of services or a graph server to prove the first personal workflow. Measure the workload and failure model first.
 
-Start with the existing modular local service, SQLite and a measured FTS5 lexical projection. Add vectors or a graph engine only after the contract and evaluation gate. Do not deploy a fleet of microservices to prove the first personal workflow. PostgreSQL/pgvector is a later concurrency/deployment option, not a mandatory replacement now.
+## Proposed later topology: research, not an active deployment
 
-Personal, company and operational/client scopes require explicit identity, grants, key custody, retention and egress policy. Credential IDs are not a mature paired-person/device system. Database labels or graph group IDs do not enforce all isolation requirements. Separate hostile workloads at a real process/filesystem/network boundary.
+```text
+          optional always-on ALFRED coordinator
+          approved home host OR approved cloud host
+                  /          |          \
+        desktop client   other client   enrolled workers
+             |
+       local node capabilities and local-only files
 
-The application is not yet encrypted at application level and is not approved for sensitive operational data. Vault sync is independent of the live SQLite ledger. Backups must have separate retention and restore procedures that reapply current revocations/deletion tombstones.
+  optional object/file tier behind a bounded authorised cache
+  optional isolated persistent/disposable execution backends
+```
 
-## Candidate components, not installed dependencies
+The later conversation favours continuity when a laptop sleeps. The authority host, data location, keys, remote authentication, provider/region and spend are still decisions. One active authority per job does not imply all personal data must move to a public-cloud server. Define local-only data and unavailable capabilities explicitly. No writable SQLite file sync or silent multi-master arrangement.
 
-Obsidian filesystem vault: primary authoring/reading interoperability. Optional official plugin/CLI/headless clients have separate permissions and lifecycle.
+A Tauri/Rust shell retaining the React console and Python services is a proposal to compare with alternatives. Use native code only where justified by OS/security/performance needs; no wholesale rewrite. Test WebGL, sidecar lifecycle, IPC, key storage, signing and updates on actual targets before adoption. Desktop packaging and hosted operation are independent; neither supplies the other's safety controls.
 
-Graphiti: first narrow temporal projection/extraction candidate. Cognee: alternative ingestion/recall pipeline. Mem0: preference extraction comparison. None can silently decide truth, invalidate accepted ALFRED history or alter authority. Basic Memory is a reference/interoperability candidate pending current AGPL terms.
+Design a remote transport with an explicit threat model and revocation path; do not expose the current development listener by weakening checks. Separate local test prototypes from deployed remote clients. The user's devices, accounts, private information and microphone remain unavailable until specifically authorised.
 
-Hermes, nanobot and QwenPaw remain runtime candidates from the earlier programme. LiveKit/Pipecat remain voice transport candidates. Jev remains an advisory classification component, not a truth or authorisation service. OpenSandbox remains an execution-containment candidate. New memory research does not install or promote any of these.
+## Candidate components
 
-OpenFGA/OPA may inform finer authorisation. Nango may inform OAuth/connectors subject to edition/licence review. Prefer one official read-only connector first rather than adopting a universal integration platform without a tested need. References and limitations: [research landscape](../research/MEMORY_LANDSCAPE_2026-09-27.md).
+The earlier source catalogue and infrastructure report remain research. Graphiti/Cognee/Mem0/Basic Memory, Hermes/nanobot/QwenPaw, LiveKit/Pipecat, Jev, OpenSandbox, OpenFGA/OPA and Nango are not adopted by mention. OpenSandbox and NVIDIA OpenShell are distinct candidates. boxd/E2B/OpenShell, Space/SpaceFS, storage and mesh providers are evaluated behind replaceable interfaces, not made the job or memory authority.
 
-## Actions and long-running work
+Inspect exact pinned code/licences, editions, data egress and failure/deletion behaviour before adoption. The source library remains inert. Self-hosted is not automatically open source; a code licence does not clear a model, dataset or hosted service.
 
-Preserve exact proposal parameters, actor/workspace, expiry, source preconditions and approval fingerprints. Recheck before dispatch. An ambiguous timeout or interruption is not an invitation to repeat an irreversible effect. Receipt, supported result and human acknowledgement are separate records.
+## Actions, routines and outcomes
 
-'Create note' will be a new capability, not a bypass through the memory API. File/database coordination needs a journal and explicit reconciliation; it is not one atomic transaction. Begin with user-reviewed new inbox notes.
+Bind exact parameters, actor/workspace, expiry and source conditions to approval; recheck before dispatch. Do not replay uncertain irreversible effects blindly. Cancellation, rollback and snapshot restore are not undo of an external effect.
 
-Pulse currently has fixed local reports and explicit interval opt-in. Models, arbitrary scripts and external account writes are not routine payloads. A later attention engine may nominate useful work but cannot silently expand its own capabilities. The host must be running; this task installs no daemon or remote worker.
+Pulse and authored routines use stated kinds, schedules/budgets and independent authority. Retrieved procedure text remains inert. Fixed-offset time handling, authoring across paired devices and other remaining workflow questions need explicit decisions/tests. No installed always-on service is established by routine scheduling code.
 
-## Voice, devices, team and specialist engines
+Voice shares context and permissions; capture, retention and upload are distinct decisions. Specialist products remain independent, with observation, report, simulation, analysis, result and acknowledgement separately labelled. No autonomous use-of-force control.
 
-Voice must share session and permissions with text. Capture, recording retention and cloud upload are separate permissions. Generated, played and acknowledged audio require distinct states; stopping speech does not undo a dispatched action. Start visible push-to-talk and named-device tests before always-available modes.
+## Observability, testing and promotion
 
-Future Home Assistant, account and device adapters expose narrow capabilities with source freshness. ENDSTATE receives scoped evidence and returns analysis with assumptions, never a fabricated observation. Noir integration must follow its actual authenticated API and acknowledgement semantics. No such integration is claimed here. Operational scenarios remain simulated/non-critical first, with no autonomous use-of-force authority.
+Inspect evidence age, source health, queues, retries, context size, resources and outcomes without retaining secrets or default raw transcripts. Preserve pause/revoke/export/forget. Measure correctness separately from responsiveness; the existing literal support report is not a semantic verifier.
 
-## Observability and changes
-
-Record evidence age, route reasons, queues, retries, revisions, token budgets and actual outcomes without retaining secrets or default raw private transcripts. Provide inspect, pause, revoke, export and forget controls. Measure latency, recall, abstention and failures on named configurations.
-
-Preserve the previous blocked live-model-comparison restriction. Documentation and deterministic contract tests are separate from model experiments. Upstream source quarantine remains inert; no nested prompt, script or AGENTS file can change this task's authority. Each dependency adoption needs its own code/model/service/licence/egress review.
+Read [SECURITY_AND_DATA.md](SECURITY_AND_DATA.md), [AUDIT_2026-10-03.md](AUDIT_2026-10-03.md) and [NEXT_STAGE.md](NEXT_STAGE.md). The current task may build Track A and prepare opt-in synthetic Track B groundwork. Private pilot, hosted infrastructure, partner outreach and commercial/owned capacity require their gates; a green CI run never activates them automatically. The restricted live-model comparison remains unexecuted and must not be rerouted.

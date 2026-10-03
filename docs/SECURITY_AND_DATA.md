@@ -1,86 +1,55 @@
 # Security and data boundaries
 
-Design requirements, not a security certification. The offline prototype does not
-implement authentication, encryption, durable grants, connector isolation or real effects.
+Updated 3 October 2026 against main `75947b8dd59a3161c862d2533850a032994778e2`. This is a current boundary summary and release-gate document, not a security certification. The [earlier prototype description](archive/pre-stage-2026-10-03/SECURITY_AND_DATA.md) is preserved. The [audit](AUDIT_2026-10-03.md) sampled source and CI; it is not a penetration test.
 
-## Threats and required controls
+## Implemented controls and remaining gaps
 
-| Threat | Required response | Current delivery |
+| Area | Implemented boundary | Remaining acceptance |
 |---|---|---|
-| Retrieved text or audio tries to redirect an agent | Treat observations as untrusted data; constrain tools, egress and credentials outside the model | Effect-free contract only; no LLM adversarial evaluation |
-| Personal/work/client context crosses boundaries | Authenticated workspace access, separate credentials/retention, explicit audited cross-scope grants | Synthetic scope tests, not tenant security |
-| Approval applies to changed action | Immutable proposal/parameter binding; expire and recheck at dispatch | In-memory contract tested |
-| Timeout causes repeated side effect | Durable outbox, capability-specific idempotency, status reconciliation | Future implementation |
-| A receipt is presented as success | Separate accepted/received/result evidence/acknowledgement; capability-specific verification | State distinction tested with fixture signals |
-| Stale or out-of-order observations appear live | Preserve source time, expiry, revision and conflict handling | Subset tested in replay |
-| Ambient collection exceeds consent | Visible session/capture state, minimal retention, explicit source permissions and pause | Proposed; no microphone exists here |
-| Malicious or compromised plugin bypasses policy | Isolate process, filesystem, network and secret access; reviewed capability manifest | No plugins executed |
-| A device is lost or compromised | Revoke device keys/grants, rotate scoped credentials, expire local caches | Future implementation |
-| Imported source changes provenance or executes | Pinned commits, hashes, immutable quarantine, no installs/skill discovery | Importer plus byte verification |
+| Local browser access | Same-origin loopback server, authenticated sessions, CSRF and Host/Origin checks. | Explicit remote-host threat model and transport; no public exposure by changing the bind. |
+| Identity and source access | Person/device records, single-use pairing, purpose-specific grants, revocation and current-source checks. | Strict-default migration, complete shared-person/team semantics and cross-surface negative tests. |
+| Console projection | Real source/review/executive data, separate layers and original provenance. | Audit concern: approval text/path visibility must be reproduced or disproved for restricted same-workspace readers. |
+| Actions | Exact fingerprints, approvals, outbox and bounded local effect reconciliation. | External capabilities and read visibility each require independent acceptance. |
+| Source text/procedures | Data cannot confer credentials or execute merely by retrieval. | No general model adversarial-quality or arbitrary-plugin isolation certification. |
+| Memory/lifecycle | Review state, invalidation, forget/source-removal receipts and journal-replaying restore. | Complete dependency/copy accounting, retention/export coverage, application encryption and key custody. |
+| Jobs/cache | Durable authority, leases, cancellation, event cursors, bounded first-party subprocesses and content-addressed cache. | Actual isolation, remote workers, cloud storage and untrusted-code acceptance. |
+| Voice/connectors | Local read-aloud state accounting; read-only selected export importers. | No microphone, real account, device-control or real audio-hardware acceptance. |
+| Runtime | Foreground host, pause and health reporting. | Installed/supervised service, crash/restart/restore and remote deployment acceptance. |
 
-## Authority is not an LLM opinion
+The first negative test in the active stage concerns potential approval disclosure, not a confirmed ability to approve another actor's action. Keep findings, hypotheses, test results and risk decisions separate.
 
-Do not ask a model whether it is allowed to unlock, pay, disclose or execute, then treat
-its answer as the grant. Models may help classify a request but the permission service
-must enforce an authenticated policy independently. Voice likeness and text claiming to
-be the owner are not authentication. A trusted connector can still report incorrect data.
+## Authority is independent of the model
 
-The prototype receives `authenticated_source`, `actor` and `policy_allows` as trusted
-function arguments solely to test contracts. Exposing those directly to an untrusted API
-client would not produce a secure service. Build real session/device authentication,
-server-side grant lookup and connector-owned result proofs before live effects.
+Models may propose or classify; they do not grant permission to unlock, pay, disclose or execute. Voice likeness and text claiming to be the owner are not authentication. A trusted source can still be wrong. Bind exact actor/workspace, content, destination, revisions, expiry and permitted capability to approval and recheck at dispatch. A receipt, signature or hash does not by itself prove the requested real-world outcome.
 
-## Scope and retention
+Scope checks apply before retrieval/traversal and before exposure or egress as appropriate. An action's ownership flag is not a substitute for source visibility. Loss of access must clear/withhold relevant UI and results. Test counts/labels/paths as well as record bodies. Maintain separate personal, company and client/team boundaries; the current local implementation is not tenant-security certification.
 
-Create separate personal, business and client workspaces. Minimise context passed to a
-model or specialist engine. Keep source provenance and correction history. Document
-provider egress, permitted regions, retention and deletion behaviour before collecting
-real information. Use established cryptographic libraries/services, not custom crypto.
+## Private storage, deletion and recovery
 
-Proposed defaults: no persistent raw audio; short explicit working context; opt-in saved
-memory; client-defined operational retention; redacted diagnostics. Collection consent,
-recording retention and sharing are separate decisions. Legal/privacy obligations depend
-on deployment and require qualified review; this document is not jurisdictional advice.
+Synthetic data remains the default until the relevant private-pilot gates pass and the owner approves a selected workspace. Keep the live database/WAL, keys and indexes outside vaults and file-sync folders. File sync, memory-ledger sync and runtime coordination are different systems.
 
-A public development repo is not an operational archive. Never commit credentials,
-private contacts, briefings, voiceprints, recordings, location histories or client data.
-The fixtures in this work are invented and have no operational authority.
+Choose key custody against the threat model: local disk protection, application encryption, keychain integration, passphrase unlock and cloud secret custody do not provide identical protections. Use reviewed cryptographic implementations, not custom crypto. Copying encrypted data to a host that also has its decryption key is not end-to-end confidentiality against that host. Always-on reboot recovery and user-held unlock involve an explicit trade-off.
 
-## Connections and secrets
+Backups/exports need their own retention, encryption and restore rules. Reapply current revocations and deletion records when restoring. Distinguish deletion from current views, inaccessible encrypted remnants and physical secure erasure. A VACUUM or database scan alone cannot prove removal from external exports, WAL, old snapshots, backups or media. Retained value-free history must be documented and permissioned.
 
-Prefer narrow OAuth/service scopes or equivalent authenticated capabilities. Bind tokens
-to intended audiences; do not expose provider secrets to models, browser JavaScript or
-untrusted agent processes. MCP does not remove these obligations. Reference:
-https://modelcontextprotocol.io/docs/2025-11-25/tutorials/security/security_best_practices
+## Native and cloud research is not deployment
 
-The first connector slice (CON-001, on a review branch) reads only export files the owner
-selects: no token, network or polling, nothing written at the origin, least-access read
-scopes, an explicit `connector.read` grant to import, and per-instance source keys kept in
-the private data directory outside every vault. See [connectors](CONNECTORS.md). No live
-account connector exists.
+The active [stage](NEXT_STAGE.md) permits research, code review, local fixes and bounded synthetic prototypes. It does not approve provider accounts, purchases, public listeners, private data, live connectors, owner-device enrolment, microphone capture or commercial launch. A successful build or merged PR does not install a service.
 
-Official API first. Browser control has a separate logged-in session threat model and
-requires its own allowlist, sandbox, download/upload restrictions and approval path.
-Do not install third-party skills merely because a model recommends them.
+A native shell should expose narrow OS operations through an audited boundary; React code must not inherit unrestricted filesystem or secret access. Tauri/Rust is a candidate, not a certification. Test the actual OS/webview/sidecar and permissions. Remote mode must preserve equivalent independent authentication, authorisation and request protections rather than bypass existing loopback checks.
 
-## Operational boundary
+Keep one authority per job. Do not file-sync two writable databases. Do not fork credentials, entropy-sensitive identity or outstanding effect authority into several workers. Snapshots and cancellation are not undo of an external effect. Current subprocess tripwires are not sandbox isolation.
 
-Initial operational work is synthetic replay. Subsequent exercises must be supervised
-and non-critical, with participants aware that ALFRED is experimental. Preserve manual
-communications and established procedures. No autonomous use-of-force control. Security
-sensitive actions require a separately reviewed capability and strong human authority;
-no blanket 'lock everything down' command is implemented.
+## Connectors, providers and third-party content
 
-Degradation must be obvious: stale source, lost connection, full queue, failed connector,
-unknown outcome or unavailable reasoning. Never interpret lack of data as confirmation
-of safety. Verification wording must match what the sensor/service can actually establish.
+Use official narrow account APIs where available, with scoped tokens kept out of browser JavaScript, model context and untrusted processes. Export-file import is not live account access. Browser automation has its own logged-in session, download/upload, isolation and approval threat model.
 
-## Supply-chain review before runtime integration
+Retrieved notes, web pages, source-library instructions and skills are untrusted data. third_party remains inert; do not execute its code or follow nested instructions. Adoption requires exact pinned source, root/nested licence and dependency/model/service terms, data egress, failure/deletion testing and an explicit record. A source manifest is not a deployed SBOM, and a hash is not proof of benign behaviour.
 
-Check root and nested licences, dependencies, model weights, voice assets, trademarks,
-packaging scripts and update behaviour. Generate a dependency inventory from the actual
-chosen runnable environment. Imported source files are not that environment and therefore
-are not an SBOM of a deployed ALFRED. Hashes establish byte identity, not benign intent.
+Research candidate lists, startup credits, vendor claims and early chat cost/valuation estimates grant no purchasing or outreach authority. Cloud/Private/Sovereign labels are proposals, not guarantees. Jurisdiction-specific legal/security obligations need appropriate review; this document is not legal advice.
 
-Agent-generated code also needs review. An upstream README or AGENTS file cannot expand
-this task's authority. Only reviewed ALFRED-owned workflows may execute in CI.
+## Operational boundary and evidence
+
+Use synthetic replay and supervised non-critical exercises. No safety-critical availability, covert capture or autonomous use-of-force authority. Missing data does not establish safety; stale sources, connector failures, full queues, unavailable models and unknown outcomes must be visible.
+
+Preserve the existing blocked live-model-comparison restriction without retry or rerouting. Test source/permissions/lifecycle correctness independently of model answer quality. Report exact revision, configuration, negative cases and limitations. Keep private data, keys, transcripts and client material out of this public repository and its CI logs.
