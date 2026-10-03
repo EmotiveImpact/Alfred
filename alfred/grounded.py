@@ -75,6 +75,11 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
         principal=store.authenticate(db,bearer,{'owner','reader'})
         before=grant_revision(db,principal,store.now())
     terms = question_terms(question)
+    # Requested model operations are not additional corpus topics. Keep the
+    # frozen comparator's token handling intact and use the narrower set only
+    # for the new relevance rule (including accumulated follow-up questions).
+    selection_terms = terms if selection_policy == 'baseline' else [
+        t for t in terms if t not in {'summarise', 'summarize'}]
     focus_kind, focus_id = parse_focus(focus)
     graph = store.knowledge(bearer, purpose=purpose)
     ranked, notes, skipped, coverage = [], {}, [], {}
@@ -90,8 +95,8 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
         notes[meta['id']] = (meta, note)
         title = (meta['title'] + ' ' + meta['path'] + ' ' + ' '.join(meta['tags'])).casefold()
         body = note['body'].casefold()
-        matched = sum(t in body or t in title for t in terms)
-        score = matched * 4 + sum(t in title for t in terms) * 3
+        matched = sum(t in body or t in title for t in selection_terms)
+        score = matched * 4 + sum(t in title for t in selection_terms) * 3
         coverage[meta['id']] = (matched,score)
         if matched:
             ranked.append((score, meta['path'], meta['id']))
@@ -104,7 +109,7 @@ def retrieve(store, bearer, question, *, purpose='read', ranking='keywords', foc
     if selection_policy == 'relevant':
         # No packet filling from a weak singleton match on a longer question.
         # This is lexical relevance, not an entailment or answer-quality claim.
-        required=max(1,(len(terms)+1)//2)
+        required=max(1,(len(selection_terms)+1)//2)
         floor=max((score for matched,score in coverage.values() if matched>=required),default=0)*.5
         ranked=[r for r in ranked if coverage[r[2]][0]>=required and coverage[r[2]][1]>=floor]
     if focus_kind == 'note' and focus_id not in notes:

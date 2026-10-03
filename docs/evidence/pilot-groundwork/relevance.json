@@ -9,7 +9,7 @@
     "frozen_set_sha256": "bf9eb18e8532be8e80e2abb3e6d188ace7371e5cb7e875cbe16bcd3289f7507c"
   },
   "heldout_sha256": "e90b74f7f5fefe499b40a747b62a02dd5514aa120da95403a48859bde4591271",
-  "runtime_sha256": "1c3a228628728904d470b804546298cda576ca8587da2825a756fab6b38cc70a",
+  "runtime_sha256": "ca98e4668ecaf22809275a54c86cf81ada20ae118dc4c32647318a3c3795c7df",
   "development": {
     "baseline": {
       "queries": 44,
@@ -24,8 +24,8 @@
       "mean_excerpt_characters": 576.5,
       "latency_ms": {
         "calls": 132,
-        "p50": 45.17,
-        "p95": 48.05
+        "p50": 47.58,
+        "p95": 51.63
       },
       "denied_evidence_items": 0,
       "per_query": [
@@ -632,8 +632,8 @@
       "mean_excerpt_characters": 259.4,
       "latency_ms": {
         "calls": 132,
-        "p50": 45.17,
-        "p95": 47.54
+        "p50": 47.6,
+        "p95": 51.09
       },
       "denied_evidence_items": 0,
       "per_query": [
@@ -1132,8 +1132,8 @@
       "mean_excerpt_characters": 178.8,
       "latency_ms": {
         "calls": 54,
-        "p50": 10.78,
-        "p95": 11.43
+        "p50": 11.44,
+        "p95": 13.6
       },
       "denied_evidence_items": 0,
       "per_query": [
@@ -1362,8 +1362,8 @@
       "mean_excerpt_characters": 74.9,
       "latency_ms": {
         "calls": 54,
-        "p50": 10.87,
-        "p95": 12.3
+        "p50": 11.66,
+        "p95": 14.42
       },
       "denied_evidence_items": 0,
       "per_query": [

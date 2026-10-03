@@ -35,6 +35,11 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(retrieve(self.store, self.owner, 'Meridian orbital launch velocity')['evidence'], [])
         self.assertTrue(retrieve(self.store, self.owner, 'Meridian orbital launch velocity', selection_policy='baseline')['evidence'])
 
+    def test_summary_operation_does_not_raise_a_follow_up_topic_floor(self):
+        # Same accumulated-topic shape as the actual conversation browser test.
+        packet = retrieve(self.store, self.owner, 'Meridian ferry status owns Summarise Meridian ferry')
+        self.assertEqual([e['path'] for e in packet['evidence']], ['Ferry.md'])
+
     def test_explicit_focus_keeps_bounded_authored_link_context(self):
         note = next(n for n in self.store.knowledge(self.owner)['nodes'] if n['path'] == 'Ferry.md')
         packet = retrieve(self.store, self.owner, 'What should I inspect?', focus='note:' + note['id'])

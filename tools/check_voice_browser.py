@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as temp:
         page.get_by_label('Access key').fill(keys['owner']); page.get_by_role('button', name='Sign in').click()
         expect(page.locator('.connection-state')).to_have_text('Connected', timeout=15000)
         command = page.get_by_label('Command or search')
-        command.fill('What still needs confirming?'); command.press('Enter')
+        command.fill('What needs equipment collection confirmation?'); command.press('Enter')
         ask = page.get_by_role('dialog')
         expect(ask.locator('.evidence').first).to_be_visible(timeout=15000)
         return page, ask
