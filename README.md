@@ -78,7 +78,7 @@ python3 -m alfred.desk access --data-dir "$ALFRED_DATA"        # prints the owne
 python3 -m alfred.desk serve  --data-dir "$ALFRED_DATA"        # http://127.0.0.1:8765
 ```
 
-Open `http://127.0.0.1:8765/console/` (or `/` for the original interface) and sign in with the owner key. The host is a foreground process: scanning, the conversation queue, Pulse and routines run only while it is running. Ctrl+C stops it; everything stays on disk. Nothing is installed as a service and nothing is sent anywhere.
+Open `http://127.0.0.1:8765/console/` (or `/` for the original interface) and sign in with the owner key. The host is a foreground process: scanning, the conversation queue, Pulse and routines run only while it is running. Ctrl+C stops it; everything stays on disk. Nothing is installed as a service. The default configuration sends nothing; optional LiveLens calls require explicit installation and grants.
 
 ### 5. Use your own notes (optional)
 
@@ -102,6 +102,12 @@ The vault is read only. ALFRED never writes into it except through the approved 
 | `connector-add --connector ics-export\|vcf-export --connector-label L` | Add a read-only calendar or contacts export connector |
 | `connector-import --connector-source ID --export-file FILE [--dry-run]` | Import an export file you chose |
 | `connectors` | List connectors and their freshness |
+| `livelens-connect --livelens-config FILE [--allow-livelens-collection]` | Install an explicit LiveLens source connection; capture control is opt-in |
+| `livelens --tool discover\|read\|propose\|approve\|dispatch\|reconcile` | Use LiveLens tools with current source grants and exact capture approvals |
+
+See [LiveLens setup and tools](docs/LIVELENS_INTEGRATION.md) for private token
+storage, agent transport routes and bounded capture. The existing conversation
+model does not automatically invoke these tools.
 
 Optional flags: `--port` (1024 to 65535, default 8765), `--local-model NAME --model-port 11434` for an opt-in, tool-free model on an Ollama server you already run (nothing is downloaded; off by default), `--vault-id-key alfred_id` to adopt stable note identifiers from frontmatter.
 
@@ -130,7 +136,7 @@ Each `tools/check_*_browser.py` script starts a real loopback server over the sy
 - **Backend.** `alfred/local.py` is the store and authentication; `alfred/knowledge.py` scans vaults and indexes notes; `alfred/desk_http.py` is the loopback server with HttpOnly sessions, CSRF tokens and Host/Origin checks; `alfred/reviewed_memory.py` and `alfred/memory_history.py` hold reviewed statements and their history; `alfred/executive.py` holds goals, commitments, decisions and milestones; `alfred/routines.py` runs the two authored routines; `alfred/jobs.py` is the bounded local job coordinator; `alfred/lifecycle.py` covers forget, backup and restore; `alfred/policy.py` covers grants, invitations and device pairing.
 - **Console.** `console/src/integration/` talks to the server, `console/src/state/` holds the projection, `console/src/components/` renders it. Demo mode uses fictional fixtures; connected mode reads only what the signed-in key may read.
 - **Authority.** Notes, graph edges, retrieved procedures, skills and tool descriptions cannot grant permission. Approvals bind exact parameters and source revisions; dispatch rechecks them. Reviewed statements are used only while accepted, authorised, current and relevant.
-- **Boundaries.** Loopback only. No microphone, no external accounts, no outbound messages, no telemetry. The source library under `third_party/` is research data and is excluded from tests, packaging and agent instructions.
+- **Boundaries.** The Desk listener stays on loopback. Opt-in LiveLens tools make source-granted reads and exactly approved bounded capture requests to an owner-selected HTTPS/loopback API. No microphone, outbound messages or telemetry. The source library under `third_party/` is research data and is excluded from tests, packaging and agent instructions.
 
 ## Not yet done
 

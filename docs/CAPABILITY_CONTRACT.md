@@ -3,7 +3,10 @@
 **Status:** proposal. Contract version 1 is implemented on the integration branch in
 [`alfred/capabilities.py`](../alfred/capabilities.py) with a synthetic simulation adapter and
 contract tests ([`tests/test_capability_contract.py`](../tests/test_capability_contract.py)).
-The owner has not yet accepted the contract, and **no real product adapter exists.**
+The original observation contract remains a proposal. A separate first-party
+[LiveLens tool integration](LIVELENS_INTEGRATION.md) now uses authenticated Desk
+transport, source grants and an exact capture/reconciliation ledger. It does not
+enable `SpecialistBridge` actions or ingest raw evidence as memory.
 
 ## Why it exists
 
@@ -14,8 +17,8 @@ product's observations into ALFRED's existing evidence pipeline under one common
 read-only first.
 
 None of those interfaces was available to this build. Nothing here imitates, names or
-models any of them. The only adapter is a clearly fictional exercise feed that exists to
-prove the rules below.
+models any of them. The observation adapter described here is a fictional exercise
+feed that proves these rules. LiveLens uses its documented tool API separately.
 
 ## Manifest
 
@@ -90,11 +93,11 @@ The rules that keep AGENTS.md's distinctions:
    before deliberate adoption.
 5. Leave actions declared but disabled until ACT-001 binding and the owner's approval exist.
 
-## Not built
+## Observation bridge limitations
 
-- No real product adapter, and no claim that any product's interface is understood.
+- No live observation adapter in this contract; LiveLens tools use their separate documented transport.
 - No HTTP route or console view to register adapters or browse specialist feeds; bridges are
   constructed in code by the host, and accepted events appear in the existing evidence view.
 - No scheduling of `sync()`; nothing polls a product.
-- No action execution of any kind.
+- No action execution through `SpecialistBridge`.
 - Role-limited team and operational workspaces (OPS-001) are not started.

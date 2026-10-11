@@ -12,6 +12,14 @@ Format: **ID. Title** · found · fixed in commit · status.
 
 ## Fixed
 
+### B-028. Reconnecting a read-only LiveLens configuration retained an earlier collection grant
+Found 11 October 2026 during integration review · fixed in the commit that adds this entry.
+The initial installation path added control when explicitly requested but did not remove it on a later installation without that flag. The printed read-only state could therefore disagree with actual authority. Reconnection now explicitly revokes this owner's collection grant by default. Focused policy tests and the real install/CLI acceptance both exercise opt-in followed by default reconnection and verify that no job is created by installation.
+
+### B-027. New LiveLens CLI paths did not carry the operator's custom vault into file placement checks
+Found 11 October 2026 during integration review · fixed in the commit that adds this entry.
+The first implementation checked the default demonstration vault only. A selected plain Markdown vault could therefore hold connection, token or tool-input files; destination home was also not validated before registration writes. The CLI now carries the selected and default vaults, checks the data directory before opening its store, and the connection/installed helpers check destination placement. Regression tests use a plain custom vault and require rejection of config, token, input and destination before source-policy mutation. The runtime placement guard remains unchanged.
+
 ### B-026. The inspector threw away open confirmations and forms whenever the workspace changed
 Found 2 October 2026 on CI for PR #18 · fixed in the commit that adds this entry.
 The `console-connected` job timed out ticking "I want to remove this source and everything derived from it": Playwright found the box, then it was detached from the page and never came back. Cause: whenever the workspace's data changed (for example the scanner noticing a note edit), `useRecordDetail` re-read the open record and first switched it to "loading", so the inspector replaced its contents with "Reading the current record…" and rebuilt them. Everything a person had open in the inspector was lost and came back closed: a source-removal or forget confirmation and its consent, the job form, an opened history. Reproduced on demand by editing a note while the removal confirmation was open, which failed every time. Re-reading the record already shown now keeps it in place until the new detail arrives (`refreshingDetail`); a different record still shows loading, and a grant or workspace change still clears the selection. Tests: `console/tests/record-detail.test.ts`; the connected browser check now edits a note mid-confirmation and requires the confirmation and its consent to survive. The temporal review check assumed a history panel always came back closed after a refresh; it now opens a history only if it is closed, because what the person opened stays open.

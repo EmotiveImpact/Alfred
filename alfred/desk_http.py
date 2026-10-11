@@ -81,9 +81,10 @@ class Sessions:
 
 class DeskHTTPServer(HTTPServer):
     allow_reuse_address = True
-    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None, jobs=None):
+    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None, jobs=None, livelens=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
         self.jobs = jobs
+        self.livelens = livelens
         self.local_model = local_model
         self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
         from .executive import ExecutiveRecords
@@ -361,6 +362,9 @@ class Handler(BaseHTTPRequestHandler):
             if not mutation and url.path == '/desk/session' and not url.query:
                 p = store.principal(bearer)
                 result = {'csrf': session['csrf'], 'scope': p['scope'], 'role': p['role'], 'expires_at': session['expires']}
+            elif (url.path == '/desk/livelens' or url.path.startswith('/desk/livelens/')) and not url.query:
+                from .livelens import route as livelens_route
+                result = livelens_route(self.server.livelens, url.path, mutation, bearer, body)
             elif not mutation and url.path == '/desk/state':
                 query = parse_qs(url.query, strict_parsing=True)
                 if set(query) - {'before'} or any(len(v) != 1 for v in query.values()):

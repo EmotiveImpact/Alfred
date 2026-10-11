@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "passed": 36,
+  "checks": [
+    "actual offline CLI installs an owner-selected connection without revealing its token",
+    "installed CLI discovers registered tools with capture and model disabled by default",
+    "actual installed CLI reads real evidence with original clocks and no source authority",
+    "offline CLI collection opt-in creates only an explicit grant",
+    "default CLI reconnection revokes a previous collection grant",
+    "discovery does not grant source access",
+    "authenticated actual ALFRED discovers registered specialist tools",
+    "real specialist evidence reaches the authenticated ALFRED transport",
+    "original source, capture, receipt clocks and integrity survive transport",
+    "captured instructions retain no authority or automatic memory/model effect",
+    "source text was not promoted into reviewed ALFRED memory",
+    "no model is configured in this acceptance",
+    "source and session response boundaries are enforced",
+    "existing Host, Origin, CSRF and cross-site guards protect specialist routes",
+    "another ALFRED scope cannot read this workspace specialist",
+    "a reader requires their own current grants",
+    "revoking a source grant blocks an existing authenticated session",
+    "capture needs separate owner control and explicit configured duration bound",
+    "approval cannot bypass a collection grant revoked before dispatch",
+    "a proposal is distinct from execution",
+    "exact approved parameters dispatch through actual ALFRED to the recorder",
+    "retrying a completed approval returns its recorded acceptance",
+    "request acceptance is followed by actual verified capture completion",
+    "retained segment clocks explicitly identify their collector basis",
+    "completed media stays within the explicit six-second capture bound",
+    "retained segment bytes match the service SHA-256 receipt",
+    "retained segment bytes match the service SHA-256 receipt",
+    "retained segment bytes match the service SHA-256 receipt",
+    "all retained segments decode through actual FFmpeg",
+    "independent decoded media clocks confirm the bounded capture receipt",
+    "only the explicitly approved job was created",
+    "collection revocation stops new control without hiding authorised evidence reads",
+    "revoked specialist source credentials block otherwise granted reads",
+    "revoked ALFRED credentials invalidate the existing browser session",
+    "tested runtime sources remained unchanged during acceptance",
+    "redacted acceptance receipt contains no runtime credentials or session secrets"
+  ],
+  "alfredRevision": "75947b8dd59a3161c862d2533850a032994778e2",
+  "livelensRevision": "92a19a26e358a70fe5e06ec31b96cbad16e83e13",
+  "testedSourceSha256": {
+    "alfred/livelens.py": "c2f642039379e0683e8fc2c082d666bb2819d66380af59a677835e7eaaa4b870",
+    "alfred/livelens_gateway.py": "35f4efcb91aeecfaae4d6a709c9250e9e8ef90ee95e4ffe70856b211544d5f1c",
+    "alfred/livelens_client.py": "3d4898ac58ddff1662f596670c441117387dd580153c8f08211595b6031bf41c",
+    "alfred/desk.py": "8de62397b71ff4dea155fc81b79cd66936ae043244cbaebd3dc5cab077a31370",
+    "alfred/desk_http.py": "366e5a8009687e8e220073427697586cef50813b077710575eaf0d7a7a4e9f6a",
+    "alfred/policy.py": "51599a946560657e093612f72a4f92792873b4710fae70898e8279b666baed1f",
+    "alfred/lifecycle.py": "55fbedcdb17d425a7c8b4eb77b5267b57e3960bb4d0605a0dd187f1977cdb184",
+    "tools/check_livelens_http.py": "cc5ae16e36fdf8c426b5fb972657b2a506cf1bf0354ede34efada3213e96fec4"
+  },
+  "livelensSourceSha256": {
+    "services/intelligence/src/server.mjs": "995b833502c62acb45d621a12aedf4754de5bd63172a4fbd9ee3d49af51395f8",
+    "services/intelligence/src/store.mjs": "6317e91c822a845c32dfae2bb142960a957cf214f56205ccaa68b37e8507e6ff",
+    "services/intelligence/src/governance.mjs": "1ac3024a925235a9fb775c9a9ac8c20a0a80cc4956b7be5431c9cf8930d78162",
+    "services/intelligence/src/recorder.mjs": "3bb0dd92834f69fd0e0ca3b909e52898034e1aaf8af79880cd896283d8b5eb0f",
+    "services/intelligence/src/recorder-exec.py": "f15d402fbd215cb2f57791b6c8bbb26236548d4546c1ec853c4bf5b43c7c2ded",
+    "services/intelligence/src/validation.mjs": "29bfba60de794fa7f3d299e1d33a7a6f612bb84eeebdcc1a5784b66a526f791c"
+  },
+  "toolVersions": {
+    "python": "3.12.14",
+    "node": "v24.19.0",
+    "ffmpeg": "ffmpeg version 7.1.5-0+deb13u1 Copyright (c) 2000-2026 the FFmpeg developers"
+  },
+  "transport": "actual authenticated ALFRED DeskHTTP sessions to real LiveLens loopback HTTP",
+  "evidence": {
+    "id": "ev_d8f21955a3d624ce6d33cbf0450db6c9d479946645b318bf22504f6a7b5ca069",
+    "sessionId": "session",
+    "sourceTimestampMs": 1700000000012,
+    "receivedAtMs": 1791692977407,
+    "capturedAtMs": 1700000000034,
+    "integrity": {
+      "payloadSha256": "da8f52f89cd32e96e5fdd7c11d19de5ae816fd90eadda0189c78ea0fdde278ac",
+      "previousSha256": null,
+      "entrySha256": "aaf49bfefd765d14aa116f8108cbff201a6b6ea9c1e887b2d5dbc9ecb111db5f"
+    }
+  },
+  "dispatch": {
+    "state": "completed",
+    "operation": "start_recording",
+    "jobId": "approved-bounded",
+    "resultSha256": "42e08b91678b053a57ac9052f30829b3a14d178ed5c3122e2934f2063466b453"
+  },
+  "capture": {
+    "id": "approved-bounded",
+    "state": "completed",
+    "maxDurationSeconds": 6,
+    "segmentSeconds": 2,
+    "attempts": 1,
+    "error": null,
+    "segments": [
+      {
+        "id": "a1-segment-00000",
+        "attempt": 1,
+        "startedAtMs": 1791692978432,
+        "durationMs": 2023,
+        "bytes": 56158,
+        "sha256": "12fac8c831d8bb8c6d4a6bef5d3da0c897cb627bff0f6674f259eea5b21a879b",
+        "timestampBasis": "collector-media-offset"
+      },
+      {
+        "id": "a1-segment-00001",
+        "attempt": 1,
+        "startedAtMs": 1791692980455,
+        "durationMs": 2000,
+        "bytes": 59385,
+        "sha256": "cf7ca802848bd90b3a52d5f452d0337c749a2d2b8a76e92e4c146969b578e737",
+        "timestampBasis": "collector-media-offset"
+      },
+      {
+        "id": "a1-segment-00002",
+        "attempt": 1,
+        "startedAtMs": 1791692982455,
+        "durationMs": 2000,
+        "bytes": 59040,
+        "sha256": "97cf32dbb6e589795e30ddfb051da6db33867e359b4112541ae39bae1a104b76",
+        "timestampBasis": "collector-media-offset"
+      }
+    ]
+  },
+  "captureDurationMs": 6023,
+  "independentlyDecodedDurationMs": 6000.0,
+  "decodedSegmentDurationsMs": [
+    2000.0,
+    2000.0,
+    2000.0
+  ],
+  "mediaDecoded": true,
+  "source": "locally generated fictional FFmpeg source",
+  "externalLiveCapture": false,
+  "modelCalls": false,
+  "emailsSent": false,
+  "thirdPartySourceLibraryExecuted": false,
+  "fixturesStopped": true,
+  "privateRuntimeArtifactsRemoved": true,
+  "runId": "a1109f9d6527f956b363918b218309f4",
+  "startedAtMs": 1791692976946,
+  "status": "passed",
+  "finishedAtMs": 1791692985251
+}
