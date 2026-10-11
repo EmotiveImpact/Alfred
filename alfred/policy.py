@@ -9,7 +9,7 @@ import re
 import secrets
 from .local import Fault, ident, text, timestamp
 
-CAPABILITIES = {'read', 'model', 'inbox.write', 'sync', 'connector.read'}
+CAPABILITIES = {'read', 'model', 'inbox.write', 'sync', 'connector.read', 'collection.control'}
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS identity_devices(
  credential TEXT PRIMARY KEY REFERENCES credentials(id), person TEXT NOT NULL,

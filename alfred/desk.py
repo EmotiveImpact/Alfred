@@ -1,4 +1,4 @@
-"""Run ALFRED's local, synthetic-data desk. No cloud keys or external services."""
+"""Run ALFRED's local desk, with explicitly configured optional specialist tools."""
 from __future__ import annotations
 import argparse
 import json
@@ -87,7 +87,9 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
         store = DeskStore(path / 'desk.sqlite')
         supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None), vault_exclusions=vault_exclusions, vault_id_key=vault_id_key)
         jobs, job_stop = start_local_jobs(store, keys['owner'], path)
-        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs)
+        from .livelens import installed
+        livelens = installed(store, path, (vault, path / 'vault') if vault else (path / 'vault',))
+        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs, livelens=livelens)
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
         print('Local development data. Microphone OFF. No external messages are sent.', flush=True)
@@ -160,12 +162,18 @@ def start_local_jobs(store, owner, path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
-                                            'connector-add', 'connector-import', 'connectors'))
+                                            'connector-add', 'connector-import', 'connectors', 'livelens-connect', 'livelens'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--credential-id')
+    parser.add_argument('--livelens-config', help='Owner-selected private LiveLens connection JSON, outside Git/vaults')
+    parser.add_argument('--allow-livelens-collection', action='store_true', help='Explicit source collection grant; each capture still needs exact approval')
+    parser.add_argument('--renew-livelens-source', action='store_true', help='Offline owner renewal for the specialist source, never a revoked/forgotten identity')
+    parser.add_argument('--tool', choices=('discover', 'read', 'actions', 'propose', 'approve', 'dispatch', 'reconcile'), default='discover', help='Installed LiveLens operator tool; controls need exact approval')
+    parser.add_argument('--tool-input', help='Private JSON input file outside Git/vaults; never place tokens in it')
+    parser.add_argument('--action-id', help='Exact proposed LiveLens action identifier')
     parser.add_argument('--vault', help='Explicit read-only Markdown folder; no Obsidian plugins are loaded')
     parser.add_argument('--vault-exclude', action='append', default=[], help='Exclude a relative folder and its descendants; repeat as needed')
     parser.add_argument('--vault-id-key', choices=('alfred_id',), help='Explicitly adopt stable alfred_id frontmatter properties')
@@ -184,7 +192,7 @@ def main():
     args = parser.parse_args()
     os.umask(0o077)
     try:
-        if args.command in ('init', 'serve', 'restore'):
+        if args.command in ('init', 'serve', 'restore', 'livelens-connect', 'livelens'):
             # Checked before anything is created; backup and access stay available to move out.
             check_data_directory(args.data_dir, (args.vault,) if args.vault else ())
         path = private_home(args.data_dir)
@@ -253,6 +261,35 @@ def main():
             from .connectors import command
             for line in command(path, args):
                 print(line)
+        elif args.command == 'livelens-connect':
+            if not args.livelens_config:
+                raise Fault('livelens_config_required')
+            from .livelens import connect
+            result = connect(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], path, args.livelens_config,
+                             collection=args.allow_livelens_collection, renew_source=args.renew_livelens_source,
+                             vaults=(args.vault, path / 'vault'))
+            print('LiveLens registered for', result['scope'], 'with explicit source reads.')
+            print('Bounded collection grant enabled; every capture needs exact approval.' if result['collectionControlGranted'] else 'Collection remains disabled.')
+            print('No polling, model egress or accepted-memory import enabled.')
+        elif args.command == 'livelens':
+            from .livelens import installed, private_bytes
+            vaults = (args.vault, path / 'vault')
+            service = installed(DeskStore(path / 'desk.sqlite'), path, vaults)
+            if service is None:
+                raise Fault('livelens_not_configured', 409)
+            body = json.loads(private_bytes(args.tool_input, 16384, vaults)) if args.tool_input else {}
+            owner = load_keys(path)['owner']
+            if args.tool in ('discover', 'actions'):
+                if body:
+                    raise Fault('unexpected_livelens_input')
+                result = service.discovery(owner) if args.tool == 'discover' else service.view(owner, args.action_id)
+            elif args.tool in ('read', 'propose'):
+                result = getattr(service, args.tool)(owner, body)
+            else:
+                if not args.action_id:
+                    raise Fault('livelens_action_id_required')
+                result = getattr(service, args.tool)(owner, args.action_id, body)
+            print(json.dumps(result, sort_keys=True, ensure_ascii=False))
         elif args.command == 'revoke':
             if not args.credential_id:
                 raise Fault('credential_id_required')

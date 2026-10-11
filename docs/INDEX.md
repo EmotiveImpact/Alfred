@@ -39,6 +39,7 @@ Every document in the repository, what it is for and when to read it. Documents 
 | [OBSIDIAN_INTEGRATION.md](OBSIDIAN_INTEGRATION.md) | Optional Obsidian over user-owned Markdown |
 | [adr/MEMORY-001.md](adr/MEMORY-001.md) | Decision: optional Obsidian, first-party governed memory |
 | [CAPABILITY_CONTRACT.md](CAPABILITY_CONTRACT.md) | Contract for independent specialist products (OPS-002) |
+| [LIVELENS_INTEGRATION.md](LIVELENS_INTEGRATION.md) | Installed LiveLens operator/agent tools, source grants and exact capture approval |
 
 ## Feature guides (how each part works)
 

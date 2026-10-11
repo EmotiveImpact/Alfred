@@ -140,6 +140,9 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None):
               'evidence_events_redacted': 0}
     # Revoked first, so nothing can index or report under this source again.
     db.execute("UPDATE credentials SET revoked=1 WHERE id=? AND scope=? AND role='source'", (source, scope))
+    if _has(db, 'livelens_actions'):
+        counts['livelens_action_records_deleted'] = db.execute(
+            'DELETE FROM livelens_actions WHERE scope=? AND source=?', (scope, source)).rowcount
     notes = set()
     if _has(db, 'knowledge_notes'):
         current = db.execute('SELECT id,path FROM knowledge_notes WHERE scope=? AND source=?', (scope, source)).fetchall()

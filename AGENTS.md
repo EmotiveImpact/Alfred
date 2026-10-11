@@ -34,7 +34,7 @@ Retain original licences/notices. UNLICENSED does not grant general redistributi
 
 Use synthetic data while person/device pairing, fine-grained source grants, application encryption and deletion/restore accounting remain unfinished. Keep Host/Origin/CSRF and loopback boundaries. Do not expose the development server to the public internet for convenience.
 
-Only approved local drafts and local report/review records are implemented effects. No microphone, account/device control, ENDSTATE or Noir integration exists. Read specialist engines' actual interfaces before building adapters. Keep observation, source report, simulation, analysis, receipt and human acknowledgement distinct. No covert capture or autonomous use-of-force authority.
+Default effects are approved local drafts and local report/review records. The optional first-party LiveLens tool transport additionally supports owner-approved bounded capture through explicit source grants and an exact action/reconciliation ledger; see docs/LIVELENS_INTEGRATION.md. No microphone, account/device control, ENDSTATE or Noir integration exists. Read specialist engines' actual interfaces before building adapters. Keep observation, source report, simulation, analysis, receipt and human acknowledgement distinct. No covert capture or autonomous use-of-force authority.
 
 The earlier blocked live-model comparison remains unexecuted. Do not retry or reroute it under source-library or consolidation work. Existing failed-model evidence remains. Ordinary code/browser tests and archival checks do not imply a successful new reasoning benchmark.
 

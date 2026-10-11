@@ -2,7 +2,13 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
-## Unreleased: branch `claude/alfred-development-qpgxhg`, draft PR #18
+## 11 October 2026: branch `feat/livelens-tools-2026-10-11`
+
+- **LiveLens connection.** The existing Desk runtime now loads an optional owner-selected LiveLens provider. Authenticated discovery/read routes and the ordinary `livelens` command invoke actual specialist APIs with fresh source grants. Captured words remain untrusted evidence, without memory promotion or model egress. No automatic conversation tool invocation is claimed.
+- **Exact bounded capture.** A separate actor-private action ledger binds exact parameters, connection, source policy and credentials to ten-minute approvals. Writes require owner role, explicit collection grant and fresh pre-write checks. Uncertain effects reconcile a stable job ID without repeating the write; request acceptance stays distinct from recording completion. Forget/restore covers the ledger.
+- **Installation and proof.** Private-file installation defaults to reads only, supports explicit source renewal without restoring revoked identities, and exposes a usable CLI plus existing session transport. The real two-application acceptance verified a six-second fictional FFmpeg capture and denied ungranted controls. See [setup](docs/LIVELENS_INTEGRATION.md) and [validation receipt](docs/evidence/livelens-2026-10-11/RECEIPT.md). This branch is not deployed or merged; no external LIVE account was captured.
+
+## Historical unreleased checkpoint: branch `claude/alfred-development-qpgxhg`, draft PR #18
 
 ### 2 October 2026 (evening)
 
