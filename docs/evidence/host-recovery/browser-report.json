@@ -1,0 +1,21 @@
+{
+  "passed": 9,
+  "checks": [
+    "reconciliation marks the started job effect unknown",
+    "the console reports that the previous host did not stop cleanly",
+    "the console reports the interrupted question",
+    "the console reports the job needing reconciliation",
+    "the console reports the unstarted lease returned to the queue",
+    "the console states no clean stop has been recorded yet",
+    "the job counts include the effect unknown state",
+    "no request leaves the ALFRED origin",
+    "no page errors"
+  ],
+  "browser_console": [
+    "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "page_errors": [],
+  "inputs": "synthetic workspace only",
+  "model_inference": false,
+  "console_dist": "console/dist built from this commit"
+}

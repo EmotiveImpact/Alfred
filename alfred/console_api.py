@@ -101,6 +101,18 @@ def _model(server, p):
             'tools_enabled': False}
 
 
+def _recovery(report):
+    """What this host reconciled when it started (RUN-001). Counts only, so readers may see it too."""
+    if not report:
+        return None
+    return {'previousStop': report['previous_stop'],
+            'lastCleanStop': _iso(report['last_clean_stop']) if report.get('last_clean_stop') else None,
+            'startedAt': _iso(report['started_at']), 'questionsInterrupted': report['questions_interrupted'],
+            'jobsEffectUnknown': len(report['jobs_effect_unknown']), 'jobsRequeued': len(report['jobs_requeued']),
+            'routineSlotsMissed': sum(report['routine_slots_due_while_stopped'].values()),
+            'basis': report['basis']}
+
+
 def health(server, bearer):
     """What the host is doing now, in plain fields. Readers see the same state; only owners may pause."""
     store = server.store
@@ -126,6 +138,7 @@ def health(server, bearer):
             'questions': {'configured': conversations is not None,
                           'waiting': conversations.jobs.qsize() if conversations is not None else 0},
             'model': _model(server, p),
+            'recovery': _recovery(getattr(server, 'recovery', None)),
             # Backups and the journal cover the whole database, so only owners see them.
             'lifecycle': {'lastBackup': _iso(backup['created']) if backup else None,
                           'journalEntries': len(entries(journal_path(store)))} if p['role'] == 'owner' else None,

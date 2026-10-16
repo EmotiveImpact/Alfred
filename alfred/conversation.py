@@ -258,6 +258,8 @@ class ConversationService:
             p,session=self.own(db,bearer,sid)
             rows=[dict(r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result,focus FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
             for turn in rows:
+                # A visible reason, so an interrupted question is never mistaken for an unanswerable one.
+                if turn['state']=='interrupted':turn['reason']='host_stopped_before_answer'
                 if not turn['result']:continue
                 result=json.loads(turn['result']);sources=result['packet']['evidence']
                 if not packet_current_db(self.store,db,p,result['packet']):
