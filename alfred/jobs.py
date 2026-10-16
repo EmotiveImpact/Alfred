@@ -842,6 +842,8 @@ class LocalSubprocessBackend(WorkerBackend):
         ident(handle)
         if kind not in job_kinds.KINDS:
             raise Fault('unknown_job_kind')
+        if kind not in job_kinds.SUBPROCESS_KINDS:
+            raise Fault('kind_not_for_this_backend')
         payload = json.dumps({'kind': kind, 'parameters': parameters,
                               'inputs': [{'name': item['name'], 'data': base64.b64encode(item['data']).decode('ascii')}
                                          for item in inputs]}).encode('ascii')

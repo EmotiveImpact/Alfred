@@ -315,7 +315,12 @@ class KnowledgeStore(DeskStore):
             return True
         # A draft the person accepted from a routine nomination (M10).
         from .routines import action_current
-        return action_current(self, db, row)
+        if action_current(self, db, row):
+            return True
+        # A draft a brain proposed at autonomy 2, while its accepted result and every
+        # excerpt it was given are still current (AGENT_HUB.md, H1).
+        from .brain import action_current as brain_action_current
+        return brain_action_current(self, db, row)
 
     def valid_origin(self, db, row):
         from . import inbox

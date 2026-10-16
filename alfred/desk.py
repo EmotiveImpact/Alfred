@@ -144,10 +144,10 @@ def start_local_jobs(store, owner, path):
     """One local-subprocess worker thread for this host. Not a sandbox or remote worker."""
     import threading
     from .jobs import BoundedCache, JobCoordinator, JobWorker, LocalSubprocessBackend
-    from .job_kinds import KINDS
+    from .job_kinds import SUBPROCESS_KINDS
     jobs = JobCoordinator(store, cache=BoundedCache(path / 'job-cache', 256 * 1024 * 1024))
     if not any(w['id'] == 'local-host' for w in jobs.workers(owner)):
-        jobs.enrol_worker(owner, 'local-host', 'This computer (local subprocess)', sorted(KINDS))
+        jobs.enrol_worker(owner, 'local-host', 'This computer (local subprocess)', list(SUBPROCESS_KINDS))
     worker = JobWorker(jobs, LocalSubprocessBackend(), owner, 'local-host', poll_seconds=0.2)
     stop = threading.Event()
     thread = threading.Thread(target=worker.run, args=(stop,), kwargs={'idle_seconds': 0.75}, name='alfred-local-jobs', daemon=True)
