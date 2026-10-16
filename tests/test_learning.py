@@ -333,9 +333,15 @@ class RuleTests(Base, BrainMixin):
         note = next(p for p in self.proposals() if p['kind'] == 'routing')
         self.assertEqual(note['key'], 'routing:synthetic:brain_task:company')
         self.assertEqual((note['detail']['accepted'], note['detail']['refused'], note['detail']['stopped']), (4, 1, 0))
-        self.assertEqual(note['detail']['basis'], 'alfred_ingestion_outcome_not_brain_confidence')
-        self.assertIsNone(note['detail']['verified'])
-        self.assertIn('passed ALFRED', note['statement'])
+        self.assertEqual(note['detail']['basis'], 'alfred_checks_and_owner_acknowledgement_not_brain_confidence')
+        # No checks were declared, so four accepted results are not verified; the refused one failed the contract.
+        self.assertEqual(note['detail']['verification'], {'verified': 0, 'failed_checks': 1, 'unverifiable': 0,
+                                                          'no_checks': 4, 'not_returned': 0})
+        self.assertEqual((note['detail']['verified'], note['category'], note['detail']['no_checks_counted_as_verified']),
+                         (0, 'routing', False))
+        self.assertIn('mostly not verified', note['statement'])
+        self.assertIn('no declared checks never counts as verified', note['statement'])
+        self.assertEqual(run['window']['evidence']['results_no_checks'], 4)
         self.assertNotIn('100 percent', json.dumps(note))
 
     def test_budget_stops_are_counted_and_noted(self):
@@ -710,10 +716,47 @@ class PacketTests(Base, BrainMixin):
 # Learning never changes authority -------------------------------------------------------
 
 class AuthorityTests(Base, BrainMixin):
+    def goal_work(self):
+        """A mandate with acceptance checks, goal work that is checked, hard-stopped at its
+        budget and refused while paused: hub and verification records for learning to read."""
+        from alfred.hub_goals import GoalHub
+        none = {'tokens': None, 'money_pence': None, 'wall_seconds': None, 'tasks': None}
+
+        def budget(total):
+            return {'daily': dict(none), 'total': {**none, **total}, 'warn_percent': 50, 'utc_offset_minutes': 0}
+        gated = BrainHub(self.store, self.jobs, self.registry, self.policy)
+        self.goals = GoalHub(self.store, gated, self.owner)
+        self.goals.set_budget(self.owner, 'overall', None, {'version': 0, 'budget': budget({'tasks': 100})})
+        goal = self.records.create(self.owner, {'request_id': self.next('goal'), 'kind': 'goal', 'title': 'Crew brief',
+                                                'detail': '', 'project': None, 'due': None, 'rank': None, 'support': None})
+        mandate = self.goals.create_mandate(self.owner, {
+            'request_id': self.next('mandate'), 'goal': goal['id'], 'scope_class': 'company', 'deadline': self.clock[0] + 20 * DAY,
+            'success_test': 'The crew brief is approved.', 'autonomy': {'research': 1}, 'brains': ['synthetic'],
+            'assigned_brain': 'synthetic', 'tools': [], 'budget': budget({'tasks': 2}), 'schedule': None,
+            'acceptance': [{'kind': 'artefact_sections', 'artefact': 'notes.md', 'sections': ['Synthetic brain notes']}]})
+        line = self.line('Decision: Use')
+        task = {'brain': None, 'work': 'research', 'instruction': 'Summarise.', 'learned': [], 'tools': [],
+                'context': [{'note': self.notes['Atlas'], 'start_line': line, 'end_line': line}], 'budget': dict(BUDGET),
+                'autonomy': 1}
+        jobs = []
+        for _ in range(2):
+            submitted = self.goals.submit_task(self.owner, mandate['id'], {'request_id': self.next('t'), **task})
+            JobWorker(self.jobs, self.goals.backend(), self.owner, 'brain-1', poll_seconds=0.01).run_once()
+            self.clock[0] += 5
+            self.goals.cycle()
+            jobs.append(submitted['job']['id'])
+        for _ in range(3):  # The goal is paused at its task budget, so the gate refuses more work.
+            with self.assertRaises(Fault):
+                self.goals.submit_task(self.owner, mandate['id'], {'request_id': self.next('t'), **task})
+        checked = self.goals.verifier.verify(self.owner, jobs[0])
+        self.assertEqual((checked['state'], checked['evidence']), ('checked', 'verified'))
+        return mandate, jobs
+
     def test_a_learning_run_changes_no_policy_grant_scope_autonomy_or_budget(self):
         self.brains()
         for _ in range(3):
             self.brain_result()
+        mandate, _ = self.goal_work()
         capture = CapturePolicies(self.store, None, self.memory)
         capture.author(self.owner, 'decisions', {
             'version': 0, 'name': 'Decisions', 'enabled': True, 'context': 'company',
@@ -726,16 +769,25 @@ class AuthorityTests(Base, BrainMixin):
         self.set_rule()
         policy = (self.policy.cloud_scopes, self.policy.permitted_tools)
         before = self.snapshot()
-        self.assertIn('source_grants', before)
+        hub_tables = ('hub_meta', 'hub_mandates', 'hub_controls', 'hub_tasks', 'hub_meter', 'hub_heartbeats', 'hub_attention',
+                      'hub_journal', 'verification_meta', 'verification_runs', 'verification_results', 'executive_records')
+        for table in ('source_grants',) + hub_tables:
+            self.assertIn(table, before)
+        self.assertTrue(all(before[t] for t in ('hub_mandates', 'hub_tasks', 'hub_attention', 'hub_journal', 'verification_runs')))
         run = self.run_now()['outcome']
         self.assertTrue(run['proposed'])
         self.assertEqual(run['accepted_by_rule'], 2)
+        # The run read the goal outcomes and the verified result.
+        self.assertEqual((run['window']['evidence']['hub_hard_stops'], run['window']['evidence']['mandate_refusals'],
+                          run['window']['evidence']['results_verified']), (1, 3, 1))
+        self.assertTrue(self.by_key('routing-goals:synthetic'))
         after = self.snapshot()
         for table in ('source_policy', 'source_grants', 'credentials', 'identity_devices', 'workspaces', 'routine_settings',
                       'capture_policies', 'capture_settings', 'brain_tasks', 'jobs', 'actions', 'outbox', 'memory_claims',
-                      'learning_trust_rules', 'desk_settings'):
+                      'learning_trust_rules', 'desk_settings') + hub_tables:
             self.assertEqual(before.get(table), after.get(table), table)
         self.assertEqual(before, after)
+        self.assertEqual(self.goals.view(self.owner)['goals'][0]['version'], mandate['version'] + 1)  # Only the budget pause.
         self.assertEqual((self.policy.cloud_scopes, self.policy.permitted_tools), policy)
         # Accepting every proposal changes none of them either.
         for proposal in self.proposals(state='suggested'):

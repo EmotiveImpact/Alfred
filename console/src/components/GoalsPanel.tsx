@@ -1,10 +1,11 @@
 import {useCallback,useEffect,useState} from 'react';
-import {Brain,Info,Pause,Play,Target} from '@phosphor-icons/react';
+import {Brain,CheckSquare,Info,Pause,Play,Target} from '@phosphor-icons/react';
 import {useConsole} from '../state/ConsoleProvider';
 import {DeskError} from '../integration/deskClient';
 import {localMoment,offsetLabel,scheduleLabel} from '../integration/routines';
-import {attentionLine,autonomyLine,controlRequest,goalMessage,stateLabel,taskLine,usageLines,
-  type BrainView,type HubState,type HubView,type Level,type MandateView,type Operation,type Usage} from '../integration/goals';
+import {acknowledgeNote,acknowledgeRequest,attentionLine,autonomyLine,brainEvidenceLine,canAcknowledge,canRunChecks,checkLabel,controlRequest,
+  evidenceLabel,evidenceTone,goalMessage,runLine,stateLabel,taskLine,usageLines,verifyRequest,
+  type BrainView,type HubResult,type HubState,type HubView,type Level,type MandateView,type Operation,type ResultsView,type Usage} from '../integration/goals';
 import '../routines.css';
 import '../goals.css';
 
@@ -43,7 +44,8 @@ function ConnectedGoals(){
   if(error&&!view)return <div className="routines-panel"><p className="sign-in-error" role="alert">{error}</p></div>;
   if(!view)return <div className="routines-panel"><p className="dialog-note" role="status">Reading your goals…</p></div>;
   if(!view.available)return <div className="routines-panel"><p className="quiet-empty">{view.reason==='owner_only'?'Goals are set by the workspace owner. This key cannot read or change them.'
-    :'Goals run under the access key this ALFRED host was started with. Sign in with that key to see them.'}</p></div>;
+    :'Goals run under the access key this ALFRED host was started with. Sign in with that key to see them.'}</p>
+    {view.reason!=='owner_only'&&<ResultsSection tick={tick} observed={observed}/>}</div>;
   const open=view.attention.filter(a=>a.state==='open');
   const titleOf=(target:string)=>view.goals.find(g=>`goal:${g.id}`===target)?.goal.title;
   return <div className="routines-panel goals-panel">
@@ -66,7 +68,63 @@ function ConnectedGoals(){
           onClick={op=>act('overall',null,op,view.overall?.version??0,op==='pause'?'All goal work paused.':'Goal work resumed.')}/></div></article>}
       {view.brains.map(b=><BrainRow key={b.id} b={b} busy={busy} act={act}/>)}
     </section>
+    <ResultsSection tick={tick} observed={observed}/>
   </div>;
+}
+
+/** What ALFRED's checks established for each brain result. Read-mostly: run the declared
+ *  checks again, or acknowledge the exact run shown, after a confirmation. */
+function ResultsSection({tick,observed}:{tick:number;observed:string}){
+  const c=useConsole(),{client,fail}=c.live;
+  const[view,setView]=useState<ResultsView|null>(null),[error,setError]=useState(''),[actionError,setActionError]=useState('');
+  const[busy,setBusy]=useState(false),[own,setOwn]=useState(0);
+  useEffect(()=>{
+    const controller=new AbortController();
+    client.get<ResultsView>('/desk/hub/results',controller.signal).then(data=>{if(!controller.signal.aborted){setView(data);setError('');}}).catch(e=>{
+      if(isAbort(e))return;setError(goalMessage(e));if(e instanceof DeskError&&e.kind==='signed_out')fail(e);
+    });
+    return()=>controller.abort();
+  },[client,fail,observed,tick,own]);
+  /* Every action is followed by a fresh read, so the card shows what the server recorded. */
+  const send=(path:string,body:unknown,notice:string)=>{
+    setBusy(true);setActionError('');
+    client.post(path,body).then(()=>c.setNotice(notice))
+      .catch(e=>{setActionError(goalMessage(e));if(e instanceof DeskError&&e.kind==='signed_out')fail(e);})
+      .finally(()=>{setBusy(false);setOwn(n=>n+1);});
+  };
+  if(!view)return error?<section aria-label="Results and checks"><p className="sign-in-error" role="alert">{error}</p></section>:null;
+  if(!view.available)return null;
+  const brains=Object.keys(view.by_brain).sort();
+  return <section aria-label="Results and checks"><h3 className="routine-subhead">Results and checks<span>{view.results.length}</span></h3>
+    <p className="dialog-note">What ALFRED's checks established for each brain result in the last {view.window_days} days. Verified means the declared checks passed or you acknowledged the result. A result with no declared checks is never counted as verified, and a brain's own confidence or “done” is never counted.</p>
+    {(actionError||error)&&<p className="sign-in-error" role="alert">{actionError||error}</p>}
+    {brains.length>0&&<ul className="routine-cites" aria-label="Results per brain">{brains.map(b=><li key={b}>{brainEvidenceLine(b,view.by_brain[b])}</li>)}</ul>}
+    {view.results.length?view.results.map(r=><ResultCard key={r.job} r={r} busy={busy}
+      onVerify={()=>send(verifyRequest(r.job,r.runs).path,verifyRequest(r.job,r.runs).body,'Checks ran. The result shows what they found.')}
+      onAcknowledge={accept=>r.last_run&&send(acknowledgeRequest(r.job,r.last_run,accept).path,acknowledgeRequest(r.job,r.last_run,accept).body,
+        accept?'Acknowledged over failed checks. Recorded as your decision.':'Acknowledged. Recorded as your decision.')}/>)
+      :<p className="quiet-empty">No brain results yet.</p>}
+  </section>;
+}
+
+function ResultCard({r,busy,onVerify,onAcknowledge}:{r:HubResult;busy:boolean;onVerify:()=>void;onAcknowledge:(acceptFailures:boolean)=>void}){
+  const[confirm,setConfirm]=useState(false);
+  const goal=r.work?`Goal: ${r.work.goal_title??'no longer available'}`:'No goal';
+  const failed=r.checks==='failed_checks';
+  return <article className="routine-card result-card" aria-label={`Result ${r.job}`}>
+    <header><span className="record-symbol"><CheckSquare size={18} weight="thin"/></span>
+      <div><h3>{r.work?r.work.work:'Brain task'} · {r.brain}</h3><p>{goal} · {r.scope_class} scope · {r.job}</p></div>
+      <ul className="routine-chips" aria-label={`Result ${r.job} verification`}><li className={evidenceTone(r.evidence)}>{evidenceLabel(r)}</li></ul></header>
+    <p className="routine-line">{runLine(r)}</p>
+    {r.last_run&&r.last_run.checks.length>0&&<ul className="result-checks">{r.last_run.checks.map(k=><li key={k.id} className={k.status}>{k.id} {k.kind.replaceAll('_',' ')}: {k.status==='unverifiable'?'could not run':k.status}</li>)}</ul>}
+    {(canRunChecks(r)||canAcknowledge(r))&&<div className="button-row">
+      {canRunChecks(r)&&<button type="button" className="secondary-button" disabled={busy} onClick={onVerify}>Run checks</button>}
+      {canAcknowledge(r)&&!confirm&&<button type="button" className="text-button" disabled={busy} aria-label={`Acknowledge result ${r.job}`} onClick={()=>setConfirm(true)}>Acknowledge…</button>}</div>}
+    {confirm&&<div className="forget-confirm" role="group" aria-label={`Confirm acknowledge result ${r.job}`}><p className="dialog-note">{acknowledgeNote(r)}</p>
+      <div className="button-row"><button type="button" className="secondary-button" disabled={busy} onClick={()=>{setConfirm(false);onAcknowledge(failed);}}>
+        {failed?'Accept with failed checks':`Acknowledge run ${r.last_run?.position??''}`}</button>
+        <button type="button" className="text-button" onClick={()=>setConfirm(false)}>Cancel</button></div></div>}
+  </article>;
 }
 
 /** The first chip is the state; the rest are cautions unless marked plain. */
@@ -108,6 +166,8 @@ function GoalCard({m,busy,act}:{m:MandateView;busy:boolean;act:Act}){
     <p className="routine-line">{m.scope_class} scope · assigned to {m.assigned_brain} · deadline {localMoment(m.deadline,offset)} ({offsetLabel(offset)})</p>
     <p className="routine-line">Autonomy: {autonomyLine(m.autonomy)}</p>
     <p className="routine-line">Allowed brains: {m.brains.join(', ')} · Tools: {m.tools.length?m.tools.join(', '):'none'}</p>
+    <p className="routine-line">{m.acceptance&&m.acceptance.length?`Acceptance checks (yours, run by ALFRED on every task): ${m.acceptance.map(checkLabel).join(' · ')}`
+      :'No acceptance checks on this goal: its results are not counted as verified unless a task declares checks.'}</p>
     {m.schedule&&<p className="routine-line">Heartbeat {scheduleLabel(m.schedule.when).toLowerCase()} · {m.next_due?`next ${localMoment(m.next_due,m.schedule.utc_offset_minutes)}`:'none scheduled'} · {m.missed_total} missed {m.missed_total===1?'slot':'slots'} counted, not replayed</p>}
     <UsageLines usage={m.usage} empty="No limit on this goal. Brain and overall budgets still apply."/>
     {m.tasks.length>0&&<details className="routine-rules"><summary>Recent tasks</summary><ul>{m.tasks.slice(0,5).map(t=><li key={t.job}>{taskLine(t)}</li>)}</ul></details>}
