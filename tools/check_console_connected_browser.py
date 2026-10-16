@@ -220,6 +220,33 @@ with tempfile.TemporaryDirectory() as temp:
             check('approved action is executed and verified by the existing outbox', store.desk_state(keys['owner'])['actions'][0]['state'] == 'verified')
             expect(page.locator('.approval-row')).to_have_count(0, timeout=15000)
             check('approvals list reflects the server result')
+            # Drafts are kept (owner decision, 16 October 2026): a lapsed draft leaves Approvals,
+            # stays findable, and can be proposed again with a fresh, rechecked approval.
+            store.propose_from_evidence(keys['owner'], {'event_seq': event['seq'], 'text': 'Synthetic lapsed draft to find again.', 'request_id': 'console-lapsed'})
+            expect(row).to_be_visible(timeout=15000)
+            with store.transaction() as db:  # Stands in for the fifteen-minute window passing.
+                db.execute("UPDATE actions SET expires=? WHERE id='console-lapsed'", (store.now(),))
+            expect(page.locator('.approval-row')).to_have_count(0, timeout=15000)
+            check('a lapsed draft is no longer offered for approval')
+            page.get_by_text('Find drafts, including lapsed and archived').click()
+            page.get_by_label('Draft filter').select_option('lapsed')
+            kept = page.locator('.drafts-row').filter(has_text='Synthetic lapsed draft to find again.')
+            expect(kept).to_contain_text('Approval lapsed · kept', timeout=15000)
+            check('a lapsed draft can be found again')
+            kept.get_by_role('button', name='Propose again console-lapsed').click()
+            expect(page.locator('.approval-row').filter(has_text='Local message draft')).to_have_count(1, timeout=15000)
+            from alfred import drafts as kept_drafts
+            fresh = kept_drafts.search(store, keys['owner'], {'status': 'awaiting_approval'})['drafts']
+            check('proposing again makes a new action with a fresh approval',
+                  len(fresh) == 1 and fresh[0]['reproposed_from'] == 'console-lapsed' and fresh[0]['text'] == 'Synthetic lapsed draft to find again.')
+            store.cancel(keys['owner'], fresh[0]['id'])
+            expect(page.locator('.approval-row')).to_have_count(0, timeout=15000)
+            page.get_by_label('Draft filter').select_option('all')
+            page.locator('.drafts-row').filter(has_text='Approval lapsed · kept').get_by_role('button', name='Archive console-lapsed').click()
+            page.get_by_label('Draft filter').select_option('archived')
+            expect(page.locator('.drafts-row').filter(has_text='Archived · kept')).to_have_count(1, timeout=15000)
+            check('an archived draft is kept and listed under Archived')
+            page.get_by_text('Find drafts, including lapsed and archived').click()
             # M04: remember this, review it, then an approved create-only inbox note.
             policy = IdentityPolicy(store)
             for capability in ('read', 'inbox.write'):

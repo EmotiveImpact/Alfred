@@ -54,6 +54,8 @@ export interface ProjectionEdge {
 export interface ServerApproval {
   id:string;capability:string;state:string;text:string|null;path?:string|null;fingerprint:string;
   createdAt:string;expiresAt:string;evidenceCurrent:boolean;mine:boolean;effect:string;
+  /** Server-computed: awaiting_approval, lapsed, archived, withdrawn or the ledger state. */
+  draftStatus?:string;
 }
 export interface ServerPriority {id:string;title:string;status:string;open:boolean;due:number|null;overdue:boolean;rank:number|null;version:number;origin:string;responsible?:string|null}
 export interface ServerAttention {recordId:string;title:string;kind:string;rules:string[];reason:string;due:number|null;responsible:string|null}

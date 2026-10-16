@@ -18,7 +18,7 @@ export interface AttentionSummary { recordId: string; title: string; kind: strin
 /** Derived from the person's own records by a stated rule; never an accepted fact. */
 export interface DerivedInsightSummary { rule: string; statement: string; recordIds: string[]; }
 /** A demo proposal changes local state only. A server action is reviewed and approved only through the server ledger. */
-export interface Proposal { id: string; title: string; body: string; scope: string; status: 'pending' | 'reviewed' | 'declined' | 'in_progress' | 'completed' | 'closed'; effect: 'local_demo_only' | 'server_action'; revision: number; serverState?: string; fingerprint?: string; capability?: string; path?: string; evidenceCurrent?: boolean; mine?: boolean; createdAt?: string; expiresAt?: string; }
+export interface Proposal { id: string; title: string; body: string; scope: string; status: 'pending' | 'reviewed' | 'declined' | 'in_progress' | 'completed' | 'closed'; effect: 'local_demo_only' | 'server_action'; revision: number; serverState?: string; fingerprint?: string; capability?: string; path?: string; evidenceCurrent?: boolean; mine?: boolean; createdAt?: string; expiresAt?: string; draftStatus?: string; }
 export interface Insight { id: string; recordId: string; title: string; summary: string; reviewedAt: string; supportId: string; }
 export interface ModelState { configured: boolean; name: string | null; allowed: boolean; }
 export interface Recommendation { fromRecord: string; fromVersion: number; title: string; reason: string; due: number | null; }

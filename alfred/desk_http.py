@@ -508,6 +508,11 @@ class Handler(BaseHTTPRequestHandler):
             elif mutation and re.fullmatch(r'/desk/evidence/[0-9]+/acknowledge', url.path):
                 exact(body, set())
                 result = store.acknowledge(bearer, int(url.path.split('/')[3]))
+            elif url.path == '/desk/drafts' or url.path.startswith('/desk/drafts/'):
+                # Drafts are kept: list, search, reopen, archive, unarchive, re-propose.
+                from .drafts import route as drafts_route
+                query = parse_qs(url.query, strict_parsing=True) if url.query else {}
+                result = drafts_route(store, url.path, mutation, bearer, body, query)
             elif mutation and re.fullmatch(r'/desk/actions/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/(approve|cancel|reconcile)', url.path):
                 action_id, command = url.path.split('/')[3:5]
                 if command == 'approve':

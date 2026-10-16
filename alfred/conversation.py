@@ -79,7 +79,10 @@ class ConversationService:
         # Deletes application rows, not secure erasure of WAL/backups/filesystem.
         dead = [r[0] for r in db.execute('''SELECT s.id FROM conversations s JOIN credentials c ON c.id=s.actor
           WHERE s.expires<=? OR c.revoked=1 OR c.expires<=?''', (self.store.now(), self.store.now()))]
+        from .drafts import preserve_conversation_links
         for sid in dead:
+            # Drafts outlive the conversation: keep their value-free source binding.
+            preserve_conversation_links(db, sid)
             db.execute('DELETE FROM conversation_action_sources WHERE session=?', (sid,))
             db.execute('DELETE FROM conversations WHERE id=?', (sid,))
 
@@ -113,6 +116,8 @@ class ConversationService:
     def forget(self,bearer,sid):
         with self.store.transaction() as db:
             self.own(db,bearer,sid)
+            from .drafts import preserve_conversation_links
+            preserve_conversation_links(db,sid)
             db.execute('DELETE FROM conversation_action_sources WHERE session=?',(sid,))
             db.execute('DELETE FROM conversations WHERE id=?',(sid,))
         return {'forgotten':True,'secure_erasure':False,'approved_drafts_undone':False}
