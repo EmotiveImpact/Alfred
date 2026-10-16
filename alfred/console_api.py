@@ -13,6 +13,7 @@ import json
 import re
 from .local import Fault
 from .policy import permitted
+from .drafts import draft_status
 
 SCHEMA_VERSION = 1
 NOTE_CATEGORY = {'project': 'projects', 'person': 'people', 'decision': 'operations',
@@ -180,7 +181,9 @@ def projection(server, bearer):
                               'text': text if isinstance(text, str) else None, 'path': path if isinstance(path, str) else None,
                               'fingerprint': view['fingerprint'], 'createdAt': _iso(row['created']),
                               'expiresAt': _iso(view['expires_at']), 'evidenceCurrent': bool(store.evidence_valid(db, row)),
-                              'mine': row['actor'] == p['id'], 'effect': view['effect']})
+                              'mine': row['actor'] == p['id'], 'effect': view['effect'],
+                              # A lapsed, archived or withdrawn draft is kept, never approvable as is.
+                              'draftStatus': draft_status(db, row, store.now())})
     nodes, edges = [], []
     sources = {s['source']: s for s in knowledge['sources']}
     with store.transaction() as db:

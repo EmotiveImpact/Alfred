@@ -315,7 +315,11 @@ class KnowledgeStore(DeskStore):
             return True
         # A draft the person accepted from a routine nomination (M10).
         from .routines import action_current
-        return action_current(self, db, row)
+        if action_current(self, db, row):
+            return True
+        # A lapsed or archived draft the owner re-proposed after its conversation ended.
+        from .drafts import reproposal_current
+        return reproposal_current(self, db, row)
 
     def valid_origin(self, db, row):
         from . import inbox

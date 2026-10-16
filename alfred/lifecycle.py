@@ -114,8 +114,18 @@ def withdraw_dependants(db, scope, actor, claim_ids, now):
                 cancelled.append(link['action_id'])
             elif action:
                 completed.append(link['action_id'])
+    # Drafts kept after their conversation ended, or re-proposed, are withdrawn too.
+    from .drafts import bound_to_claims, withdraw
+    bound = bound_to_claims(db, scope, claim_ids) if _has(db, 'actions') else set()
+    for action_id in sorted(bound - set(cancelled) - set(completed)):
+        action = db.execute('SELECT state FROM actions WHERE scope=? AND id=?', (scope, action_id)).fetchone()
+        if action and action['state'] in ('proposed', 'queued'):
+            cancelled.append(action_id)
+        elif action and action['state'] in ('executing', 'uncertain', 'verified'):
+            completed.append(action_id)
+    withdrawn = withdraw(db, scope, bound | set(cancelled), 'memory_forgotten', now)
     return {'conversation_answers_withdrawn': answers, 'pending_actions_cancelled': cancelled,
-            'completed_actions_not_undone': completed}
+            'completed_actions_not_undone': completed, 'drafts_withdrawn': withdrawn}
 
 
 REMOVED = 'Removed when its source was forgotten.'
@@ -146,7 +156,8 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
     unless `purge_history` is set (decision 0.3)."""
     counts = {'notes_removed': 0, 'reviewed_statements_invalidated': 0, 'conversation_answers_withdrawn': 0,
               'pending_actions_cancelled': [], 'completed_actions_not_undone': [], 'job_results_deleted': [],
-              'evidence_events_redacted': 0, 'connector_records_removed': 0, 'history_rows_purged': 0}
+              'evidence_events_redacted': 0, 'connector_records_removed': 0, 'history_rows_purged': 0,
+              'drafts_withdrawn': []}
     # Revoked first, so nothing can index or report under this source again.
     db.execute("UPDATE credentials SET revoked=1 WHERE id=? AND scope=? AND role='source'", (source, scope))
     notes = set()
@@ -202,6 +213,10 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
             refs = binding if isinstance(binding, list) else binding.get('sources', [])
             if {r.get('note_id') for r in refs if isinstance(r, dict)} & notes:
                 bound.add(link['action_id'])
+    if notes:
+        # Includes drafts whose conversation has ended and drafts re-proposed from them.
+        from .drafts import bound_to_notes
+        bound |= bound_to_notes(db, scope, notes)
     if _has(db, 'events'):
         seqs = [r[0] for r in db.execute('SELECT seq FROM events WHERE scope=? AND source=?', (scope, source))]
         for seq in seqs:
@@ -228,6 +243,9 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
             if json.loads(row['parameters']).get('source') == source:
                 bound.add(row['id'])
         _cancel(db, scope, bound, counts)
+        # Archived or lapsed copies are not a way around forgetting: their text goes too.
+        from .drafts import withdraw
+        counts['drafts_withdrawn'] = withdraw(db, scope, bound, 'source_forgotten', now)
     if _has(db, 'artefacts'):
         for row in db.execute('SELECT sha256,lineage FROM artefacts WHERE scope=?', (scope,)).fetchall():
             if source in json.loads(row['lineage']).get('sources', []):
