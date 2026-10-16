@@ -453,7 +453,12 @@ class KnowledgeStore(DeskStore):
             return True
         # A lapsed or archived draft the owner re-proposed after its conversation ended.
         from .drafts import reproposal_current
-        return reproposal_current(self, db, row)
+        if reproposal_current(self, db, row):
+            return True
+        # A draft a brain proposed at autonomy 2, while its accepted result and every
+        # excerpt it was given are still current (AGENT_HUB.md, H1).
+        from .brain import action_current as brain_action_current
+        return brain_action_current(self, db, row)
 
     def valid_origin(self, db, row):
         write = self.vault_write(row['capability'])
