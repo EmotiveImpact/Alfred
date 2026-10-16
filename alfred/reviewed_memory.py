@@ -307,8 +307,9 @@ class ReviewedMemory:
 
     def forget(self, bearer, identity, body):
         """Forget one reviewed statement everywhere current retrieval could use it."""
-        exact(body, {'version'})
-        if type(body['version']) is not int or body['version'] < 1:
+        # Value-free history rows are kept unless the owner explicitly asks to purge them (decision 0.3).
+        exact(body, {'version', 'purge_history'} if 'purge_history' in (body if type(body) is dict else {}) else {'version'})
+        if type(body['version']) is not int or body['version'] < 1 or type(body.get('purge_history', False)) is not bool:
             raise Fault('invalid_memory_review')
         from . import lifecycle
         with self.store.transaction() as db:
@@ -318,13 +319,16 @@ class ReviewedMemory:
                 return self._receipt(db,p,'claim_forgotten',identity)
             if c['version']!=body['version']:raise Fault('memory_review_changed',409)
             # Intent is journalled before the database changes, so a restore replays it.
-            lifecycle.append(self.store,{'kind':'claim_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()})
-            effect=lifecycle.apply_entry(db,{'kind':'claim_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity},self.store.now())
-            return lifecycle.record(self.store,db,p,'claim_forgotten',identity,{'removed':['reviewed value','reviewed relationship'],**effect})
+            entry={'kind':'claim_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()}
+            if body.get('purge_history'):entry['purge_history']=True
+            lifecycle.append(self.store,entry)
+            return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':['reviewed value','reviewed relationship']},lifecycle.REMAINS)
 
     def forget_entity(self, bearer, identity, body):
         """Forget an entity's name and every statement that mentions it."""
-        exact(body, set())
+        exact(body, {'purge_history'} if 'purge_history' in (body if type(body) is dict else {}) else set())
+        if type(body.get('purge_history', False)) is not bool:
+            raise Fault('invalid_fields')
         from . import lifecycle
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'})
@@ -334,9 +338,10 @@ class ReviewedMemory:
                 raise Fault('memory_entity_not_found',404)
             claims=db.execute('SELECT count(*) FROM memory_claims WHERE scope=? AND actor=? AND (subject_id=? OR object_id=?) AND state!=?',
                               (p['scope'],p['id'],identity,identity,'forgotten')).fetchone()[0]
-            lifecycle.append(self.store,{'kind':'entity_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()})
-            effect=lifecycle.apply_entry(db,{'kind':'entity_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity},self.store.now())
-            return lifecycle.record(self.store,db,p,'entity_forgotten',identity,{'removed':['entity name',f'{claims} reviewed statement(s)'],**effect})
+            entry={'kind':'entity_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()}
+            if body.get('purge_history'):entry['purge_history']=True
+            lifecycle.append(self.store,entry)
+            return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':['entity name',f'{claims} reviewed statement(s)']},lifecycle.REMAINS)
 
     @staticmethod
     def _receipt(db,p,kind,subject):

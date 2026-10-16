@@ -223,7 +223,8 @@ def recovery_command(args):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
-                                            'connector-add', 'connector-import', 'connectors', 'doctor', 'service-file'))
+                                            'connector-add', 'connector-import', 'connectors', 'doctor', 'service-file',
+                                            'deletion-report'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
@@ -245,9 +246,12 @@ def main():
     parser.add_argument('--dry-run', action='store_true', help='Show what an import would change, changing nothing')
     parser.add_argument('--allow-remove-all', action='store_true', help='Accept an export that removes every current item')
     # Host recovery (RUN-001). doctor only reads; service-file only prints or writes text and never installs.
-    parser.add_argument('--json', action='store_true', help='doctor: print the checks as JSON')
+    parser.add_argument('--json', action='store_true', help='doctor and deletion-report: print as JSON')
     parser.add_argument('--service', choices=('launchd', 'systemd'), help='service-file: launchd plist or systemd user unit (default: this platform)')
     parser.add_argument('--output', help='service-file: write to this new file instead of standard output; never a folder a service manager loads from')
+    # Deletion accounting (MEM-010): what the workspace still holds about one subject, and where.
+    parser.add_argument('--subject-kind', choices=('source', 'entity', 'statement'), help='Kind of subject for deletion-report')
+    parser.add_argument('--subject', help='Source, entity or statement identifier for deletion-report')
     args = parser.parse_args()
     os.umask(0o077)
     try:
@@ -279,7 +283,7 @@ def main():
             print('Export written:', result['directory'])
             print('Statements:', result['counts']['statements'], '- executive records:', result['counts']['executive_records'],
                   '- left out (forgotten, withheld or past retention):',
-                  sum(v for v in result['excluded'].values() if isinstance(v, int)))
+                  sum(result['excluded'][k] for k in ('forgotten_statements', 'withheld_statements', 'retention_ended_statements')))
             print('Readable JSON and Markdown with SHA256SUMS. Not a backup and not encrypted. Keep it private.')
         elif args.command == 'rotate':
             rotate_key(path, args.role)
@@ -295,10 +299,17 @@ def main():
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     raise Fault('stop_alfred_before_restore', 409) from None
-                result = restore(args.backup_file, path / 'desk.sqlite')
+                cache = None
+                if (path / 'job-cache').is_dir():
+                    from .jobs import BoundedCache
+                    cache = BoundedCache(path / 'job-cache', 256 * 1024 * 1024)
+                result = restore(args.backup_file, path / 'desk.sqlite', cache=cache)
             finally:
                 os.close(fd)
             print('Restored', result['restored_from'], '- replayed', result['journal_entries_replayed'], 'forget/revocation entries.')
+            again = result['removed_again']
+            print('Removed again from the backup:', ', '.join(f'{k} {v}' for k, v in sorted(again['totals'].items())) or 'nothing',
+                  '- cached results removed:', again['cached_results_removed'])
         elif args.command == 'rebuild-index':
             import fcntl
             from .rebuild import rebuild_index
@@ -319,6 +330,15 @@ def main():
             print('New revisions:', len(notes['new_revision']), '- no longer present:', len(notes['no_longer_present']),
                   '- new:', len(notes['new']), '- links unchanged:', report['links']['unchanged'],
                   '- reviewed statements whose state changed:', len(report['reviewed_statements']['state_changed']))
+        elif args.command == 'deletion-report':
+            if not args.subject_kind or not args.subject:
+                raise Fault('subject_required')
+            from .deletion import lines, report
+            cache = path / 'job-cache'
+            result = report(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], args.subject_kind, args.subject,
+                            cache_dir=cache if cache.is_dir() else None)
+            for line in ([json.dumps(result, indent=1, sort_keys=True)] if args.json else lines(result)):
+                print(line)
         elif args.command in ('connector-add', 'connector-import', 'connectors'):
             from .connectors import command
             for line in command(path, args):

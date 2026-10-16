@@ -198,8 +198,14 @@ assembled. A source credential cannot export. The bundle holds:
   stays `proposed`), version, value, validity, review time, conflicts, cited note ID, hash,
   revision and line range, the cited text when it is currently permitted, and lineage
   (`replaces`, `replaced_by`); a link to a statement that was left out reads `not_exported`;
+- `review-history.json`: the recorded review history of each exported statement (state,
+  time, whether the time is known, who changed it, origin and valid period), never a value;
+  the history of a statement that was left out is left out too and counted in the manifest;
+  `statements.md` shows the same steps under each statement;
 - `captures.json`: memory type, retention date (or none) and capture origin for each
   exported captured statement;
+- `routines.json`: the routine settings this credential authored (kind, schedule, budgets,
+  quiet hours, pause) and its pulse routine intervals, without runs or nominations;
 - `executive-records.json` and `executive-records.md`: goals, priorities, commitments,
   decisions, milestones and follow-ups with status, dates, project and cited-support state;
 - `manifest.json`: format and version, export time, workspace, credential, role, counts,
@@ -211,7 +217,7 @@ Never included: access keys and credential digests, sessions, invitation codes, 
 people's records, forgotten statements, statements whose support is withheld, captures whose
 retention has ended (even before the supervisor's next retention pass), note bodies beyond the
 cited lines, the knowledge index and note history, the audit log, lifecycle receipts, actions
-and drafts, and jobs. Markdown shows note text inside code spans or fenced blocks, so it is
+and drafts, routine runs and nominations, and jobs. Markdown shows note text inside code spans or fenced blocks, so it is
 displayed literally and cannot act as HTML or links.
 
 The destination must be a new folder or an existing empty one, outside every configured vault
@@ -219,7 +225,12 @@ and any folder holding `.obsidian`, and outside this repository; it may not be a
 its parent must exist. The export is written to a private staging folder (0700, files 0600)
 and renamed into place, so a failure leaves nothing behind and a destination that gains a file
 meanwhile is not overwritten. A synced folder is an acceptable destination. Each export adds
-an `export.written` audit entry naming its export ID.
+an `export.written` audit entry naming its export ID, and a line in the export register
+(`desk.sqlite.exports.jsonl`, beside the database, 0600) holding the export ID, folder and the
+identifiers it included, never values. Forget receipts and `deletion-report` use the register
+to name exports still on disk that hold a forgotten subject. ALFRED never deletes an export
+folder; remove it yourself. The format version is 2 since review history and routine settings
+were added.
 
 ## Not implemented
 

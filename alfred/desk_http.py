@@ -422,12 +422,18 @@ class Handler(BaseHTTPRequestHandler):
                     raise Fault('not_found', 404)
             elif mutation and re.fullmatch(r'/desk/sources/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget', url.path):
                 # Removes the source from ALFRED, never the person's own files.
-                exact(body, {'confirm'})
+                exact(body, {'confirm', 'purge_history'} if isinstance(body, dict) and 'purge_history' in body else {'confirm'})
                 if body['confirm'] != url.path.split('/')[3]:
                     raise Fault('confirmation_mismatch')
                 from .lifecycle import forget_source
                 jobs = self.server.jobs
-                result = forget_source(store, bearer, url.path.split('/')[3], cache=jobs.cache if jobs is not None else None)
+                result = forget_source(store, bearer, url.path.split('/')[3], cache=jobs.cache if jobs is not None else None,
+                                       purge_history=body.get('purge_history', False))
+            elif not mutation and url.path.startswith('/desk/deletion-report/') and not url.query:
+                # What the workspace still holds about a subject, and where (MEM-010). Owner only; reads only.
+                from .deletion import route as deletion_route
+                jobs = self.server.jobs
+                result = deletion_route(store, url.path, bearer, cache_dir=jobs.cache.root if jobs is not None and jobs.cache is not None else None)
             elif url.path == '/desk/pulse/history' and not url.query:
                 if self.server.pulse is None: raise Fault('pulse_not_configured',409)
                 result = self.server.pulse.prune_history(bearer,body) if mutation else self.server.pulse.history_plan(bearer)
