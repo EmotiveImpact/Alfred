@@ -88,9 +88,13 @@ def _has(db, table):
 def withdraw_dependants(db, scope, actor, claim_ids, now):
     """Clear saved answers and cancel undecided actions bound to forgotten claims."""
     answers, cancelled, completed = 0, [], []
+    # Conversations belong to a device credential; the ledger to its person. Cover both.
+    from .policy import ledger_keys
+    keys = ledger_keys(db, actor) if _has(db, 'identity_devices') else [actor]
     if _has(db, 'conversation_turns'):
-        for row in db.execute('''SELECT t.id,t.result FROM conversation_turns t JOIN conversations s ON s.id=t.session
-                                 WHERE s.scope=? AND s.actor=? AND t.result IS NOT NULL''', (scope, actor)).fetchall():
+        for row in db.execute(f'''SELECT t.id,t.result FROM conversation_turns t JOIN conversations s ON s.id=t.session
+                                 WHERE s.scope=? AND s.actor IN ({','.join('?' * len(keys))}) AND t.result IS NOT NULL''',
+                              (scope, *keys)).fetchall():
             bound = {m.get('claim_id') for m in json.loads(row['result'])['packet'].get('memory', [])}
             if bound & set(claim_ids):
                 db.execute("UPDATE conversation_turns SET state='memory_forgotten',result=NULL WHERE id=?", (row['id'],))
@@ -259,36 +263,44 @@ def apply_entry(db, entry, now, origin='recorded'):
     if not _has(db, 'memory_claims'):
         return {}
     actor = entry['actor']
+    # The ledger is per person. An entry may name the person or (written before ledgers were
+    # per person, or replayed into an older backup) a device credential of that person.
+    from .policy import ledger_keys
+    keys = ledger_keys(db, actor) if _has(db, 'identity_devices') else [actor]
+    within = f"actor IN ({','.join('?' * len(keys))})"
     if kind == 'entity_forgotten':
-        ids = [r[0] for r in db.execute('SELECT id FROM memory_claims WHERE scope=? AND actor=? AND (subject_id=? OR object_id=?)',
-                                         (scope, actor, entry['subject'], entry['subject']))]
-        db.execute('DELETE FROM memory_entities WHERE id=? AND scope=? AND actor=?', (entry['subject'], scope, actor))
+        ids = [r[0] for r in db.execute(f'SELECT id FROM memory_claims WHERE scope=? AND {within} AND (subject_id=? OR object_id=?)',
+                                         (scope, *keys, entry['subject'], entry['subject']))]
+        db.execute(f'DELETE FROM memory_entities WHERE id=? AND scope=? AND {within}', (entry['subject'], scope, *keys))
     else:
         ids = [entry['subject']]
     from .memory_history import record_if_present
     for identity in ids:
-        changed = db.execute("UPDATE memory_claims SET state='forgotten',value=NULL,object_id=NULL,version=version+1 WHERE id=? AND scope=? AND actor=? AND state!='forgotten'",
-                             (identity, scope, actor)).rowcount
-        if changed:
-            record_if_present(db, scope, actor, identity, 'forgotten', at, actor, origin=origin, detail=kind)
+        row = db.execute(f"SELECT actor FROM memory_claims WHERE id=? AND scope=? AND {within} AND state!='forgotten'",
+                         (identity, scope, *keys)).fetchone()
+        if row:
+            db.execute("UPDATE memory_claims SET state='forgotten',value=NULL,object_id=NULL,version=version+1 WHERE id=?", (identity,))
+            record_if_present(db, scope, row['actor'], identity, 'forgotten', at, entry.get('by', actor), origin=origin, detail=kind)
     return withdraw_dependants(db, scope, actor, ids, now)
 
 
 def record(store, db, p, kind, subject, receipt, remains=REMAINS):
+    from .policy import ledger
     rid = 'receipt-' + secrets.token_hex(12)
     full = {'id': rid, 'kind': kind, 'subject': subject, 'at': store.now(), **receipt,
             'remains': remains, 'secure_erasure': False}
     db.execute('INSERT INTO lifecycle_receipts VALUES (?,?,?,?,?,?,?)',
-               (rid, p['scope'], p['id'], kind, subject, store.now(), json.dumps(full)))
+               (rid, p['scope'], ledger(db, p), kind, subject, store.now(), json.dumps(full)))
     store.log(db, p['scope'], p['id'], 'lifecycle.' + kind, subject)
     return full
 
 
 def receipts(store, bearer):
+    from .policy import ledger
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner', 'reader'})
         return {'receipts': [json.loads(r['receipt']) for r in db.execute(
-            'SELECT receipt FROM lifecycle_receipts WHERE scope=? AND actor=? ORDER BY at DESC,id LIMIT 100', (p['scope'], p['id']))]}
+            'SELECT receipt FROM lifecycle_receipts WHERE scope=? AND actor=? ORDER BY at DESC,id LIMIT 100', (p['scope'], ledger(db, p)))]}
 
 
 def backup(store, bearer, directory) -> dict:

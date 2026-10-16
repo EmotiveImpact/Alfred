@@ -151,12 +151,18 @@ class Handler(BaseHTTPRequestHandler):
         policy, store = IdentityPolicy(self.server.store), self.server.store
         if not mutation and path == '/desk/identity':
             return policy.view(bearer)
+        if not mutation and path == '/desk/identity/people':
+            return policy.people(bearer)
         if not mutation:
             raise Fault('not_found', 404)
         def expiry(source, days):
             if type(days) is not int or not 1 <= days <= 30:
                 raise Fault('invalid_grant_days')
-            limit = next((s['credential_expires'] for s in policy.view(bearer)['sources'] if s['source'] == source), None)
+            view = policy.view(bearer)
+            if view['role'] != 'owner':
+                # Only an owner grants or invites; say so before anything about sources.
+                raise Fault('forbidden', 403)
+            limit = next((s['credential_expires'] for s in view['sources'] if s['source'] == source), None)
             if limit is None:
                 raise Fault('source_not_available', 404)
             return min(store.now() + days * 86400, limit)
@@ -177,6 +183,21 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/desk/identity/pairing':
             exact(body, {'role'})
             return policy.offer_pairing(bearer, body['role'])
+        if path == '/desk/identity/enrolments':
+            # A new person with their own reader key and no grants (SYS-001).
+            exact(body, {'label', 'epoch'})
+            return policy.offer_enrolment(bearer, body['label'], body['epoch'])
+        match = re.fullmatch(r'/desk/identity/people/(person-[0-9a-f]{24})/grants', path)
+        if match:
+            exact(body, {'source', 'capability', 'days', 'epoch', 'revoke'})
+            if type(body['revoke']) is not bool:
+                raise Fault('invalid_fields')
+            if body['revoke']:
+                policy.grant(bearer, body['source'], body['capability'], store.now() + 1, body['epoch'], revoke=True, person=match.group(1))
+            else:
+                policy.grant(bearer, body['source'], body['capability'], expiry(body['source'], body['days']), body['epoch'],
+                             person=match.group(1))
+            return policy.people(bearer)
         match = re.fullmatch(r'/desk/identity/devices/([A-Za-z0-9-]{1,40})/revoke', path)
         if match:
             exact(body, set())

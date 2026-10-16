@@ -14,6 +14,7 @@ import unittest
 from alfred.desk import init_demo, start_local_jobs
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor
 from alfred.desk_http import DeskHTTPServer
+from grant_helpers import grant_all
 
 
 class JobsHTTPTests(unittest.TestCase):
@@ -99,8 +100,10 @@ class JobsHTTPTests(unittest.TestCase):
         self.assertEqual(self.req('/desk/jobs?scope=other')[0], 400)
         job = self.submit('k2')[1]
         self.assertEqual(self.req(f"/desk/jobs/{job['id']}/events?after=-1")[0], 400)
+        inputs = [{'note': self.note('Sample film')['id']}]
+        grant_all(self.store, self.keys['owner'], ('read',))  # the reader holds nothing until granted
         self.login('reader')
-        self.assertEqual(self.submit('reader-job')[0], 403)
+        self.assertEqual(self.submit('reader-job', inputs=inputs)[0], 403)
         self.assertEqual(self.req('/desk/jobs/' + job['id'])[1]['id'], job['id'])
 
     def test_strict_grants_also_govern_job_history(self):

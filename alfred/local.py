@@ -209,7 +209,9 @@ class LocalCore:
         if row['role'] not in roles:
             raise Fault('forbidden', 403)
         device = db.execute('SELECT * FROM identity_devices WHERE credential=?', (row['id'],)).fetchone()
-        return dict(row) | {'person_id':device['person'], 'device_id':device['device'], 'generation':device['generation']}
+        # The review ledger is the person's, shared by every device of that person.
+        return dict(row) | {'person_id':device['person'], 'device_id':device['device'], 'generation':device['generation'],
+                            'ledger':device['person']}
 
     def log(self, db, scope, actor, kind, subject):
         db.execute('INSERT INTO audit(scope,actor,kind,subject,at) VALUES (?,?,?,?,?)',

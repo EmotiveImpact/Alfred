@@ -15,6 +15,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.executive import ExecutiveRecords, SCHEMA
 from alfred.policy import IdentityPolicy
+from grant_helpers import grant_all, revoke_all
 
 DAY = 86400
 T = 1_900_000_000
@@ -29,6 +30,7 @@ class Base(unittest.TestCase):
         self.other = self.store.provision('work', 'owner-two', 'owner', ttl=2592000)
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        grant_all(self.store, self.owner)
         self.vault = root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('---\ntitle: Atlas\ntype: project\n---\n# Atlas\n\nLaunch review on Friday.\nBudget sign-off pending.\n')
         (self.vault / 'Borealis.md').write_text('---\ntitle: Borealis\ntype: project\n---\n# Borealis\n\nA second fictional project.\n')
@@ -138,7 +140,7 @@ class ResponsibleTests(Base):
         record = self.get(entity['id'])
         self.assertEqual((record['responsible'], record['responsible_state'], record['responsible_name']), ('Budget owner', 'unavailable', None))
         self.assertNotIn('Morgan Example', json.dumps(self.view()))
-        IdentityPolicy(self.store).enable(self.owner, 0)
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         record = self.get(note['id'])
         self.assertEqual((record['responsible_state'], record['responsible_name']), ('unavailable', None))
         # The label can still change while the existing link is kept; a new hidden link cannot be made.
@@ -309,7 +311,7 @@ class BriefTests(Base):
         first = json.dumps(brief)
         self.assertIn('Launch review on Friday.', first); self.assertIn('budget sign-off pending', first)
         policy = IdentityPolicy(self.store)
-        policy.enable(self.owner, 0)
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         brief = self.records.brief(self.owner, made['id'])
         text = json.dumps(brief)
         for hidden in ('Launch review on Friday.', 'Budget sign-off pending.', 'budget sign-off pending', 'Looks after'):
@@ -326,7 +328,7 @@ class BriefTests(Base):
         brief = self.records.brief(self.owner, made['id'])
         self.assertEqual({s['claim_id'] for s in brief['statements']}, {self.status, self.owner_claim})
         self.assertEqual(brief['statements_not_shown']['awaiting_review'], 1)
-        IdentityPolicy(self.store).enable(self.owner, 0)
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         brief = self.records.brief(self.owner, made['id'])
         self.assertEqual((brief['statements'], brief['statements_not_shown']['withheld']), ([], 2))
         self.assertNotIn('budget sign-off pending', json.dumps(brief))
@@ -423,7 +425,7 @@ class InsightTests(Base):
         self.assertEqual((found['basis'], found['stored']), ('derived_from_your_records_not_accepted_fact', False))
         self.assertIn('"Finance lead"', found['statement'])
         self.assertEqual(len(self.view()['records']), before)
-        IdentityPolicy(self.store).enable(self.owner, 0)
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         self.assertEqual(self.insight('responsible_overdue_across_projects'), [])
 
     def test_namesake_links_do_not_combine_into_an_insight(self):
@@ -462,7 +464,7 @@ class SupportStateTests(Base):
         made = self.create('commitment', support=self.lines('Atlas', 8))
         self.assertEqual(self.get(made['id'])['support']['state'], 'current')
         policy = IdentityPolicy(self.store)
-        policy.enable(self.owner, 0)
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         self.assertEqual(self.get(made['id'])['support'], {'note_id': atlas, 'start_line': 8, 'end_line': 8, 'quote': None, 'state': 'unavailable'})
         policy.grant(self.owner, 'source', 'read', T + 3600, policy.view(self.owner)['epoch'])
         self.assertEqual(self.get(made['id'])['support']['quote'], 'Budget sign-off pending.')

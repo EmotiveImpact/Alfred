@@ -23,7 +23,7 @@ import json
 import re
 import secrets
 from .local import Fault, exact, ident, text, timestamp
-from .policy import permitted
+from .policy import ledger, permitted
 
 KINDS = ('goal', 'priority', 'commitment', 'decision', 'milestone', 'follow_up')
 STATUSES = {'goal': ('active', 'achieved', 'dropped'), 'priority': ('open', 'done', 'dropped'),
@@ -200,7 +200,7 @@ class ExecutiveRecords:
                 found = None
                 if kind == 'entity' and entities:
                     row = db.execute('SELECT id,kind,name FROM memory_entities WHERE id=? AND scope=? AND actor=?',
-                                     (key, p['scope'], p['id'])).fetchone()
+                                     (key, p['scope'], ledger(db, p))).fetchone()
                     if row:
                         found = {'ref': ref, 'name': row['name'], 'kind': row['kind'], 'origin': 'reviewed_entity'}
                 elif kind == 'note':
@@ -755,7 +755,7 @@ def _brief_statements(db, p, now, record, notes, resolve, ask):
     linked = {ref.partition(':')[2] for ref in (record['project'], record['responsible_link'])
               if ref and ref.startswith('entity:') and resolve(ref)}
     cited = {n['note_id'] for n in notes if n['state'] == 'current'}
-    entities = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], p['id']))}
+    entities = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], ledger(db, p)))}
     for key in sorted(linked):
         e = entities[key]
         if any(x['id'] != key and (x['kind'], x['name'].casefold()) == (e['kind'], e['name'].casefold()) for x in entities.values()):

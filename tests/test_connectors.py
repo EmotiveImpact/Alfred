@@ -26,6 +26,7 @@ from alfred.grounded import retrieve
 from alfred.desk import init_demo, load_keys
 from alfred.desk_http import DeskHTTPServer
 from alfred import connectors, console_api, inbox, lifecycle
+from grant_helpers import as_pre_strict_database
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 DAY = 86400
@@ -157,6 +158,9 @@ class ContractTests(unittest.TestCase):
             store = KnowledgeStore(Path(tmp) / 'desk.sqlite')
             owner = store.provision('legacy', 'owner', 'owner')
             store.provision('legacy', 'feed', 'source')
+            # Only a workspace that predates strict-by-default is recorded as legacy.
+            as_pre_strict_database(Path(tmp) / 'desk.sqlite')
+            store = KnowledgeStore(Path(tmp) / 'desk.sqlite')
             with store.connection() as db:
                 p = store.authenticate(db, owner, {'owner'})
                 self.assertTrue(permitted(db, p, 'feed', store.now(), 'read'))
@@ -571,7 +575,7 @@ class ConsoleHTTPTests(unittest.TestCase):
         self.sup = KnowledgeSupervisor(self.store, self.keys['owner'], self.keys['source'], self.home / 'project', vault=self.home / 'vault')
         self.sup.cycle()
         policy = IdentityPolicy(self.store)
-        policy.enable(self.keys['owner'], 0)
+        policy.enable(self.keys['owner'], policy.view(self.keys['owner'])['epoch'])
         policy.grant(self.keys['owner'], 'demo-source', 'read', self.store.now() + 3600, policy.view(self.keys['owner'])['epoch'])
         made = connectors.create_instance(self.store, self.keys['owner'], 'ics-export', 'Calendar export')
         self.source, self.bearer = made['source'], made['bearer']
@@ -672,7 +676,7 @@ class CommandTests(unittest.TestCase):
         self.keys = init_demo(self.home)
         self.store = KnowledgeStore(self.home / 'desk.sqlite')
         policy = IdentityPolicy(self.store)
-        policy.enable(self.keys['owner'], 0)
+        policy.enable(self.keys['owner'], policy.view(self.keys['owner'])['epoch'])
         self.export = Path(self.tmp.name) / 'calendar.ics'
         self.export.write_bytes(calendar(event('plan-1@example.org', 'Sample planning review')))
 
@@ -739,6 +743,7 @@ class CommandTests(unittest.TestCase):
         self.assertEqual((listed.returncode, listed.stdout.strip()), (0, 'No connector sources. Create one with connector-add.'))
         legacy = Path(self.tmp.name) / 'legacy'
         init_demo(legacy)
+        as_pre_strict_database(legacy / 'desk.sqlite')  # a demo created before strict-by-default
         refused = subprocess.run([sys.executable, '-m', 'alfred.desk', 'connector-add', '--connector', 'ics-export',
                                   '--connector-label', 'Calendar export', '--data-dir', str(legacy)],
                                  cwd=REPOSITORY, capture_output=True, text=True, timeout=60)

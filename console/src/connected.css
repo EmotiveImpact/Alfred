@@ -73,6 +73,10 @@
 .access-chip{padding:4px 10px;border:1px solid var(--edge-strong);border-radius:999px;font-size:11px;color:#8e9698}
 .access-chip.on{border-color:#acb9a066;color:var(--sage)}
 button.access-chip:hover:not(:disabled){border-color:#d7b37566}
+.person-row{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:6px}
+.person-row>small{font-size:11px;color:var(--quiet)}
+.person-row .access-caps{align-items:center}
+.access-caps-source{flex:1 1 140px;min-width:0;font-size:11px;color:var(--quiet);overflow-wrap:anywhere}
 .invitation-code{display:flex;flex-direction:column;gap:4px;margin:10px 0 0;padding:10px 12px;border:1px solid #d7b37540;border-radius:8px;word-break:break-all}
 .invitation-code small{font-size:10px;color:var(--quiet)}
 /* Bounded jobs: a plain event timeline and a text result. */

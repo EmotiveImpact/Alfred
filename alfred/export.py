@@ -25,6 +25,7 @@ from pathlib import Path
 import secrets
 import shutil
 from .local import Fault
+from .policy import ledger
 
 FORMAT, FORMAT_VERSION = 'alfred-portable-export', 1
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -58,7 +59,7 @@ def collect(store, bearer):
             raise Fault('export_authority_changed', 409)
         captures = {r['claim_id']: dict(r) for r in db.execute(
             'SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',
-            (p['scope'], p['id']))}
+            (p['scope'], ledger(db, p)))}
     entities = {e['id']: e for e in memory['entities']}
     replaced_by = {c['replaces_id']: c['id'] for c in memory['claims'] if c['replaces_id']}
     excluded = {'forgotten_statements': 0, 'withheld_statements': 0, 'retention_ended_statements': 0}

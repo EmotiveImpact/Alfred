@@ -23,6 +23,7 @@ those still take only accepted, current, authorised and valid statements.
 """
 from __future__ import annotations
 from .local import Fault, ident, timestamp
+from .policy import ledger, ledger_keys, person_credentials
 
 VERSION = 1
 REVIEW_STATES = ('proposed', 'accepted', 'disputed', 'withdrawn', 'superseded', 'invalidated', 'forgotten')
@@ -107,15 +108,21 @@ def migrate(db, now):
         def add(state, at, by, known=True, detail=None, related=None, valid=None):
             record(db, scope, actor, cid, state, at, by, origin='migrated', time_known=known, detail=detail,
                    related=related, valid=valid)
-        add('proposed', c['created'], actor, detail='from_statement_record', valid=(c['valid_from'], c['valid_until']))
+        # The ledger key is the person; the audit names the device credential that acted.
+        keys = ledger_keys(db, actor) if _has(db, 'identity_devices') else [actor]
+        within = ','.join('?' * len(keys))
+        proposer = db.execute(f"SELECT actor FROM audit WHERE scope=? AND actor IN ({within}) AND subject=? AND kind='memory.proposed' ORDER BY seq LIMIT 1",
+                              (scope, *keys, cid)).fetchone()
+        add('proposed', c['created'], proposer['actor'] if proposer else actor, detail='from_statement_record',
+            valid=(c['valid_from'], c['valid_until']))
         last = 'proposed'
-        audited = db.execute(f'''SELECT kind,at FROM audit WHERE scope=? AND actor=? AND subject=?
-            AND kind IN ({','.join('?' * len(AUDIT_STATES))}) ORDER BY seq''', (scope, actor, cid, *AUDIT_STATES)).fetchall()
+        audited = db.execute(f'''SELECT kind,at,actor FROM audit WHERE scope=? AND actor IN ({within}) AND subject=?
+            AND kind IN ({','.join('?' * len(AUDIT_STATES))}) ORDER BY seq''', (scope, *keys, cid, *AUDIT_STATES)).fetchall()
         for row in audited:
             state = AUDIT_STATES[row['kind']]
             if state == last:
                 continue
-            by = SYSTEM if state == 'invalidated' else actor
+            by = SYSTEM if state == 'invalidated' else row['actor']
             related = None
             if state == 'superseded' and len(replaced_by.get(cid, [])) == 1:
                 related = replaced_by[cid][0]
@@ -149,7 +156,7 @@ def observe(db, p, claims, now):
     """
     last = {}
     for r in db.execute('''SELECT claim_id,state FROM memory_claim_history WHERE scope=? AND actor=?
-                           AND state IN ('withheld','restored') ORDER BY seq''', (p['scope'], p['id'])):
+                           AND state IN ('withheld','restored') ORDER BY seq''', (p['scope'], ledger(db, p))):
         last[r['claim_id']] = r['state']
     for c in claims:
         if c['state'] in ('invalidated', 'forgotten'):
@@ -161,8 +168,8 @@ def observe(db, p, claims, now):
             state = 'restored'
         else:
             continue
-        if count(db, p['scope'], p['id'], c['id']) < MAX_HISTORY_PER_CLAIM:
-            record(db, p['scope'], p['id'], c['id'], state, now, SYSTEM, origin='observed',
+        if count(db, p['scope'], ledger(db, p), c['id']) < MAX_HISTORY_PER_CLAIM:
+            record(db, p['scope'], ledger(db, p), c['id'], state, now, SYSTEM, origin='observed',
                    detail='support_unavailable_or_not_permitted' if state == 'withheld' else 'support_readable_again')
 
 
@@ -237,9 +244,12 @@ def lineage(claims, identity):
     return back, forward
 
 
-def _entry_view(e, p):
+def _entry_view(e, p, devices=frozenset()):
+    # The history is the person's; a decision made on another of their devices says so.
+    by = ('you' if e['by'] == p['id'] else 'alfred' if e['by'] == SYSTEM
+          else 'you_on_another_device' if e['by'] in devices else 'another_credential')
     return {'seq': e['seq'], 'state': e['state'], 'at': e['at'], 'time_known': bool(e['time_known']),
-            'by': 'you' if e['by'] == p['id'] else 'alfred' if e['by'] == SYSTEM else 'another_credential',
+            'by': by,
             'origin': e['origin'], 'related_id': e['related_id'], 'detail': e['detail'],
             # Only a proposal, or a decision that set the period, records a valid period.
             'valid_period': {'from': e['valid_from'], 'until': e['valid_until']} if e['sets_valid'] else None}
@@ -262,12 +272,13 @@ class MemoryHistory:
                 # Unknown and another person's statements are indistinguishable.
                 raise Fault('memory_claim_not_found', 404)
             claim = found[0]
-            entries = rows(db, p['scope'], p['id'], identity).get(identity, [])
+            entries = rows(db, p['scope'], ledger(db, p), identity).get(identity, [])
+            devices = person_credentials(db, ledger(db, p))
             back, forward = lineage(claims, identity)
             by_id = {c['id']: c for c in claims}
             return {'claim': summary(claim, entities) | {'usable': claim['usable'], 'conflicts': claim['conflicts'],
                                                          'withheld': bool(claim['withheld'])},
-                    'entries': [_entry_view(e, p) for e in entries],
+                    'entries': [_entry_view(e, p, devices) for e in entries],
                     'recorded_from_start': bool(entries) and entries[0]['origin'] != 'migrated',
                     'times_unknown': sum(not e['time_known'] for e in entries),
                     'lineage': {'replaces': [summary(by_id[i], entities) for i in back],
@@ -285,7 +296,7 @@ class MemoryHistory:
             entities, claims = self.memory._snapshot(db, p, now)
             moment = min(at, now)
             when_valid = valid if valid is not None else moment
-            history = rows(db, p['scope'], p['id'])
+            history = rows(db, p['scope'], ledger(db, p))
             replaced_by = {c['replaces_id']: c['id'] for c in claims if c['replaces_id']}
             held, outside, uncertain = [], [], []
             not_held = {s: 0 for s in REVIEW_STATES if s != 'accepted'}

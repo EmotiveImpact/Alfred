@@ -24,6 +24,7 @@ import json
 import re
 import secrets
 from .local import Fault, canonical, exact, fingerprint, ident
+from .policy import ledger
 
 DAY, HOUR = 86400, 3600
 KINDS = {
@@ -438,7 +439,7 @@ class Routines:
         # Accepted, current statements the person captured as commitments. The shared currentness
         # rule rechecks review state, validity, conflicts, the source revision and the read grant.
         captured = {row['claim_id'] for row in db.execute('''SELECT m.claim_id FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id
-            WHERE c.scope=? AND c.actor=? AND m.memory_type='commitment' ''', (p['scope'], p['id']))}
+            WHERE c.scope=? AND c.actor=? AND m.memory_type='commitment' ''', (p['scope'], ledger(db, p)))}
         statements = {'read': 0, 'undated': 0, 'not_usable': 0}
         for c in ReviewedMemory._claims(db, p, now):
             if c['id'] not in captured:
@@ -672,7 +673,7 @@ class Routines:
             if 'claims' not in cache:
                 cache['claims'] = {c['id']: c for c in ReviewedMemory._claims(db, p, now)}
                 cache['entities'] = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?',
-                                                                         (p['scope'], p['id']))}
+                                                                         (p['scope'], ledger(db, p)))}
             return cache['claims'], cache['entities']
 
         def resolve(kind, identity, version):
@@ -799,8 +800,8 @@ class Routines:
             # The same reconciliation the reviewed-memory view runs: edited support invalidates.
             self.memory._reconcile(db, p)
             procedural = {r['claim_id']: dict(r) for r in db.execute('''SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id
-                WHERE c.scope=? AND c.actor=? AND m.memory_type='procedural' ''', (p['scope'], p['id']))}
-            entities = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], p['id']))}
+                WHERE c.scope=? AND c.actor=? AND m.memory_type='procedural' ''', (p['scope'], ledger(db, p)))}
+            entities = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], ledger(db, p)))}
             items = []
             for c in ReviewedMemory._claims(db, p, now):
                 if c['id'] not in procedural or c['state'] == 'forgotten':

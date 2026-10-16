@@ -13,6 +13,7 @@ from alfred.conversation import ConversationService
 from alfred.grounded import retrieve
 from alfred.policy import IdentityPolicy
 from alfred.reviewed_memory import ReviewedMemory
+from grant_helpers import grant_all, revoke_all
 
 
 class FocusTests(unittest.TestCase):
@@ -30,6 +31,7 @@ class FocusTests(unittest.TestCase):
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
         other_source = self.store.provision('elsewhere', 'other-source', 'source', ttl=100000)
         self.other_owner = self.store.provision('elsewhere', 'other-owner', 'owner', ttl=100000)
+        grant_all(self.store, self.owner); grant_all(self.store, self.other_owner)
         other = root / 'other'; other.mkdir(); (other / 'Secret.md').write_text('# Secret\nAnother workspace.\n')
         MarkdownVault(self.store, other_source, other).scan()
         self.memory = ReviewedMemory(self.store)
@@ -72,8 +74,10 @@ class FocusTests(unittest.TestCase):
         hidden_source = self.store.provision('work', 'hidden-source', 'source', ttl=100000)
         folder = Path(self.tmp.name) / 'hidden'; folder.mkdir(); (folder / 'Private.md').write_text('# Private\nUngranted.\n')
         MarkdownVault(self.store, hidden_source, folder).scan()
+        grant_all(self.store, self.owner)  # only to learn the note's identifier as the owner
         private = self.note('Private')['id']
         policy = IdentityPolicy(self.store)
+        revoke_all(self.store, self.owner)
         policy.grant(self.owner, 'source', 'read', 5000, policy.view(self.owner)['epoch'])
         with self.assertRaises(Fault) as caught:
             retrieve(self.store, self.owner, 'Tell me more', focus='note:' + private)

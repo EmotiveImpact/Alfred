@@ -8,6 +8,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault, parse_note, resolve_
 from alfred.knowledge_context import build_packet
 from alfred.knowledge_http import knowledge_get
 from alfred.local import Fault
+from grant_helpers import grant_all
 
 
 class MarkdownTests(unittest.TestCase):
@@ -48,6 +49,7 @@ class KnowledgeTests(unittest.TestCase):
         self.clock=[1000];self.store=KnowledgeStore(self.root/'db.sqlite',clock=lambda:self.clock[0])
         self.owner=self.store.provision('work','owner','owner');self.reader=self.store.provision('work','reader','reader');self.source=self.store.provision('work','source','source')
         self.foreign=self.store.provision('other','foreign','owner')
+        grant_all(self.store,self.owner)
         self.connector=MarkdownVault(self.store,self.source,self.vault)
     def tearDown(self):self.tmp.cleanup()
     def write(self,path,body):

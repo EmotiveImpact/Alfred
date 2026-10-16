@@ -10,6 +10,7 @@ import secrets
 import threading
 import time
 from .local import Fault, exact, ident, text, fingerprint, canonical
+from .policy import ledger
 from .evidence_review import assess_interpretation
 from .grounded import (retrieve, question_terms, references, check_packet, packet_current_db,
                        sources_current_db, validate_interpretation, parse_focus)
@@ -284,7 +285,7 @@ class ConversationService:
         if kind=='note':
             return sources_current_db(db,p['scope'],[{'note_id':identity,'sha256':focus['sha256'],'revision':focus['revision']}],self.store.now(),p)
         return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_entities'").fetchone()
-                    and db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],p['id'])).fetchone())
+                    and db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],ledger(db,p))).fetchone())
 
     def propose_draft(self,bearer,sid,body):
         exact(body,{'turn_id','text','request_id'});ident(body['turn_id']);ident(body['request_id']);text(body['text'])

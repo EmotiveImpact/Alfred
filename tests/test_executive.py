@@ -12,6 +12,7 @@ from alfred.local import Fault
 from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.executive import ExecutiveRecords
+from grant_helpers import grant_all
 
 DAY = 86400
 
@@ -29,6 +30,7 @@ class ExecutiveTests(unittest.TestCase):
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
         other_source = self.store.provision('elsewhere', 'other-source', 'source', ttl=2592000)
         self.other_owner = self.store.provision('elsewhere', 'other-owner', 'owner', ttl=2592000)
+        grant_all(self.store, self.owner); grant_all(self.store, self.other_owner)
         other = root / 'other'; other.mkdir(); (other / 'Hidden.md').write_text('# Hidden\nElsewhere.\n')
         MarkdownVault(self.store, other_source, other).scan()
         ReviewedMemory(self.store).create_entity(self.owner, {'id': 'atlas', 'kind': 'project', 'name': 'Atlas'})

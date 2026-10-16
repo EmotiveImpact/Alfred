@@ -15,6 +15,7 @@ from alfred.conversation import ConversationService
 from alfred.policy import IdentityPolicy
 from alfred.grounded import retrieve
 from alfred import lifecycle
+from grant_helpers import grant_all, revoke_all
 
 
 class LifecycleTests(unittest.TestCase):
@@ -27,6 +28,7 @@ class LifecycleTests(unittest.TestCase):
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000)
         self.source = self.store.provision('work', 'source', 'source', ttl=100000)
         self.other = self.store.provision('work', 'other', 'source', ttl=100000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\n')
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
@@ -51,6 +53,10 @@ class LifecycleTests(unittest.TestCase):
         return next(c for c in self.memory.view(bearer or self.owner)['claims'] if c['id'] == identity)
 
     def grant(self, source, revoke=False):
+        # These tests narrow the fixture's explicit grants to exactly what they grant here.
+        if not getattr(self, 'narrowed', False):
+            revoke_all(self.store, self.owner)
+            self.narrowed = True
         return self.policy.grant(self.owner, source, 'read', 5000, self.policy.view(self.owner)['epoch'], revoke=revoke)
 
     # Unavailable is not deleted.
@@ -128,13 +134,16 @@ class LifecycleTests(unittest.TestCase):
 
     # Backup and restore.
     def test_restore_does_not_resurrect_forgotten_or_revoked(self):
+        # Narrow the fixture's grants first; restore replays the whole journal, narrowing included.
+        revoke_all(self.store, self.owner); self.narrowed = True
+        narrowing = len(lifecycle.entries(lifecycle.journal_path(self.store)))
         manifest = lifecycle.backup(self.store, self.owner, self.root / 'backups')
         self.memory.forget(self.owner, self.status, {'version': self.claim(self.status)['version']})
         self.memory.forget_entity(self.owner, 'mina', {})
         self.grant('source'); self.grant('source', revoke=True)
         self.store.revoke('reader')
         result = lifecycle.restore(self.root / 'backups' / manifest['file'], self.db)
-        self.assertEqual(result['journal_entries_replayed'], 4); self.assertEqual(result['integrity_check'], 'ok')
+        self.assertEqual(result['journal_entries_replayed'], 4 + narrowing); self.assertEqual(result['integrity_check'], 'ok')
         restored = KnowledgeStore(self.db, clock=lambda: self.clock[0]); memory = ReviewedMemory(restored)
         claims = {c['id']: c for c in memory.view(self.owner)['claims']}
         self.assertEqual(claims[self.status]['state'], 'forgotten'); self.assertIsNone(claims[self.status]['value'])
@@ -224,6 +233,7 @@ class SourceForgetTests(LifecycleTests):
     def test_adding_the_folder_again_never_revives_old_reviews(self):
         lifecycle.forget_source(self.store, self.owner, 'source')
         fresh = self.store.provision('work', 'source-2', 'source', ttl=100000)
+        grant_all(self.store, self.owner)
         MarkdownVault(self.store, fresh, self.vault).scan()
         self.assertEqual(len(self.store.knowledge(self.owner)['nodes']), 1)
         self.assertEqual({c['state'] for c in self.memory.view(self.owner)['claims']}, {'invalidated'})

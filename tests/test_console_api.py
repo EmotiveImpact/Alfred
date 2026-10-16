@@ -14,6 +14,7 @@ from alfred.desk import init_demo
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.desk_http import DeskHTTPServer
 from alfred.policy import IdentityPolicy
+from grant_helpers import grant_all, person_of
 
 
 class ConsoleProjectionHTTPTests(unittest.TestCase):
@@ -125,6 +126,7 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
         vault = self.root / 'other-vault'; vault.mkdir()
         (vault / 'Hidden.md').write_text('# Zephyrmarker project\nBelongs to another workspace.\n')
         MarkdownVault(self.store, other_source, vault).scan()
+        grant_all(self.store, other_owner)  # its own owner may read it; nobody here may
         self.login(self.keys['owner']); p = self.projection()
         self.assertNotIn('Zephyrmarker', json.dumps(p)); self.assertEqual(p['counts']['notes'], 20)
         hidden = self.store.knowledge(other_owner)['nodes'][0]['id']
@@ -136,10 +138,13 @@ class ConsoleProjectionHTTPTests(unittest.TestCase):
         vault = self.root / 'hidden-vault'; vault.mkdir()
         (vault / 'Secret.md').write_text('# Classifiedmarker\nUngranted synthetic record. [[Sample film]]\n')
         MarkdownVault(self.store, hidden_source, vault, label='Classified label').scan()
-        self.login(self.keys['owner']); legacy = self.projection()
+        self.login(self.keys['owner'])
+        self.assertEqual(self.projection()['counts']['notes'], 20)  # a new source is ungranted, even to the owner
+        grant_all(self.store, self.keys['owner'], ('read',), sources=['hidden-source'], people=[person_of(self.store, self.keys['owner'])])
+        legacy = self.projection()
         self.assertIn('Classifiedmarker', json.dumps(legacy)); self.assertEqual(legacy['counts']['notes'], 21)
         policy = IdentityPolicy(self.store)
-        policy.grant(self.keys['owner'], 'demo-source', 'read', self.store.now() + 3600, policy.view(self.keys['owner'])['epoch'])
+        policy.grant(self.keys['owner'], 'hidden-source', 'read', self.store.now() + 3600, policy.view(self.keys['owner'])['epoch'], revoke=True)
         strict = self.projection(); text = json.dumps(strict)
         self.assertNotIn('Classifiedmarker', text); self.assertNotIn('Classified label', text); self.assertNotIn('hidden-source', text)
         self.assertEqual(strict['counts']['notes'], 20)
