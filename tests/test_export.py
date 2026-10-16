@@ -28,7 +28,7 @@ from alfred.reviewed_memory import ReviewedMemory
 
 DAY = 86400
 FILES = {'README.md', 'manifest.json', 'statements.json', 'captures.json', 'executive-records.json',
-         'statements.md', 'executive-records.md', 'SHA256SUMS'}
+         'review-history.json', 'routines.json', 'statements.md', 'executive-records.md', 'SHA256SUMS'}
 
 
 class ExportTests(unittest.TestCase):
@@ -112,7 +112,7 @@ class ExportTests(unittest.TestCase):
         manifest = json.loads(files['manifest.json'])
         self.assertEqual(manifest, {k: v for k, v in result.items() if k != 'directory'})
         self.assertEqual((manifest['format'], manifest['format_version'], manifest['exported_at']),
-                         ('alfred-portable-export', 1, self.clock[0]))
+                         ('alfred-portable-export', 2, self.clock[0]))
         self.assertEqual((manifest['workspace'], manifest['credential'], manifest['role']), ('work', 'owner', 'owner'))
         self.assertEqual({f['path'] for f in manifest['files']}, FILES - {'manifest.json', 'SHA256SUMS'})
         for entry in manifest['files']:
@@ -121,7 +121,9 @@ class ExportTests(unittest.TestCase):
         sums = dict(reversed(line.split('  ')) for line in files['SHA256SUMS'].decode().splitlines())
         self.assertEqual(set(sums), FILES - {'SHA256SUMS'})
         self.assertTrue(all(hashlib.sha256(files[name]).hexdigest() == digest for name, digest in sums.items()))
-        self.assertEqual(manifest['counts'], {'entities': 3, 'statements': 8, 'captures': 2, 'executive_records': 2})
+        self.assertEqual({k: manifest['counts'][k] for k in ('entities', 'statements', 'captures', 'executive_records', 'routine_settings')},
+                         {'entities': 3, 'statements': 8, 'captures': 2, 'executive_records': 2, 'routine_settings': 0})
+        self.assertEqual(manifest['counts']['review_history_entries'], len(json.loads(files['review-history.json'])['entries']))
         self.assertEqual({k: manifest['excluded'][k] for k in ('forgotten_statements', 'withheld_statements', 'retention_ended_statements')},
                          {'forgotten_statements': 1, 'withheld_statements': 1, 'retention_ended_statements': 1})
         self.assertFalse(manifest['encrypted'] or manifest['restorable'] or manifest['authority_granted'])
@@ -204,7 +206,8 @@ class ExportTests(unittest.TestCase):
         export(self.store, self.reader, self.root / 'reader')
         files = self.bundle(self.root / 'reader')
         manifest = json.loads(files['manifest.json'])
-        self.assertEqual(manifest['counts'], {'entities': 0, 'statements': 0, 'captures': 0, 'executive_records': 0})
+        self.assertEqual(manifest['counts'], {'entities': 0, 'statements': 0, 'captures': 0, 'executive_records': 0,
+                                              'review_history_entries': 0, 'routine_settings': 0})
         everything = b''.join(files.values())
         for owner_text in (b'awaiting review', b'Send the Atlas brief', b'Mina'):
             self.assertNotIn(owner_text, everything)

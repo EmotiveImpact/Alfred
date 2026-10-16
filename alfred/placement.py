@@ -69,6 +69,7 @@ def artefacts(data_dir):
     return [('database', data_dir / 'desk.sqlite'), ('write-ahead log', data_dir / 'desk.sqlite-wal'),
             ('shared-memory index', data_dir / 'desk.sqlite-shm'),
             ('lifecycle journal', data_dir / ('desk.sqlite' + JOURNAL_SUFFIX)),
+            ('export register', data_dir / 'desk.sqlite.exports.jsonl'),
             ('access keys', data_dir / 'desk-access.json'), ('host lock', data_dir / 'desk.lock'),
             ('job cache', data_dir / 'job-cache')]
 
