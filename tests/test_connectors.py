@@ -171,7 +171,7 @@ class InstanceTests(Base):
         source, bearer = self.connector()
         view = {s['source']: s for s in self.policy.view(self.owner)['sources']}
         self.assertEqual(view[source]['label'], 'Calendar export')
-        self.assertEqual(view[source]['permitted'], {'connector.read': True, 'inbox.write': False, 'model': False, 'read': True, 'sync': False})
+        self.assertEqual(view[source]['permitted'], {'connector.read': True, 'inbox.write': False, 'model': False, 'read': True, 'sync': False, 'vault.append': False})
         self.assertEqual([s['source'] for s in IdentityPolicy(self.store).view(self.reader)['sources']], [])
         self.assertEqual(self.store.principal(bearer, {'source'})['id'], source)
 

@@ -23,6 +23,12 @@ The date and time must be a real calendar date and clock time. A conflict copy
 of a conflict copy is traced back to the first original. OneDrive, iCloud Drive,
 Google Drive, Obsidian Sync and Git conflicts are deliberately not recognised by
 name; docs/SYNC.md explains why.
+
+A copy from a tool not recognised by name is detected by content instead
+(`content_copies`): a note with exactly the same bytes as another note in the same
+folder, whose name is the other note's name plus a short suffix (`Atlas 2.md`,
+`Atlas (1).md`, `Atlas-laptop.md`). It is recorded the same way, with the tool
+`unrecognised_same_content`. Empty notes are never matched this way.
 """
 from __future__ import annotations
 from datetime import datetime
@@ -32,6 +38,8 @@ import re
 from .local import Fault
 
 MAX_CONFLICTS = 64
+CONTENT_TOOL = 'unrecognised_same_content'
+_COPY_SUFFIX = re.compile(r'[ ._~(-].{0,63}')
 _EXTENSION = r'(?P<ext>\.[Mm][Dd])'
 PATTERNS = (
     ('syncthing', re.compile(r'(?P<base>.+)\.sync-conflict-(?P<date>[0-9]{8})-(?P<time>[0-9]{6})-(?:[A-Z2-7]{7})?' + _EXTENSION)),
@@ -82,6 +90,43 @@ def conflict_copy(path):
     return {'tool': tool, 'original_path': posixpath.join(folder, name) if folder else name, 'markers': markers}
 
 
+def _stem(path):
+    name = posixpath.basename(path)
+    return name[:-3] if name.lower().endswith('.md') else name
+
+
+def _copy_of(copy, original):
+    """True when `copy` is `original`'s name plus a short suffix, in the same folder."""
+    if copy == original or posixpath.dirname(copy) != posixpath.dirname(original):
+        return False
+    stem, base = _stem(copy), _stem(original)
+    return (len(stem) > len(base) and stem[:len(base)].casefold() == base.casefold()
+            and bool(_COPY_SUFFIX.fullmatch(stem[len(base):])))
+
+
+def content_copies(notes):
+    """Conflict copies from tools not recognised by name, found by identical content.
+
+    `notes` are parsed notes with `path`, `sha256` and `body`. Returns one entry per
+    copy naming the note it duplicates. Identical content alone is not enough:
+    the name must also extend the original's name, so two unrelated notes that
+    happen to match are left alone. Nothing is compared beyond the hash.
+    """
+    groups = {}
+    for n in notes:
+        if n['body'].strip() and not conflict_copy(n['path']):
+            groups.setdefault((posixpath.dirname(n['path']), n['sha256']), []).append(n['path'])
+    found = []
+    for (_, digest), paths in sorted(groups.items()):
+        if len(paths) < 2:
+            continue
+        for path in sorted(paths):
+            originals = sorted((o for o in paths if _copy_of(path, o)), key=lambda o: (len(_stem(o)), o))
+            if originals:
+                found.append({'path': path, 'original_path': originals[0], 'tool': CONTENT_TOOL, 'markers': 0, 'sha256': digest})
+    return found
+
+
 def conflict_id(source, path):
     """Stable reference for audit entries, so the audit log never holds note paths."""
     return hashlib.sha256((source + '\0' + path).encode()).hexdigest()[:24]
@@ -102,14 +147,29 @@ def scanned(copies, notes, errors):
     return [{**c, 'original_present': c['original_path'] in present} for c in copies[:MAX_CONFLICTS]]
 
 
-def checked(conflicts, note_paths):
-    """Validate what a scanner reports before it is stored next to the notes."""
+def checked(conflicts, note_paths, hashes=None):
+    """Validate what a scanner reports before it is stored next to the notes.
+
+    `hashes` maps casefolded indexed note paths to their SHA-256; a copy detected by
+    content must match its original's hash exactly.
+    """
     if not isinstance(conflicts, (list, tuple)) or len(conflicts) > MAX_CONFLICTS:
         raise Fault('knowledge_capacity')
     from .knowledge import safe_path
     result, seen = [], set()
     for item in conflicts:
-        if type(item) is not dict or set(item) != {'path', 'original_path', 'tool', 'markers', 'original_present'}:
+        keys = {'path', 'original_path', 'tool', 'markers', 'original_present'}
+        if type(item) is dict and item.get('tool') == CONTENT_TOOL and set(item) == keys | {'sha256'}:
+            path, original = safe_path(item['path']), safe_path(item['original_path'])
+            if (conflict_copy(path) or item['markers'] != 0 or item['original_present'] is not True
+                    or not _copy_of(path, original) or (hashes or {}).get(original.casefold()) != item['sha256']):
+                raise Fault('invalid_sync_conflict')
+            if path.casefold() in note_paths or path.casefold() in seen:
+                raise Fault('duplicate_note_path')
+            seen.add(path.casefold())
+            result.append({'path': path, 'original_path': original, 'tool': CONTENT_TOOL, 'markers': 0, 'original_present': True})
+            continue
+        if type(item) is not dict or set(item) != keys:
             raise Fault('invalid_sync_conflict')
         path = safe_path(item['path'])
         expected = conflict_copy(path)
@@ -148,4 +208,5 @@ def view(rows, visible_notes):
     return [{'source': r['source'], 'path': r['path'], 'original_path': r['original_path'],
              'original': r['original_id'] if r['original_id'] in visible_notes else None,
              'state': r['state'], 'tool': r['tool'], 'detected': r['detected'], 'checked': r['checked'],
+             'detected_by': 'content_hash' if r['tool'] == CONTENT_TOOL else 'name',
              'basis': 'sync_conflict_copy_not_indexed'} for r in rows]

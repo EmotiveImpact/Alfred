@@ -9,7 +9,7 @@ import re
 import secrets
 from .local import Fault, ident, text, timestamp
 
-CAPABILITIES = {'read', 'model', 'inbox.write', 'sync', 'connector.read'}
+CAPABILITIES = {'read', 'model', 'inbox.write', 'vault.append', 'sync', 'connector.read'}
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS identity_devices(
  credential TEXT PRIMARY KEY REFERENCES credentials(id), person TEXT NOT NULL,
@@ -165,7 +165,7 @@ class IdentityPolicy:
     def invite(self, bearer, source, capability, grant_expires, epoch):
         """A one-time code another person redeems with their own key. No one is granted by ID."""
         ident(source); timestamp(grant_expires)
-        if capability not in CAPABILITIES or capability == 'inbox.write':
+        if capability not in CAPABILITIES or capability in ('inbox.write', 'vault.append'):
             # Writing into the vault stays with the owner's own person.
             raise Fault('invalid_capability')
         code = secrets.token_urlsafe(18)
