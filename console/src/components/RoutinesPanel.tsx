@@ -6,9 +6,10 @@ import {requestKey} from '../integration/jobs';
 import {EVERY_HOURS,OFFSETS,RULE_LABEL,citeLabel,decisionLabel,formFromRoutine,formProblem,holdLabel,localMoment,nominationLine,notNominatedLine,offsetLabel,
   readLine,routineMessage,runSummary,scheduleLabel,settingsPayload,sourceLabel,
   type Cite,type NominationView,type ProceduresView,type RoutineForm,type RoutineKind,type RoutineSummary,type RoutineView,type RoutinesView,type RunView} from '../integration/routines';
+import {type CaptureView,captureMessage,contextLabel,countLine,ruleLabel,todayLine} from '../integration/capture';
 import '../routines.css';
 
-type Tab='routines'|'nominations'|'runs'|'procedures';
+type Tab='routines'|'nominations'|'runs'|'procedures'|'capture';
 const isAbort=(e:unknown)=>e instanceof DOMException&&e.name==='AbortError';
 // Which tab the next opening should show, set by the side panel. Read once, then cleared.
 let requestedTab:Tab|null=null;
@@ -37,7 +38,8 @@ export function RoutinesPanel(){
 }
 
 function ConnectedRoutines(){
-  const c=useConsole(),routines=useRoutineData<RoutinesView>('/desk/routines'),procedures=useRoutineData<ProceduresView>('/desk/routines/procedures');
+  const c=useConsole(),routines=useRoutineData<RoutinesView>('/desk/routines'),procedures=useRoutineData<ProceduresView>('/desk/routines/procedures'),
+    capture=useRoutineData<CaptureView>('/desk/capture');
   const[tab,setTab]=useState<Tab>(()=>{const t=requestedTab??'routines';requestedTab=null;return t;});
   const[busy,setBusy]=useState(false),[error,setError]=useState('');
   const view=routines.data;
@@ -50,7 +52,7 @@ function ConnectedRoutines(){
   };
   const open=(view?.nominations??[]).filter(n=>n.state==='open');
   const tabs:[Tab,string,number][]=[['routines','Routines',view?.routines.filter(r=>r.enabled).length??0],['nominations','Nominations',open.length],
-    ['runs','Runs',view?.runs.length??0],['procedures','Procedures',procedures.data?.procedures.length??0]];
+    ['runs','Runs',view?.runs.length??0],['procedures','Procedures',procedures.data?.procedures.length??0],['capture','Capture',capture.data?.policies.filter(p=>p.enabled).length??0]];
   return <div className="routines-panel">
     <div className="exec-tabs" role="tablist" aria-label="Routine views">
       {tabs.map(([id,label,count])=><button key={id} role="tab" id={`routine-tab-${id}`} aria-selected={tab===id} aria-controls={`routine-panel-${id}`} onClick={()=>setTab(id)}>{label}<span>{count}</span></button>)}
@@ -67,6 +69,7 @@ function ConnectedRoutines(){
     {view&&tab==='nominations'&&<NominationList view={view} busy={busy} write={write}/>}
     {view&&tab==='runs'&&<RunList view={view}/>}
     {tab==='procedures'&&<ProcedureList data={procedures.data} error={procedures.error}/>}
+    {tab==='capture'&&<CaptureList data={capture.data} error={capture.error}/>}
   </div>;
 }
 
@@ -222,6 +225,28 @@ function ProcedureList({data,error}:{data:ProceduresView|null;error:string}){
       {data.authored_procedure_notes.length?<ul className="procedure-notes">{data.authored_procedure_notes.map(n=><li key={n.id}><strong>{n.title}</strong><small>{n.path} · revision {n.revision} · authored, not reviewed</small></li>)}</ul>
         :<p className="quiet-empty">No notes of type procedure in your permitted sources.</p>}
     </>}
+  </section>;
+}
+
+/** Owner-authored capture policies with what each has proposed. Read-only here; decisions stay in memory review. */
+function CaptureList({data,error}:{data:CaptureView|null;error:string}){
+  const c=useConsole(),owner=c.live.session?.role==='owner';
+  return <section role="tabpanel" id="routine-panel-capture" aria-labelledby="routine-tab-capture">
+    <div className="review-scope"><Info size={20}/><span>Capture policies are rules the workspace owner writes. A matching line in your notes becomes a proposed statement in memory review, bound to its exact line and revision. Nothing is accepted automatically and no model is used.</span></div>
+    {!owner?<p className="quiet-empty">{captureMessage(null,'forbidden')}</p>:<>
+    {error&&<p className="sign-in-error" role="alert">{error}</p>}
+    {!data&&!error&&<p className="dialog-note" role="status">Reading capture policies…</p>}
+    {data&&<>
+      <h3 className="routine-subhead">Policies<span>{data.policies.length}</span></h3>
+      {data.policies.length?<ul className="procedure-list" aria-label="Capture policies">{data.policies.map(p=><li key={p.id} aria-label={p.name}>
+        <div className="nomination-head"><strong>{p.name}</strong><small>{p.enabled?'On':'Off'} · {contextLabel(p.context)} · version {p.version}</small></div>
+        <p className="procedure-value">{ruleLabel(p.match)} · proposes {p.proposes.memory_type} · {p.proposes.predicate.replaceAll('_',' ')}</p>
+        <p className="nomination-source">{p.description}</p>
+        <p className="procedure-value capture-counts">{countLine(p.counts)}</p>
+        <p className="procedure-basis">{todayLine(p)}{p.subject_available?'':' · its record is no longer available, so it proposes nothing'}</p></li>)}</ul>
+        :<p className="quiet-empty">No capture policies. The workspace owner writes them through the ALFRED host.</p>}
+      <p className="dialog-note">Today {data.today.proposed} of {data.settings.daily_budget} across all policies{data.today.deferred.daily_budget?` · ${data.today.deferred.daily_budget} over the overall budget, counted not proposed`:''}.</p>
+    </>}</>}
   </section>;
 }
 
