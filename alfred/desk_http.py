@@ -81,9 +81,12 @@ class Sessions:
 
 class DeskHTTPServer(HTTPServer):
     allow_reuse_address = True
-    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None, jobs=None):
+    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None, jobs=None, goals=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
         self.jobs = jobs
+        # The goal hub (AGENT_HUB.md H2), when this host has brains: its heartbeats run in the supervisor cycle.
+        self.goals = goals
+        if goals is not None and hasattr(supervisor, 'owner'): supervisor.goals = goals
         self.local_model = local_model
         self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
         from .executive import ExecutiveRecords
@@ -507,6 +510,9 @@ class Handler(BaseHTTPRequestHandler):
             elif (url.path == '/desk/capture' or url.path.startswith('/desk/capture/')) and not url.query:
                 from .capture_policies import route as capture_route
                 result = capture_route(self.server.capture, url.path, mutation, bearer, body)
+            elif (url.path == '/desk/hub' or url.path.startswith('/desk/hub/')) and not url.query:
+                from .hub_goals import route as hub_route
+                result = hub_route(self.server, url.path, mutation, bearer, body)
             elif url.path == '/desk/jobs' or url.path.startswith('/desk/jobs/'):
                 result = self.jobs_route(url, mutation, bearer, body)
             elif not mutation and url.path == '/desk/console/workspaces' and not url.query:

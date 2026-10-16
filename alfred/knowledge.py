@@ -1045,6 +1045,13 @@ class KnowledgeSupervisor(Supervisor):
                 except Exception as exc:
                     # A routine failure is recorded on its run; it never stops the supervisor.
                     self.error = exc.code if isinstance(exc, Fault) else 'routines_failed'
+            # Goal heartbeats and budget accounting (AGENT_HUB.md H2): only ALFRED wakes a brain.
+            # Called while paused too, so due heartbeats are recorded as skipped.
+            if getattr(self, 'goals', None) is not None:
+                try:
+                    self.goals.cycle()
+                except Exception as exc:
+                    self.error = exc.code if isinstance(exc, Fault) else 'goals_failed'
 
     def view(self,scope):
         result=super().view(scope)

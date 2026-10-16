@@ -27,7 +27,8 @@ import time
 from .local import Fault
 
 JOURNAL_SUFFIX = '.lifecycle.jsonl'
-KINDS = {'claim_forgotten', 'entity_forgotten', 'credential_revoked', 'grant_revoked', 'source_forgotten'}
+KINDS = {'claim_forgotten', 'entity_forgotten', 'credential_revoked', 'grant_revoked', 'source_forgotten',
+         'hub_stopped'}
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS lifecycle_receipts(
  id TEXT PRIMARY KEY, scope TEXT NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL,
@@ -334,6 +335,10 @@ def apply_entry(db, entry, now, origin='recorded'):
     if kind == 'credential_revoked':
         changed = db.execute('UPDATE credentials SET revoked=1 WHERE id=? AND revoked=0', (entry['subject'],)).rowcount
         return {'credentials_revoked': changed}
+    if kind == 'hub_stopped':
+        # A goal or brain the owner stopped (alfred.hub_goals) stays stopped after a restore.
+        from .hub_goals import apply_stop
+        return {'hub_targets_stopped': apply_stop(db, entry)}
     if kind == 'grant_revoked':
         removed = 0
         if _has(db, 'source_grants'):
@@ -513,7 +518,7 @@ def _register_backups(db, directory):
 REMOVAL_COUNTS = ('statements_forgotten', 'entities_removed', 'notes_removed', 'reviewed_statements_invalidated',
                   'conversation_answers_withdrawn', 'pending_actions_cancelled', 'job_results_deleted',
                   'evidence_events_redacted', 'connector_records_removed', 'history_rows_purged',
-                  'credentials_revoked', 'grants_removed')
+                  'credentials_revoked', 'grants_removed', 'hub_targets_stopped')
 
 
 def _replay(db, entry, now, cache_dir, database):
