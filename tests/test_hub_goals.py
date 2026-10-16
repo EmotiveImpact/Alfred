@@ -425,10 +425,18 @@ class BudgetTests(Base):
         view = self.mandate(brains=['slow'], assigned_brain='slow', budget=budget(total={'tokens': 5000}))
         submitted = self.task(view['id'], budget={'wall_seconds': 30, 'tokens': 2000, 'money_pence': 0, 'steps': 1000})
         job_id = submitted['job']['id']
-        thread = threading.Thread(target=self.worker().run_once)
+        backend = self.hub.backend()
+        thread = threading.Thread(target=JobWorker(self.jobs, backend, self.owner, 'brain-1', poll_seconds=0.01,
+                                                   heartbeat_seconds=0.05).run_once)
         thread.start()
+        # Lower the limit only once the brain has metered work: a job marked running may not
+        # have taken its first step yet, and then nothing would have been used to charge.
         deadline = time.monotonic() + 5
-        while self.jobs.view(self.owner, job_id)['state'] != 'running' and time.monotonic() < deadline:
+        while time.monotonic() < deadline:
+            with backend._lock:
+                runs = list(backend._runs.values())
+            if runs and runs[0].meter.snapshot()['tokens'] > 0:
+                break
             time.sleep(0.01)
         self.hub.update_mandate(self.owner, view['id'], {'version': 1, 'budget': budget(total={'tokens': 100})})
         thread.join(10)
