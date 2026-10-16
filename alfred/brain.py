@@ -553,8 +553,11 @@ class BrainBackend(WorkerBackend):
     """
     name = 'brain'
 
-    def __init__(self, registry: BrainRegistry, policy: BrainPolicy):
+    def __init__(self, registry: BrainRegistry, policy: BrainPolicy, *, gate=None):
         self.registry, self.policy = registry, policy
+        # H2 (alfred.hub_goals): the goal hub rechecks the mandate before a brain starts and
+        # records what the meter counted when the run ends. None keeps H1 behaviour.
+        self.gate = gate
         self._runs, self._lock = {}, threading.Lock()
 
     @staticmethod
@@ -593,7 +596,11 @@ class BrainBackend(WorkerBackend):
         with self._lock:
             if handle in self._runs:
                 raise Fault('backend_handle_exists', 409)
+            if self.gate is not None:
+                # The JobWorker handle is '<job>.<attempt>'. A refusal here means the brain never starts.
+                self.gate.dispatch(handle.rsplit('.', 1)[0], brain.spec, packet)
             self._runs[handle] = run
+        run.began = time.monotonic()
         digest = packet_sha256(packet)
         given = json.loads(_compact(packet))  # A fresh copy: the brain cannot alter ALFRED's record.
         run.thread = threading.Thread(target=self._work, args=(run, brain, given, digest), daemon=True,
@@ -664,11 +671,22 @@ class BrainBackend(WorkerBackend):
             self._runs.pop(handle, None)
         with run.lock:
             reason, output = run.reason, run.output
+        if self.gate is not None:
+            self._report(handle, run, reason)
         if reason is not None:
             return BackendResult(False, None, reason if REASON.fullmatch(reason) else 'brain_error', None, '')
         if output is None:
             return BackendResult(False, None, 'brain_error', None, '')
         return BackendResult(True, output, None, 0, '')
+
+    def _report(self, handle, run, reason):
+        """Tell the goal hub what the meter counted, before the job settles. Wall time is
+        whole seconds, at least one, and at most the packet's limit (the brain is stopped there)."""
+        wall = min(max(1, math.ceil(time.monotonic() - run.began)), run.meter.budget['wall_seconds'])
+        try:
+            self.gate.metered(handle.rsplit('.', 1)[0], run.meter.snapshot(), wall, reason)
+        except Exception:  # Unreported usage is charged at the task's ceiling by the hub.
+            pass
 
 
 # Synthetic brain -------------------------------------------------------------
@@ -790,8 +808,11 @@ class BrainHub:
     """
 
     def __init__(self, store, jobs: JobCoordinator, registry: BrainRegistry, policy: BrainPolicy, *,
-                 workspace_scopes=None):
+                 workspace_scopes=None, gate=None):
         self.store, self.jobs, self.registry, self.policy = store, jobs, registry, policy
+        # H2 (alfred.hub_goals.GoalHub attaches itself here): with a gate, every task must
+        # serve a current mandate and fit its budgets, or it is refused before a job exists.
+        self.gate = gate
         self.workspace_scopes = dict(workspace_scopes or {})
         if any(v not in SCOPE_CLASSES for v in self.workspace_scopes.values()):
             raise Fault('invalid_workspace_scopes')
@@ -891,13 +912,20 @@ class BrainHub:
             packet['acceptance'] = declare(request['acceptance'])
         return validate_packet(packet)
 
-    def submit(self, bearer, request) -> dict:
-        """Build a packet, ask policy, and submit it as a ``brain_task`` job."""
+    def submit(self, bearer, request, *, binding=None) -> dict:
+        """Build a packet, ask policy, and submit it as a ``brain_task`` job.
+
+        ``binding`` names the mandate and kind of work the task serves; the gate, when one
+        is attached, refuses a task without one or outside it."""
         if type(request) is not dict or 'brain' not in request:
             raise Fault('invalid_fields')
         packet = self.build_packet(bearer, request)
         brain = self.registry.get(request['brain'])
         self.policy.decide(brain.spec, packet)
+        if self.gate is not None:
+            self.gate.authorise(bearer, brain.spec, packet, binding)
+        elif binding is not None:
+            raise Fault('mandate_gate_not_configured', 409)
         notes = []
         for item in packet['context']:
             if not any(n['note'] == item['note_id'] for n in notes):
@@ -914,6 +942,8 @@ class BrainHub:
                            (job['id'], p['scope'], p['id'], packet['task_id'], brain.spec.id, packet['scope'],
                             packet['autonomy'], digest, self.store.now()))
                 self.store.log(db, p['scope'], p['id'], 'brain.task_submitted', job['id'])
+                if self.gate is not None:
+                    self.gate.bind(db, p, job, brain.spec, packet, binding)
             elif prior['packet_sha256'] != digest:
                 raise Fault('idempotency_key_collision', 409)
         return {'job': job, 'packet_sha256': digest, 'brain': brain.spec.id, 'autonomy': AUTONOMY[packet['autonomy']]}
