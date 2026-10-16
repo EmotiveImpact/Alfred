@@ -1,0 +1,7 @@
+/* Goals panel (AGENT_HUB.md H2). Reuses the routine card styles; only budget lines are new. */
+.goal-usage{display:flex;flex-direction:column;gap:3px;margin:0;padding:0;list-style:none}
+.goal-usage li{padding-left:10px;border-left:2px solid var(--edge-strong);font-size:11px;line-height:1.6;letter-spacing:.3px;color:#9aa7a9;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.goal-usage li.warn{border-left-color:#d7b37566;color:#d9c9a2}
+.goal-usage li.spent{border-left-color:#d9a18499;color:#d9a184}
+.goals-panel .forget-confirm{margin-top:0}
+.goals-panel .routine-cites .text-button{margin-left:6px;font-size:11px}
