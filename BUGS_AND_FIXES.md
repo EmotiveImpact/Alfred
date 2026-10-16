@@ -12,6 +12,10 @@ Format: **ID. Title** · found · fixed in commit · status.
 
 ## Fixed
 
+### B-029. Hub budget test lowered the limit before the brain had taken a step
+Found 16 October 2026 while wiring the agent hub steps together · fixed in the commit that adds this entry.
+`tests/test_hub_goals.py` `test_lowering_a_limit_cancels_running_work_through_the_coordinator` lowered a goal's token limit as soon as the job was marked running. Under load the synthetic brain had not yet taken its first metered step, so the cancelled task was recorded as `brain_not_started` instead of `metered` and the test failed (once in 12 parallel runs, reproduced). The product behaviour was right; the test now waits until the brain's meter shows tokens used before lowering the limit, and passed 36 parallel runs.
+
 ### B-028. Deletion report missed a person's answers when the ledger actor was the person
 Found 16 October 2026 after merging strict grants (plan 1.2) with deletion accounting (plan 1.3) · fixed in the commit that adds this entry.
 Review ledgers are now keyed by person, so journal entries, and the replay of a forget on `restore`, carry the person as the actor. The deletion scan matched saved conversations with `conversations.actor = actor`, but conversations are still kept per device credential, so a scan run with the person's key found no answers or voice playbacks, and the restored copy's report disagreed with a direct scan (`answers` 0 instead of 1). The scan now matches conversations by every key of that person's ledger (the person and its device credentials, `ledger_keys`). Test: `tests/test_deletion_accounting.py` `test_restore_reports_what_the_journal_removed_again`, which fails without the change.

@@ -1,0 +1,43 @@
+{
+  "passed": 28,
+  "checks": [
+    "owner signs in to the connected console",
+    "daily learning is off until the owner sets it up",
+    "the card asks for proposals per run, with no interrupt choice, drafts or quiet hours",
+    "the stated rules say learning never changes authority and fetches nothing",
+    "the saved settings are what the owner chose, with fixed delivery",
+    "the rule is off by default",
+    "only writing style and presentation can be named",
+    "switching the rule on is audited",
+    "the run states what it proposed, its budget, the upstream result and that no model or authority was involved",
+    "no draft text is stored in the run or the proposals",
+    "today's list counts what was proposed and what the rule accepted",
+    "the rule acceptance is labelled, can be undone and shows its evidence against the threshold",
+    "a procedure is proposed for review and is never accepted by the rule",
+    "undo is audited and nothing accepted by the rule remains current",
+    "a dismissal is audited",
+    "the exact listed set is accepted in one audited action",
+    "accepted learnings say who accepted them and which may be sent as context",
+    "the accepted procedure draft is in the procedure registry, labelled never run",
+    "no grant, policy, credential, device or other routine changed",
+    "390px learning view has no horizontal overflow",
+    "390px every control stays inside the dialog",
+    "no browser storage used",
+    "no access key rendered",
+    "no Content Security Policy violations",
+    "no requests leave the loopback origin",
+    "no uncaught page errors",
+    "a reader sees none of the owner's learnings and no decision buttons",
+    "the reader page has no uncaught errors"
+  ],
+  "browser_console": [
+    "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "error: Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "page_errors": [],
+  "inputs": "synthetic demo vault and one synthetic event only",
+  "model_inference": false,
+  "network_fetch": false,
+  "external_delivery": false,
+  "console_dist": "console/dist built from this commit"
+}

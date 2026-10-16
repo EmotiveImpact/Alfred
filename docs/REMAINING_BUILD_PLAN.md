@@ -20,6 +20,11 @@ are kept, archived and can be proposed again with fresh approval. The agent brai
 designed in [AGENT_HUB.md](AGENT_HUB.md); its step H1 (the brain plug) is built, and it
 refines item 2.1: the reasoning runtime becomes one or more brains behind that plug.
 
+Later the same day, hub steps H2 (goals, mandates, budgets, heartbeats and operator controls),
+H3 (the daily learning job with its review list and trusted-kinds rule) and H4 (independent
+verification of brain results) were built on the same branch for a second PR. H5, the Hermes
+adapter, waits on the owner's adoption decision and model choice.
+
 ## Where we are
 
 33 requirements: 8 implemented on the branch, 24 partial, 1 not started. Every surface exists

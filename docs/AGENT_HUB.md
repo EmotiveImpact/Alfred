@@ -1,7 +1,8 @@
 # ALFRED agent hub: many brains, one authority
 
 16 October 2026. Design for ALFRED's agent brain, written after the owner's conversation on
-Hermes Agent and Paperclip (development session of 16 October). Status: **design, not built.**
+Hermes Agent and Paperclip (development session of 16 October). Status: **steps H1 to H4 built
+against a synthetic brain; no real brain yet.**
 Nothing here installs, runs or imports Hermes, Paperclip or any other `third_party/` code.
 Adoption of any outside runtime still follows the AGENTS.md rules and needs the owner's
 sign-off, recorded in the [requirement register](../plans/requirement-register.json).
@@ -111,12 +112,17 @@ layer. The learning loop lives in ALFRED, not in the workers.
      (MEM-015);
    - *routing* notes on which brain did which job well, measured by verified outcomes, not
      by the worker's own confidence.
-3. **Puts every proposal in the review inbox.** Nothing becomes accepted automatically.
-   Accepted learnings become ALFRED-owned, versioned records that later task packets carry
-   in `learned`. Dismissed ones are not re-offered unless the evidence changes.
-4. **Harvests worker learning safely.** Skills or notes a worker wrote in its disposable
-   home (for example Hermes skills) are copied out as proposals and the home is then
-   deleted. They enter the same review path; a worker's skill never runs as ALFRED's own
+3. **Puts every proposal in the review inbox, as one short daily list.** The owner can
+   approve the exact listed set in one action or dismiss items one by one. Accepted
+   learnings become ALFRED-owned, versioned records that later task packets carry in
+   `learned`. Dismissed ones are not re-offered unless the evidence changes. The owner may
+   also author a rule trusting a closed list of low-risk kinds (writing style and
+   presentation preferences only); items accepted that way are labelled as accepted by the
+   rule and can be undone. Facts about people, money, commitments, procedures and routing
+   always ask.
+4. **Harvests worker learning safely.** Skills or notes a worker staged for approval or
+   wrote in its disposable home (for example Hermes skills) are copied out as proposals and
+   the home is then deleted. They enter the same review path; a worker's skill never runs as ALFRED's own
    until accepted and reviewed.
 5. **Watches upstream daily.** For each pinned outside project, it checks for new releases
    and writes an update brief: what changed, new defaults, licence changes, security notes.
@@ -138,15 +144,21 @@ in-process route accepts an explicit toolset allowlist, `skip_memory`,
 `skip_background_review`, `skip_context_files`, an approval callback, a step limit and a run
 budget, and returns the final response.
 
-**Its memory can be switched off or replaced.** Built-in memory and the user profile have
-config switches (`memory.memory_enabled`, `memory.user_profile_enabled`), and the caller can
-supply its own memory manager per task through the `MemoryProvider` interface. One gap: no
-config switch was found that stops session transcripts being written to its `state.db`, so
-each task gets a fresh, disposable Hermes home that ALFRED deletes after harvesting.
+**Redirect its memory and learning rather than lose them (owner direction, 16 October).**
+Hermes's strengths are learning by itself and recalling past work; ALFRED's are provenance,
+review, scopes and real forgetting. The design keeps both with one authority:
 
-**Its learning can be switched off.** The background review that writes memories and skills,
-skill creation nudges and the weekly curator all have switches. ALFRED turns them off and
-does the learning itself (above).
+- *Memory plugged into ALFRED.* Hermes's built-in memory files and user profile are switched
+  off (`memory.memory_enabled`, `memory.user_profile_enabled`), and ALFRED supplies a memory
+  manager per task through Hermes's `MemoryProvider` interface. Hermes still recalls, but
+  only what ALFRED grants that job, sourced and scoped. Its `on_memory_write` hook sends
+  anything it wants to remember back to ALFRED as a suggestion.
+- *Learning that writes into ALFRED.* Hermes's skill and memory writes are staged for
+  approval (`skills.write_approval`, `memory.write_approval`) rather than saved, and land in
+  ALFRED's daily learning list. Its weekly curator is off because ALFRED curates.
+- *Session transcripts.* No config switch was found that stops transcripts being written
+  to its `state.db`, so each task gets a fresh, disposable Hermes home that ALFRED deletes
+  after harvesting.
 
 **Its outbound actions can be routed to ALFRED.** A `pre_tool_call` hook can block or send any
 tool call to a human gate, and an approval transport plugin can carry decisions, failing
@@ -159,13 +171,27 @@ closed. ALFRED uses both, with `approvals.mode: manual`, so Hermes's own second-
 |---|---|---|
 | `auth.adopt_external_logins` | on: borrows Claude Code and Codex logins | off |
 | `approvals.mode` | `smart` (a second model decides) | `manual`, routed to ALFRED |
-| `memory.memory_enabled`, `memory.user_profile_enabled` | on | off |
-| `auxiliary.background_review.enabled` | on, and fails open on broken config | off, set explicitly |
-| `curator.enabled` | on (weekly) | off |
+| `memory.memory_enabled`, `memory.user_profile_enabled` | on | off; ALFRED's memory supplied per task instead |
+| `memory.write_approval`, `skills.write_approval` | off | on; staged writes go to ALFRED's daily list |
+| `auxiliary.background_review.enabled` | on, and fails open on broken config | set explicitly; its writes are staged, never saved |
+| `curator.enabled` | on (weekly) | off; ALFRED curates |
 | `security.allow_lazy_installs` | on: installs packages from PyPI on demand | off |
 | `updates.check`, plugin update checks | on | off; ALFRED's daily watch replaces them |
 | Telemetry | off | off, verified |
 | Toolsets | broad default | explicit allowlist per task |
+
+**Upgrades and plugins (owner question, 16 October).**
+
+- *Upgrades* are pinned, never silent. The daily upstream watch writes a brief for each new
+  release. If the owner approves, ALFRED builds the new version in a fresh container, reruns
+  the fence tests below on synthetic data and switches over only if every one passes, keeping
+  the previous version for rollback. A renamed setting or a changed hook fails the fence tests
+  before it reaches the owner's data.
+- *Plugins and skills* are allowed one by one. Each Hermes plugin is approved by name and
+  version, pinned, and never installs itself. Its tool calls still pass ALFRED's approval, and
+  it gets no credentials or network unless a task grants them. Hermes skills arrive in the
+  daily learning list as proposals. Plugins that would replace ALFRED's own roles, such as
+  another memory store or another approval route, are refused.
 
 **Fence tests before any real use** (synthetic vault only):
 
@@ -191,10 +217,10 @@ is an owner decision. Its telemetry is on by default and would be switched off.
 | Step | What | Needs |
 |---|---|---|
 | H0 | This design, linked from the build plan. | Done with this document |
-| H1 | The brain plug: task packet, result bundle, autonomy levels and budgets as code, with a deterministic synthetic worker and contract tests. No model. | Nothing |
-| H2 | Goals and mandates, heartbeats through routines, budgets with automatic pause, pause/reassign/stop in the console. | H1 |
-| H3 | The daily learning job: evidence gathering, preference/procedure/routing proposals into the inbox, upstream watch briefs from the source-library manifests. Deterministic first, no model. | H1, capture policies (2.4) |
-| H4 | Independent verification of worker results (tests, read-back, citation checks) as a gate before "done". | H1 |
+| H1 | The brain plug: task packet, result bundle, autonomy levels and budgets as code, with a deterministic synthetic worker and contract tests. No model. | Built (`alfred/brain.py`) |
+| H2 | Goals and mandates, heartbeats through routines, budgets with automatic pause, pause/reassign/stop in the console. | Built (`alfred/hub_goals.py`); console edits mandates later |
+| H3 | The daily learning job: evidence gathering, preference/procedure/routing proposals into the inbox, upstream watch briefs from the source-library manifests. Deterministic first, no model. | Built (`alfred/learning.py`) |
+| H4 | Independent verification of worker results (tests, read-back, citation checks) as a gate before "done". | Built (`alfred/verification.py`) |
 | H5 | Hermes adapter in an isolated container behind the plug, with every override above and the fence tests. | Owner: adoption sign-off and model choice (2.1); isolation backend (3.2) |
 | H6 | Further brains (Claude, local Qwen) behind the same plug; Paperclip only if wanted. | H5 pattern, owner decisions |
 

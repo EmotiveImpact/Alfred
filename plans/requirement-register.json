@@ -514,13 +514,14 @@
    "acceptance_evidence": [
     "tests/test_routines_procedures.py",
     "tools/check_routines_browser.py",
-    "docs/evidence/routines/RECEIPT.md"
+    "docs/evidence/routines/RECEIPT.md",
+    "tests/test_learning.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Read-only procedure registry with source and review state, plus authored procedure notes marked not reviewed. Tests feed instruction-like procedure text through routines, retrieval, answers, the conversation queue, a job, Pulse and approval dispatch and show no grant, credential, approval, setting, job or file changes. A versioned procedure workflow and workflow learning remain future work."
+   "notes": "Read-only procedure registry with source and review state, plus authored procedure notes marked not reviewed. Tests feed instruction-like procedure text through routines, retrieval, answers, the conversation queue, a job, Pulse and approval dispatch and show no grant, credential, approval, setting, job or file changes. A versioned procedure workflow and workflow learning remain future work. Learned procedure drafts from the daily learning job appear in the registry as owner-reviewed, versioned records and are never run (16 October)."
   },
   {
    "id": "MEM-016",
@@ -633,13 +634,19 @@
     "docs/evidence/memory-m03/RECEIPT.md",
     "tests/test_console_focus.py",
     "tests/test_brain_plug.py",
-    "docs/evidence/brain-plug/RECEIPT.md"
+    "docs/evidence/brain-plug/RECEIPT.md",
+    "tests/test_hub_goals.py",
+    "docs/evidence/hub-goals/RECEIPT.md",
+    "tests/test_learning.py",
+    "docs/evidence/hub-learning/RECEIPT.md",
+    "tests/test_verification.py",
+    "docs/evidence/hub-verify/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Bounded packets and an optional tool-free local model adapter. No dependable reasoning runtime selected. Console questions use the existing queue. Agent hub brain plug (docs/AGENT_HUB.md, H1, 16 October): packet and result contracts, brain policy, budget meter and a synthetic brain; no real model."
+   "notes": "Bounded packets and an optional tool-free local model adapter. No dependable reasoning runtime selected. Console questions use the existing queue. Agent hub brain plug (docs/AGENT_HUB.md, H1, 16 October): packet and result contracts, brain policy, budget meter and a synthetic brain; no real model. Hub steps H2 to H4 (16 October): mandates over executive goals with budgets, automatic pause, heartbeats and operator controls; a deterministic daily learning loop with a review inbox, a one-action daily list and an owner trusted-kinds rule limited to writing style; owner-declared acceptance checks that gate brain-proposed drafts. Synthetic brain only; the host does not construct a goal hub until a real brain exists (H5)."
   },
   {
    "id": "INT-002",
@@ -698,13 +705,15 @@
     "tests/test_memory_capture_inbox.py",
     "tools/check_console_connected_browser.py",
     "tests/test_drafts_archive.py",
-    "docs/evidence/drafts-archive/RECEIPT.md"
+    "docs/evidence/drafts-archive/RECEIPT.md",
+    "tests/test_verification.py",
+    "docs/evidence/hub-verify/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Local drafts with exact fingerprints in main; the console now proposes, approves and cancels through the same ledger. No external effects. A second capability, vault.inbox_note, uses the same ledger with create-only execution and read-back reconciliation. Drafts are kept after the approval window lapses; archive, search and re-propose with fresh approval and source recheck (owner decision, 16 October)."
+   "notes": "Local drafts with exact fingerprints in main; the console now proposes, approves and cancels through the same ledger. No external effects. A second capability, vault.inbox_note, uses the same ledger with create-only execution and read-back reconciliation. Drafts are kept after the approval window lapses; archive, search and re-propose with fresh approval and source recheck (owner decision, 16 October). A draft a brain proposed under declared acceptance checks cannot be approved until the checks have run, nor approved or dispatched while any has failed without the owner's acknowledgement (H4, 16 October)."
   },
   {
    "id": "ATT-001",
@@ -729,13 +738,15 @@
     "docs/evidence/executive-2/RECEIPT.md",
     "tests/test_routines.py",
     "tools/check_routines_browser.py",
-    "docs/evidence/routines/RECEIPT.md"
+    "docs/evidence/routines/RECEIPT.md",
+    "tests/test_learning.py",
+    "tools/check_learning_browser.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Fixed Pulse routines with bounded history; in-app attention by four stated rules with authored snooze; three derived insight rules. Authored routines (commitment review and morning brief) now have schedules, run and nomination budgets, quiet hours, a show-now or hold-for-brief choice, per-routine and workspace pause, authority rechecked inside every run, and inspectable run outcomes holding citations and counts only. Reminders are accepted, accepted with a follow-up or dismissed; a draft offer only proposes a message.draft that still needs exact approval. In-app only; learned relevance unmeasured; fixed UTC offsets without daylight saving (owner decision)."
+   "notes": "Fixed Pulse routines with bounded history; in-app attention by four stated rules with authored snooze; three derived insight rules. Authored routines (commitment review and morning brief) now have schedules, run and nomination budgets, quiet hours, a show-now or hold-for-brief choice, per-routine and workspace pause, authority rechecked inside every run, and inspectable run outcomes holding citations and counts only. Reminders are accepted, accepted with a follow-up or dismissed; a draft offer only proposes a message.draft that still needs exact approval. In-app only; learned relevance unmeasured; fixed UTC offsets without daylight saving (owner decision). A third allowlisted routine, daily-learning (16 October), delivers like the morning brief; goal heartbeats share the routines scheduling and missed-slot rules."
   },
   {
    "id": "CON-001",

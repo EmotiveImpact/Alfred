@@ -1,0 +1,33 @@
+{
+  "passed": 19,
+  "checks": [
+    "the host hands its goal hub to the supervisor cycle",
+    "the goals command opens the goals panel",
+    "a goal whose budget is spent shows it was paused by the budget",
+    "the server agrees the goal is paused by its budget",
+    "the card shows mandate, autonomy per kind of work and measured budget use",
+    "the hard stop is listed as an attention item",
+    "goals without a mandate are counted, not worked on",
+    "resuming while the budget is still spent is refused by the server",
+    "pause goes to the server and the card shows it",
+    "resume goes to the server",
+    "a brain can be paused",
+    "stop asks for confirmation first",
+    "stop goes to the server",
+    "the stop is written to the lifecycle journal",
+    "a stopped goal offers no controls",
+    "no horizontal scroll at phone width",
+    "a reader sees no goals and no controls",
+    "no requests leave the loopback origin",
+    "no uncaught page errors"
+  ],
+  "browser_console": [
+    "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "error: Failed to load resource: the server responded with a status of 409 (Conflict)"
+  ],
+  "page_errors": [],
+  "inputs": "synthetic demo vault and synthetic executive goals only",
+  "brain": "H1 SyntheticBrain (deterministic, no model)",
+  "model_inference": false,
+  "console_dist": "console/dist built from this commit"
+}

@@ -5,8 +5,9 @@ per the owner's decision, strict grants 1.2, deletion accounting 1.3, host recov
 Obsidian compatibility 1.5, capture policies 2.4) and the agent hub design with its brain plug
 (H1) were built on branch `claude/project-thread-qj8beq` and merged to `main` with the owner's
 authorisation. Read [CHANGELOG.md](CHANGELOG.md), [docs/AGENT_HUB.md](docs/AGENT_HUB.md) and
-the receipts under `docs/evidence/`. Next: agent hub H2 to H4 (no owner decision needed), the
-Hermes adoption decision for H5, and the console visual direction, which the owner will give.
+the receipts under `docs/evidence/`. Agent hub H2 to H4 (goals and budgets, daily learning,
+verification) followed on the same branch for a second PR. Next: the Hermes adoption decision
+for H5, and the console visual direction, which the owner will give.
 
 **Latest checkpoint, 2 October 2026:** resume from
 [CHECKPOINT_2026-10-02.md](docs/CHECKPOINT_2026-10-02.md) on branch

@@ -1,15 +1,17 @@
 import {useCallback,useEffect,useState} from 'react';
-import {Bell,BookOpenText,CaretRight,ClockCounterClockwise,Info,MoonStars,Pause,Play} from '@phosphor-icons/react';
+import {Bell,BookOpenText,CaretRight,ClockCounterClockwise,Info,Lightbulb,MoonStars,Pause,Play} from '@phosphor-icons/react';
 import {useConsole,type ConsoleController} from '../state/ConsoleProvider';
 import {DeskError} from '../integration/deskClient';
 import {requestKey} from '../integration/jobs';
-import {EVERY_HOURS,OFFSETS,RULE_LABEL,citeLabel,decisionLabel,formFromRoutine,formProblem,holdLabel,localMoment,nominationLine,notNominatedLine,offsetLabel,
+import {EVERY_HOURS,OFFSETS,RULE_LABEL,citeLabel,decisionLabel,fixedDelivery,formFromRoutine,formProblem,holdLabel,localMoment,nominationLine,notNominatedLine,offsetLabel,
   readLine,routineMessage,runSummary,scheduleLabel,settingsPayload,sourceLabel,
   type Cite,type NominationView,type ProceduresView,type RoutineForm,type RoutineKind,type RoutineSummary,type RoutineView,type RoutinesView,type RunView} from '../integration/routines';
 import {type CaptureView,captureMessage,contextLabel,countLine,ruleLabel,todayLine} from '../integration/capture';
+import {type DigestView,type LearningProposal,type LearningView,batchBody,digestLine,learningDecision,learningLine,learningMessage,trustRuleBody,trustRuleLine,
+  upstreamLine} from '../integration/learning';
 import '../routines.css';
 
-type Tab='routines'|'nominations'|'runs'|'procedures'|'capture';
+type Tab='routines'|'nominations'|'runs'|'learning'|'procedures'|'capture';
 const isAbort=(e:unknown)=>e instanceof DOMException&&e.name==='AbortError';
 // Which tab the next opening should show, set by the side panel. Read once, then cleared.
 let requestedTab:Tab|null=null;
@@ -33,13 +35,14 @@ function useRoutineData<T>(path:string){
 export function RoutinesPanel(){
   const c=useConsole();
   if(!c.connected)return <div className="routines-panel"><div className="review-scope"><Info size={20}/><span>Routines need the connected ALFRED product. This local preview has no routines, schedules or nominations, and runs nothing.</span></div>
-    <p className="dialog-note">When the console is served by your ALFRED host, you can enable a commitment review and a morning brief, set budgets, quiet hours and a pause, and accept or dismiss what they nominate.</p></div>;
+    <p className="dialog-note">When the console is served by your ALFRED host, you can enable a commitment review, a morning brief and daily learning, set budgets, quiet hours and a pause, and accept or dismiss what they nominate.</p></div>;
   return <ConnectedRoutines/>;
 }
 
 function ConnectedRoutines(){
   const c=useConsole(),routines=useRoutineData<RoutinesView>('/desk/routines'),procedures=useRoutineData<ProceduresView>('/desk/routines/procedures'),
-    capture=useRoutineData<CaptureView>('/desk/capture');
+    capture=useRoutineData<CaptureView>('/desk/capture'),learning=useRoutineData<LearningView>('/desk/learning'),
+    digest=useRoutineData<DigestView>('/desk/learning/digest');
   const[tab,setTab]=useState<Tab>(()=>{const t=requestedTab??'routines';requestedTab=null;return t;});
   const[busy,setBusy]=useState(false),[error,setError]=useState('');
   const view=routines.data;
@@ -47,12 +50,12 @@ function ConnectedRoutines(){
   const write=async<T,>(path:string,body:unknown,notice?:string):Promise<T|null>=>{
     setBusy(true);setError('');
     try{const r=await c.live.client.post<T>(path,body);if(notice)c.setNotice(notice);return r;}
-    catch(e){setError(routineMessage(e));if(e instanceof DeskError&&e.kind==='signed_out')c.live.fail(e);return null;}
-    finally{setBusy(false);refreshAll();procedures.refresh();}
+    catch(e){setError(path.startsWith('/desk/learning')?learningMessage(e):routineMessage(e));if(e instanceof DeskError&&e.kind==='signed_out')c.live.fail(e);return null;}
+    finally{setBusy(false);refreshAll();procedures.refresh();learning.refresh();digest.refresh();}
   };
   const open=(view?.nominations??[]).filter(n=>n.state==='open');
   const tabs:[Tab,string,number][]=[['routines','Routines',view?.routines.filter(r=>r.enabled).length??0],['nominations','Nominations',open.length],
-    ['runs','Runs',view?.runs.length??0],['procedures','Procedures',procedures.data?.procedures.length??0],['capture','Capture',capture.data?.policies.filter(p=>p.enabled).length??0]];
+    ['runs','Runs',view?.runs.length??0],['learning','Learning',learning.data?.counts.awaiting_review??0],['procedures','Procedures',procedures.data?.procedures.length??0],['capture','Capture',capture.data?.policies.filter(p=>p.enabled).length??0]];
   return <div className="routines-panel">
     <div className="exec-tabs" role="tablist" aria-label="Routine views">
       {tabs.map(([id,label,count])=><button key={id} role="tab" id={`routine-tab-${id}`} aria-selected={tab===id} aria-controls={`routine-panel-${id}`} onClick={()=>setTab(id)}>{label}<span>{count}</span></button>)}
@@ -68,6 +71,7 @@ function ConnectedRoutines(){
     </section>}
     {view&&tab==='nominations'&&<NominationList view={view} busy={busy} write={write}/>}
     {view&&tab==='runs'&&<RunList view={view}/>}
+    {tab==='learning'&&<LearningList data={learning.data} digest={digest.data} error={learning.error||digest.error} busy={busy} write={write}/>}
     {tab==='procedures'&&<ProcedureList data={procedures.data} error={procedures.error}/>}
     {tab==='capture'&&<CaptureList data={capture.data} error={capture.error}/>}
   </div>;
@@ -80,13 +84,14 @@ function RoutineCard({routine:r,busy,write}:{routine:RoutineView;busy:boolean;wr
   const c=useConsole(),owner=c.live.session?.role==='owner';
   const[form,setForm]=useState<RoutineForm>(()=>formFromRoutine(r));
   const set=(patch:Partial<RoutineForm>)=>setForm(f=>({...f,...patch}));
-  const problem=formProblem(r.kind,form),offset=r.settings?.utc_offset_minutes??form.offset,brief=r.kind==='morning-brief';
+  const problem=formProblem(r.kind,form),offset=r.settings?.utc_offset_minutes??form.offset,brief=r.kind==='morning-brief',
+    learns=r.kind==='daily-learning',fixed=fixedDelivery(r.kind);
   const save=()=>void write(`/desk/routines/${r.kind}/configure`,settingsPayload(r.kind,form,r.version),`${r.name} settings saved.`);
   const pause=()=>void write(`/desk/routines/${r.kind}/pause`,{version:r.version,paused:!r.paused},r.paused?`${r.name} resumed.`:`${r.name} paused. Due runs are recorded as skipped.`);
   const runNow=()=>void write(`/desk/routines/${r.kind}/run`,{request_id:requestKey()},`${r.name} ran. See its outcome under Runs.`);
   const status=[r.configured?(r.enabled?'On':'Off'):'Not set up',r.paused?'Paused':null,r.quiet_now?'Quiet hours now':null,r.configured&&!r.authority_available?'Authority unavailable':null].filter(Boolean) as string[];
   return <article className="routine-card" aria-labelledby={`routine-${r.kind}`}>
-    <header><span className="record-symbol">{brief?<ClockCounterClockwise size={18} weight="thin"/>:<Bell size={18} weight="thin"/>}</span>
+    <header><span className="record-symbol">{brief?<ClockCounterClockwise size={18} weight="thin"/>:learns?<Lightbulb size={18} weight="thin"/>:<Bell size={18} weight="thin"/>}</span>
       <div><h3 id={`routine-${r.kind}`}>{r.name}</h3><p>{r.description}</p></div>
       <ul className="routine-chips" aria-label={`${r.name} status`}>{status.map(s=><li key={s} className={s==='On'?'on':s==='Paused'||s==='Authority unavailable'?'warn':''}>{s}</li>)}</ul></header>
     {r.configured&&r.settings&&<p className="routine-line">{scheduleLabel(r.settings.schedule)} · {offsetLabel(r.settings.utc_offset_minutes)} · {r.enabled&&r.next_due?`next ${localMoment(r.next_due,offset)}`:'no run scheduled'} · {r.runs_today} of {r.settings.runs_per_day} runs today</p>}
@@ -99,14 +104,14 @@ function RoutineCard({routine:r,busy,write}:{routine:RoutineView;busy:boolean;wr
         {form.every==='daily'&&<label>Time of day<input type="time" value={form.dailyAt} onChange={e=>set({dailyAt:e.target.value})}/></label>}
         <label>Local time offset<select value={form.offset} onChange={e=>set({offset:Number(e.target.value)})}>{OFFSETS.map(o=><option key={o} value={o}>{offsetLabel(o)}</option>)}</select></label>
         <label>Runs per day<input type="number" min={1} max={24} value={form.runsPerDay} onChange={e=>set({runsPerDay:Math.trunc(Number(e.target.value))})}/></label>
-        <label>{brief?'Held items surfaced per run':'Nominations per run'}<input type="number" min={1} max={10} value={form.nominationsPerRun} onChange={e=>set({nominationsPerRun:Math.trunc(Number(e.target.value))})}/></label>
+        <label>{brief?'Held items surfaced per run':learns?'Proposals per run':'Nominations per run'}<input type="number" min={1} max={10} value={form.nominationsPerRun} onChange={e=>set({nominationsPerRun:Math.trunc(Number(e.target.value))})}/></label>
       </div>
-      <fieldset className="routine-quiet"><legend><MoonStars size={14}/>Quiet hours</legend>
+      {!learns&&<fieldset className="routine-quiet"><legend><MoonStars size={14}/>Quiet hours</legend>
         <label className="routine-check"><input type="checkbox" checked={form.quiet} onChange={e=>set({quiet:e.target.checked})}/><span>Hold nominations during quiet hours and show them afterwards</span></label>
         {form.quiet&&<div className="routine-grid"><label>Quiet from<input type="time" value={form.quietStart} onChange={e=>set({quietStart:e.target.value})}/></label>
           <label>Quiet until<input type="time" value={form.quietEnd} onChange={e=>set({quietEnd:e.target.value})}/></label></div>}
-      </fieldset>
-      {!brief&&<fieldset className="routine-interrupt"><legend>When something is nominated</legend>
+      </fieldset>}
+      {!fixed&&<fieldset className="routine-interrupt"><legend>When something is nominated</legend>
         <label className="routine-check"><input type="radio" name={`interrupt-${r.kind}`} checked={form.interrupt==='show_now'} onChange={()=>set({interrupt:'show_now'})}/><span>Show it now</span></label>
         <label className="routine-check"><input type="radio" name={`interrupt-${r.kind}`} checked={form.interrupt==='hold_for_brief'} onChange={()=>set({interrupt:'hold_for_brief'})}/><span>Hold it for the next morning brief</span></label>
         <label className="routine-check"><input type="checkbox" checked={form.proposeDrafts} onChange={e=>set({proposeDrafts:e.target.checked})}/><span>Offer a local draft for overdue items with a responsible label</span></label>
@@ -181,6 +186,9 @@ function RunDetail({run,offset}:{run:RunView;offset:number}){
       {o.read&&<div><dt>Read</dt><dd>{readLine(o.read)}</dd></div>}
       {o.nominated&&<div><dt>Nominated</dt><dd>{o.nominated.length||'None'}{o.held&&(o.held.quiet_hours+o.held.next_brief)?` · ${o.held.quiet_hours} held for quiet hours · ${o.held.next_brief} held for the brief`:''}</dd></div>}
       {skipped&&<div><dt>Not nominated</dt><dd>{skipped}</dd></div>}
+      {o.proposed&&<div><dt>Proposed</dt><dd>{o.proposed.length||'None'}{o.accepted_by_rule?` · ${o.accepted_by_rule} accepted by your rule`:''}</dd></div>}
+      {o.not_proposed&&notNominatedLine(o.not_proposed)&&<div><dt>Not proposed</dt><dd>{notNominatedLine(o.not_proposed)}</dd></div>}
+      {o.upstream&&<div><dt>Upstream</dt><dd>{upstreamLine(o.upstream)}</dd></div>}
       {o.released&&<div><dt>Surfaced</dt><dd>{o.released.length} held nomination{o.released.length===1?'':'s'}{o.still_held?` · ${o.still_held} still held`:''}</dd></div>}
       {o.error&&<div><dt>Error</dt><dd>{o.error}</dd></div>}
     </dl>
@@ -190,7 +198,9 @@ function RunDetail({run,offset}:{run:RunView;offset:number}){
       <CiteList items={o.sections.approvals} label="Proposals awaiting your approval"/></>
       :<CiteList items={o.cited??[]} label="Everything read and cited, nominated or not"/>}
     {o.cited_total!=null&&o.cited&&o.cited_total>o.cited.length&&<p className="dialog-note">{o.cited_total-o.cited.length} further citations were counted but not stored.</p>}
-    <p className="dialog-note">{run.kind==='morning-brief'?'Assembled from your current records by the stated rules. Not advice and not model output.':'Computed by the stated rules over your records and accepted statements. No model was used.'} Titles show as they read for you now.</p>
+    <p className="dialog-note">{run.kind==='morning-brief'?'Assembled from your current records by the stated rules. Not advice and not model output.'
+      :run.kind==='daily-learning'?'Computed by the stated rules over your own records. No model was used. Learning changes no policy, grant, scope, autonomy level or budget.'
+      :'Computed by the stated rules over your records and accepted statements. No model was used.'} Titles show as they read for you now.</p>
   </div>;
 }
 
@@ -203,6 +213,58 @@ function RunList({view}:{view:RoutinesView}){
         <button aria-expanded={open===run.id} onClick={()=>setOpen(open===run.id?null:run.id)}><span><strong>{name} · {localMoment(run.started,offset)}</strong><small>{runSummary(run)}</small></span><CaretRight size={14}/></button>
         {open===run.id&&<RunDetail run={run} offset={offset}/>}</li>;})}</ol>
       :<p className="quiet-empty">No runs yet. Enable a routine or choose Run now.</p>}
+  </section>;
+}
+
+function LearningRow({p,busy,write,owner}:{p:LearningProposal;busy:boolean;write:Write;owner:boolean}){
+  const path=`/desk/learning/proposals/${encodeURIComponent(p.id)}`;
+  return <li className={`nomination-row ${p.state!=='suggested'?'decided':''}`} aria-label={`${p.category_label}: ${p.statement}`}>
+    <div className="nomination-head"><span className="attention-mark rule-due_soon" aria-hidden="true"/><strong>{p.category_label}</strong><small>{learningLine(p)}</small></div>
+    <p className="procedure-value">{p.statement}</p>
+    <p className="nomination-decided">{learningDecision(p)}</p>
+    {owner&&(p.state==='suggested'||p.undo_available)&&<div className="button-row">
+      {p.state==='suggested'&&<><button className="secondary-button" disabled={busy} onClick={()=>void write(`${path}/accept`,{version:p.version},'Learning accepted. It is yours, versioned, and can be retired.')}>Accept</button>
+        <button className="text-button" disabled={busy} onClick={()=>void write(`${path}/dismiss`,{version:p.version},'Learning dismissed. It is not offered again unless new evidence arrives.')}>Dismiss</button></>}
+      {p.undo_available&&p.record&&<button className="text-button" disabled={busy} onClick={()=>void write(`/desk/learning/records/${encodeURIComponent(p.record??'')}/undo`,{version:p.record_version},'Undone. It is back for your review.')}>Undo</button>}
+    </div>}
+  </li>;
+}
+
+/** Daily learning: today's list with an exact batch accept, earlier items awaiting review, the trusted-kinds rule and accepted learnings. */
+function LearningList({data,digest,error,busy,write}:{data:LearningView|null;digest:DigestView|null;error:string;busy:boolean;write:Write}){
+  const c=useConsole(),owner=c.live.session?.role==='owner';
+  const listed=new Set(digest?.items.map(i=>i.id)??[]),earlier=(data?.proposals??[]).filter(p=>p.state==='suggested'&&!listed.has(p.id));
+  const rule=data?.trust_rule,[draft,setDraft]=useState<string[]|null>(null),chosen=draft??rule?.categories??[];
+  const saveRule=(enabled:boolean)=>{if(rule)void write('/desk/learning/trust',trustRuleBody(rule,enabled,chosen),enabled?'Your trusted-kinds rule is on.':'Your trusted-kinds rule is off.').then(()=>setDraft(null));};
+  const current=data?.records.filter(r=>r.state==='current')??[];
+  return <section role="tabpanel" id="routine-panel-learning" aria-labelledby="routine-tab-learning">
+    <div className="review-scope"><Lightbulb size={20}/><span>Daily learning reads your own records by stated rules and proposes. Nothing becomes a learning unless you accept it, apart from writing style and presentation preferences your own rule names. Learning never changes policy, grants, budgets or routines, and no model is used.</span></div>
+    {error&&<p className="sign-in-error" role="alert">{error}</p>}
+    {!data&&!error&&<p className="dialog-note" role="status">Reading learnings…</p>}
+    {digest&&<><h3 className="routine-subhead">Today's list<span>{digest.counts.proposed}</span></h3>
+      <p className="dialog-note">{digestLine(digest)}</p>
+      {owner&&digest.approvable.length>0&&<div className="button-row"><button className="primary-button" disabled={busy}
+        onClick={()=>void write('/desk/learning/digest/approve',batchBody(digest),'The listed learnings were accepted.')}>Accept these {digest.approvable.length}</button></div>}
+      {digest.items.length?<ul className="nomination-list" aria-label="Today's learnings">{digest.items.map(p=><LearningRow key={`${p.id}:${p.version}`} p={p} busy={busy} write={write} owner={owner}/>)}</ul>
+        :<p className="quiet-empty">Nothing proposed today.</p>}</>}
+    {data&&<>
+      <h3 className="routine-subhead">Earlier, awaiting your review<span>{earlier.length}</span></h3>
+      {earlier.length?<ul className="nomination-list" aria-label="Earlier learnings awaiting review">{earlier.map(p=><LearningRow key={`${p.id}:${p.version}`} p={p} busy={busy} write={write} owner={owner}/>)}</ul>
+        :<p className="quiet-empty">Nothing else awaits your review.</p>}
+      <h3 className="routine-subhead">Your trusted-kinds rule</h3>
+      <p className="dialog-note">{trustRuleLine(data.trust_rule)} Never for: {data.trust_rule.never_trustable.toLowerCase()}</p>
+      {owner&&rule&&<form className="routine-form" aria-label="Trusted-kinds rule" onSubmit={e=>{e.preventDefault();saveRule(true);}}>
+        {rule.trustable_categories.map(cat=><label key={cat.id} className="routine-check"><input type="checkbox" checked={chosen.includes(cat.id)}
+          onChange={e=>setDraft(e.target.checked?[...chosen,cat.id]:chosen.filter(x=>x!==cat.id))}/><span>{cat.label}</span></label>)}
+        <div className="button-row"><button className="secondary-button" type="submit" disabled={busy||!chosen.length}>{rule.enabled?'Save rule':'Switch rule on'}</button>
+          {rule.enabled&&<button type="button" className="text-button" disabled={busy} onClick={()=>saveRule(false)}>Switch rule off</button>}</div></form>}
+      <h3 className="routine-subhead">Accepted learnings<span>{data.counts.current_records}</span></h3>
+      {current.length?<ul className="procedure-list" aria-label="Accepted learnings">{current.map(r=><li key={r.id}>
+        <div className="nomination-head"><strong>{r.category_label}</strong><small>version {r.version} · accepted by {r.accepted_by==='your_rule'?'your rule':'you'}{r.sent_to_brains?' · may be sent to a brain as context':''}</small></div>
+        <p className="procedure-value">{r.statement}</p>
+        {owner&&<div className="button-row"><button className="text-button" disabled={busy} onClick={()=>void write(`/desk/learning/records/${encodeURIComponent(r.id)}/retire`,{version:r.version},'Learning retired. It is kept, labelled and never sent again.')}>Retire</button></div>}</li>)}</ul>
+        :<p className="quiet-empty">No accepted learnings yet.</p>}
+    </>}
   </section>;
 }
 
@@ -224,6 +286,12 @@ function ProcedureList({data,error}:{data:ProceduresView|null;error:string}){
       <h3 className="routine-subhead">Authored procedure notes<span>{data.authored_procedure_notes.length}</span></h3>
       {data.authored_procedure_notes.length?<ul className="procedure-notes">{data.authored_procedure_notes.map(n=><li key={n.id}><strong>{n.title}</strong><small>{n.path} · revision {n.revision} · authored, not reviewed</small></li>)}</ul>
         :<p className="quiet-empty">No notes of type procedure in your permitted sources.</p>}
+      <h3 className="routine-subhead">Learned procedure drafts<span>{data.learned_procedures?.length??0}</span></h3>
+      {data.learned_procedures?.length?<ul className="procedure-list" aria-label="Learned procedure drafts">{data.learned_procedures.map(l=><li key={l.id}>
+        <div className="nomination-head"><strong>{l.review_state==='accepted'?`Accepted · version ${l.version} · ${l.state}`:'Draft awaiting your review under Learning'}</strong></div>
+        <p className="procedure-value">{l.statement}</p>
+        <p className="procedure-basis">Proposed by daily learning · never run · grants nothing</p></li>)}</ul>
+        :<p className="quiet-empty">No learned procedure drafts. Daily learning proposes one when you repeat the same steps.</p>}
     </>}
   </section>;
 }

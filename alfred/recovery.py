@@ -136,6 +136,12 @@ def _routine_slots(db, scope, now):
         for row in db.execute('SELECT id,interval_seconds,next_due FROM pulse_routines WHERE scope=? AND enabled=1 '
                               'AND next_due>0 AND next_due<=? ORDER BY id', (scope, now)):
             missed['pulse:' + row['id']] = min(1000, (now - row['next_due']) // max(row['interval_seconds'], 1) + 1)
+    if _table(db, 'hub_mandates'):
+        # Goal heartbeats (AGENT_HUB.md H2): counted here, never replayed.
+        from .hub_goals import missed_slots
+        for row in db.execute('SELECT id,schedule,next_due FROM hub_mandates WHERE scope=? AND next_due>0 AND next_due<=? '
+                              'AND schedule IS NOT NULL ORDER BY id', (scope, now)):
+            missed['hub:' + row['id']] = missed_slots(json.loads(row['schedule']), row['next_due'], now)
     return missed
 
 

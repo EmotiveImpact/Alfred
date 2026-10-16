@@ -112,7 +112,7 @@ class SettingsTests(Base):
     def test_nothing_is_configured_or_run_until_the_person_enables_it(self):
         view = self.routines.view(self.owner)
         self.assertEqual([(r['kind'], r['configured'], r['enabled']) for r in view['routines']],
-                         [('commitment-review', False, False), ('morning-brief', False, False)])
+                         [('commitment-review', False, False), ('morning-brief', False, False), ('daily-learning', False, False)])
         self.record(due=T - HOUR)
         self.clock[0] += 3 * DAY; self.sup.cycle()
         self.assertEqual((self.runs(), self.nominations()), ([], []))

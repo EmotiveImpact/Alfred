@@ -160,6 +160,9 @@ def _strings(value):
 
 PACKET_KEYS = {'packet_version', 'task_id', 'goal', 'scope', 'instruction', 'context', 'learned',
                'tools', 'budget', 'autonomy'}
+# H4: acceptance checks declared by the owner or a mandate, never the brain
+# (alfred.verification). A packet without them is exactly the H1 contract.
+OPTIONAL_PACKET_KEYS = {'acceptance'}
 EXCERPT_KEYS = {'id', 'note_id', 'title', 'revision', 'sha256', 'start_line', 'end_line', 'text', 'basis'}
 LEARNED_KEYS = {'id', 'claim_id', 'version', 'statement', 'basis'}
 EXCERPT_BASIS = 'authored_note_not_verified_fact'
@@ -180,7 +183,8 @@ def validate_packet(packet):
     below also refuses any string anywhere in the packet that has the shape of an ALFRED
     bearer token. Autonomy 3 and 4 are valid values here but refused by ``BrainPolicy``.
     """
-    _exact(packet, PACKET_KEYS, 'invalid_packet_fields')
+    if type(packet) is not dict or not PACKET_KEYS <= set(packet) <= PACKET_KEYS | OPTIONAL_PACKET_KEYS:
+        raise Fault('invalid_packet_fields')
     if packet['packet_version'] != PACKET_VERSION or type(packet['packet_version']) is not int:
         raise Fault('unsupported_packet_version')
     ident(packet['task_id'])
@@ -232,6 +236,9 @@ def validate_packet(packet):
         raise Fault('invalid_tools')
     validate_budget(packet['budget'])
     _int(packet['autonomy'], 0, 4, 'invalid_autonomy')
+    if 'acceptance' in packet:
+        from .verification import validate_acceptance
+        validate_acceptance(packet['acceptance'], packet)
     if any(CREDENTIAL_SHAPE.search(s) for s in _strings(packet)):
         raise Fault('credential_shaped_value_in_packet')
     if len(_compact(packet).encode('ascii')) > MAX_PACKET_BYTES:
@@ -546,8 +553,11 @@ class BrainBackend(WorkerBackend):
     """
     name = 'brain'
 
-    def __init__(self, registry: BrainRegistry, policy: BrainPolicy):
+    def __init__(self, registry: BrainRegistry, policy: BrainPolicy, *, gate=None):
         self.registry, self.policy = registry, policy
+        # H2 (alfred.hub_goals): the goal hub rechecks the mandate before a brain starts and
+        # records what the meter counted when the run ends. None keeps H1 behaviour.
+        self.gate = gate
         self._runs, self._lock = {}, threading.Lock()
 
     @staticmethod
@@ -586,7 +596,11 @@ class BrainBackend(WorkerBackend):
         with self._lock:
             if handle in self._runs:
                 raise Fault('backend_handle_exists', 409)
+            if self.gate is not None:
+                # The JobWorker handle is '<job>.<attempt>'. A refusal here means the brain never starts.
+                self.gate.dispatch(handle.rsplit('.', 1)[0], brain.spec, packet)
             self._runs[handle] = run
+        run.began = time.monotonic()
         digest = packet_sha256(packet)
         given = json.loads(_compact(packet))  # A fresh copy: the brain cannot alter ALFRED's record.
         run.thread = threading.Thread(target=self._work, args=(run, brain, given, digest), daemon=True,
@@ -657,11 +671,22 @@ class BrainBackend(WorkerBackend):
             self._runs.pop(handle, None)
         with run.lock:
             reason, output = run.reason, run.output
+        if self.gate is not None:
+            self._report(handle, run, reason)
         if reason is not None:
             return BackendResult(False, None, reason if REASON.fullmatch(reason) else 'brain_error', None, '')
         if output is None:
             return BackendResult(False, None, 'brain_error', None, '')
         return BackendResult(True, output, None, 0, '')
+
+    def _report(self, handle, run, reason):
+        """Tell the goal hub what the meter counted, before the job settles. Wall time is
+        whole seconds, at least one, and at most the packet's limit (the brain is stopped there)."""
+        wall = min(max(1, math.ceil(time.monotonic() - run.began)), run.meter.budget['wall_seconds'])
+        try:
+            self.gate.metered(handle.rsplit('.', 1)[0], run.meter.snapshot(), wall, reason)
+        except Exception:  # Unreported usage is charged at the task's ceiling by the hub.
+            pass
 
 
 # Synthetic brain -------------------------------------------------------------
@@ -783,8 +808,11 @@ class BrainHub:
     """
 
     def __init__(self, store, jobs: JobCoordinator, registry: BrainRegistry, policy: BrainPolicy, *,
-                 workspace_scopes=None):
+                 workspace_scopes=None, gate=None):
         self.store, self.jobs, self.registry, self.policy = store, jobs, registry, policy
+        # H2 (alfred.hub_goals.GoalHub attaches itself here): with a gate, every task must
+        # serve a current mandate and fit its budgets, or it is refused before a job exists.
+        self.gate = gate
         self.workspace_scopes = dict(workspace_scopes or {})
         if any(v not in SCOPE_CLASSES for v in self.workspace_scopes.values()):
             raise Fault('invalid_workspace_scopes')
@@ -834,29 +862,41 @@ class BrainHub:
             raise Fault('invalid_learned')
         if not claim_ids:
             return []
-        from .reviewed_memory import ReviewedMemory
-        view = ReviewedMemory(self.store).view(bearer)
-        entities = {e['id']: e for e in view['entities']}
-        claims = {c['id']: c for c in view['claims']}
+        for claim_id in claim_ids:
+            ident(claim_id)
+        # Owner-accepted learning records (H3, alfred/learning.py) travel in the same field,
+        # their record ID in ``claim_id``; one that is not current is refused like a claim.
+        from .learning import is_record_id, packet_statements
+        records = packet_statements(self.store, bearer, [c for c in claim_ids if is_record_id(c)])
+        claims, entities = {}, {}
+        if len(records) < len(claim_ids):
+            from .reviewed_memory import ReviewedMemory
+            view = ReviewedMemory(self.store).view(bearer)
+            entities = {e['id']: e for e in view['entities']}
+            claims = {c['id']: c for c in view['claims']}
         learned, total = [], 0
         for index, claim_id in enumerate(claim_ids, 1):
-            ident(claim_id)
-            claim = claims.get(claim_id)
-            if not claim or not claim['usable']:
-                raise Fault('learned_not_usable', 409)
-            other = entities[claim['object_id']]['name'] if claim['object_id'] else claim['value']
-            statement = f"{entities[claim['subject_id']]['name']} {claim['predicate'].replace('_', ' ')} {other}"
+            if claim_id in records:
+                statement, version = records[claim_id]['statement'], records[claim_id]['version']
+            else:
+                claim = claims.get(claim_id)
+                if not claim or not claim['usable']:
+                    raise Fault('learned_not_usable', 409)
+                other = entities[claim['object_id']]['name'] if claim['object_id'] else claim['value']
+                statement = f"{entities[claim['subject_id']]['name']} {claim['predicate'].replace('_', ' ')} {other}"
+                version = claim['version']
             total += len(statement)
             if total > MAX_LEARNED_CHARACTERS:
                 raise Fault('learned_over_budget')
-            learned.append({'id': f'L{index}', 'claim_id': claim_id, 'version': claim['version'],
+            learned.append({'id': f'L{index}', 'claim_id': claim_id, 'version': version,
                             'statement': statement[:600], 'basis': LEARNED_BASIS})
         return learned
 
     def build_packet(self, bearer, request) -> dict:
         """A validated packet from the caller's own permitted material. Sends nothing."""
         keys = {'task_id', 'goal', 'scope', 'instruction', 'context', 'learned', 'tools', 'budget', 'autonomy'}
-        _exact(request, keys | {'brain'}, 'invalid_fields')
+        if type(request) is not dict or not keys | {'brain'} <= set(request) <= keys | {'brain', 'acceptance'}:
+            raise Fault('invalid_fields')
         with self.store.connection() as db:
             principal = self.store.authenticate(db, bearer, {'owner'})
         expected = self.workspace_scopes.get(principal['scope'])
@@ -867,15 +907,25 @@ class BrainHub:
                   'context': self._excerpts(bearer, request['context']),
                   'learned': self._learned(bearer, request['learned']),
                   'tools': request['tools'], 'budget': request['budget'], 'autonomy': request['autonomy']}
+        if 'acceptance' in request:
+            from .verification import declare
+            packet['acceptance'] = declare(request['acceptance'])
         return validate_packet(packet)
 
-    def submit(self, bearer, request) -> dict:
-        """Build a packet, ask policy, and submit it as a ``brain_task`` job."""
+    def submit(self, bearer, request, *, binding=None) -> dict:
+        """Build a packet, ask policy, and submit it as a ``brain_task`` job.
+
+        ``binding`` names the mandate and kind of work the task serves; the gate, when one
+        is attached, refuses a task without one or outside it."""
         if type(request) is not dict or 'brain' not in request:
             raise Fault('invalid_fields')
         packet = self.build_packet(bearer, request)
         brain = self.registry.get(request['brain'])
         self.policy.decide(brain.spec, packet)
+        if self.gate is not None:
+            self.gate.authorise(bearer, brain.spec, packet, binding)
+        elif binding is not None:
+            raise Fault('mandate_gate_not_configured', 409)
         notes = []
         for item in packet['context']:
             if not any(n['note'] == item['note_id'] for n in notes):
@@ -892,6 +942,8 @@ class BrainHub:
                            (job['id'], p['scope'], p['id'], packet['task_id'], brain.spec.id, packet['scope'],
                             packet['autonomy'], digest, self.store.now()))
                 self.store.log(db, p['scope'], p['id'], 'brain.task_submitted', job['id'])
+                if self.gate is not None:
+                    self.gate.bind(db, p, job, brain.spec, packet, binding)
             elif prior['packet_sha256'] != digest:
                 raise Fault('idempotency_key_collision', 409)
         return {'job': job, 'packet_sha256': digest, 'brain': brain.spec.id, 'autonomy': AUTONOMY[packet['autonomy']]}
@@ -1110,9 +1162,15 @@ def action_current(store, db, row):
                      (link['job_id'], row['scope'], row['actor'])).fetchone()
     if not result or result['status'] != 'accepted' or not job:
         return False
+    packet = json.loads(job['parameters'])['packet']
+    # H4: declared acceptance checks must have run, and none failed unless the owner
+    # acknowledged the result (alfred.verification).
+    from .verification import holds_effects
+    if holds_effects(db, row['scope'], row['actor'], link['job_id'], packet):
+        return False
     from .policy import permitted
     principal, now = {'scope': row['scope'], 'id': row['actor']}, store.now()
-    for item in json.loads(job['parameters'])['packet']['context']:
+    for item in packet['context']:
         note = db.execute('''SELECT n.source,n.revision,n.sha256 FROM knowledge_notes n
             JOIN credentials c ON c.id=n.source AND c.scope=n.scope
             JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source

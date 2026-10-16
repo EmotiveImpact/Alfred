@@ -25,6 +25,7 @@ import re
 import secrets
 from .local import Fault, canonical, exact, fingerprint, ident
 from .policy import ledger
+from .learning import ROUTINE_RULES as LEARNING_RULES
 
 DAY, HOUR = 86400, 3600
 KINDS = {
@@ -60,7 +61,18 @@ KINDS = {
         ),
         'default': {'schedule': {'daily_at': '07:30'}, 'interrupt': 'show_now'},
     },
+    # Daily learning (AGENT_HUB.md step H3): proposals for review only, see alfred/learning.py.
+    'daily-learning': {
+        'name': 'Daily learning',
+        'description': 'Reads the value-free record of your recent decisions and brain results, and proposes preferences, '
+                       'procedure drafts and routing notes for your review. Also compares the source library\'s pinned versions '
+                       'with your file of latest known upstream versions. It never changes policy, grants, budgets or routines.',
+        'rules': LEARNING_RULES,
+        'default': {'schedule': {'daily_at': '21:00'}, 'interrupt': 'show_now'},
+    },
 }
+# Kinds whose output is shown when made: no holding for the brief and no draft offers.
+FIXED_DELIVERY = ('morning-brief', 'daily-learning')
 EVERY_HOURS = (1, 2, 4, 8, 12, 24)
 FIELDS = {'version', 'enabled', 'schedule', 'utc_offset_minutes', 'runs_per_day', 'nominations_per_run',
           'quiet_hours', 'interrupt', 'propose_drafts'}
@@ -142,10 +154,10 @@ def validate(kind, body):
             raise Fault('invalid_quiet_hours')
     if body['interrupt'] not in ('show_now', 'hold_for_brief'):
         raise Fault('invalid_interrupt')
-    if kind == 'morning-brief' and body['interrupt'] != 'show_now':
+    if kind in FIXED_DELIVERY and body['interrupt'] != 'show_now':
         # The brief is the moment held nominations appear; it cannot hold for itself.
         raise Fault('interrupt_not_applicable')
-    if kind == 'morning-brief' and body['propose_drafts']:
+    if kind in FIXED_DELIVERY and body['propose_drafts']:
         raise Fault('drafts_not_applicable')
     return {'schedule': dict(schedule), 'utc_offset_minutes': offset,
             'runs_per_day': _number(body['runs_per_day'], 1, MAX_RUNS_PER_DAY, 'invalid_run_budget'),
@@ -235,6 +247,8 @@ class Routines:
         from .reviewed_memory import ReviewedMemory
         self.store, self.supervisor, self.scope = store, supervisor, supervisor.scope
         self.executive, self.memory = ExecutiveRecords(store), ReviewedMemory(store)
+        from .learning import Learning
+        self.learning = Learning(store)
         with store.connection() as db:
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
             if [r[0] for r in db.execute('SELECT version FROM routine_meta')] != [1]:
@@ -397,7 +411,8 @@ class Routines:
             self.store.log(db, self.scope, row['actor'], 'routine.skipped', kind)
         else:
             budget['runs_today'] = used + 1
-            work = self._commitment_review if kind == 'commitment-review' else self._morning_brief
+            work = {'commitment-review': self._commitment_review, 'morning-brief': self._morning_brief,
+                    'daily-learning': self._daily_learning}[kind]
             outcome = {**common, **work(db, p, settings, run_id, now)}
             self._insert_run(db, run_id, kind, row['actor'], slot, now, 'completed', None, outcome)
             self.store.log(db, self.scope, row['actor'], 'routine.completed', kind)
@@ -499,6 +514,10 @@ class Routines:
                 'nominated': nominated, 'not_nominated': not_nominated, 'held': held,
                 'nothing_due': not candidates, 'surface_at': surface_at,
                 'basis': 'stated_rules_over_your_records_and_reviewed_statements'}
+
+    def _daily_learning(self, db, p, settings, run_id, now):
+        # Proposals into the learning inbox, inside this run's transaction (alfred/learning.py).
+        return self.learning.run_in(db, p, settings, run_id, now)
 
     @staticmethod
     def _reason(kind, c):
@@ -825,8 +844,10 @@ class Routines:
             for n in self.store.knowledge(bearer, kind='procedure')['results']:
                 notes.append({'id': n['id'], 'title': n['title'], 'path': n['path'], 'revision': n['revision'],
                               'basis': 'authored_note_not_reviewed', 'executable': False})
-        return {'procedures': items, 'authored_procedure_notes': notes[:64],
-                'counts': {'reviewed': len(items), 'usable': sum(i['usable'] for i in items), 'authored_notes': len(notes)},
+        learned = self.learning.procedure_registry(bearer)
+        return {'procedures': items, 'authored_procedure_notes': notes[:64], 'learned_procedures': learned,
+                'counts': {'reviewed': len(items), 'usable': sum(i['usable'] for i in items), 'authored_notes': len(notes),
+                           'learned': sum(i['state'] == 'current' for i in learned)},
                 'read_only': True, 'executable': False, 'authority_granted': False,
                 'basis': 'reviewed_descriptions_not_instructions',
                 'statement': 'Procedures are kept to be read. Nothing here runs, approves, schedules or grants anything.'}

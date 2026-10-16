@@ -81,9 +81,12 @@ class Sessions:
 
 class DeskHTTPServer(HTTPServer):
     allow_reuse_address = True
-    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None, jobs=None):
+    def __init__(self, store, supervisor, port=8765, assets=None, local_model=None, console_dist=None, jobs=None, goals=None):
         self.store, self.supervisor, self.sessions = store, supervisor, Sessions(store)
         self.jobs = jobs
+        # The goal hub (AGENT_HUB.md H2), when this host has brains: its heartbeats run in the supervisor cycle.
+        self.goals = goals
+        if goals is not None and hasattr(supervisor, 'owner'): supervisor.goals = goals
         self.local_model = local_model
         self.memory = ReviewedMemory(store) if hasattr(store, 'knowledge') else None
         from .executive import ExecutiveRecords
@@ -97,6 +100,8 @@ class DeskHTTPServer(HTTPServer):
         from .routines import Routines
         self.routines = Routines(store, supervisor) if self.pulse is not None else None
         if self.routines is not None: supervisor.routines = self.routines
+        # Daily learning (AGENT_HUB.md H3): the routine's learning service, proposals for review only.
+        self.learning = self.routines.learning if self.routines is not None else None
         # Owner-authored capture policies (MEM-004, M04) propose statements into the review queue.
         from .capture_policies import CapturePolicies
         self.capture = CapturePolicies(store, supervisor if hasattr(supervisor, 'owner') else None, self.memory) if self.memory is not None else None
@@ -504,9 +509,15 @@ class Handler(BaseHTTPRequestHandler):
             elif (url.path == '/desk/routines' or url.path.startswith('/desk/routines/')) and not url.query:
                 from .routines_http import route as routines_route
                 result = routines_route(self.server, url.path, mutation, bearer, body)
+            elif (url.path == '/desk/learning' or url.path.startswith('/desk/learning/')) and not url.query:
+                from .learning import route as learning_route
+                result = learning_route(self.server, url.path, mutation, bearer, body)
             elif (url.path == '/desk/capture' or url.path.startswith('/desk/capture/')) and not url.query:
                 from .capture_policies import route as capture_route
                 result = capture_route(self.server.capture, url.path, mutation, bearer, body)
+            elif (url.path == '/desk/hub' or url.path.startswith('/desk/hub/')) and not url.query:
+                from .hub_goals import route as hub_route
+                result = hub_route(self.server, url.path, mutation, bearer, body)
             elif url.path == '/desk/jobs' or url.path.startswith('/desk/jobs/'):
                 result = self.jobs_route(url, mutation, bearer, body)
             elif not mutation and url.path == '/desk/console/workspaces' and not url.query:
