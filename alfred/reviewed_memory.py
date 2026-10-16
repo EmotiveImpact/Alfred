@@ -1,4 +1,7 @@
-"""Reviewed, actor-private statements over indexed evidence, not automated truth.
+"""Reviewed, person-private statements over indexed evidence, not automated truth.
+
+The ledger belongs to the person (every paired device of that person shares it);
+each review still records the device credential that made it.
 
 Entities are explicitly created, never merged by name. Review records a user's
 judgement; it grants no device/tool authority. Source slices are reconstructed,
@@ -11,6 +14,7 @@ import json
 import secrets
 from .local import Fault, exact, ident, text, timestamp, fingerprint
 from . import memory_history
+from .policy import ledger, migrate_ledgers, person_credentials
 
 KINDS = ('person', 'organisation', 'project', 'asset', 'decision', 'commitment', 'event')
 RELATIONS = {
@@ -63,12 +67,15 @@ class ReviewedMemory:
             if [r[0] for r in db.execute('SELECT version FROM reviewed_memory_meta')] != [1]:
                 raise Fault('unsupported_reviewed_memory_version')
         memory_history.initialise(store)
+        # The review ledger is per person, so a paired device shows the same history.
+        with store.transaction() as db:
+            migrate_ledgers(db)
 
     @staticmethod
     def _entity(db, p, identity):
         ident(identity)
         row = db.execute('SELECT * FROM memory_entities WHERE id=? AND scope=? AND actor=?',
-                         (identity, p['scope'], p['id'])).fetchone()
+                         (identity, p['scope'], ledger(db, p))).fetchone()
         if not row:
             raise Fault('memory_entity_not_found', 404)
         return dict(row)
@@ -77,7 +84,7 @@ class ReviewedMemory:
     def _claim(db, p, identity):
         ident(identity)
         row = db.execute('SELECT * FROM memory_claims WHERE id=? AND scope=? AND actor=?',
-                         (identity, p['scope'], p['id'])).fetchone()
+                         (identity, p['scope'], ledger(db, p))).fetchone()
         if not row:
             raise Fault('memory_claim_not_found', 404)
         return dict(row)
@@ -146,13 +153,13 @@ class ReviewedMemory:
 
     def _reconcile(self, db, p):
         for row in db.execute("SELECT * FROM memory_claims WHERE scope=? AND actor=? AND state!='invalidated' AND (value IS NOT NULL OR object_id IS NOT NULL)",
-                              (p['scope'], p['id'])).fetchall():
+                              (p['scope'], ledger(db, p))).fetchall():
             c=dict(row)
             state=self._support_state(db,p['scope'],c)
             if state=='changed':
                 db.execute("UPDATE memory_claims SET state='invalidated',value=NULL,object_id=NULL,version=version+1 WHERE id=?",(c['id'],))
                 self.store.log(db,p['scope'],p['id'],'memory.invalidated',c['id'])
-                memory_history.record(db,p['scope'],p['id'],c['id'],'invalidated',self.store.now(),memory_history.SYSTEM,detail='support_changed')
+                memory_history.record(db,p['scope'],ledger(db,p),c['id'],'invalidated',self.store.now(),memory_history.SYSTEM,detail='support_changed')
 
     def create_entity(self, bearer, body):
         exact(body, {'id','kind','name'});ident(body['id']);text(body['name'],120)
@@ -162,13 +169,13 @@ class ReviewedMemory:
             p=self.store.authenticate(db,bearer,{'owner'})
             existing=db.execute('SELECT * FROM memory_entities WHERE id=?',(body['id'],)).fetchone()
             if existing:
-                if (existing['scope'],existing['actor'],existing['kind'],existing['name'])!=(p['scope'],p['id'],body['kind'],body['name'].strip()):
+                if (existing['scope'],existing['actor'],existing['kind'],existing['name'])!=(p['scope'],ledger(db,p),body['kind'],body['name'].strip()):
                     raise Fault('memory_entity_id_unavailable',409)
                 return {'id':body['id'],'reused':True}
-            if db.execute('SELECT count(*) FROM memory_entities WHERE actor=?',(p['id'],)).fetchone()[0]>=MAX_ENTITIES:
+            if db.execute('SELECT count(*) FROM memory_entities WHERE actor=?',(ledger(db,p),)).fetchone()[0]>=MAX_ENTITIES:
                 raise Fault('memory_entity_capacity',409)
             db.execute('INSERT INTO memory_entities VALUES (?,?,?,?,?,?)',
-                       (body['id'],p['scope'],p['id'],body['kind'],body['name'].strip(),self.store.now()))
+                       (body['id'],p['scope'],ledger(db,p),body['kind'],body['name'].strip(),self.store.now()))
             self.store.log(db,p['scope'],p['id'],'memory.entity_created',body['id'])
         return {'id':body['id'],'reused':False}
 
@@ -201,7 +208,7 @@ class ReviewedMemory:
             p=self.store.authenticate(db,bearer,{'owner'})
             due=[(r['id'],r['version']) for r in db.execute('''SELECT c.id,c.version FROM memory_claims c JOIN memory_capture m ON m.claim_id=c.id
                  WHERE c.scope=? AND c.actor=? AND c.state!='forgotten' AND m.retention_until IS NOT NULL AND m.retention_until<=?''',
-                 (p['scope'],p['id'],self.store.now()))]
+                 (p['scope'],ledger(db,p),self.store.now()))]
         return [self.forget(bearer,identity,{'version':version}) for identity,version in due]
 
     def propose(self, bearer, body, capture=None):
@@ -225,7 +232,7 @@ class ReviewedMemory:
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'});self._reconcile(db,p)
             old=db.execute('SELECT id,request_hash,state FROM memory_claims WHERE scope=? AND actor=? AND request_id=?',
-                           (p['scope'],p['id'],body['request_id'])).fetchone()
+                           (p['scope'],ledger(db,p),body['request_id'])).fetchone()
             if old:
                 if old['request_hash']!=digest:raise Fault('memory_request_collision',409)
                 return {'id':old['id'],'state':old['state'],'reused':True}
@@ -235,11 +242,11 @@ class ReviewedMemory:
                 if other['kind'] not in relation['objects']:raise Fault('memory_object_kind')
                 if body['subject_id']==body['object_id']:raise Fault('memory_self_relation')
             source=self._source(db,p['scope'],body['evidence'],self.store.now(),p)
-            if db.execute('SELECT count(*) FROM memory_claims WHERE actor=?',(p['id'],)).fetchone()[0]>=MAX_CLAIMS:
+            if db.execute('SELECT count(*) FROM memory_claims WHERE actor=?',(ledger(db,p),)).fetchone()[0]>=MAX_CLAIMS:
                 raise Fault('memory_claim_capacity',409)
             cid='claim-'+secrets.token_hex(12)
             db.execute('INSERT INTO memory_claims VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                       (cid,p['scope'],p['id'],body['request_id'],digest,body['subject_id'],body['predicate'],
+                       (cid,p['scope'],ledger(db,p),body['request_id'],digest,body['subject_id'],body['predicate'],
                         body['object_id'],body['value'].strip() if body['value'] else None,body['valid_from'],body['valid_until'],
                         source['note_id'],source['sha256'],source['revision'],source['start_line'],source['end_line'],
                         source['quote_hash'],'proposed',1,self.store.now(),None,None,None))
@@ -247,7 +254,7 @@ class ReviewedMemory:
                 until=self.store.now()+capture['retention_days']*86400 if capture['retention_days'] else None
                 db.execute('INSERT INTO memory_capture VALUES (?,?,?,?,?)',(cid,capture['memory_type'],until,json.dumps(capture['captured_from'],sort_keys=True),self.store.now()))
             self.store.log(db,p['scope'],p['id'],'memory.proposed',cid)
-            memory_history.record(db,p['scope'],p['id'],cid,'proposed',self.store.now(),p['id'],
+            memory_history.record(db,p['scope'],ledger(db,p),cid,'proposed',self.store.now(),p['id'],
                                   detail='captured' if capture is not None else None,valid=(body['valid_from'],body['valid_until']))
         return {'id':cid,'state':'proposed','reused':False}
 
@@ -278,7 +285,7 @@ class ReviewedMemory:
             if c['state'] not in ('proposed','accepted','disputed'):raise Fault('memory_review_closed',409)
             if validity==(c['valid_from'],c['valid_until']):validity=None
             if validity is not None and c['state']!='proposed':raise Fault('memory_validity_fixed',409)
-            if memory_history.count(db,p['scope'],p['id'],c['id'])>=memory_history.MAX_HISTORY_PER_CLAIM:
+            if memory_history.count(db,p['scope'],ledger(db,p),c['id'])>=memory_history.MAX_HISTORY_PER_CLAIM:
                 raise Fault('memory_history_capacity',409)
             self._source(db,p['scope'],self._ref(c),self.store.now(),p)
             replacement=c['replaces_id']
@@ -295,12 +302,12 @@ class ReviewedMemory:
                 db.execute("UPDATE memory_claims SET state='superseded',version=version+1,reviewed=?,reviewer=? WHERE id=?",
                            (self.store.now(),p['id'],replacement))
                 self.store.log(db,p['scope'],p['id'],'memory.superseded',replacement)
-                memory_history.record(db,p['scope'],p['id'],replacement,'superseded',self.store.now(),p['id'],related=c['id'])
+                memory_history.record(db,p['scope'],ledger(db,p),replacement,'superseded',self.store.now(),p['id'],related=c['id'])
             state={'accept':'accepted','supersede':'accepted','dispute':'disputed','withdraw':'withdrawn'}[body['decision']]
             db.execute('UPDATE memory_claims SET state=?,version=version+1,reviewed=?,reviewer=?,replaces_id=? WHERE id=?',
                        (state,self.store.now(),p['id'],replacement,c['id']))
             self.store.log(db,p['scope'],p['id'],'memory.'+state,c['id'])
-            memory_history.record(db,p['scope'],p['id'],c['id'],state,self.store.now(),p['id'],
+            memory_history.record(db,p['scope'],ledger(db,p),c['id'],state,self.store.now(),p['id'],
                                   related=replacement if body['decision']=='supersede' else None,
                                   detail='supersede' if body['decision']=='supersede' else None,valid=validity)
         return self.view(bearer)
@@ -319,7 +326,7 @@ class ReviewedMemory:
                 return self._receipt(db,p,'claim_forgotten',identity)
             if c['version']!=body['version']:raise Fault('memory_review_changed',409)
             # Intent is journalled before the database changes, so a restore replays it.
-            entry={'kind':'claim_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()}
+            entry={'kind':'claim_forgotten','scope':p['scope'],'actor':ledger(db,p),'by':p['id'],'subject':identity,'at':self.store.now()}
             if body.get('purge_history'):entry['purge_history']=True
             lifecycle.append(self.store,entry)
             return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':['reviewed value','reviewed relationship']},lifecycle.REMAINS)
@@ -332,13 +339,13 @@ class ReviewedMemory:
         from . import lifecycle
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'})
-            if not db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],p['id'])).fetchone():
-                if db.execute('SELECT 1 FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=?',(p['scope'],p['id'],'entity_forgotten',identity)).fetchone():
+            if not db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],ledger(db,p))).fetchone():
+                if db.execute('SELECT 1 FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=?',(p['scope'],ledger(db,p),'entity_forgotten',identity)).fetchone():
                     return self._receipt(db,p,'entity_forgotten',identity)
                 raise Fault('memory_entity_not_found',404)
             claims=db.execute('SELECT count(*) FROM memory_claims WHERE scope=? AND actor=? AND (subject_id=? OR object_id=?) AND state!=?',
-                              (p['scope'],p['id'],identity,identity,'forgotten')).fetchone()[0]
-            entry={'kind':'entity_forgotten','scope':p['scope'],'actor':p['id'],'subject':identity,'at':self.store.now()}
+                              (p['scope'],ledger(db,p),identity,identity,'forgotten')).fetchone()[0]
+            entry={'kind':'entity_forgotten','scope':p['scope'],'actor':ledger(db,p),'by':p['id'],'subject':identity,'at':self.store.now()}
             if body.get('purge_history'):entry['purge_history']=True
             lifecycle.append(self.store,entry)
             return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':['entity name',f'{claims} reviewed statement(s)']},lifecycle.REMAINS)
@@ -346,7 +353,7 @@ class ReviewedMemory:
     @staticmethod
     def _receipt(db,p,kind,subject):
         row=db.execute('SELECT receipt FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=? ORDER BY at DESC LIMIT 1',
-                       (p['scope'],p['id'],kind,subject)).fetchone()
+                       (p['scope'],ledger(db,p),kind,subject)).fetchone()
         if not row:raise Fault('memory_claim_not_found',404)
         return json.loads(row['receipt'])
 
@@ -354,7 +361,10 @@ class ReviewedMemory:
     def _claims(cls, db, p, now):
         """One currentness/conflict rule for review, retrieval and final checks."""
         claims=[]
-        for row in db.execute('SELECT * FROM memory_claims WHERE scope=? AND actor=? ORDER BY created DESC,id',(p['scope'],p['id'])):
+        person=ledger(db,p)
+        # A review made on any device of this person counts; the reviewer stays the device credential.
+        reviewers=person_credentials(db,person)|{p['id']}
+        for row in db.execute('SELECT * FROM memory_claims WHERE scope=? AND actor=? ORDER BY created DESC,id',(p['scope'],person)):
             c=dict(row)
             c.pop('request_hash');c.pop('request_id');c.pop('scope');c.pop('actor')
             c['source']=None
@@ -372,16 +382,16 @@ class ReviewedMemory:
                     c['conflicts'].append(other['id'])
         for c in claims:
             c['usable']=(c['state']=='accepted' and c['valid_now'] and bool(c['source'])
-                         and c['reviewed'] is not None and c['reviewer']==p['id'] and not c['conflicts'])
+                         and c['reviewed'] is not None and c['reviewer'] in reviewers and not c['conflicts'])
         return claims
 
     def _snapshot(self, db, p, now):
         """Reconciled entities and claims with withheld values removed, in the caller's
         transaction. The reviewed-memory view, history and as-of report all read this."""
         self._reconcile(db,p)
-        entities=[dict(r) for r in db.execute('SELECT id,kind,name,created FROM memory_entities WHERE scope=? AND actor=? ORDER BY created,id',(p['scope'],p['id']))]
+        entities=[dict(r) for r in db.execute('SELECT id,kind,name,created FROM memory_entities WHERE scope=? AND actor=? ORDER BY created,id',(p['scope'],ledger(db,p)))]
         claims=self._claims(db,p,now)
-        captures={r['claim_id']:dict(r) for r in db.execute('SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',(p['scope'],p['id']))}
+        captures={r['claim_id']:dict(r) for r in db.execute('SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',(p['scope'],ledger(db,p)))}
         for c in claims:
             m=captures.get(c['id'])
             c['memory_type'],c['retention_until']=(m['memory_type'],m['retention_until']) if m else (None,None)
@@ -446,7 +456,7 @@ def context_ambiguities(entities, statements):
 
 def ambiguities_current_db(db, p, statements, expected):
     if not statements:return not expected
-    entities={r['id']:dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?',(p['scope'],p['id']))}
+    entities={r['id']:dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?',(p['scope'],ledger(db,p)))}
     return context_ambiguities(entities,statements)==expected
 
 
@@ -477,7 +487,7 @@ def context_current_db(db, p, refs, now):
     if len({r['claim_id'] for r in refs})!=len(refs):raise Fault('duplicate_memory_reference')
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_claims'").fetchone():return None
     claims={c['id']:c for c in ReviewedMemory._claims(db,p,now)}
-    entities={r['id']:dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?',(p['scope'],p['id']))}
+    entities={r['id']:dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?',(p['scope'],ledger(db,p)))}
     current=[]
     for ref in refs:
         c=claims.get(ref['claim_id'])

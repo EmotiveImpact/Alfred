@@ -4,6 +4,7 @@ import unittest
 from alfred.knowledge import KnowledgeStore,parse_note
 from alfred.knowledge_context import build_packet
 from alfred.local import Fault
+from grant_helpers import grant_all
 
 
 class KnowledgeLimitTests(unittest.TestCase):
@@ -11,6 +12,7 @@ class KnowledgeLimitTests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.store=KnowledgeStore(Path(self.temp.name)/'db.sqlite')
         self.owner=self.store.provision('work','owner','owner')
         self.source=self.store.provision('work','source','source');self.second=self.store.provision('work','second','source')
+        grant_all(self.store,self.owner)
     def tearDown(self):self.temp.cleanup()
     def notes(self,count):
         values=[]

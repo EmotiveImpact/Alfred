@@ -9,6 +9,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault, parse_note, note_id
 from alfred.grounded import check_sources
 from alfred.local import Fault
 from alfred.reviewed_memory import ReviewedMemory
+from grant_helpers import grant_all
 
 
 class M01Tests(unittest.TestCase):
@@ -21,6 +22,7 @@ class M01Tests(unittest.TestCase):
         self.store = KnowledgeStore(self.root / 'db', clock=lambda:1000)
         self.owner = self.store.provision('work', 'owner', 'owner')
         self.source = self.store.provision('work', 'source', 'source')
+        grant_all(self.store, self.owner)
         self.scanner = MarkdownVault(self.store, self.source, self.vault)
 
     def write(self, path, body):
@@ -88,6 +90,7 @@ class M01Tests(unittest.TestCase):
 
     def test_missing_selection_visible_before_first_scan(self):
         second = self.store.provision('work', 'second', 'source')
+        grant_all(self.store, self.owner)
         scanner = MarkdownVault(self.store, second, self.root / 'absent')
         self.assertEqual(scanner.health['status'], 'unavailable')
         source = next(s for s in self.data()['sources'] if s['source']=='second')
@@ -232,6 +235,7 @@ class M01Tests(unittest.TestCase):
     def test_same_external_id_in_distinct_vaults_remains_distinct(self):
         self.adopt_ids(); self.write('a.md', '---\nalfred_id: x\n---\n# A'); self.scan(); first=self.node('a.md')
         source = self.store.provision('work','second','source'); other=self.root/'other'; other.mkdir()
+        grant_all(self.store, self.owner)
         (other/'a.md').write_text('---\nalfred_id: x\n---\n# A')
         scanner=MarkdownVault(self.store,source,other,id_key='alfred_id'); scanner.scan()
         nodes=self.data()['nodes']; self.assertEqual(len(nodes),2)
@@ -273,6 +277,7 @@ class M01Tests(unittest.TestCase):
     def test_direct_pipeline_rejects_unsafe_and_duplicate_paths_atomically(self):
         good=parse_note('a.md',b'# A'); good['modified']=0
         other=self.store.provision('work','direct','source')
+        grant_all(self.store, self.owner)
         self.store.replace_notes(other,'Direct',[good],[])
         for notes in ([good,dict(good)], [dict(good,path='../outside.md')]):
             with self.assertRaises(Fault):self.store.replace_notes(other,'Direct',notes,[])

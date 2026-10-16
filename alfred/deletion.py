@@ -130,15 +130,25 @@ def _rows(db, sql, ids, *args):
     return result
 
 
+def _keys(db, actor):
+    """Every actor value naming this person's review ledger (per person since strict grants)."""
+    if not _has(db, 'identity_devices'):
+        return [actor]
+    from .policy import ledger_keys
+    return ledger_keys(db, actor)
+
+
 def _linked(db, scope, actor, kind, subject, trace):
     """Every identifier that ties a row to the subject, from current links and earlier receipts."""
     t = {k: set(trace.get(k, ())) for k in TRACE}
     private = kind != 'source'
+    keys = _keys(db, actor)
+    mine = f"actor IN ({','.join('?' * len(keys))})"
     if kind == 'statement':
         t['claims'].add(subject)
     elif kind == 'entity' and _has(db, 'memory_claims'):
-        t['claims'] |= {r[0] for r in db.execute('SELECT id FROM memory_claims WHERE scope=? AND actor=? AND (subject_id=? OR object_id=?)',
-                                                 (scope, actor, subject, subject))}
+        t['claims'] |= {r[0] for r in db.execute(f'SELECT id FROM memory_claims WHERE scope=? AND {mine} AND (subject_id=? OR object_id=?)',
+                                                 (scope, *keys, subject, subject))}
     elif kind == 'source':
         for table in ('knowledge_notes', 'knowledge_history', 'knowledge_identity', 'memory_tombstones'):
             column = 'note_id' if table == 'memory_tombstones' else 'id'
@@ -159,7 +169,7 @@ def _linked(db, scope, actor, kind, subject, trace):
                         t['jobs'].add(row['id'])
     if private and t['claims'] and _has(db, 'memory_claims'):
         # Statements are private to the person who reviewed them.
-        t['claims'] = {r[0] for r in _rows(db, 'SELECT id FROM memory_claims WHERE scope=? AND actor=? AND id IN ({ids})', t['claims'], scope, actor)}
+        t['claims'] = {r[0] for r in _rows(db, f'SELECT id FROM memory_claims WHERE scope=? AND {mine} AND id IN ({{ids}})', t['claims'], scope, *keys)}
     if kind != 'statement' and t['claims'] and _has(db, 'lifecycle_receipts'):
         # A statement forgotten on its own earlier unlinked its answers and drafts; its receipt still names them.
         for row in _rows(db, "SELECT receipt FROM lifecycle_receipts WHERE scope=? AND kind='claim_forgotten' AND subject IN ({ids})",
@@ -216,8 +226,10 @@ def scan(db, scope, actor, kind, subject, *, trace=None, cache_dir=None, databas
         if t['claims'] and _has(db, 'memory_claims') else []
     c['statements'] = _category(len(claims), sum(r['value'] is not None or r['object_id'] is not None for r in claims), ['memory_claims'])
     if kind == 'entity':
-        held = _has(db, 'memory_entities') and db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',
-                                                          (subject, scope, actor)).fetchone() is not None
+        keys = _keys(db, actor)
+        held = _has(db, 'memory_entities') and db.execute(
+            f"SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor IN ({','.join('?' * len(keys))})",
+            (subject, scope, *keys)).fetchone() is not None
         c['entity_name'] = _category(int(held), int(held), ['memory_entities'])
     captures = len(_rows(db, 'SELECT claim_id FROM memory_capture WHERE claim_id IN ({ids})', t['claims'])) \
         if t['claims'] and _has(db, 'memory_capture') else 0
@@ -301,7 +313,7 @@ def scan(db, scope, actor, kind, subject, *, trace=None, cache_dir=None, databas
     else:
         present, gone = [], 0
         for entry in exports(database):
-            if entry.get('scope') != scope or (kind != 'source' and entry.get('actor') != actor):
+            if entry.get('scope') != scope or (kind != 'source' and entry.get('actor') not in _keys(db, actor)):
                 continue
             hit = set(entry.get('statements') or []) & t['claims']
             hit = hit or (kind == 'entity' and subject in (entry.get('entities') or []))
@@ -354,8 +366,10 @@ def traces(db, scope, actor, kind, subject):
     merged, latest = {k: set() for k in TRACE}, None
     if not _has(db, 'lifecycle_receipts'):
         return merged, latest
-    sql = 'SELECT at,receipt FROM lifecycle_receipts WHERE scope=? AND kind=? AND subject=?' + ('' if kind == 'source' else ' AND actor=?')
-    for row in db.execute(sql, (scope, receipt_kind, subject) if kind == 'source' else (scope, receipt_kind, subject, actor)):
+    keys = _keys(db, actor)
+    sql = 'SELECT at,receipt FROM lifecycle_receipts WHERE scope=? AND kind=? AND subject=?' + \
+        ('' if kind == 'source' else f" AND actor IN ({','.join('?' * len(keys))})")
+    for row in db.execute(sql, (scope, receipt_kind, subject) if kind == 'source' else (scope, receipt_kind, subject, *keys)):
         latest = max(latest or row['at'], row['at'])
         for k, ids in ((_json(row['receipt']) or {}).get('trace') or {}).items():
             if k in merged and isinstance(ids, list):

@@ -29,6 +29,7 @@ from pathlib import Path
 import secrets
 import shutil
 from .local import Fault
+from .policy import ledger
 
 FORMAT, FORMAT_VERSION = 'alfred-portable-export', 2
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -62,7 +63,7 @@ def collect(store, bearer):
             raise Fault('export_authority_changed', 409)
         captures = {r['claim_id']: dict(r) for r in db.execute(
             'SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',
-            (p['scope'], p['id']))}
+            (p['scope'], ledger(db, p)))}
         history = _history(db, p)
         routines = _routines(db, p)
     entities = {e['id']: e for e in memory['entities']}
@@ -146,7 +147,7 @@ def _history(db, p):
              'time_known': bool(r['time_known']), 'by': by(r['by']), 'origin': r['origin'], 'related_id': r['related_id'],
              'detail': r['detail'],
              'valid_period': {'from': r['valid_from'], 'until': r['valid_until']} if r['sets_valid'] else None}
-            for r in db.execute('SELECT * FROM memory_claim_history WHERE scope=? AND actor=? ORDER BY seq', (p['scope'], p['id']))]
+            for r in db.execute('SELECT * FROM memory_claim_history WHERE scope=? AND actor=? ORDER BY seq', (p['scope'], ledger(db, p)))]
 
 
 def _routines(db, p):

@@ -17,6 +17,7 @@ from alfred.reviewed_memory import ReviewedMemory
 from alfred.executive import ExecutiveRecords
 from alfred.policy import IdentityPolicy
 from alfred.routines import Routines, next_slot, quiet_until, scheduled_time
+from grant_helpers import grant_all, revoke_all
 
 DAY, HOUR = 86400, 3600
 T = 1_900_000_000  # 2030-03-17 17:46:40 UTC
@@ -33,6 +34,7 @@ class Base(unittest.TestCase):
         self.other = self.store.provision('work', 'owner-two', 'owner', ttl=2592000)
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        grant_all(self.store, self.owner)
         (self.root / 'project').mkdir()
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text(ATLAS)
@@ -292,7 +294,7 @@ class RunTests(Base):
         dated = self.statement(7, '2030-03-17')
         self.configure()
         policy = IdentityPolicy(self.store)
-        policy.enable(self.owner, policy.view(self.owner)['epoch'])
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         outcome = self.run_now()['outcome']
         self.assertEqual((outcome['read']['commitment_statements'], outcome['read']['statements_not_usable']), (0, 1))
         self.assertNotIn(dated, json.dumps(outcome))
@@ -304,7 +306,7 @@ class RunTests(Base):
         nomination = self.nominations()[0]
         self.assertEqual((nomination['cite']['state'], nomination['cite']['value']), ('current', '2030-03-17'))
         policy = IdentityPolicy(self.store)
-        policy.enable(self.owner, policy.view(self.owner)['epoch'])
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         view = self.routines.view(self.owner)
         self.assertEqual(view['nominations'][0]['cite'], {'kind': 'statement', 'id': dated, 'version': 2, 'state': 'unavailable'})
         self.assertEqual(view['runs'][0]['outcome']['cited'][0]['resolved'], {'state': 'unavailable'})

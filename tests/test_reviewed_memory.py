@@ -7,6 +7,7 @@ from unittest.mock import patch
 from alfred.knowledge import KnowledgeStore,MarkdownVault
 from alfred.local import Fault
 from alfred.reviewed_memory import ReviewedMemory
+from grant_helpers import grant_all
 
 class MemoryTests(unittest.TestCase):
     def setUp(self):
@@ -14,6 +15,7 @@ class MemoryTests(unittest.TestCase):
         self.store=KnowledgeStore(self.root/'db',clock=lambda:self.clock[0]);self.owner=self.store.provision('personal','owner','owner',ttl=100000)
         self.other=self.store.provision('personal','other','owner');self.reader=self.store.provision('personal','reader','reader');self.source=self.store.provision('personal','source','source',ttl=100000)
         self.foreign=self.store.provision('other-scope','foreign','owner');self.vault=self.root/'vault';self.vault.mkdir()
+        grant_all(self.store,self.owner)
         self.file=self.vault/'Atlas.md';self.file.write_text('# Atlas\nMina is responsible for Atlas.\nAtlas is in planning.\nThe alternative report names Sam.\n')
         self.scan=MarkdownVault(self.store,self.source,self.vault);self.scan.scan();self.memory=ReviewedMemory(self.store)
         for eid,kind,name in [('atlas','project','Atlas'),('mina','person','Mina'),('sam','person','Sam')]:self.memory.create_entity(self.owner,{'id':eid,'kind':kind,'name':name})

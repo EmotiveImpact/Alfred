@@ -38,6 +38,14 @@ def init_demo(path):
         raise Fault('desk_already_initialised', 409)
     store = DeskStore(path / 'desk.sqlite')
     credentials = {role: store.provision('demo-production', 'demo-' + role, role) for role in ('owner', 'reader', 'source')}
+    # Strict grants by default (SYS-001): nobody, the owner included, sees a source until it
+    # is granted. The demo grants its owner read and model on its one source, explicitly and
+    # journalled like any grant. The reader key holds nothing until the owner grants it.
+    from .policy import IdentityPolicy
+    policy = IdentityPolicy(store)
+    source_expires = store.principal(credentials['source'], {'source'})['expires']
+    for capability in ('read', 'model'):
+        policy.grant(credentials['owner'], 'demo-source', capability, source_expires, policy.view(credentials['owner'])['epoch'])
     fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w') as stream:
         json.dump(credentials, stream)

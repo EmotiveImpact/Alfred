@@ -9,6 +9,7 @@ from alfred.answer_support import assess
 from alfred.conversation import ConversationService
 from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.reviewed_memory import ReviewedMemory
+from grant_helpers import grant_all
 
 
 def packet(evidence=(), memory=(), **extra):
@@ -60,6 +61,7 @@ class ConversationSupportTests(unittest.TestCase):
         self.store = KnowledgeStore(root / 'desk.sqlite')
         self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000)
         source = self.store.provision('work', 'source', 'source', ttl=100000)
+        grant_all(self.store, self.owner)
         vault = root / 'vault'; vault.mkdir()
         (vault / 'Atlas.md').write_text('# Atlas\nAtlas is awaiting review.\nAtlas is approved.\n')
         MarkdownVault(self.store, source, vault).scan()

@@ -513,14 +513,19 @@ def _retrieve_all(*, repeats, warmup, fts5):
         hidden = store.provision(WORKSPACE, RESTRICTED_SOURCE, 'source', ttl=CREDENTIAL_TTL)
         health = {MAIN_SOURCE: MarkdownVault(store, main, root / 'vault', 'Synthetic evaluation notes').scan(),
                   RESTRICTED_SOURCE: MarkdownVault(store, hidden, root / 'restricted', 'Synthetic restricted notes').scan()}
+        # Workspaces are strict by default (SYS-001). The control grants the owner read on
+        # both sources explicitly; the measured pass then revokes the restricted one.
+        policy = IdentityPolicy(store)
+        for source in (MAIN_SOURCE, RESTRICTED_SOURCE):
+            policy.grant(owner, source, 'read', FIXED_NOW + 86400, policy.view(owner)['epoch'])
         legacy = store.knowledge(owner)
         origin = {n['id']: n['source'] for n in legacy['nodes']}
         paths = {n['id']: n['path'] for n in legacy['nodes']}
         restricted_markers = {n['id'] for n in legacy['nodes'] if n['source'] == RESTRICTED_SOURCE}
         restricted_markers |= {n['sha256'] for n in legacy['nodes'] if n['source'] == RESTRICTED_SOURCE}
         restricted_markers.add(RESTRICTED_CANARY)
-        # Positive control under the documented legacy whole-workspace policy, in
-        # which the owner may read both sources. This is not leakage; it shows the
+        # Positive control in which the owner is explicitly granted both sources (the
+        # coverage the earlier whole-workspace policy gave). This is not leakage; it shows the
         # ungranted notes do match some questions, so a zero below is meaningful.
         control = {}
         for ranking in rankings:
@@ -530,8 +535,7 @@ def _retrieve_all(*, repeats, warmup, fts5):
                 phases['legacy_control'] += 1
                 hits.append(sum(origin.get(e['note_id']) == RESTRICTED_SOURCE for e in packet['evidence']))
             control[ranking] = hits
-        policy = IdentityPolicy(store)
-        policy.grant(owner, MAIN_SOURCE, 'read', FIXED_NOW + 86400, policy.view(owner)['epoch'])
+        policy.grant(owner, RESTRICTED_SOURCE, 'read', FIXED_NOW + 1, policy.view(owner)['epoch'], revoke=True)
         view = policy.view(owner)
         granted = store.knowledge(owner)
         strict_leaks = {r: 0 for r in rankings}

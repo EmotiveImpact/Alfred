@@ -33,6 +33,11 @@ def main():
         home = Path(tmp) / 'desk'; keys = init_demo(home)
         (home / 'vault' / COPY).write_text('# Creative brief\nZephyrmarker: a colour opening instead.\n')
         store = KnowledgeStore(home / 'desk.sqlite')
+        # Strict by default (SYS-001): the demo reader sees nothing until the owner grants it.
+        from alfred.policy import IdentityPolicy
+        policy = IdentityPolicy(store)
+        policy.grant(keys['owner'], 'demo-source', 'read', store.now() + 3600, policy.view(keys['owner'])['epoch'],
+                     person=store.principal(keys['reader'])['person_id'])
         supervisor = KnowledgeSupervisor(store, keys['owner'], keys['source'], home / 'project', interval=.1, vault=home / 'vault')
         server = DeskHTTPServer(store, supervisor, port=0); thread = threading.Thread(target=server.serve_forever, daemon=True)
         supervisor.start(); thread.start()

@@ -20,6 +20,7 @@ from alfred.memory_history import MemoryHistory
 from alfred.policy import IdentityPolicy
 from alfred.grounded import retrieve
 from alfred import lifecycle, memory_history
+from grant_helpers import grant_all, revoke_all
 
 ATLAS = '# Atlas\nAtlas is planning.\nAtlas is filming.\nMina leads Atlas.\nOrla leads Atlas.\n'
 
@@ -36,6 +37,7 @@ class TemporalBase(unittest.TestCase):
         self.source = self.store.provision('work', 'source', 'source', ttl=900000)
         self.other = self.store.provision('work', 'other', 'source', ttl=900000)
         self.elsewhere = self.store.provision('elsewhere', 'elsewhere-owner', 'owner', ttl=900000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text(ATLAS)
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
@@ -83,6 +85,10 @@ class TemporalBase(unittest.TestCase):
         self.assertEqual(caught.exception.code, code)
 
     def grant(self, source, revoke=False):
+        # These tests narrow the fixture's explicit grants to exactly what they grant here.
+        if not getattr(self, 'narrowed', False):
+            revoke_all(self.store, self.owner)
+            self.narrowed = True
         policy = IdentityPolicy(self.store)
         return policy.grant(self.owner, source, 'read', self.clock[0] + 50000, policy.view(self.owner)['epoch'], revoke=revoke)
 
@@ -218,6 +224,7 @@ class MigrationTests(TemporalBase):
         second_vault = self.root / 'second'; second_vault.mkdir()
         (second_vault / 'Borealis.md').write_text('# Borealis\nBorealis is planning.\n')
         second = self.store.provision('work', 'second', 'source', ttl=900000)
+        grant_all(self.store, self.owner)
         MarkdownVault(self.store, second, second_vault).scan()
         status = self.propose('s1', 'status', 2, value='planning')
         self.at(2000); self.review(status, 'accept'); self.at(3000); self.review(status, 'dispute'); self.at(4000); self.review(status, 'accept')

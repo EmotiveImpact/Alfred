@@ -25,6 +25,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from alfred.reviewed_memory import ReviewedMemory
+from grant_helpers import grant_all
 
 DAY = 86400
 FILES = {'README.md', 'manifest.json', 'statements.json', 'captures.json', 'executive-records.json',
@@ -40,6 +41,7 @@ class ExportTests(unittest.TestCase):
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
         self.other = self.store.provision('work', 'other', 'source', ttl=2592000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\n'
                                              'The opening is monochrome.\nThe opening is now in colour.\n'
@@ -75,7 +77,8 @@ class ExportTests(unittest.TestCase):
             'support': {'note_id': note['id'], 'sha256': note['sha256'], 'revision': note['revision'], 'start_line': 7, 'end_line': 7}})
         self.goal = self.records.create(self.owner, {'request_id': 'e2', 'kind': 'goal', 'title': 'Atlas ships in spring', 'detail': '',
                                                       'project': None, 'due': None, 'rank': None, 'support': None})
-        self.invitation = IdentityPolicy(self.store).invite(self.owner, 'source', 'read', self.clock[0] + DAY, 0)['code']
+        policy = IdentityPolicy(self.store)
+        self.invitation = policy.invite(self.owner, 'source', 'read', self.clock[0] + DAY, policy.view(self.owner)['epoch'])['code']
         self.clock[0] += 2 * DAY
 
     def note(self, path='Atlas.md'):
