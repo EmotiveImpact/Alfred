@@ -15,11 +15,13 @@ export type Usage={daily:PeriodUse;total:PeriodUse}|null;
 export interface HubTask{job:string;work:string;brain:string;autonomy:number;trigger:'operator'|'heartbeat';created:number;job_state:string|null;
   job_reason:string|null;result:string|null;accounted:number|null;usage:{tokens:number;money_pence:number;wall_seconds:number;basis:string}|null}
 export interface Heartbeat{slot:string;at:number;status:'submitted'|'skipped'|'refused';reason:string|null;missed:number;job:string|null}
+/** An acceptance check as ALFRED declared it (AGENT_HUB.md H4). Parameters vary by kind. */
+export interface AcceptanceCheck{id:string;kind:string;artefact?:string;sections?:string[];fields?:string[];targets?:string[];[k:string]:unknown}
 export interface MandateView{id:string;version:number;state:HubState;state_reason:string|null;
   goal:{id:string;title:string|null;status:string|null;available:boolean};scope_class:string;deadline:number;expired:boolean;success_test:string;
   autonomy:Record<string,{level:number;name:string}>;brains:string[];assigned_brain:string;tools:string[];budget:HubBudget;usage:Usage;
   schedule:{when:{every_hours:number}|{daily_at:string};utc_offset_minutes:number}|null;next_due:number|null;missed_total:number;
-  tasks:HubTask[];heartbeats:Heartbeat[]}
+  tasks:HubTask[];heartbeats:Heartbeat[];acceptance?:AcceptanceCheck[]}
 export interface BrainView{id:string;registered:boolean;label:string|null;locality:string|null;state:HubState;reason:string|null;control_version:number;
   budget:HubBudget|null;usage:Usage}
 export interface AttentionItem{id:string;target:string;period:'daily'|'total';since:number;dimension:Dimension;level:'warning'|'hard_stop';
@@ -86,8 +88,86 @@ export function controlRequest(level:Level,target:string|null,operation:Operatio
   return {path,body:{version}};
 }
 
+/* Results and checks (AGENT_HUB.md H4). ALFRED runs the checks and decides each class; this
+   file only words them. A brain's own confidence or "done" is never one of the inputs. */
+export type EvidenceClass='verified'|'failed_checks'|'unverifiable'|'no_checks'|'not_returned';
+export interface CheckStatus{id:string;kind:string;status:'passed'|'failed'|'unverifiable'}
+export interface ResultRun{position:number;outcome:'returned'|'checked'|'failed_checks';sha256:string;
+  counts:{passed:number;failed:number;unverifiable:number};checks:CheckStatus[]}
+export interface HubResult{job:string;brain:string;task_id:string;scope_class:string;contract:'accepted'|'refused'|'stopped';contract_reason:string|null;
+  declared:number;checks:string;state:string;evidence:EvidenceClass;runs:number;acknowledged_over:string|null;ingested_at:number;updated_at:number|null;
+  work:{mandate:string;goal:string;goal_title:string|null;work:string;trigger:string}|null;last_run:ResultRun|null}
+export type EvidenceCounts=Record<EvidenceClass,number>&{results:number};
+export interface ResultsView{available:boolean;reason:'owner_only'|null;results:HubResult[];by_brain:Record<string,EvidenceCounts>;window_days:number}
+
+const CLASS_ORDER:EvidenceClass[]=['verified','failed_checks','unverifiable','no_checks','not_returned'];
+const CLASS_WORDS:Record<EvidenceClass,string>={verified:'verified',failed_checks:'failed checks',unverifiable:'not verified',
+  no_checks:'no checks declared',not_returned:'not returned'};
+
+/** The chip for one result. Acknowledged and checked are told apart; neither comes from the brain. */
+export function evidenceLabel(r:HubResult){
+  if(r.evidence==='verified')return r.state!=='acknowledged'?'Verified by checks':r.acknowledged_over==='failed_checks'?'Acknowledged over failed checks':'Acknowledged by you';
+  if(r.evidence==='failed_checks')return r.contract==='refused'?'Failed checks (refused)':'Failed checks';
+  if(r.evidence==='unverifiable')return r.runs===0?'Not verified: checks not run':'Not verified: checks could not run';
+  if(r.evidence==='no_checks')return 'No checks declared';
+  return 'Not returned';
+}
+/** Chip tone: amber for verified, warning for failed checks, plain otherwise. */
+export function evidenceTone(e:EvidenceClass){return e==='verified'?'on':e==='failed_checks'?'warn':'';}
+
+/** Per brain, for example "synthetic: 2 verified · 1 failed checks · 0 not verified · 3 no checks declared". */
+export function brainEvidenceLine(brain:string,c:EvidenceCounts){
+  return `${brain}: ${CLASS_ORDER.filter(k=>k!=='not_returned'||c[k]>0).map(k=>`${c[k]} ${CLASS_WORDS[k]}`).join(' · ')}`;
+}
+
+const CHECK_WORDS:Record<string,(c:AcceptanceCheck)=>string>={
+  claims_cited:()=>'every claim cites a sent excerpt',
+  numbers_cited:()=>'every number appears in the cited text',
+  artefact_sections:c=>`${c.artefact} has ${(c.sections??[]).map(s=>`“${s}”`).join(', ')}`,
+  artefact_fields:c=>`${c.artefact} has ${(c.fields??[]).join(', ')}`,
+  artefact_schema:c=>`${c.artefact} matches the declared schema`,
+  artefact_pattern:c=>`${c.artefact} matches the declared pattern`,
+  no_out_of_scope_content:()=>'nothing from notes outside the task',
+  effect_readback:()=>'every proposed effect reads back as proposed',
+};
+export function checkLabel(c:AcceptanceCheck){return `${c.id} ${(CHECK_WORDS[c.kind]??(()=>c.kind.replaceAll('_',' ')))(c)}`;}
+
+/** What the last run found, without reasons (they may quote what the brain returned). */
+export function runLine(r:HubResult){
+  if(r.contract==='stopped')return 'The job stopped without a result, so nothing was checked.';
+  if(r.declared===0)return 'No acceptance checks were declared for this task, so it is never counted as verified.';
+  if(!r.last_run)return `${r.declared} ${r.declared===1?'check':'checks'} declared, not run yet.`;
+  const n=r.last_run.counts;
+  return `Run ${r.last_run.position}: ${n.passed} passed · ${n.failed} failed · ${n.unverifiable} could not run`;
+}
+
+export function canRunChecks(r:HubResult){return r.contract==='accepted'&&r.declared>0;}
+export function canAcknowledge(r:HubResult){return r.contract==='accepted'&&r.last_run!==null&&r.state!=='acknowledged';}
+
+/** The run the person saw, and whether they accept it over failed checks. Nothing else is sent. */
+export function verifyRequest(job:string,runs:number){return {path:`/desk/hub/results/${encodeURIComponent(job)}/verify`,body:{runs}};}
+export function acknowledgeRequest(job:string,run:ResultRun,acceptFailures:boolean){
+  return {path:`/desk/hub/results/${encodeURIComponent(job)}/acknowledge`,body:{run_sha256:run.sha256,accept_failures:acceptFailures}};
+}
+/** What acknowledging means for this result, said before the person confirms. */
+export function acknowledgeNote(r:HubResult){
+  const run=r.last_run?`run ${r.last_run.position}`:'this run';
+  if(r.declared===0)return `You accept ${run} as it stands. No checks were declared, so this result stays unverified for routing even after you acknowledge it.`;
+  if(r.checks==='failed_checks'){
+    const failed=(r.last_run?.checks??[]).filter(c=>c.status==='failed').map(c=>c.id);
+    return `${run[0].toUpperCase()+run.slice(1)} failed ${failed.length?failed.join(', '):'a check'}. Accepting it over failed checks is recorded as your decision, bound to ${run}. It grants no authority: proposed effects still need their own approval.`;
+  }
+  return `You accept ${run} as it stands. It grants no authority: proposed effects still need their own approval. A later run that fails a check you did not accept ends this acknowledgement.`;
+}
+
 const ERRORS:Record<string,string>={
   hub_not_configured:'This ALFRED host has no brains plugged in, so there are no goals for brains to work on.',
+  verification_changed:'Checks ran again since you opened this. The view has been refreshed; check it and try again.',
+  acknowledgement_mismatch:'This result was checked again since you opened it. The view has been refreshed; acknowledge the run you now see.',
+  failed_checks_need_explicit_acceptance:'This run failed checks. Accept it explicitly over the failed checks, or leave it.',
+  not_verified_yet:'Run the checks before acknowledging this result.',
+  nothing_to_acknowledge:'A refused or stopped result has nothing to acknowledge.',
+  not_found:'This result is not yours, or no longer exists.',
   hub_owner_not_hosted:'Goals are run under the access key this ALFRED host was started with. Sign in with that key to change them.',
   forbidden:'Only the workspace owner can change goals.',
   budget_still_spent:'The budget that paused this is still spent. Raise the limit or wait for a new day before resuming.',
