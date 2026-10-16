@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from .local import Fault
 
-KIND = r'(commitment-review|morning-brief)'
+KIND = r'(commitment-review|morning-brief|daily-learning)'
 ROUTINE_OPERATION = re.compile(rf'/desk/routines/{KIND}/(configure|pause|run)')
 NOMINATION_OPERATION = re.compile(r'/desk/routines/nominations/([A-Za-z0-9][A-Za-z0-9_.-]{0,79})/(accept|dismiss)')
 

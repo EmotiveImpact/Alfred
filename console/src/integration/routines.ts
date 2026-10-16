@@ -4,7 +4,10 @@
  * what it returns and builds the exact settings body the person chose. Nothing here runs.
  */
 import {DeskError} from './deskClient';
-export type RoutineKind='commitment-review'|'morning-brief';
+export type RoutineKind='commitment-review'|'morning-brief'|'daily-learning';
+/** Routines whose output is shown where it is made: no interrupt choice and no drafts. */
+export const FIXED_DELIVERY:readonly RoutineKind[]=['morning-brief','daily-learning'];
+export const fixedDelivery=(kind:RoutineKind)=>FIXED_DELIVERY.includes(kind);
 export type Schedule={every_hours:number}|{daily_at:string};
 export interface RoutineSettings{schedule:Schedule;utc_offset_minutes:number;runs_per_day:number;nominations_per_run:number;
   quiet_hours:{start:string;end:string}|null;interrupt:'show_now'|'hold_for_brief';propose_drafts:boolean}
@@ -20,7 +23,9 @@ export interface RunOutcome{trigger:'manual'|'scheduled';missed_slots:number;bud
   skipped?:string;error?:string;read?:Record<string,number>;cited?:Cite[];cited_total?:number;due?:number;
   nominated?:{nomination:string;kind:'reminder'|'draft';rule:string;delivery:string;cite:Cite}[];not_nominated?:Record<string,number>;
   held?:{quiet_hours:number;next_brief:number};nothing_due?:boolean;surface_at?:number|null;
-  sections?:{attention:Cite[];insights:{rule:string;records:Cite[]}[];approvals:Cite[]};released?:string[];still_held?:number;basis?:string}
+  sections?:{attention:Cite[];insights:{rule:string;records:Cite[]}[];approvals:Cite[]};released?:string[];still_held?:number;basis?:string;
+  proposed?:{proposal:string;kind:string;category:string;rule:string;accepted_by_rule?:{rule:string;version:number;record:string}}[];accepted_by_rule?:number;candidates?:number;
+  not_proposed?:Record<string,number>;upstream?:{status:string;briefs_written?:number;licence_changed?:number;manifest_mismatch?:number};changes_authority?:false}
 export interface RunView{id:string;kind:RoutineKind;trigger:'manual'|'scheduled';started:number;finished:number;status:'completed'|'skipped'|'failed';
   skipped_reason:string|null;outcome:RunOutcome}
 export type NominationCite={kind:'record'|'statement';id:string;version:number}&Resolved;
@@ -34,7 +39,11 @@ export interface RoutineSummary{available:boolean;reason:string|null;nominations
 export interface ProcedureView{id:string;version:number;review_state:string;usable:boolean;subject:{id:string;kind:string;name:string}|null;predicate:string;
   value:string|null;support_state:'current'|'changed'|'unavailable';reviewed:number|null;
   source:{note_id:string;path:string;title:string;revision:number;start_line:number;end_line:number;quote:string}|null;executable:false;basis:string}
+/** A procedure draft from daily learning (alfred/learning.py): accepted versions and drafts awaiting review. Never run. */
+export interface LearnedProcedureView{id:string;key:string;version:number|null;state:string;statement:string;origin:string;
+  review_state:'accepted'|'suggested';executable:false;grants_authority:false}
 export interface ProceduresView{procedures:ProcedureView[];authored_procedure_notes:{id:string;title:string;path:string;revision:number;basis:string}[];
+  learned_procedures?:LearnedProcedureView[];
   counts:{reviewed:number;usable:number;authored_notes:number};read_only:true;executable:false;statement:string}
 
 /** The form the person edits. Converted to the exact server body only on save. */
@@ -63,7 +72,7 @@ export function scheduleLabel(schedule:Schedule){
 export function formFromRoutine(r:RoutineView,offset=browserOffset()):RoutineForm{
   const s=r.settings,schedule=s?.schedule??r.default.schedule;
   return {enabled:s?r.enabled:true,every:'daily_at' in schedule?'daily':schedule.every_hours,dailyAt:'daily_at' in schedule?schedule.daily_at:'07:30',
-    offset:s?.utc_offset_minutes??offset,runsPerDay:s?.runs_per_day??(r.kind==='morning-brief'?1:6),nominationsPerRun:s?.nominations_per_run??3,
+    offset:s?.utc_offset_minutes??offset,runsPerDay:s?.runs_per_day??(fixedDelivery(r.kind)?1:6),nominationsPerRun:s?.nominations_per_run??3,
     quiet:Boolean(s?.quiet_hours),quietStart:s?.quiet_hours?.start??'22:00',quietEnd:s?.quiet_hours?.end??'07:00',
     interrupt:s?.interrupt??r.default.interrupt,proposeDrafts:s?.propose_drafts??false};
 }
@@ -75,12 +84,13 @@ export function formProblem(kind:RoutineKind,f:RoutineForm):string|null{
   if(f.quiet&&(!CLOCK.test(f.quietStart)||!CLOCK.test(f.quietEnd)))return 'Quiet hours need a start and an end time.';
   if(f.quiet&&f.quietStart===f.quietEnd)return 'Quiet hours need different start and end times.';
   if(kind==='morning-brief'&&(f.interrupt!=='show_now'||f.proposeDrafts))return 'The morning brief shows what it surfaces and offers no drafts.';
+  if(kind==='daily-learning'&&(f.interrupt!=='show_now'||f.proposeDrafts))return 'Daily learning only proposes learnings for your review and offers no drafts.';
   return null;
 }
 export function settingsPayload(kind:RoutineKind,f:RoutineForm,version:number){
   return {version,enabled:f.enabled,schedule:f.every==='daily'?{daily_at:f.dailyAt}:{every_hours:f.every},utc_offset_minutes:f.offset,
     runs_per_day:f.runsPerDay,nominations_per_run:f.nominationsPerRun,quiet_hours:f.quiet?{start:f.quietStart,end:f.quietEnd}:null,
-    interrupt:kind==='morning-brief'?'show_now':f.interrupt,propose_drafts:kind==='morning-brief'?false:f.proposeDrafts};
+    interrupt:fixedDelivery(kind)?'show_now':f.interrupt,propose_drafts:fixedDelivery(kind)?false:f.proposeDrafts};
 }
 
 export const SKIP_LABEL:Record<string,string>={authority_lost:'Authority lost: the access key this host runs under is no longer valid for this routine.',
@@ -113,6 +123,11 @@ export function runSummary(run:RunView){
     const r=o.read??{},parts=[plural(r.attention_items??0,'attention item'),plural(r.insights??0,'insight'),plural(r.pending_approvals??0,'pending approval')];
     if(o.released?.length)parts.push(`${o.released.length} held released`);
     return `Brief assembled · ${parts.join(' · ')}`;
+  }
+  if(run.kind==='daily-learning'){
+    const n=o.proposed?.length??0,ruled=o.accepted_by_rule??0,briefs=o.upstream?.briefs_written??0;
+    return [`Learning run · ${plural(n-ruled,'learning')} for your review`,ruled?`${ruled} accepted by your rule`:null,
+      briefs?`${plural(briefs,'update brief')}`:null].filter(Boolean).join(' · ');
   }
   if(o.nothing_due)return 'Completed · nothing due';
   const n=o.nominated?.length??0,held=(o.held?.quiet_hours??0)+(o.held?.next_brief??0);
@@ -159,6 +174,6 @@ const ERRORS:Record<string,string>={routine_changed:'These settings changed else
   nomination_not_found:'This nomination is no longer available to you.',follow_up_only_for_reminders:'Only reminders can add a follow-up.',
   invalid_quiet_hours:'Quiet hours need different start and end times.',invalid_routine_schedule:'Choose a schedule from the list.',
   invalid_run_budget:'Runs per day must be between 1 and 24.',invalid_nomination_budget:'Nominations per run must be between 1 and 10.',
-  interrupt_not_applicable:'The morning brief shows what it surfaces.',drafts_not_applicable:'The morning brief offers no drafts.',
+  interrupt_not_applicable:'The morning brief and daily learning show what they produce.',drafts_not_applicable:'The morning brief and daily learning offer no drafts.',
   executive_capacity:'Your executive records are full.',action_capacity:'The approval ledger is full.'};
 export function routineMessage(e:unknown){return e instanceof DeskError?ERRORS[e.code]??`ALFRED refused this (${e.code}).`:'ALFRED could not be reached.';}

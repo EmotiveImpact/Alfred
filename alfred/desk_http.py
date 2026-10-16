@@ -97,6 +97,8 @@ class DeskHTTPServer(HTTPServer):
         from .routines import Routines
         self.routines = Routines(store, supervisor) if self.pulse is not None else None
         if self.routines is not None: supervisor.routines = self.routines
+        # Daily learning (AGENT_HUB.md H3): the routine's learning service, proposals for review only.
+        self.learning = self.routines.learning if self.routines is not None else None
         # Owner-authored capture policies (MEM-004, M04) propose statements into the review queue.
         from .capture_policies import CapturePolicies
         self.capture = CapturePolicies(store, supervisor if hasattr(supervisor, 'owner') else None, self.memory) if self.memory is not None else None
@@ -504,6 +506,9 @@ class Handler(BaseHTTPRequestHandler):
             elif (url.path == '/desk/routines' or url.path.startswith('/desk/routines/')) and not url.query:
                 from .routines_http import route as routines_route
                 result = routines_route(self.server, url.path, mutation, bearer, body)
+            elif (url.path == '/desk/learning' or url.path.startswith('/desk/learning/')) and not url.query:
+                from .learning import route as learning_route
+                result = learning_route(self.server, url.path, mutation, bearer, body)
             elif (url.path == '/desk/capture' or url.path.startswith('/desk/capture/')) and not url.query:
                 from .capture_policies import route as capture_route
                 result = capture_route(self.server.capture, url.path, mutation, bearer, body)
