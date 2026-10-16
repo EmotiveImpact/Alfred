@@ -841,22 +841,33 @@ class BrainHub:
             raise Fault('invalid_learned')
         if not claim_ids:
             return []
-        from .reviewed_memory import ReviewedMemory
-        view = ReviewedMemory(self.store).view(bearer)
-        entities = {e['id']: e for e in view['entities']}
-        claims = {c['id']: c for c in view['claims']}
+        for claim_id in claim_ids:
+            ident(claim_id)
+        # Owner-accepted learning records (H3, alfred/learning.py) travel in the same field,
+        # their record ID in ``claim_id``; one that is not current is refused like a claim.
+        from .learning import is_record_id, packet_statements
+        records = packet_statements(self.store, bearer, [c for c in claim_ids if is_record_id(c)])
+        claims, entities = {}, {}
+        if len(records) < len(claim_ids):
+            from .reviewed_memory import ReviewedMemory
+            view = ReviewedMemory(self.store).view(bearer)
+            entities = {e['id']: e for e in view['entities']}
+            claims = {c['id']: c for c in view['claims']}
         learned, total = [], 0
         for index, claim_id in enumerate(claim_ids, 1):
-            ident(claim_id)
-            claim = claims.get(claim_id)
-            if not claim or not claim['usable']:
-                raise Fault('learned_not_usable', 409)
-            other = entities[claim['object_id']]['name'] if claim['object_id'] else claim['value']
-            statement = f"{entities[claim['subject_id']]['name']} {claim['predicate'].replace('_', ' ')} {other}"
+            if claim_id in records:
+                statement, version = records[claim_id]['statement'], records[claim_id]['version']
+            else:
+                claim = claims.get(claim_id)
+                if not claim or not claim['usable']:
+                    raise Fault('learned_not_usable', 409)
+                other = entities[claim['object_id']]['name'] if claim['object_id'] else claim['value']
+                statement = f"{entities[claim['subject_id']]['name']} {claim['predicate'].replace('_', ' ')} {other}"
+                version = claim['version']
             total += len(statement)
             if total > MAX_LEARNED_CHARACTERS:
                 raise Fault('learned_over_budget')
-            learned.append({'id': f'L{index}', 'claim_id': claim_id, 'version': claim['version'],
+            learned.append({'id': f'L{index}', 'claim_id': claim_id, 'version': version,
                             'statement': statement[:600], 'basis': LEARNED_BASIS})
         return learned
 

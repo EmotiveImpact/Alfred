@@ -165,7 +165,7 @@ class ProcedureHasNoEffectTests(ProcedureBase):
         # Routines, on demand and on schedule.
         review = self.routines.manual(self.owner, 'commitment-review', {'request_id': 'r1'})
         brief = self.routines.manual(self.owner, 'morning-brief', {'request_id': 'b1'})
-        self.clock[0] = max(r['next_due'] for r in self.routines.view(self.owner)['routines'])
+        self.clock[0] = max(r['next_due'] or 0 for r in self.routines.view(self.owner)['routines'])
         for _ in range(3):
             self.sup.cycle()
         cited = {c['id'] for run in self.routines.view(self.owner)['runs'] for c in run['outcome'].get('cited', [])}
@@ -175,7 +175,7 @@ class ProcedureHasNoEffectTests(ProcedureBase):
         reminder = next(n for n in self.routines.view(self.owner)['nominations'] if n['cite']['id'] == commitment)
         self.assertEqual(reminder['reason'], 'Your accepted commitment statement is past its due time.')
         self.assertEqual([a['id'] for a in brief['outcome']['sections']['approvals']], ['a1'])
-        self.assertEqual(sorted(KINDS), ['commitment-review', 'morning-brief'])
+        self.assertEqual(sorted(KINDS), ['commitment-review', 'daily-learning', 'morning-brief'])
 
         # Retrieval and answers carry the text only as labelled evidence.
         packet = retrieve(self.store, self.owner, 'approve pending draft grant inbox write')
