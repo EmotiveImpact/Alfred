@@ -61,10 +61,20 @@ Gate on effects
     be approved or dispatched until the checks have run, nor while any has failed unless
     the owner acknowledged the result. Results without declared checks keep H1 behaviour.
 
-``outcomes`` is the small query later routing statistics (H3) should read: per result and
-per brain, the check outcome (``checked``, ``failed_checks``, ``returned``,
-``not_returned``) and whether the owner acknowledged it. Records are private to the
-person who submitted the task, as in H1.
+``outcomes`` is the small query routing statistics (H3) read: per result and per brain,
+the check outcome (``checked``, ``failed_checks``, ``returned``, ``not_returned``) and
+whether the owner acknowledged it. ``outcome_rows`` is the same reading inside a caller's
+transaction, and ``evidence_class`` sorts each result into one routing evidence class:
+
+    verified        checks were declared and all passed, or the owner acknowledged the
+                    result, which had declared checks
+    failed_checks   a declared check failed, or H1 refused the bundle (its contract, C0)
+    unverifiable    checks were declared but could not run, or have not run yet
+    no_checks       nothing was declared, so nothing was verified (even if acknowledged)
+    not_returned    the job stopped without a result
+
+Records are private to the person who submitted the task (``policy.ledger``: the person,
+shared by all of that person's devices), as the job coordinator treats submitters.
 """
 from __future__ import annotations
 import copy
@@ -80,6 +90,7 @@ import sys
 from . import brain as plug
 from .evidence_review import NUMBER
 from .local import Fault, ident, text
+from .policy import ledger, person_credentials
 
 VERSION = 1
 ACCEPTANCE_VERSION = 1
@@ -87,6 +98,7 @@ REPORT_VERSION = 1
 STATES = ('returned', 'checked', 'failed_checks', 'acknowledged')
 OUTCOMES = ('returned', 'checked', 'failed_checks')
 VERIFIED = ('checked', 'acknowledged')
+EVIDENCE = ('verified', 'failed_checks', 'unverifiable', 'no_checks', 'not_returned')
 CHECK_STATUSES = ('passed', 'failed', 'unverifiable')
 DECLARERS = ('owner', 'mandate')
 MAX_CHECKS, MAX_ACCEPTANCE_BYTES, MAX_REASONS = 8, 4096, 20
@@ -550,50 +562,109 @@ def _checks_outcome(failed, complete) -> str:
     return 'failed_checks' if failed else 'checked' if complete else 'returned'
 
 
+def submitters(db, p) -> list:
+    """Every credential that names the caller's person: results are the person's, not one device's."""
+    return sorted(person_credentials(db, ledger(db, p)) | {p['id']})
+
+
+def _declared(parameters) -> int:
+    """How many acceptance checks ALFRED's recorded packet declared. Never the bundle."""
+    try:
+        acceptance = json.loads(parameters)['packet'].get('acceptance')
+        return len(acceptance['checks']) if acceptance else 0
+    except (TypeError, KeyError, ValueError, AttributeError):
+        return 0
+
+
+def evidence_class(contract, declared, state, failed) -> str:
+    """One routing evidence class per result, from ALFRED's records only.
+
+    A result counts as verified only when checks were declared and they all passed, or the
+    owner acknowledged it. A result with no declared checks is never verified, whatever
+    else happened to it. The brain's own words are never read here.
+    """
+    if contract == 'stopped':
+        return 'not_returned'
+    if contract == 'refused':
+        return 'failed_checks'  # The H1 bundle contract (C0) is ALFRED's check too.
+    if not declared:
+        return 'no_checks'
+    if state in VERIFIED:
+        return 'verified'
+    if failed:
+        return 'failed_checks'
+    return 'unverifiable'
+
+
+def outcome_rows(db, scope, actors, *, brain=None, since=None, limit=None) -> list:
+    """Value-free verification rows for the brain results of the given credentials, oldest
+    first (the newest ``limit`` when one is given).
+
+    Runs inside the caller's transaction. Each row carries identifiers, states, counts and
+    times only: never an answer, artefact, citation or anything the brain said.
+    """
+    if not actors or not _table(db, 'brain_results') or not _table(db, 'brain_tasks'):
+        return []
+    verification = _table(db, 'verification_results')
+    columns = ('v.state,v.failed,coalesce(v.passed_complete,0) AS passed_complete,coalesce(v.runs,0) AS runs,'
+               'v.acknowledged_over,v.updated' if verification
+               else 'NULL AS state,NULL AS failed,0 AS passed_complete,0 AS runs,NULL AS acknowledged_over,NULL AS updated')
+    join = 'LEFT JOIN verification_results v ON v.job_id=t.job_id' if verification else ''
+    jobs = _table(db, 'jobs')
+    rows = db.execute(
+        f'''SELECT t.job_id,t.brain,t.task_id,t.scope_class,t.actor,r.status,r.reason,r.created AS ingested,
+            {'j.parameters' if jobs else 'NULL AS parameters'},{columns}
+            FROM brain_tasks t JOIN brain_results r ON r.job_id=t.job_id {join} {'LEFT JOIN jobs j ON j.id=t.job_id' if jobs else ''}
+            WHERE t.scope=? AND t.actor IN ({','.join('?' * len(actors))}) AND (? IS NULL OR t.brain=?)
+            AND (? IS NULL OR r.created>=?) ORDER BY r.created DESC,t.job_id DESC LIMIT ?''',
+        (scope, *actors, brain, brain, since, since, -1 if limit is None else limit)).fetchall()[::-1]
+    found = []
+    for row in rows:
+        failed = json.loads(row['failed']) if row['failed'] else []
+        declared = _declared(row['parameters'])
+        if row['status'] == 'stopped':
+            checks = state = 'not_returned'
+        elif row['state'] is None:
+            checks = state = 'failed_checks' if row['status'] == 'refused' else 'returned'
+        else:
+            checks, state = _checks_outcome(failed, row['passed_complete']), row['state']
+        found.append({'job': row['job_id'], 'brain': row['brain'], 'task_id': row['task_id'],
+                      'scope_class': row['scope_class'], 'actor': row['actor'], 'contract': row['status'],
+                      'reason': row['reason'], 'ingested_at': row['ingested'], 'declared': declared, 'checks': checks,
+                      'state': state, 'verified': state in VERIFIED, 'acknowledged_over': row['acknowledged_over'],
+                      'runs': row['runs'], 'updated_at': row['updated'],
+                      'evidence': evidence_class(row['status'], declared, row['state'], failed)})
+    return found
+
+
 def outcomes(store, bearer, *, brain=None) -> dict:
     """Verification outcomes of the caller's brain results, for routing statistics (H3).
 
     ``checks`` is what ALFRED's checks established (``checked``, ``failed_checks``,
     ``returned`` when nothing was established, ``not_returned`` when the job stopped
-    without a result). ``state`` adds the owner's acknowledgement. Neither ever comes
-    from a brain's own claims.
+    without a result). ``state`` adds the owner's acknowledgement. ``evidence`` is the
+    routing evidence class (``EVIDENCE``). None of them ever comes from a brain's own claims.
     """
     if brain is not None:
         ident(brain)
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner'})
-        rows = []
-        if _table(db, 'brain_results'):
-            verification = _table(db, 'verification_results')
-            columns = ('v.state,v.failed,coalesce(v.passed_complete,0) AS passed_complete,coalesce(v.runs,0) AS runs,'
-                       'v.acknowledged_over,v.updated' if verification
-                       else 'NULL AS state,NULL AS failed,0 AS passed_complete,0 AS runs,NULL AS acknowledged_over,NULL AS updated')
-            join = 'LEFT JOIN verification_results v ON v.job_id=t.job_id' if verification else ''
-            rows = [dict(r) for r in db.execute(
-                f'''SELECT t.job_id,t.brain,t.task_id,r.status,r.reason,r.created AS ingested,{columns}
-                    FROM brain_tasks t JOIN brain_results r ON r.job_id=t.job_id {join}
-                    WHERE t.scope=? AND t.actor=? AND (? IS NULL OR t.brain=?) ORDER BY r.created,t.job_id''',
-                (p['scope'], p['id'], brain, brain))]
-    results, by_brain = [], {}
+        rows = outcome_rows(db, p['scope'], submitters(db, p), brain=brain)
+    results, by_brain, evidence = [], {}, {}
     for row in rows:
-        if row['status'] == 'stopped':
-            checks, state = 'not_returned', 'not_returned'
-        elif row['state'] is None:
-            checks = state = 'failed_checks' if row['status'] == 'refused' else 'returned'
-        else:
-            checks = _checks_outcome(json.loads(row['failed']), row['passed_complete'])
-            state = row['state']
-        item = {'job': row['job_id'], 'brain': row['brain'], 'task_id': row['task_id'], 'ingested_at': row['ingested'],
-                'contract': row['status'], 'checks': checks, 'state': state, 'verified': state in VERIFIED,
-                'acknowledged_over': row['acknowledged_over'], 'runs': row['runs'], 'updated_at': row['updated']}
-        results.append(item)
+        results.append({k: row[k] for k in ('job', 'brain', 'task_id', 'ingested_at', 'contract', 'checks', 'state',
+                                            'verified', 'acknowledged_over', 'runs', 'updated_at', 'declared', 'evidence')})
         counts = by_brain.setdefault(row['brain'], {'results': 0, 'checked': 0, 'failed_checks': 0, 'returned': 0,
                                                      'not_returned': 0, 'acknowledged': 0, 'verified': 0})
         counts['results'] += 1
-        counts[checks] += 1
-        counts['acknowledged'] += state == 'acknowledged'
-        counts['verified'] += item['verified']
-    return {'results': results, 'by_brain': by_brain, 'basis': BASIS, 'brain_claims_counted': False}
+        counts[row['checks']] += 1
+        counts['acknowledged'] += row['state'] == 'acknowledged'
+        counts['verified'] += row['verified']
+        classes = evidence.setdefault(row['brain'], {'results': 0, **dict.fromkeys(EVIDENCE, 0)})
+        classes['results'] += 1
+        classes[row['evidence']] += 1
+    return {'results': results, 'by_brain': by_brain, 'evidence_by_brain': evidence, 'basis': BASIS,
+            'brain_claims_counted': False, 'no_checks_counted_as_verified': False}
 
 
 # Verifier -------------------------------------------------------------------------
@@ -650,6 +721,18 @@ class Verifier:
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
 
     # Reading what was sent and returned ------------------------------------------
+
+    @staticmethod
+    def _submitted(db, p, job_id):
+        """The brain task, if the caller's person submitted it (from any of their devices).
+        Anyone else is told it does not exist."""
+        ident(job_id)
+        actors = submitters(db, p)
+        row = db.execute(f'''SELECT * FROM brain_tasks WHERE job_id=? AND scope=?
+            AND actor IN ({','.join('?' * len(actors))})''', (job_id, p['scope'], *actors)).fetchone()
+        if not row:
+            raise Fault('not_found', 404)
+        return row
 
     def _bundle(self, bearer, job, result, task):
         """The bundle ALFRED ingested, re-read through the coordinator, or (None, reason)."""
@@ -912,20 +995,27 @@ class Verifier:
 
     # Runs ----------------------------------------------------------------------------
 
-    def verify(self, bearer, job_id) -> dict:
-        """Run the packet's declared checks on the ingested result and record the run."""
+    def verify(self, bearer, job_id, *, expected_runs=None) -> dict:
+        """Run the packet's declared checks on the ingested result and record the run.
+
+        ``expected_runs`` is the number of runs the caller saw; when given, the run is
+        refused if another run was recorded meanwhile."""
         ident(job_id)
+        if expected_runs is not None and (type(expected_runs) is not int or expected_runs < 0):
+            raise Fault('invalid_runs')
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            task = dict(self.hub._task(db, p, job_id))
+            task = dict(self._submitted(db, p, job_id))
             result = db.execute('SELECT * FROM brain_results WHERE job_id=?', (job_id,)).fetchone()
             if not result:
                 raise Fault('not_ingested', 409)
             if result['status'] == 'stopped':
                 raise Fault('result_not_returned', 409)
             result = dict(result)
+            self._expect(db, p, task, job_id, expected_runs)
             proposals = [dict(r) for r in db.execute(
-                'SELECT * FROM brain_proposals WHERE job_id=? AND scope=? AND actor=? ORDER BY position', (job_id, p['scope'], p['id']))]
+                'SELECT * FROM brain_proposals WHERE job_id=? AND scope=? AND actor=? ORDER BY position',
+                (job_id, p['scope'], task['actor']))]
         job = self.jobs.view(bearer, job_id)
         packet = job['parameters']['packet']
         if plug.packet_sha256(packet) != task['packet_sha256']:
@@ -937,7 +1027,7 @@ class Verifier:
             checks += [{'id': c['id'], 'kind': c['kind'], **_result('unverifiable', [{'code': 'bundle_refused'}])} for c in declared]
         else:
             bundle, missing = self._bundle(bearer, job, result, task)
-            ctx = _Context(bearer, p['scope'], p['id'], job_id, packet, bundle, missing, proposals)
+            ctx = _Context(bearer, p['scope'], task['actor'], job_id, packet, bundle, missing, proposals)
             checks = [self._check(check, ctx) for check in declared]
         counts = {status: sum(c['status'] == status for c in checks) for status in CHECK_STATUSES}
         if counts['failed']:
@@ -953,19 +1043,28 @@ class Verifier:
                   'declared_ref': acceptance['ref'] if acceptance else None,
                   'contract': result['status'], 'declared': len(declared), 'checks': checks, 'counts': counts,
                   'outcome': outcome, 'basis': BASIS, 'limits': LIMITS, 'brain_claims_counted': False}
-        return self._record(bearer, job_id, task, report)
+        return self._record(bearer, job_id, task, report, expected_runs)
 
-    def _record(self, bearer, job_id, task, report) -> dict:
+    @staticmethod
+    def _expect(db, p, task, job_id, expected_runs):
+        if expected_runs is None:
+            return
+        row = _row(db, p['scope'], task['actor'], job_id)
+        if (row['runs'] if row else 0) != expected_runs:
+            raise Fault('verification_changed', 409)
+
+    def _record(self, bearer, job_id, task, report, expected_runs=None) -> dict:
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            self.hub._task(db, p, job_id)
-            row = _row(db, p['scope'], p['id'], job_id)
+            actor = self._submitted(db, p, job_id)['actor']
+            self._expect(db, p, task, job_id, expected_runs)
+            row = _row(db, p['scope'], actor, job_id)
             position, now = (row['runs'] if row else 0) + 1, self.store.now()
             report = dict(report, position=position, at=now)
             body = _compact(report)
             digest, run_id = _sha(body), 'vr-' + _sha(f'{job_id}|{position}')[:24]
             db.execute('INSERT INTO verification_runs VALUES (?,?,?,?,?,?,?,?,?)',
-                       (run_id, job_id, p['scope'], p['id'], position, report['outcome'], body, digest, now))
+                       (run_id, job_id, p['scope'], actor, position, report['outcome'], body, digest, now))
             failed_now = sorted(c['id'] for c in report['checks'] if c['status'] == 'failed')
             failed = sorted(set(json.loads(row['failed']) if row else []) | set(failed_now))
             complete = int(bool(row and row['passed_complete']) or report['outcome'] == 'checked')
@@ -985,10 +1084,10 @@ class Verifier:
                     WHERE job_id=?''', (state, _compact(failed), complete, position, run_id, digest, *acknowledgement, now, job_id))
             else:
                 db.execute('INSERT INTO verification_results VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                           (job_id, p['scope'], p['id'], task['brain'], state, _compact(failed), complete, position, run_id,
+                           (job_id, p['scope'], actor, task['brain'], state, _compact(failed), complete, position, run_id,
                             digest, None, None, None, None, now, now))
             self.store.log(db, p['scope'], p['id'], 'verification.run_' + report['outcome'], job_id)
-            return self._view(db, _row(db, p['scope'], p['id'], job_id))
+            return self._view(db, _row(db, p['scope'], actor, job_id))
 
     def acknowledge(self, bearer, job_id, run_sha256, *, accept_failures=False) -> dict:
         """The owner accepts a result, bound to the exact run they saw.
@@ -1003,13 +1102,13 @@ class Verifier:
         _bool(accept_failures, 'invalid_accept_failures')
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            self.hub._task(db, p, job_id)
+            actor = self._submitted(db, p, job_id)['actor']
             result = db.execute('SELECT status FROM brain_results WHERE job_id=?', (job_id,)).fetchone()
             if not result:
                 raise Fault('not_ingested', 409)
             if result['status'] != 'accepted':
                 raise Fault('nothing_to_acknowledge', 409)
-            row = _row(db, p['scope'], p['id'], job_id)
+            row = _row(db, p['scope'], actor, job_id)
             if row is None:
                 raise Fault('not_verified_yet', 409)
             if not secrets.compare_digest(row['last_run_sha256'], run_sha256):
@@ -1023,7 +1122,7 @@ class Verifier:
                 acknowledged_failed=?,acknowledged_at=?,updated=? WHERE job_id=?''',
                        (row['last_run'], row['state'], row['failed'], now, now, job_id))
             self.store.log(db, p['scope'], p['id'], 'verification.acknowledged', job_id)
-            return self._view(db, _row(db, p['scope'], p['id'], job_id))
+            return self._view(db, _row(db, p['scope'], actor, job_id))
 
     # Views -----------------------------------------------------------------------------
 
@@ -1034,11 +1133,14 @@ class Verifier:
         if row['state'] == 'acknowledged':
             acknowledged = {'run': row['acknowledged_run'], 'over': row['acknowledged_over'],
                             'failed_accepted': json.loads(row['acknowledged_failed']), 'at': row['acknowledged_at']}
+        report, failed = json.loads(run['report']), json.loads(row['failed'])
         return {'job': row['job_id'], 'brain': row['brain'], 'state': row['state'], 'verified': row['state'] in VERIFIED,
-                'checks': _checks_outcome(json.loads(row['failed']), row['passed_complete']),
-                'failed': json.loads(row['failed']), 'runs': row['runs'], 'acknowledged': acknowledged,
+                'checks': _checks_outcome(failed, row['passed_complete']),
+                'failed': failed, 'runs': row['runs'], 'acknowledged': acknowledged,
+                'declared': report['declared'],
+                'evidence': evidence_class(report['contract'], report['declared'], row['state'], failed),
                 'last_run': {'position': run['position'], 'outcome': run['outcome'], 'sha256': run['report_sha256'],
-                             'report': json.loads(run['report'])},
+                             'report': report},
                 'basis': BASIS, 'brain_claims_counted': False, 'authority_granted': False}
 
     def state(self, bearer, job_id) -> dict:
@@ -1046,19 +1148,22 @@ class Verifier:
         ident(job_id)
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            task = self.hub._task(db, p, job_id)
+            task = self._submitted(db, p, job_id)
             result = db.execute('SELECT status,reason FROM brain_results WHERE job_id=?', (job_id,)).fetchone()
             if not result:
                 raise Fault('not_ingested', 404)
-            row = _row(db, p['scope'], p['id'], job_id)
+            row = _row(db, p['scope'], task['actor'], job_id)
             if row:
                 return self._view(db, row)
+            job = db.execute('SELECT parameters FROM jobs WHERE id=?', (job_id,)).fetchone() if _table(db, 'jobs') else None
+            declared = _declared(job['parameters']) if job else 0
             if result['status'] == 'stopped':
                 state = checks = 'not_returned'
             else:
                 state = checks = 'failed_checks' if result['status'] == 'refused' else 'returned'
             return {'job': job_id, 'brain': task['brain'], 'state': state, 'verified': False, 'checks': checks,
                     'failed': ['C0'] if result['status'] == 'refused' else [], 'runs': 0, 'acknowledged': None,
+                    'declared': declared, 'evidence': evidence_class(result['status'], declared, None, []),
                     'last_run': None, 'contract_reason': result['reason'], 'basis': BASIS,
                     'brain_claims_counted': False, 'authority_granted': False}
 
@@ -1067,11 +1172,11 @@ class Verifier:
         ident(job_id)
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            self.hub._task(db, p, job_id)
+            task = self._submitted(db, p, job_id)
             return [{'position': r['position'], 'outcome': r['outcome'], 'sha256': r['report_sha256'],
                      'report': json.loads(r['report'])}
                     for r in db.execute('SELECT * FROM verification_runs WHERE job_id=? AND scope=? AND actor=? ORDER BY position',
-                                        (job_id, p['scope'], p['id']))]
+                                        (job_id, p['scope'], task['actor']))]
 
     def outcomes(self, bearer, *, brain=None) -> dict:
         return outcomes(self.store, bearer, brain=brain)

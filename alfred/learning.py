@@ -12,14 +12,20 @@ Each run:
    and refusals (audit), dismissed suggestions (routine nominations, brain suggestions,
    capture policy proposals), owner corrections (supersessions and disputes in the review
    history), drafts lapsed, archived and re-proposed, brain results (ALFRED's own
-   ingestion outcome in ``brain_results``) and budget stops. Only identifiers, states,
-   times and counts are kept. The one place a value is read is a re-proposed draft: its
-   old and new text are compared for length and sentence count, and only the direction
-   (shorter, longer, fewer sentences, more sentences) is kept.
+   ingestion outcome in ``brain_results`` and H4's verification outcome per result:
+   verified, failed checks, unverifiable, no declared checks, not returned), budget stops
+   and what happened to goal work in the hub journal (H2: budget warnings and hard stops,
+   goals and brains paused, stopped or reassigned by the owner, tasks refused by the
+   mandate gate, heartbeat slots missed). Only identifiers, states, codes, times and counts
+   are kept. The one place a value is read is a re-proposed draft: its old and new text are
+   compared for length and sentence count, and only the direction (shorter, longer, fewer
+   sentences, more sentences) is kept.
 2. Proposes learnings of three kinds, each bound to the evidence identifiers that
    support it and a minimum-evidence threshold: preferences, procedure drafts (to read,
-   never to run) and routing notes (per brain, job kind and scope class, counted from
-   ALFRED's ingestion outcome, never from the brain's own confidence).
+   never to run) and routing notes (per brain, kind of work and scope class, counted from
+   ALFRED's checks and the owner's acknowledgement, never from the brain's own confidence
+   or its saying it is done; a result without declared checks never counts as verified;
+   and per brain, from the goal outcomes in the hub journal).
 3. Puts every proposal in the learning review inbox as a suggestion. Accepting one makes
    an owner-owned, versioned record; ``select_learned`` and ``packet_statements`` let
    H1's ``BrainHub`` carry current preference and procedure records in a packet's
@@ -41,8 +47,9 @@ version, shown in the daily digest as accepted by your rule, and can be undone. 
 about people, money, commitments, procedures, routing or anything a worker supplied can
 ever be accepted that way; the check is in code, independent of what the rule names.
 
-Learning never changes policy, grants, scopes, autonomy levels, budgets, routines or
-capture policies. It changes only what ALFRED proposes and what context it sends.
+Learning never changes policy, grants, scopes, autonomy levels, budgets, mandates,
+routines or capture policies. It changes only what ALFRED proposes and what context it
+sends; routing notes are not even sent.
 """
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
@@ -77,6 +84,12 @@ COMMIT = re.compile(r'[0-9a-f]{40}')
 SHA256 = re.compile(r'[0-9a-f]{64}')
 DAY_TEXT = re.compile(r'([0-9]{4})-([0-9]{2})-([0-9]{2})')
 ROUTINE_KIND = 'daily-learning'
+# Read from the hub journal (H2) as codes and identifiers, never trusted as anything else.
+HUB_EVENTS = ('budget.warning', 'budget.hard_stop', 'goal.paused', 'goal.stopped', 'brain.paused', 'brain.stopped',
+              'goal.reassigned', 'task.refused', 'heartbeat.missed')
+BRAIN_ID = re.compile(r'[a-z0-9][a-z0-9_.-]{0,63}')
+WORK_KIND = re.compile(r'[a-z][a-z0-9_-]{0,31}')
+CODE = re.compile(r'[a-z][a-z0-9_]{0,63}')
 TRUST_RULE = 'trusted-kinds'
 FETCH = {'capability': 'upstream.fetch', 'status': 'declared_future_capability_not_built', 'network_used': False}
 
@@ -102,8 +115,10 @@ DECISIONS = {'accepted_by_you': 'Accepted by you', 'accepted_by_your_rule': 'Acc
 
 ROUTINE_RULES = (
     {'id': 'evidence', 'rule': 'Reads only your own records from the last 30 days: approvals, refusals, dismissed suggestions, '
-                               'corrections to accepted statements, lapsed, archived and re-proposed drafts, brain results and budget '
-                               'stops. It keeps identifiers, states, times and counts, never the text, except the direction of a draft edit.'},
+                               'corrections to accepted statements, lapsed, archived and re-proposed drafts, brain results with their '
+                               'verification outcome, budget stops and what happened to goal work (budget warnings and hard stops, '
+                               'goals paused, stopped or reassigned, tasks refused by a mandate, missed heartbeats). It keeps '
+                               'identifiers, states, times and counts, never the text, except the direction of a draft edit.'},
     {'id': 'draft_edits', 'rule': 'Drafts you edit before proposing again: with at least 3 edits, two thirds of them in one direction '
                                   '(shorter or longer, fewer or more sentences), a writing style preference is proposed.'},
     {'id': 'dismissals', 'rule': 'A capture policy whose proposals you dismissed at least 3 times and at least half the time, or a routine '
@@ -113,15 +128,21 @@ ROUTINE_RULES = (
                                              'at least 3 corrections to accepted statements of one kind, is noted as a preference.'},
     {'id': 'procedures', 'rule': 'Drafts you approved after the same sequence of at least three recorded steps, at least 3 times, are '
                                  'proposed as a procedure draft. Procedures are kept to be read and are never run.'},
-    {'id': 'routing', 'rule': 'Brain results per brain, job kind and scope class, at least 3: counted from ALFRED\'s own checks (accepted, '
-                              'refused, stopped, stopped at a budget limit), never from anything a brain says about itself.'},
+    {'id': 'routing', 'rule': 'Brain results per brain, kind of work and scope class, at least 3: counted as verified (declared checks '
+                              'passed, or you acknowledged the result), failed checks, could not be verified, no declared checks, not '
+                              'returned or stopped at a budget limit. A result without declared checks never counts as verified, and '
+                              'nothing a brain says about itself, its confidence or its being done is ever counted.'},
+    {'id': 'goal_outcomes', 'rule': 'Goal work per brain, at least 3 setbacks in the hub journal: hard budget stops, tasks refused by a '
+                                    'mandate, goals or the brain paused or stopped by you, goals moved to another brain. Budget warnings '
+                                    'and missed heartbeats are shown alongside. A routing note only; nothing in the hub is changed.'},
     {'id': 'review', 'rule': 'Every learning waits in your review inbox and daily digest. One open proposal per learning. A dismissed '
                              'learning is offered again only when at least 3 new pieces of evidence arrive after you dismissed it.'},
     {'id': 'trusted_kinds', 'rule': 'Off unless you switch it on: your trusted-kinds rule may accept writing style and presentation '
                                     'preferences for you. Nothing about people, money, commitments, procedures, routing or worker text.'},
     {'id': 'upstream', 'rule': 'Compares the pinned version of each project in the source library with your file of latest known '
                                'versions and writes an update brief. Nothing is fetched or installed.'},
-    {'id': 'no_authority', 'rule': 'Learning never changes policy, grants, scopes, autonomy levels, budgets, routines or capture policies.'},
+    {'id': 'no_authority', 'rule': 'Learning never changes policy, grants, scopes, autonomy levels, budgets, mandates, acceptance '
+                                   'checks, routines or capture policies.'},
 )
 
 NOT_PROPOSED = ('already_open', 'already_accepted', 'accepted_evidence_unchanged', 'dismissed_evidence_unchanged',
@@ -177,9 +198,16 @@ PATH_KINDS = {'action.proposed': 'proposed', 'action.proposed_from_routine': 'pr
               'action.reproposed_from_draft': 'reproposed', 'action.approved': 'approved'}
 CAPABILITY_TEXT = {'message.draft': 'message draft', 'vault.inbox_note': 'inbox note', 'vault.append': 'note addition'}
 ROUTING_TEXT = {'often_stops_at_budget': 'often stopped at a budget limit',
-                'mostly_accepted': 'results mostly passed ALFRED\'s checks',
+                'often_fails_checks': 'results often failed ALFRED\'s checks',
+                'mostly_verified': 'results were mostly verified by ALFRED\'s checks or your acknowledgement',
                 'mostly_refused_or_stopped': 'results were mostly refused or stopped',
+                'mostly_not_verified': 'results were mostly not verified (no declared checks, or checks that could not run)',
                 'mixed': 'results were mixed'}
+GOAL_TEXT = {'often_hard_stopped': 'its goal work often hit a hard budget stop',
+             'often_refused_by_mandate': 'its goal tasks were often refused by the mandate',
+             'often_paused_stopped_or_moved': 'its goal work was often paused, stopped or moved to another brain by you',
+             'goal_setbacks_mixed': 'its goal work met mixed setbacks'}
+VERIFICATION_CLASSES = ('verified', 'failed_checks', 'unverifiable', 'no_checks', 'not_returned')
 
 
 # Helpers -----------------------------------------------------------------------------
@@ -326,7 +354,7 @@ def gather(db, p, now):
     since = now - WINDOW
     ev = {name: [] for name in ('approvals', 'refusals', 'archived', 'reproposed', 'lapsed', 'routine_dismissed',
                                 'routine_accepted', 'brain_suggestions_dismissed', 'capture_decided', 'corrections',
-                                'brain_results', 'budget_stops')}
+                                'brain_results', 'budget_stops', 'hub_budget', 'hub_controls', 'hub_refusals', 'hub_missed')}
     for row in _audit(db, scope, creds, ('action.approved', 'action.cancelled', 'draft.archived', 'action.reproposed_from_draft',
                                          'routine.nomination_dismissed', 'routine.nomination_accepted',
                                          'brain.suggestion_dismissed'), since, now):
@@ -382,17 +410,23 @@ def gather(db, p, now):
                 ORDER BY h.seq DESC LIMIT ?''', (scope, person, *creds, since, MAX_SCAN)).fetchall()[::-1]:
             ev['corrections'].append({'id': f'history:{row["seq"]}', 'at': row['at'], 'predicate': row['predicate']})
     if _has(db, 'brain_results') and _has(db, 'brain_tasks'):
-        for row in db.execute(f'''SELECT r.job_id,r.status,r.reason,r.created,t.brain,t.scope_class,j.kind FROM brain_results r
-                JOIN brain_tasks t ON t.job_id=r.job_id LEFT JOIN jobs j ON j.id=r.job_id
-                WHERE r.scope=? AND r.actor IN ({_marks(creds)}) AND r.created>=? ORDER BY r.created DESC,r.job_id DESC LIMIT ?''',
-                              (scope, *creds, since, MAX_SCAN)).fetchall()[::-1]:
+        # H4's outcome per result: ALFRED's checks and the owner's acknowledgement, never the brain's words.
+        from .verification import outcome_rows
+        hub = _has(db, 'hub_tasks')
+        for row in outcome_rows(db, scope, creds, since=since, limit=MAX_SCAN):
+            found = db.execute('SELECT work FROM hub_tasks WHERE job_id=?', (row['job'],)).fetchone() if hub else None
+            work = found['work'] if found and isinstance(found['work'], str) and WORK_KIND.fullmatch(found['work']) else None
             over = bool(row['reason'] and row['reason'].startswith('over_budget_'))
-            item = {'id': f'brain_result:{row["job_id"]}', 'at': row['created'], 'brain': row['brain'],
-                    'job_kind': row['kind'] or 'brain_task', 'scope_class': row['scope_class'], 'status': row['status'],
-                    'over_budget': over}
+            # The latest time ALFRED's record of the result changed: ingested, or checked or acknowledged later.
+            item = {'id': f'brain_result:{row["job"]}', 'at': max(row['ingested_at'], row['updated_at'] or 0),
+                    'brain': row['brain'], 'job_kind': work or 'brain_task', 'scope_class': row['scope_class'],
+                    'status': row['contract'], 'over_budget': over, 'verification': row['evidence'],
+                    'declared': row['declared'], 'acknowledged': row['state'] == 'acknowledged'}
             ev['brain_results'].append(item)
             if over:
                 ev['budget_stops'].append({'id': item['id'], 'at': item['at'], 'kind': 'brain'})
+    if _has(db, 'hub_journal'):
+        _hub_evidence(db, scope, creds, since, now, ev)
     if _has(db, 'routine_runs'):
         for row in db.execute(f'''SELECT id,started FROM routine_runs WHERE scope=? AND actor IN ({_marks(creds)})
                 AND status='skipped' AND skipped_reason='budget_exhausted' AND started>=? ORDER BY started DESC LIMIT ?''',
@@ -407,15 +441,71 @@ def gather(db, p, now):
     return ev
 
 
+def _hub_brain(target, detail, name='brain'):
+    value = target[len('brain:'):] if name == 'brain' and target.startswith('brain:') else detail.get(name)
+    return value if isinstance(value, str) and BRAIN_ID.fullmatch(value) else None
+
+
+def _hub_evidence(db, scope, creds, since, now, ev):
+    """What happened to goal work, from the hub journal: identifiers, codes, times and counts.
+    The journal is ALFRED's own record of its gate and the owner's controls; nothing a brain
+    wrote reaches it."""
+    rows = db.execute(f'''SELECT seq,target,event,detail,at FROM hub_journal WHERE scope=? AND actor IN ({_marks(creds)})
+        AND event IN ({_marks(HUB_EVENTS)}) AND at>=? AND at<=? ORDER BY seq DESC LIMIT ?''',
+                      (scope, *creds, *HUB_EVENTS, since, now, MAX_SCAN)).fetchall()[::-1]
+    for row in rows:
+        try:
+            detail = json.loads(row['detail'])
+        except ValueError:
+            detail = {}
+        detail = detail if isinstance(detail, dict) else {}
+        item = {'id': f'hub_journal:{row["seq"]}', 'at': row['at']}
+        event, target = row['event'], row['target']
+        if event.startswith('budget.'):
+            level = 'brain' if target.startswith('brain:') else 'goal' if target.startswith('goal:') else 'overall'
+            item.update(level=event[len('budget.'):], target_level=level, brain=_hub_brain(target, detail))
+            ev['hub_budget'].append(item)
+            if item['level'] == 'hard_stop':
+                ev['budget_stops'].append({'id': item['id'], 'at': item['at'], 'kind': 'hub'})
+        elif event in ('goal.paused', 'goal.stopped', 'brain.paused', 'brain.stopped'):
+            if detail.get('reason') != 'operator':
+                continue  # A hold a budget caused is already counted as its hard stop.
+            item.update(action=event.split('.')[1], target_level=event.split('.')[0], brain=_hub_brain(target, detail))
+            ev['hub_controls'].append(item)
+        elif event == 'goal.reassigned':
+            item.update(action='reassigned', target_level='goal', brain=_hub_brain('', detail, 'from'))
+            ev['hub_controls'].append(item)
+        elif event == 'task.refused':
+            reason, stage = detail.get('reason'), detail.get('stage')
+            item.update(brain=_hub_brain('', detail), reason=reason if isinstance(reason, str) and CODE.fullmatch(reason) else None,
+                        stage=stage if stage in ('admission', 'dispatch') else None)
+            ev['hub_refusals'].append(item)
+        else:
+            missed = detail.get('missed')
+            item.update(brain=_hub_brain('', detail), missed=missed if type(missed) is int and 0 < missed <= 1000 else 0)
+            ev['hub_missed'].append(item)
+
+
 def summary(ev, now):
     """Value-free counts for today (the last 24 hours) and the whole window."""
     groups = {'approvals': ev['approvals'], 'refusals': ev['refusals'],
               'dismissed_suggestions': ev['routine_dismissed'] + ev['brain_suggestions_dismissed']
               + [c for c in ev['capture_decided'] if c['dismissed']],
               'corrections': ev['corrections'], 'drafts_lapsed': ev['lapsed'], 'drafts_archived': ev['archived'],
-              'drafts_reproposed': ev['reproposed'], 'brain_results': ev['brain_results'], 'budget_stops': ev['budget_stops']}
-    return ({name: sum(i['at'] >= now - DAY for i in items) for name, items in groups.items()},
-            {name: len(items) for name, items in groups.items()})
+              'drafts_reproposed': ev['reproposed'], 'brain_results': ev['brain_results'], 'budget_stops': ev['budget_stops'],
+              'hub_budget_warnings': [i for i in ev['hub_budget'] if i['level'] == 'warning'],
+              'hub_hard_stops': [i for i in ev['hub_budget'] if i['level'] == 'hard_stop'],
+              'paused_or_stopped_by_you': [i for i in ev['hub_controls'] if i['action'] != 'reassigned'],
+              'work_reassigned': [i for i in ev['hub_controls'] if i['action'] == 'reassigned'],
+              'mandate_refusals': ev['hub_refusals']}
+    today = {name: sum(i['at'] >= now - DAY for i in items) for name, items in groups.items()}
+    window = {name: len(items) for name, items in groups.items()}
+    today['heartbeat_slots_missed'] = sum(i['missed'] for i in ev['hub_missed'] if i['at'] >= now - DAY)
+    window['heartbeat_slots_missed'] = sum(i['missed'] for i in ev['hub_missed'])
+    for name in VERIFICATION_CLASSES:
+        today['results_' + name] = sum(i['verification'] == name and i['at'] >= now - DAY for i in ev['brain_results'])
+        window['results_' + name] = sum(i['verification'] == name for i in ev['brain_results'])
+    return today, window
 
 
 # Rules: evidence to candidate learnings ---------------------------------------------
@@ -564,22 +654,72 @@ def derive(db, p, ev, now):
             continue
         counts = {s: sum(i['status'] == s for i in items) for s in ('accepted', 'refused', 'stopped')}
         over = sum(i['over_budget'] for i in items)
+        checks = {c: sum(i['verification'] == c for i in items) for c in VERIFICATION_CLASSES}
+        unconfirmed = checks['no_checks'] + checks['unverifiable']
         if over >= MIN_EVIDENCE and 3 * over >= total:
             category = 'often_stops_at_budget'
-        elif 5 * counts['accepted'] >= 4 * total:
-            category = 'mostly_accepted'
+        elif checks['failed_checks'] >= MIN_EVIDENCE and 3 * checks['failed_checks'] >= total:
+            category = 'often_fails_checks'
+        elif checks['verified'] >= MIN_EVIDENCE and 5 * checks['verified'] >= 4 * total:
+            category = 'mostly_verified'
         elif 2 * counts['accepted'] < total:
             category = 'mostly_refused_or_stopped'
+        elif unconfirmed >= MIN_EVIDENCE and 2 * unconfirmed >= total:
+            category = 'mostly_not_verified'
         else:
             category = 'mixed'
         found.append(_candidate('routing', 'routing', 'routing', f'routing:{brain}:{job_kind}:{scope_class}', category,
                                 f'Brain "{brain}" on {job_kind.replace("_", " ")} work in {scope_class} scope: '
-                                f'{ROUTING_TEXT[category]} ({counts["accepted"]} accepted, {counts["refused"]} refused, '
-                                f'{counts["stopped"]} stopped, {over} at a budget limit, in {WINDOW_DAYS} days). Counted from '
-                                'ALFRED\'s own checks, not the brain\'s confidence; not independently verified.',
+                                f'{ROUTING_TEXT[category]} ({checks["verified"]} verified, {checks["failed_checks"]} failed checks, '
+                                f'{checks["unverifiable"]} could not be verified, {checks["no_checks"]} with no declared checks, '
+                                f'{checks["not_returned"]} not returned, {over} at a budget limit, in {WINDOW_DAYS} days). '
+                                'Verified means ALFRED\'s declared checks passed or you acknowledged the result; a result with '
+                                'no declared checks never counts as verified, and the brain\'s own confidence is never counted.',
                                 {'brain': brain, 'job_kind': job_kind, 'scope_class': scope_class, **counts,
-                                 'over_budget': over, 'total': total, 'verified': None,
-                                 'basis': 'alfred_ingestion_outcome_not_brain_confidence'}, items))
+                                 'over_budget': over, 'total': total, 'verification': checks, 'verified': checks['verified'],
+                                 'acknowledged': sum(i['acknowledged'] and i['verification'] == 'verified' for i in items),
+                                 'no_checks_counted_as_verified': False,
+                                 'basis': 'alfred_checks_and_owner_acknowledgement_not_brain_confidence'}, items))
+    found.extend(_goal_outcomes(ev))
+    return found
+
+
+def _goal_outcomes(ev):
+    """One routing note per brain from what happened to its goal work (the hub journal)."""
+    brains = {}
+    for name in ('hub_budget', 'hub_controls', 'hub_refusals', 'hub_missed'):
+        for item in ev[name]:
+            if item.get('brain'):
+                brains.setdefault(item['brain'], {n: [] for n in ('hub_budget', 'hub_controls', 'hub_refusals', 'hub_missed')})[name].append(item)
+    found = []
+    for brain in sorted(brains):
+        entry = brains[brain]
+        hard = [i for i in entry['hub_budget'] if i['level'] == 'hard_stop']
+        warnings = sum(i['level'] == 'warning' for i in entry['hub_budget'])
+        refused, controls = entry['hub_refusals'], entry['hub_controls']
+        setbacks = hard + refused + controls
+        if len(setbacks) < MIN_EVIDENCE:
+            continue
+        groups = (('often_hard_stopped', hard), ('often_refused_by_mandate', refused), ('often_paused_stopped_or_moved', controls))
+        largest = max(len(items) for _, items in groups)
+        category = next((name for name, items in groups if len(items) == largest and largest >= MIN_EVIDENCE), 'goal_setbacks_mixed')
+        moved = sum(i['action'] == 'reassigned' for i in controls)
+        missed = sum(i['missed'] for i in entry['hub_missed'])
+        reasons = {}
+        for item in refused:
+            if item['reason']:
+                reasons[item['reason']] = reasons.get(item['reason'], 0) + 1
+        found.append(_candidate('routing', 'routing', 'goal_outcomes', f'routing-goals:{brain}', category,
+                                f'Goal work routed to brain "{brain}": {GOAL_TEXT[category]} ({len(hard)} hard budget stops, '
+                                f'{warnings} budget warnings, {len(refused)} tasks refused by the mandate, '
+                                f'{len(controls) - moved} pauses or stops by you, {moved} goals moved to another brain, '
+                                f'{missed} heartbeat slots missed while ALFRED was not running, in {WINDOW_DAYS} days). Counted '
+                                'from ALFRED\'s hub journal, never from the brain. A note only: no budget, mandate or '
+                                'assignment is changed.',
+                                {'brain': brain, 'hard_stops': len(hard), 'budget_warnings': warnings, 'mandate_refusals': len(refused),
+                                 'refusal_reasons': dict(sorted(reasons.items())), 'paused_or_stopped_by_you': len(controls) - moved,
+                                 'moved_to_another_brain': moved, 'heartbeat_slots_missed': missed, 'setbacks': len(setbacks),
+                                 'basis': 'alfred_hub_journal_not_brain_report'}, setbacks))
     return found
 
 

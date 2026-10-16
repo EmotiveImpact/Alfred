@@ -46,6 +46,29 @@ owner-authored task. The supervisor cycle submits that task for the latest due s
 missed while the host was stopped are counted, never replayed. A brain cannot schedule
 itself: no field of a result bundle and no proposal capability reaches a schedule.
 
+Acceptance checks (H4) on a mandate: the owner may attach a list of ``alfred.verification``
+checks to a mandate, owner only, version-checked and journalled like every other mandate
+setting. ``GoalHub`` puts them first in the ``acceptance`` of every task packet it
+authorises under that mandate (declared by the mandate, with the mandate as reference),
+followed by any checks the task request itself declares; exact duplicates are dropped. The
+gate refuses a packet under that mandate that does not carry them. A brain never declares
+checks: the result bundle has no field for them. ``effect_readback`` can only be declared by
+a task at autonomy 2, never by a mandate, because a mandate also covers lower levels. The
+mandate's success test stays text the owner wrote; nothing evaluates it.
+
+What happened to goal work is journalled for the learning loop (H3), value-free: budget
+warnings and hard stops (with the brain whose accounted task triggered them), goals and
+brains paused, stopped or reassigned, tasks the mandate gate refused (``task.refused``:
+reason code, stage, brain, kind of work, mandate) and heartbeat slots missed
+(``heartbeat.missed``). Learning reads these for routing notes only and changes nothing here.
+
+Verification over HTTP: ``results`` lists the caller's own brain results with ALFRED's
+routing evidence class (verified, failed checks, unverifiable, no checks, not returned);
+``result`` reads one with its runs; ``verify`` runs its declared checks and ``acknowledge``
+records the owner accepting the exact run they saw (explicitly over failed checks). Each is
+private to the person who submitted the task (``policy.ledger``), and a check's reasons are
+withheld when the result's sources can no longer be read under the person's grants.
+
 Like routines, the hub runs under the owner credential this host was started with, because
 heartbeats, ingestion and cancellation use it. Any other credential is told the hub is not
 available to it. No model, network or file access happens here.
@@ -59,6 +82,7 @@ import secrets
 import threading
 
 from . import brain as plug
+from . import verification
 from .local import Fault, canonical, exact, ident, timestamp
 from .routines import CLOCK, EVERY_HOURS, day_start, next_slot
 
@@ -75,11 +99,16 @@ MAX_WORK, MAX_BRAINS, MAX_MANDATES = 8, 8, 64
 MAX_DEADLINE = 5 * 366 * DAY
 ACCOUNT_PER_CYCLE, BEATS_PER_CYCLE = 32, 8
 KEEP_HEARTBEATS, VIEW_TASKS, VIEW_BEATS, VIEW_ATTENTION, VIEW_JOURNAL = 400, 8, 8, 40, 20
+VIEW_RESULTS, RESULTS_WINDOW, RESULTS_SCAN, VIEW_RUNS = 24, 30 * DAY, 2000, 20
 CREATE_FIELDS = {'request_id', 'goal', 'scope_class', 'deadline', 'success_test', 'autonomy', 'brains',
                  'assigned_brain', 'tools', 'budget', 'schedule'}
-SETTINGS = ('deadline', 'success_test', 'autonomy', 'brains', 'tools', 'budget', 'schedule')
+# Optional on create, update, a scheduled task and an operator task: acceptance checks (H4).
+OPTIONAL = 'acceptance'
+SETTINGS = ('deadline', 'success_test', 'autonomy', 'brains', 'tools', 'budget', 'schedule', 'acceptance')
 TEMPLATE_FIELDS = {'work', 'instruction', 'context', 'learned', 'tools', 'budget', 'autonomy'}
 TASK_FIELDS = TEMPLATE_FIELDS | {'request_id', 'brain'}
+# Refusals that are the gate's replay guards, not decisions about the work.
+NOT_JOURNALLED = ('already_dispatched',)
 OPERATIONS = {'goal': ('pause', 'resume', 'stop', 'reassign'), 'brain': ('pause', 'resume', 'stop'),
               'overall': ('pause', 'resume')}
 
@@ -91,7 +120,7 @@ CREATE TABLE IF NOT EXISTS hub_mandates(
  goal TEXT NOT NULL, scope_class TEXT NOT NULL, deadline INTEGER NOT NULL, success_test TEXT NOT NULL,
  autonomy TEXT NOT NULL, brains TEXT NOT NULL, assigned_brain TEXT NOT NULL, tools TEXT NOT NULL, budget TEXT NOT NULL,
  schedule TEXT, next_due INTEGER NOT NULL, missed_total INTEGER NOT NULL, state TEXT NOT NULL, state_reason TEXT,
- version INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
+ version INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL, acceptance TEXT,
  UNIQUE(scope,actor,request_id), CHECK(state IN ('active','paused','stopped')));
 CREATE UNIQUE INDEX IF NOT EXISTS hub_mandate_goal ON hub_mandates(scope,goal) WHERE state!='stopped';
 CREATE TABLE IF NOT EXISTS hub_controls(
@@ -199,9 +228,41 @@ def _selections(value):
     return [dict(item) for item in value]
 
 
+def validate_checks(value):
+    """Acceptance check requests as ``verification.declare`` takes them, normalised: defaults
+    filled, no identifiers (they are numbered when a packet is built). ``None`` means none."""
+    if value is None:
+        return None
+    if type(value) is not list or not value:
+        raise Fault('invalid_acceptance')
+    declared = verification.declare({'checks': value})
+    verification.validate_acceptance(declared, {'autonomy': 2})  # Shape; read-back is checked where it is used.
+    return _bare(declared['checks'])
+
+
+def _bare(checks):
+    return [{k: v for k, v in check.items() if k != 'id'} for check in checks]
+
+
+def merge_checks(mandate_id, mandate_checks, task_checks, autonomy):
+    """The packet's acceptance request: the mandate's checks first, then the task's own,
+    exact duplicates dropped, validated against the task's autonomy. ``None`` when neither
+    declares any."""
+    checks = list(mandate_checks or [])
+    for check in task_checks or []:
+        if check not in checks:
+            checks.append(check)
+    if not checks:
+        return None
+    request = ({'declared_by': 'mandate', 'ref': mandate_id, 'checks': checks} if mandate_checks
+               else {'declared_by': 'owner', 'checks': checks})
+    verification.validate_acceptance(verification.declare(request), {'autonomy': autonomy})
+    return request
+
+
 def validate_template(value):
     """The task a heartbeat submits, or an operator task, before it becomes a packet."""
-    if type(value) is not dict or set(value) != TEMPLATE_FIELDS:
+    if type(value) is not dict or not TEMPLATE_FIELDS <= set(value) <= TEMPLATE_FIELDS | {OPTIONAL}:
         raise Fault('invalid_task')
     if not isinstance(value['work'], str) or not WORK.fullmatch(value['work']):
         raise Fault('invalid_work_kind')
@@ -211,9 +272,13 @@ def validate_template(value):
         raise Fault('invalid_learned')
     for item in learned:
         ident(item)
-    return {'work': value['work'], 'instruction': value['instruction'], 'context': _selections(value['context']),
+    task = {'work': value['work'], 'instruction': value['instruction'], 'context': _selections(value['context']),
             'learned': list(learned), 'tools': _names(value['tools'], plug.TOOL, plug.MAX_TOOLS, 'invalid_tools'),
             'budget': dict(plug.validate_budget(value['budget'])), 'autonomy': _level(value['autonomy'])}
+    checks = validate_checks(value.get(OPTIONAL))
+    if checks is not None:
+        task[OPTIONAL] = checks
+    return task
 
 
 def validate_schedule(value):
@@ -282,6 +347,10 @@ class GoalHub:
             if versions != [1]:
                 raise Fault('unsupported_hub_version')
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
+            if 'acceptance' not in {r[1] for r in db.execute('PRAGMA table_info(hub_mandates)')}:
+                # Additive: mandates written before H4 acceptance checks have none.
+                db.executescript('BEGIN IMMEDIATE;\nALTER TABLE hub_mandates ADD COLUMN acceptance TEXT;\nCOMMIT;')
+        self.verifier = verification.Verifier(brains)
         brains.gate = self
 
     def backend(self) -> plug.BrainBackend:
@@ -345,7 +414,7 @@ class GoalHub:
             raise Fault('brain_stopped', 409)
         return spec
 
-    def _settings(self, db, p, body, scope_class, now):
+    def _settings(self, db, p, body, scope_class, now, mandate_id):
         """Normalise a whole mandate. Everything is explicit; nothing is inferred."""
         deadline = timestamp(body['deadline'])
         if not now < deadline <= now + MAX_DEADLINE:
@@ -363,26 +432,34 @@ class GoalHub:
         tools = _names(body['tools'], plug.TOOL, plug.MAX_TOOLS, 'invalid_tools')
         if not set(tools) <= self.policy.permitted_tools:
             raise Fault('tool_not_permitted', 403)
+        checks = validate_checks(body.get(OPTIONAL))
+        if checks is not None:
+            # A mandate covers every level up to its own, so it cannot declare a read-back of effects.
+            verification.validate_acceptance(verification.declare(
+                {'declared_by': 'mandate', 'ref': mandate_id, 'checks': checks}), {'autonomy': 0})
         schedule = validate_schedule(body['schedule'])
         if schedule is not None:
             task = schedule['task']
             if (task['work'] not in autonomy or task['autonomy'] > autonomy[task['work']]
                     or not set(task['tools']) <= set(tools)):
                 raise Fault('schedule_outside_mandate', 403)
+            merge_checks(mandate_id, checks, task.get(OPTIONAL), task['autonomy'])
         return {'deadline': deadline, 'success_test': _prose(body['success_test'], 600, 'invalid_success_test'),
                 'autonomy': {k: autonomy[k] for k in sorted(autonomy)}, 'brains': brains, 'tools': tools,
-                'budget': validate_budget(body['budget']), 'schedule': schedule}
+                'budget': validate_budget(body['budget']), 'schedule': schedule, OPTIONAL: checks}
 
     @staticmethod
     def _stored(row):
         return {'deadline': row['deadline'], 'success_test': row['success_test'], 'autonomy': json.loads(row['autonomy']),
                 'brains': json.loads(row['brains']), 'tools': json.loads(row['tools']), 'budget': json.loads(row['budget']),
-                'schedule': json.loads(row['schedule']) if row['schedule'] else None}
+                'schedule': json.loads(row['schedule']) if row['schedule'] else None,
+                OPTIONAL: json.loads(row['acceptance']) if row['acceptance'] else None}
 
     # Mandates ---------------------------------------------------------------
 
     def create_mandate(self, bearer, body):
-        exact(body, CREATE_FIELDS)
+        if type(body) is not dict or not CREATE_FIELDS <= set(body) <= CREATE_FIELDS | {OPTIONAL}:
+            raise Fault('invalid_fields')
         ident(body['request_id']); ident(body['goal'])
         if body['scope_class'] not in plug.SCOPE_CLASSES:
             raise Fault('invalid_scope_class')
@@ -409,17 +486,20 @@ class GoalHub:
                           (p['scope'], goal['id'])).fetchone():
                 raise Fault('goal_has_mandate', 409)
             now = self.store.now()
-            settings = self._settings(db, p, body, body['scope_class'], now)
+            mandate_id = 'mandate-' + secrets.token_hex(12)
+            settings = self._settings(db, p, body, body['scope_class'], now, mandate_id)
             if body['assigned_brain'] not in settings['brains']:
                 raise Fault('assigned_brain_not_allowed', 403)
-            mandate_id = 'mandate-' + secrets.token_hex(12)
-            schedule = settings['schedule']
-            db.execute('INSERT INTO hub_mandates VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            schedule, checks = settings['schedule'], settings[OPTIONAL]
+            db.execute('''INSERT INTO hub_mandates(id,scope,actor,request_id,request_hash,goal,scope_class,deadline,success_test,
+                autonomy,brains,assigned_brain,tools,budget,schedule,next_due,missed_total,state,state_reason,version,created,updated,
+                acceptance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                        (mandate_id, p['scope'], p['id'], body['request_id'], digest, goal['id'], body['scope_class'],
                         settings['deadline'], settings['success_test'], canonical(settings['autonomy']),
                         canonical(settings['brains']), body['assigned_brain'], canonical(settings['tools']),
                         canonical(settings['budget']), canonical(schedule) if schedule else None,
-                        next_slot(_clock(schedule), now) if schedule else 0, 0, 'active', None, 1, now, now))
+                        next_slot(_clock(schedule), now) if schedule else 0, 0, 'active', None, 1, now, now,
+                        canonical(checks) if checks else None))
             self._journal(db, p, 'goal:' + mandate_id, 'mandate.created', 1,
                           {'goal': goal['id'], 'scope_class': body['scope_class'], 'assigned_brain': body['assigned_brain'],
                            **settings})
@@ -438,7 +518,7 @@ class GoalHub:
                     raise Fault('goal_stopped', 409)
                 now = self.store.now()
                 merged = {**self._stored(row), **{k: body[k] for k in SETTINGS if k in body}}
-                settings = self._settings(db, p, merged, row['scope_class'], now)
+                settings = self._settings(db, p, merged, row['scope_class'], now, row['id'])
                 if row['assigned_brain'] not in settings['brains']:
                     raise Fault('assigned_brain_not_allowed', 409)  # Reassign first.
                 changed = {k: settings[k] for k in SETTINGS if k in body}
@@ -446,11 +526,13 @@ class GoalHub:
                 next_due = row['next_due']
                 if 'schedule' in body:
                     next_due = next_slot(_clock(schedule), now) if schedule else 0
+                checks = settings[OPTIONAL]
                 db.execute('''UPDATE hub_mandates SET deadline=?,success_test=?,autonomy=?,brains=?,tools=?,budget=?,schedule=?,
-                    next_due=?,version=version+1,updated=? WHERE id=?''',
+                    acceptance=?,next_due=?,version=version+1,updated=? WHERE id=?''',
                            (settings['deadline'], settings['success_test'], canonical(settings['autonomy']),
                             canonical(settings['brains']), canonical(settings['tools']), canonical(settings['budget']),
-                            canonical(schedule) if schedule else None, next_due, now, row['id']))
+                            canonical(schedule) if schedule else None, canonical(checks) if checks else None,
+                            next_due, now, row['id']))
                 self._journal(db, p, 'goal:' + row['id'], 'mandate.updated', row['version'] + 1, changed)
             # A lowered limit can stop the goal at once.
             self._enforce(mandate=row['id'])
@@ -461,11 +543,12 @@ class GoalHub:
 
     def submit_task(self, bearer, mandate_id, body):
         """An operator task now, under the mandate. The brain defaults to the assigned one."""
-        exact(body, TASK_FIELDS)
+        if type(body) is not dict or not TASK_FIELDS <= set(body) <= TASK_FIELDS | {OPTIONAL}:
+            raise Fault('invalid_fields')
         ident(body['request_id'])
         if body['brain'] is not None and (not isinstance(body['brain'], str) or not BRAIN_ID.fullmatch(body['brain'])):
             raise Fault('invalid_brain')
-        task = validate_template({k: body[k] for k in TEMPLATE_FIELDS})
+        task = validate_template({k: body[k] for k in set(body) & (TEMPLATE_FIELDS | {OPTIONAL})})
         with self.lock:
             with self.store.transaction() as db:
                 p = self._hosted(db, bearer)
@@ -482,6 +565,11 @@ class GoalHub:
                    'scope': row['scope_class'], 'instruction': task['instruction'], 'context': task['context'],
                    'learned': task['learned'], 'tools': task['tools'], 'budget': task['budget'],
                    'autonomy': task['autonomy']}
+        # The owner's checks: the mandate's first, then the task's own. Never the brain's.
+        acceptance = merge_checks(row['id'], json.loads(row['acceptance']) if row['acceptance'] else None,
+                                  task.get(OPTIONAL), task['autonomy'])
+        if acceptance is not None:
+            request['acceptance'] = acceptance
         binding = {'mandate': row['id'], 'work': task['work'], 'trigger': trigger, 'slot': slot}
         submitted = self.brains.submit(bearer, request, binding=binding)
         return {**submitted, 'mandate': row['id'], 'goal': row['goal'], 'work': task['work'], 'trigger': trigger}
@@ -520,29 +608,65 @@ class GoalHub:
             raise Fault('invalid_mandate_binding')
         if binding['mandate'] != packet['goal']['ref']:
             raise Fault('mandate_mismatch', 403)
+        refusal = None
         with self.store.transaction() as db:
             p = self._hosted(db, bearer)
             row = db.execute('SELECT * FROM hub_mandates WHERE id=? AND scope=? AND actor=?',
                              (binding['mandate'], p['scope'], p['id'])).fetchone()
             if not row:
                 raise Fault('mandate_required', 403)
-            now = self.store.now()
-            self._admissible(db, row, spec.id, now)
-            if packet['scope'] != row['scope_class']:
-                raise Fault('scope_class_outside_mandate', 403)
-            autonomy = json.loads(row['autonomy'])
-            if binding['work'] not in autonomy:
-                raise Fault('work_kind_not_in_mandate', 403)
-            if packet['autonomy'] > autonomy[binding['work']]:
-                raise Fault('autonomy_above_mandate', 403)
-            if spec.id not in json.loads(row['brains']):
-                raise Fault('brain_not_in_mandate', 403)
-            if not set(packet['tools']) <= set(json.loads(row['tools'])):
-                raise Fault('tool_not_in_mandate', 403)
-            prior = db.execute('''SELECT 1 FROM brain_tasks b JOIN hub_tasks h ON h.job_id=b.job_id
-                WHERE b.scope=? AND b.actor=? AND b.task_id=?''', (p['scope'], p['id'], packet['task_id'])).fetchone()
-            if not prior:  # A repeated request for an admitted task is already counted.
-                self._admit(db, p, row, spec, _ceilings(spec, packet['budget']), now)
+            try:
+                self._inside(db, p, row, spec, packet, binding)
+            except Fault as exc:
+                refusal = exc  # Nothing was written; the refusal is journalled below.
+        if refusal is not None:
+            self._refused(p, 'admission', refusal, spec.id, binding['work'], binding['trigger'], row['id'])
+            raise refusal
+
+    @staticmethod
+    def _checks_carried(row, packet):
+        """The mandate's acceptance checks must lead the packet's, declared by this mandate."""
+        mandate_checks = json.loads(row['acceptance']) if row['acceptance'] else None
+        acceptance = packet.get('acceptance')
+        if acceptance and acceptance['declared_by'] == 'mandate' and acceptance['ref'] != row['id']:
+            raise Fault('mandate_mismatch', 403)
+        if mandate_checks:
+            if not acceptance or acceptance['declared_by'] != 'mandate':
+                raise Fault('mandate_checks_missing', 403)
+            if _bare(acceptance['checks'][:len(mandate_checks)]) != mandate_checks:
+                raise Fault('mandate_checks_changed', 409)
+        elif acceptance and acceptance['declared_by'] == 'mandate':
+            raise Fault('mandate_checks_changed', 409)
+
+    def _inside(self, db, p, row, spec, packet, binding):
+        now = self.store.now()
+        self._admissible(db, row, spec.id, now)
+        if packet['scope'] != row['scope_class']:
+            raise Fault('scope_class_outside_mandate', 403)
+        autonomy = json.loads(row['autonomy'])
+        if binding['work'] not in autonomy:
+            raise Fault('work_kind_not_in_mandate', 403)
+        if packet['autonomy'] > autonomy[binding['work']]:
+            raise Fault('autonomy_above_mandate', 403)
+        if spec.id not in json.loads(row['brains']):
+            raise Fault('brain_not_in_mandate', 403)
+        if not set(packet['tools']) <= set(json.loads(row['tools'])):
+            raise Fault('tool_not_in_mandate', 403)
+        self._checks_carried(row, packet)
+        prior = db.execute('''SELECT 1 FROM brain_tasks b JOIN hub_tasks h ON h.job_id=b.job_id
+            WHERE b.scope=? AND b.actor=? AND b.task_id=?''', (p['scope'], p['id'], packet['task_id'])).fetchone()
+        if not prior:  # A repeated request for an admitted task is already counted.
+            self._admit(db, p, row, spec, _ceilings(spec, packet['budget']), now)
+
+    def _refused(self, p, stage, refusal, brain, work, trigger, mandate, job=None):
+        """A task the mandate gate refused, for the owner's record and the learning loop.
+        Codes, identifiers and the stage only."""
+        if refusal.code in NOT_JOURNALLED or not plug.REASON.fullmatch(refusal.code):
+            return
+        with self.store.transaction() as db:
+            self._journal(db, p, 'tasks', 'task.refused', None,
+                          {'reason': refusal.code, 'stage': stage, 'brain': brain, 'work': work, 'trigger': trigger,
+                           'mandate': mandate, 'job': job})
 
     def bind(self, db, p, job, spec, packet, binding):
         """Called by ``BrainHub.submit`` inside its own transaction: the task links back to
@@ -560,17 +684,26 @@ class GoalHub:
     def dispatch(self, job_id, spec, packet):
         """Called by the brain backend just before a brain starts: the final recheck. The
         start is recorded first, so a brain that never reports is charged its ceiling."""
+        refusal = None
         with self.store.transaction() as db:
             task = db.execute('SELECT * FROM hub_tasks WHERE job_id=?', (job_id,)).fetchone()
             if not task:
                 raise Fault('mandate_required', 403)
-            if task['brain'] != spec.id or packet['goal']['ref'] != task['mandate']:
-                raise Fault('mandate_mismatch', 403)
-            row = db.execute('SELECT * FROM hub_mandates WHERE id=?', (task['mandate'],)).fetchone()
-            self._admissible(db, row, spec.id, self.store.now())
-            if db.execute('SELECT 1 FROM hub_meter WHERE job_id=?', (job_id,)).fetchone():
-                raise Fault('already_dispatched', 409)
-            db.execute("INSERT INTO hub_meter(job_id,state,started) VALUES (?,'running',?)", (job_id, self.store.now()))
+            try:
+                if task['brain'] != spec.id or packet['goal']['ref'] != task['mandate']:
+                    raise Fault('mandate_mismatch', 403)
+                row = db.execute('SELECT * FROM hub_mandates WHERE id=?', (task['mandate'],)).fetchone()
+                self._admissible(db, row, spec.id, self.store.now())
+                if db.execute('SELECT 1 FROM hub_meter WHERE job_id=?', (job_id,)).fetchone():
+                    raise Fault('already_dispatched', 409)
+            except Fault as exc:
+                refusal = exc
+            else:
+                db.execute("INSERT INTO hub_meter(job_id,state,started) VALUES (?,'running',?)", (job_id, self.store.now()))
+        if refusal is not None:
+            self._refused({'scope': task['scope'], 'id': task['actor']}, 'dispatch', refusal, task['brain'], task['work'],
+                          task['trigger'], task['mandate'], job_id)
+            raise refusal
 
     def metered(self, job_id, used, wall_seconds, reason):
         """Called by the brain backend when a run ends, with the meter's own count."""
@@ -653,15 +786,17 @@ class GoalHub:
                 elif limit > 0 and used[dimension] * 100 >= limit * budget['warn_percent']:
                     yield period, since, dimension, used[dimension], limit, 'warning'
 
-    def _attention(self, db, p, target, period, since, dimension, level, used, limit):
+    def _attention(self, db, p, target, period, since, dimension, level, used, limit, cause=None):
         identity = 'hub-att-' + hashlib.sha256(
             f"{p['scope']}|{p['id']}|{target}|{period}|{since}|{dimension}|{level}".encode()).hexdigest()[:24]
         inserted = db.execute('INSERT OR IGNORE INTO hub_attention VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
                               (identity, p['scope'], p['id'], target, period, since, dimension, level, used, limit,
                                self.store.now(), 'open')).rowcount
         if inserted:
-            self._journal(db, p, target, 'budget.' + level, None,
-                          {'period': period, 'since': since, 'dimension': dimension, 'used': used, 'limit': limit})
+            detail = {'period': period, 'since': since, 'dimension': dimension, 'used': used, 'limit': limit}
+            if cause is not None:
+                detail['brain'] = cause  # The brain whose accounted task brought this budget here.
+            self._journal(db, p, target, 'budget.' + level, None, detail)
 
     def _in_flight(self, db, p, level, target):
         where, args = self._filter(level, target, 'h.')
@@ -677,7 +812,8 @@ class GoalHub:
             if row['state'] == 'active' or (state == 'stopped' and row['state'] != 'stopped'):
                 db.execute('UPDATE hub_mandates SET state=?,state_reason=?,next_due=?,version=version+1,updated=? WHERE id=?',
                            (state, reason, 0 if state == 'stopped' else row['next_due'], now, target))
-                self._journal(db, p, 'goal:' + target, 'goal.' + state, row['version'] + 1, {'reason': reason})
+                self._journal(db, p, 'goal:' + target, 'goal.' + state, row['version'] + 1,
+                              {'reason': reason, 'brain': row['assigned_brain']})
         else:
             key = 'overall' if level == 'overall' else 'brain:' + target
             row = self._control(db, p, key)
@@ -705,8 +841,9 @@ class GoalHub:
                               {'jobs': cancelled})
         return cancelled
 
-    def _enforce(self, *, mandate=None, brain=None):
-        """Record warnings and apply hard stops for the budgets a goal and brain count against."""
+    def _enforce(self, *, mandate=None, brain=None, cause=None):
+        """Record warnings and apply hard stops for the budgets a goal and brain count against.
+        ``cause`` is the brain whose accounted task is being enforced, when there is one."""
         cancel = []
         with self.store.transaction() as db:
             p = {'scope': self.scope, 'id': self.host_id}
@@ -716,7 +853,7 @@ class GoalHub:
                     continue
                 stop = None
                 for period, since, dimension, used, limit, concern in self._evaluate(db, p, level, target, budget, now):
-                    self._attention(db, p, key, period, since, dimension, concern, used, limit)
+                    self._attention(db, p, key, period, since, dimension, concern, used, limit, cause)
                     if concern == 'hard_stop' and stop is None:
                         stop = f'budget_{period}_{dimension}'
                 if stop:
@@ -921,7 +1058,7 @@ class GoalHub:
                 self.store.log(db, task['scope'], task['actor'], 'hub.task_accounted', job_id)
                 touched.append((task['mandate'], task['brain']))
         for mandate, brain in dict.fromkeys(touched):
-            self._enforce(mandate=mandate, brain=brain)
+            self._enforce(mandate=mandate, brain=brain, cause=brain)
 
     def _heartbeats(self):
         with self.store.connection() as db:
@@ -942,6 +1079,10 @@ class GoalHub:
             missed = missed_slots(schedule, due, now) - 1
             db.execute('UPDATE hub_mandates SET next_due=?,missed_total=missed_total+? WHERE id=?',
                        (next_slot(_clock(schedule), now), missed, mandate_id))
+            if missed:
+                # Slots that fell while the host was not running: counted, never replayed.
+                self._journal(db, {'scope': self.scope, 'id': self.host_id}, 'heartbeats', 'heartbeat.missed', None,
+                              {'mandate': mandate_id, 'brain': row['assigned_brain'], 'missed': missed, 'due': due})
             reason = None
             try:
                 self._admissible(db, row, row['assigned_brain'], now)
@@ -1028,6 +1169,8 @@ class GoalHub:
                 'budget': settings['budget'], 'usage': self._usage_view(db, p, 'goal', row['id'], settings['budget'], now),
                 'schedule': settings['schedule'], 'next_due': row['next_due'] or None, 'missed_total': row['missed_total'],
                 'tasks': tasks, 'heartbeats': beats, 'created': row['created'], 'updated': row['updated'],
+                'acceptance': [{'id': f'C{n}', **check} for n, check in enumerate(settings[OPTIONAL] or [], 1)],
+                'acceptance_declared_by': 'mandate' if settings[OPTIONAL] else None,
                 'basis': 'owner_authored_limits_not_a_grant', 'success_test_evaluated': False}
 
     def view(self, bearer):
@@ -1069,6 +1212,110 @@ class GoalHub:
                     'policy': {'permitted_tools': sorted(self.policy.permitted_tools),
                                'cloud_scopes': sorted(self.policy.cloud_scopes)}}
 
+    # Verification of results (H4) ----------------------------------------------
+
+    @staticmethod
+    def _work_of(db, row):
+        """The goal work a result served, if the hub admitted it: identifiers and the title only."""
+        task = db.execute('SELECT mandate,goal,work,trigger,actor,scope FROM hub_tasks WHERE job_id=?', (row['job'],)).fetchone()
+        if not task:
+            return None
+        goal = db.execute('SELECT title FROM executive_records WHERE id=? AND scope=? AND actor=?',
+                          (task['goal'], task['scope'], task['actor'])).fetchone()
+        return {'mandate': task['mandate'], 'goal': task['goal'], 'goal_title': goal['title'] if goal else None,
+                'work': task['work'], 'trigger': task['trigger']}
+
+    @staticmethod
+    def _last_run(db, job_id):
+        """The latest run's position, hash, outcome and per-check statuses. No reasons."""
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='verification_results'").fetchone():
+            return None
+        row = db.execute('''SELECT r.position,r.outcome,r.report,r.report_sha256 FROM verification_results v
+            JOIN verification_runs r ON r.id=v.last_run WHERE v.job_id=?''', (job_id,)).fetchone()
+        if not row:
+            return None
+        report = json.loads(row['report'])
+        return {'position': row['position'], 'outcome': row['outcome'], 'sha256': row['report_sha256'],
+                'counts': report['counts'],
+                'checks': [{'id': c['id'], 'kind': c['kind'], 'status': c['status']} for c in report['checks']]}
+
+    def results(self, bearer):
+        """The caller's own brain results of the last 30 days, newest first, each with ALFRED's
+        routing evidence class, and the counts per brain. Person-private (policy.ledger)."""
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner', 'reader'})
+            now = self.store.now()
+            base = {'classes': list(verification.EVIDENCE), 'window_days': RESULTS_WINDOW // DAY,
+                    'basis': verification.BASIS, 'limits': verification.LIMITS, 'brain_claims_counted': False,
+                    'no_checks_counted_as_verified': False, 'model_used': False, 'authority_granted': False}
+            if p['role'] != 'owner':
+                return {**base, 'available': False, 'reason': 'owner_only', 'results': [], 'by_brain': {}}
+            rows = verification.outcome_rows(db, p['scope'], verification.submitters(db, p), since=now - RESULTS_WINDOW,
+                                             limit=RESULTS_SCAN)
+            by_brain = {}
+            for row in rows:
+                counts = by_brain.setdefault(row['brain'], {'results': 0, **dict.fromkeys(verification.EVIDENCE, 0)})
+                counts['results'] += 1
+                counts[row['evidence']] += 1
+            listed = []
+            for row in reversed(rows[-VIEW_RESULTS:]):
+                listed.append({'job': row['job'], 'brain': row['brain'], 'task_id': row['task_id'],
+                               'scope_class': row['scope_class'], 'contract': row['contract'],
+                               'contract_reason': row['reason'], 'declared': row['declared'], 'checks': row['checks'],
+                               'state': row['state'], 'evidence': row['evidence'], 'runs': row['runs'],
+                               'acknowledged_over': row['acknowledged_over'], 'ingested_at': row['ingested_at'],
+                               'updated_at': row['updated_at'], 'work': self._work_of(db, row),
+                               'last_run': self._last_run(db, row['job'])})
+            return {**base, 'available': True, 'reason': None, 'results': listed, 'by_brain': by_brain,
+                    'scanned': len(rows)}
+
+    def result(self, bearer, job_id):
+        """One of the caller's results: its verification state, declared checks and runs. A
+        check's reasons can quote what the brain returned, so they are withheld when the
+        result's sources can no longer be read under the person's grants."""
+        state = self.verifier.state(bearer, job_id)  # Submitter only; anyone else is told it does not exist.
+        runs = self.verifier.runs(bearer, job_id)
+        with self.store.transaction() as db:
+            self.store.authenticate(db, bearer, {'owner'})
+            envelope = db.execute('SELECT envelope_sha256 FROM brain_results WHERE job_id=?', (job_id,)).fetchone()[0]
+            work = self._work_of(db, {'job': job_id})
+        readable = False
+        if envelope:
+            try:
+                self.jobs.artefact(bearer, envelope)
+                readable = True
+            except Fault:
+                readable = False
+        packet = self.jobs.view(bearer, job_id)['parameters']['packet']
+        acceptance = packet.get('acceptance')
+
+        def shown(report):
+            if readable:
+                return report
+            return {**report, 'checks': [{**c, 'reasons': [], 'detail': {}, 'truncated': False} for c in report['checks']],
+                    'reasons_withheld': True}
+
+        if state.get('last_run'):
+            state = {**state, 'last_run': {**state['last_run'], 'report': shown(state['last_run']['report'])}}
+        return {'result': state, 'work': work, 'sources_readable': readable,
+                'declared': {'by': acceptance['declared_by'], 'ref': acceptance['ref'], 'checks': acceptance['checks']}
+                if acceptance else None,
+                'runs': [{**run, 'report': shown(run['report'])} for run in runs[-VIEW_RUNS:]], 'runs_total': len(runs),
+                'basis': verification.BASIS, 'limits': verification.LIMITS, 'brain_claims_counted': False,
+                'authority_granted': False}
+
+    def verify_result(self, bearer, job_id, body):
+        """Run the declared checks again, at the number of runs the owner saw."""
+        exact(body, {'runs'})
+        self.verifier.verify(bearer, job_id, expected_runs=body['runs'])
+        return self.result(bearer, job_id)
+
+    def acknowledge_result(self, bearer, job_id, body):
+        """The owner accepts the exact run they saw; explicitly over failed checks."""
+        exact(body, {'run_sha256', 'accept_failures'})
+        self.verifier.acknowledge(bearer, job_id, body['run_sha256'], accept_failures=body['accept_failures'])
+        return self.result(bearer, job_id)
+
 
 def apply_stop(db, entry):
     """Replay a journalled stop into a database (live or restored). Idempotent."""
@@ -1089,6 +1336,7 @@ def apply_stop(db, entry):
 # HTTP ------------------------------------------------------------------------
 
 MANDATE = r'(mandate-[0-9a-f]{24})'
+JOB = r'(job-[0-9a-f]{24})'
 ROUTES = (
     (re.compile(r'/desk/hub/mandates'), 'create'),
     (re.compile(rf'/desk/hub/mandates/{MANDATE}'), 'update'),
@@ -1099,6 +1347,8 @@ ROUTES = (
     (re.compile(r'/desk/hub/overall/(pause|resume)'), 'overall'),
     (re.compile(r'/desk/hub/overall/budget'), 'overall_budget'),
     (re.compile(r'/desk/hub/attention/([A-Za-z0-9][A-Za-z0-9_.-]{0,79})/acknowledge'), 'acknowledge'),
+    (re.compile(rf'/desk/hub/results/{JOB}/verify'), 'verify_result'),
+    (re.compile(rf'/desk/hub/results/{JOB}/acknowledge'), 'acknowledge_result'),
 )
 
 
@@ -1111,6 +1361,11 @@ def route(server, path, mutation, bearer, body):
     if not mutation:
         if path == '/desk/hub':
             return hub.view(bearer)
+        if path == '/desk/hub/results':
+            return hub.results(bearer)
+        match = re.fullmatch(rf'/desk/hub/results/{JOB}', path)
+        if match:
+            return hub.result(bearer, match[1])
         raise Fault('not_found', 404)
     for pattern, name in ROUTES:
         match = pattern.fullmatch(path)
@@ -1132,5 +1387,9 @@ def route(server, path, mutation, bearer, body):
             return hub.control(bearer, 'overall', None, match[1], body)
         if name == 'overall_budget':
             return hub.set_budget(bearer, 'overall', None, body)
+        if name == 'verify_result':
+            return hub.verify_result(bearer, match[1], body)
+        if name == 'acknowledge_result':
+            return hub.acknowledge_result(bearer, match[1], body)
         return hub.acknowledge(bearer, match[1], body)
     raise Fault('not_found', 404)
