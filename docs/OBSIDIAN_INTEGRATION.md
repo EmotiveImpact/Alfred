@@ -24,7 +24,38 @@ Successful complete traversal reconciles missing notes and clears their current 
 
 The scanner checks file identity/size/timestamps before and after reading and revalidates observed file/directory signatures before publication. Unclosed frontmatter, fences and HTML comments fail honestly. A stable, syntactically valid intermediate editor save is indistinguishable from an intended save; this is not an editor transaction protocol or universal sync-conflict detector. Results remain labelled indexed snapshots, and later scans/final source checks apply. No filesystem proof here is cryptographic proof against a malicious local filesystem or inode reuse.
 
-Since 2 October, conflict copies named in the documented Syncthing, Dropbox and Nextcloud/ownCloud forms are recognised by name, recorded beside their originals and kept out of the index until the person removes them; other tools' conflicts are not recognised. See [the sync separation](SYNC.md).
+Since 2 October, conflict copies named in the documented Syncthing, Dropbox and Nextcloud/ownCloud forms are recognised by name, recorded beside their originals and kept out of the index until the person removes them; other tools' conflicts are not recognised by name. Since plan item 1.5 an identical copy under an extended name is detected by content hash. See [the sync separation](SYNC.md).
+
+## Plan item 1.5: Obsidian syntax and safe appends, 16 October 2026
+
+Built on branch `feat/obsidian-compat-2026-10-16` from main `75947b8dd`; [receipt](evidence/obsidian-compat/RECEIPT.md). It extends the M01 scanner in place: every M01 identity, availability, exclusion, rejection and provenance rule above still applies. Tested against a synthetic fixture vault (`tests/fixtures/obsidian_vault`), not a vault edited by the Obsidian app.
+
+What is now read as Obsidian reads it:
+
+| Syntax | Behaviour |
+|---|---|
+| Frontmatter `aliases` and `tags` | List (block or inline) or plain string; a leading `#` on a frontmatter tag is dropped. The singular `alias`, `tag` and `cssclass`, which Obsidian 1.4 stopped reading, are ignored with the warning `deprecated_obsidian_property_ignored`. Frontmatter links are still not link evidence. |
+| Inline tags | `#tag` and nested `#area/sub` after whitespace or at line start; letters, digits, `_`, `-` and `/`; at least one non-digit (`#42` is not a tag). Not read inside code, comments, links or URLs. Merged with frontmatter tags case-insensitively, at most 64, with `note_tag_capacity_truncated` beyond that. |
+| `[[link\|alias]]` | Target and display text are separated; the table form, with a backslash before the pipe, reads the same. Display text is shown in a note's `structure`, never used to resolve. |
+| Embeds | `![[note]]`, `![[note#heading]]` and `![[note#^block]]` are `embeds` edges with the same anchor validation as links. `![[image.png\|300]]` and other Obsidian attachment types are attachments, not issues. |
+| Headings | Plain-text ATX headings as in M01, plus nested subpaths `[[note#Parent#Child]]`: each earlier part must name an enclosing heading, in order. A bare child heading that occurs under two parents stays ambiguous. |
+| Block IDs | A trailing `^id` on a paragraph spans the whole paragraph; on a list item, quote line or table row it spans that line. A standalone `^id` line names the block just above (a quote, list, table, callout or fenced code block), with at most one blank line between. Never a heading. |
+| Callouts | `> [!type] Title`, `+` or `-` folding, nesting by quote depth. Type, Obsidian's style for that type (aliases such as `faq` render as `question`, unknown types as `note`), title, fold state and line span. |
+| Comments | `%%...%%`, inline or across lines, hide links, tags and anchors like HTML comments; an unclosed `%%` fails that note with `unclosed_obsidian_comment`. |
+| Links | `[[sub/Note]]` resolves a unique trailing partial path such as `a/sub/Note.md`. A dotted name such as `[[v1.2 release notes]]` is a note name; a short alphanumeric suffix (`.pdf`, `.docx`, and so `[[Some.Note]]`) is still read as an attachment. |
+| `.obsidian` | Still excluded with every other hidden path; nothing in it is read. |
+
+Read views: `knowledge_note` gains `structure` (tags, aliases, headings, blocks, callouts and references with display text, all with line numbers into the stored body). This describes authored syntax; it is not a rendering and says nothing about truth.
+
+Still outside: rich inline markup inside heading text, headings inside quotes or callouts, footnotes, frontmatter links, Dataview, Canvas and Bases content, attachment parsing and the Obsidian app's own rendering. Native app acceptance remains open.
+
+### `vault.append_section`
+
+The second approved write capability, after create-only inbox notes (`alfred/vault_append.py`, route `POST /desk/vault/append-proposals`). It needs the separate `vault.append` grant: the legacy policy, a read grant or an `inbox.write` grant never allow it, and it cannot be given by invitation. The request names the indexed note, the hash the person saw, a plain heading and the text. The proposal reads the file, which must still hash to that base, and binds by fingerprint the source, vault ID, note ID, path, base hash and revision, heading, text, byte offset, exact inserted bytes, resulting hash and a unified diff, which the approval view shows. The appended text may not add a heading, setext underline, unbalanced fence or comment, or a block ID that already exists.
+
+The change is a pure insertion at the end of the named heading's section (after its last non-blank line, before the next heading of the same or higher level), keeping the note's line endings and BOM; existing text is never rewritten, moved or removed, and the tests assert `result == base[:offset] + inserted + base[offset:]`. At dispatch the note must be the same regular, single-link file under the verified root, still hashing to the base. A file that already hashes to the approved result is the same append done before, so a retry, a crash followed by reconcile, or a repeated request never appends twice. The new bytes are written to a hidden temporary file and renamed over the note only if the note's file signature is unchanged at that moment; otherwise the action fails with `note_changed_since_proposal` and the note is left as the person saved it. The result is read back and its hash compared before the action is `verified`. A rescan keeps the note's identity and advances its revision.
+
+Limit: the final signature check and the rename are two system calls. An editor that saves in the instant between them can still lose that save; closing this needs an atomic exchange (`renameat2`) or an editor-side protocol. A sync client may later deliver an older version over the appended one; ALFRED reports "appended and read back", not "synchronised".
 
 ## Decision
 

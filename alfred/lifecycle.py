@@ -239,7 +239,7 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
             for seq in seqs:
                 db.execute('UPDATE desk_links SET title=? WHERE seq=?', (REMOVED, seq))
     if _has(db, 'actions'):
-        for row in db.execute("SELECT id,parameters FROM actions WHERE scope=? AND capability='vault.inbox_note'", (scope,)).fetchall():
+        for row in db.execute("SELECT id,parameters FROM actions WHERE scope=? AND capability IN ('vault.inbox_note','vault.append_section')", (scope,)).fetchall():
             if json.loads(row['parameters']).get('source') == source:
                 bound.add(row['id'])
         _cancel(db, scope, bound, counts)

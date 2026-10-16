@@ -23,6 +23,19 @@ KINDS = ('map', 'project', 'person', 'decision', 'procedure', 'note')
 MAX_NOTES, MAX_BYTES, MAX_TOTAL, MAX_LINKS = 256, 65536, 4194304, 8192
 WIKI = re.compile(r'(!?)\[\[([^\]\n]{1,400})\]\]')
 MARKDOWN = re.compile(r'(!?)\[[^\]\n]{0,160}\]\(([^\)\n]{1,400})\)')
+# Obsidian tags: preceded by whitespace or line start; letters, digits, '_', '-' and '/'.
+TAG = re.compile(r'(?<!\S)#([\w-][\w/-]{0,99})')
+MAX_TAGS = 64
+DEPRECATED_PROPERTIES = {'tag', 'alias', 'cssclass'}
+# Callout types and the aliases Obsidian renders with the same style; others render as note.
+CALLOUTS = {'note': 'note', 'abstract': 'abstract', 'summary': 'abstract', 'tldr': 'abstract', 'info': 'info',
+            'todo': 'todo', 'tip': 'tip', 'hint': 'tip', 'important': 'tip', 'success': 'success', 'check': 'success',
+            'done': 'success', 'question': 'question', 'help': 'question', 'faq': 'question', 'warning': 'warning',
+            'caution': 'warning', 'attention': 'warning', 'failure': 'failure', 'fail': 'failure', 'missing': 'failure',
+            'danger': 'danger', 'error': 'danger', 'bug': 'bug', 'example': 'example', 'quote': 'quote', 'cite': 'quote'}
+# Extensions Obsidian opens as attachments; another dotted wikilink name is a note name.
+ATTACHMENTS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg', '.webp', '.avif', '.mp3', '.webm', '.wav', '.m4a',
+               '.ogg', '.3gp', '.flac', '.mp4', '.ogv', '.mov', '.mkv', '.pdf', '.canvas', '.base'}
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS knowledge_meta(version INTEGER NOT NULL);
 INSERT INTO knowledge_meta SELECT 2 WHERE NOT EXISTS(SELECT 1 FROM knowledge_meta);
@@ -89,12 +102,16 @@ def safe_path(path):
 
 
 def parse_note(path, raw, id_key=None):
-    """Deliberately bounded Markdown subset; not Obsidian's complete parser.
+    """Deliberately bounded Markdown subset, read the way Obsidian reads it.
 
-    Flat title/type/kind/tags/aliases frontmatter, ordinary wikilinks and Markdown
-    links are recognised. Fenced/inline code and frontmatter are not link evidence.
-    ATX headings and single-line trailing block IDs have validated line spans.
-    Other anchor forms are explicitly unsupported. No Markdown rendering occurs.
+    Not Obsidian's complete parser, and no Markdown rendering occurs. Recognised:
+    flat title/type/kind/tags/aliases frontmatter (lists or strings), wikilinks with
+    display text (`[[a|b]]`, and `[[a\\|b]]` inside tables), embeds (`![[...]]`),
+    Markdown links, inline and nested tags (`#a/b`), callouts (`> [!type]`), ATX
+    headings and block IDs (a trailing `^id` on a paragraph, list item or line, or a
+    standalone `^id` line after a structured block). Fenced and inline code, HTML and
+    `%%` comments and frontmatter are not link, tag or anchor evidence. Other anchor
+    forms are explicitly unsupported.
     """
     safe_path(path)
     if id_key not in {None, 'alfred_id'}: raise Fault('unsupported_note_id_key')
@@ -128,6 +145,10 @@ def parse_note(path, raw, id_key=None):
             if key == 'alfred_id' and id_key is None:
                 warnings.append('stable_id_not_adopted')
                 continue
+            if key in DEPRECATED_PROPERTIES:
+                # Obsidian 1.4 and later no longer read the singular forms either.
+                warnings.append('deprecated_obsidian_property_ignored')
+                continue
             if key not in {'title', 'type', 'kind', 'tags', 'aliases', id_key}:
                 continue
             if key in meta:
@@ -145,9 +166,20 @@ def parse_note(path, raw, id_key=None):
     external_id = meta.get(id_key) if id_key else None
     if external_id is not None and not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', external_id):
         raise Fault('invalid_stable_note_id')
-    links, anchors, fence = [], [], None
-    comment = False
+    # A frontmatter tag may be written with or without its leading '#'.
+    tags = [t[1:] if t.startswith('#') else t for t in meta.get('tags', [])]
+    links, link_text, anchors, callouts, fence = [], [], [], [], None
+    comment = obsidian_comment = False
+    run_start = paragraph_start = previous_run = None
+    blanks, open_callouts = 0, []
     for number, line in enumerate(lines[start:], start + 1):
+        # Contiguous non-blank runs give standalone block IDs their spans.
+        before_run, before_previous, before_blanks = run_start, previous_run, blanks
+        if fence is None and not line.strip():
+            if run_start is not None: previous_run = (run_start, number - 1)
+            run_start = paragraph_start = None; blanks += 1
+        elif run_start is None:
+            run_start, blanks = number, 0
         match = re.match(r'^\s{0,3}(`{3,}|~{3,})', line)
         if match:
             marker = match[1]
@@ -155,48 +187,126 @@ def parse_note(path, raw, id_key=None):
                 fence = (marker[0], len(marker))
             elif marker[0] == fence[0] and len(marker) >= fence[1]:
                 fence = None
+            paragraph_start = None
             continue
         if fence or line.startswith('    ') or line.startswith('\t'):
             continue
-        # Strip HTML comments, including multi-line comments, without rendering HTML.
+        # Strip HTML and Obsidian %% comments, including multi-line ones, without rendering.
         visible = ''; rest = line
         while rest:
-            delimiter = '-->' if comment else '<!--'
-            at = rest.find(delimiter)
-            if at < 0:
-                if not comment: visible += rest
-                break
-            if not comment: visible += rest[:at]
-            rest = rest[at + len(delimiter):]; comment = not comment
+            if comment or obsidian_comment:
+                delimiter = '-->' if comment else '%%'
+                at = rest.find(delimiter)
+                if at < 0: break
+                rest = rest[at + len(delimiter):]; comment = obsidian_comment = False
+                continue
+            found = [p for p in (rest.find('<!--'), rest.find('%%')) if p >= 0]
+            if not found:
+                visible += rest; break
+            at = min(found); visible += rest[:at]
+            if rest.startswith('<!--', at):
+                rest = rest[at + 4:]; comment = True
+            else:
+                rest = rest[at + 2:]; obsidian_comment = True
         heading = re.fullmatch(r'\s{0,3}(#{1,6})\s+(.+?)\s*', visible)
         if heading:
             name = re.sub(r'\s+#+\s*$', '', heading[2]).strip()
-            # Rich inline markup and nested-heading subpaths are outside M01.
+            # Rich inline markup in heading text remains outside this slice.
             if not any(c in name for c in '`*[]<>#'):
                 anchors.append({'kind':'heading','name':name,'start_line':number,
                                 'end_line':number,'level':len(heading[1])})
-        block = re.fullmatch(r'(.+\S)\s+\^([A-Za-z0-9-]+)\s*', visible)
-        if block and not heading:
-            anchors.append({'kind':'block','name':block[2],'start_line':number,'end_line':number})
+            # A heading is its own block: it ends the run above and is never a block span.
+            run_start = paragraph_start = None; previous_run = (number, number)
+        quote, depth = visible, 0
+        while depth < 16:
+            prefix = re.match(r'\s{0,3}>\s?', quote)
+            if not prefix: break
+            quote, depth = quote[prefix.end():], depth + 1
+        while open_callouts and open_callouts[-1]['depth'] > depth:
+            open_callouts.pop()
+        for callout in open_callouts:
+            callout['end_line'] = number
+        marker = re.fullmatch(r'\[!([A-Za-z][A-Za-z0-9_-]{0,39})\]([+-]?)(?:\s+(.*?))?\s*', quote) if depth else None
+        if marker:
+            if len(callouts) >= 256: raise Fault('note_callout_capacity')
+            while open_callouts and open_callouts[-1]['depth'] >= depth:
+                open_callouts.pop()
+            name = marker[1].casefold()
+            callout = {'type': name, 'rendered_as': CALLOUTS.get(name, 'note'),
+                       'title': (marker[3] or '')[:400] or name[:1].upper() + name[1:],
+                       'fold': {'+': 'expanded', '-': 'collapsed'}.get(marker[2], 'none'),
+                       'depth': depth, 'start_line': number, 'end_line': number}
+            callouts.append(callout); open_callouts.append(callout)
+        standalone = re.fullmatch(r'\s*\^([A-Za-z0-9-]+)\s*', visible)
+        block = None if standalone else re.fullmatch(r'(.+\S)\s+\^([A-Za-z0-9-]+)\s*', visible)
+        structured = bool(depth or re.match(r'\s*([-*+]|[0-9]{1,9}[.)])\s', visible) or visible.lstrip().startswith('|'))
+        if standalone and not heading:
+            # A standalone ID names the block just above it, with at most one blank line between.
+            target = (before_run, number - 1) if before_run is not None else (before_previous if before_blanks <= 1 else None)
+            if target and target[0] <= target[1] and not any(
+                    a['kind'] == 'heading' and target[0] <= a['start_line'] <= target[1] for a in anchors):
+                anchors.append({'kind':'block','name':standalone[1],'start_line':target[0],'end_line':target[1]})
+        elif block and not heading:
+            # A trailing ID on a paragraph names the whole paragraph; on a list item,
+            # quote or table row it names that line only.
+            first = paragraph_start if paragraph_start is not None and not structured else number
+            anchors.append({'kind':'block','name':block[2],'start_line':first,'end_line':number})
+        if not heading:
+            paragraph_start = None if structured or not visible.strip() else (paragraph_start or number)
         visible = re.sub(r'(`+).*?\1', '', visible)
         for regex, syntax in ((WIKI, 'wiki'), (MARKDOWN, 'markdown')):
             for match in regex.finditer(visible):
-                target = match[2].split('|', 1)[0].strip() if syntax == 'wiki' else match[2].strip().strip('<>')
+                if syntax == 'wiki':
+                    # In a table the alias separator is written as '\|'.
+                    parts = re.split(r'\\?\|', match[2], maxsplit=1)
+                    target, display = parts[0].strip(), (parts[1].strip() if len(parts) > 1 else '')
+                else:
+                    target = match[2].strip().strip('<>')
+                    display = match[0][match[0].index('[') + 1:match[0].index('](')].strip()
                 if len(links) >= 128:
                     raise Fault('note_link_capacity')
                 links.append({'target': target, 'line': number, 'syntax': syntax,
                               'relation': 'embeds' if match[1] else 'links_to'})
+                link_text.append(display or None)
+        # Tags are read outside links, URLs and code, as Obsidian reads them.
+        plain = re.sub(r'[A-Za-z][A-Za-z0-9+.-]*://\S+', ' ', MARKDOWN.sub(' ', WIKI.sub(' ', visible)))
+        for match in TAG.finditer(plain):
+            name = match[1].rstrip('/')
+            if name and not name.replace('/', '').isdigit() and all(t.casefold() != name.casefold() for t in tags):
+                tags.append(name)
     if fence is not None: raise Fault('unclosed_code_fence')
     if comment: raise Fault('unclosed_html_comment')
+    if obsidian_comment: raise Fault('unclosed_obsidian_comment')
     if len(anchors) > 1024: raise Fault('note_anchor_capacity')
+    if len(tags) > MAX_TAGS:
+        tags = tags[:MAX_TAGS]; warnings.append('note_tag_capacity_truncated')
     headings = [a for a in anchors if a['kind'] == 'heading']
     for i, anchor in enumerate(headings):
         anchor['end_line'] = next((a['start_line'] - 1 for a in headings[i+1:]
                                    if a['level'] <= anchor['level']), len(lines))
-    return {'path': path, 'title': title, 'kind': kind, 'tags': meta.get('tags', []),
+    return {'path': path, 'title': title, 'kind': kind, 'tags': tags,
             'aliases': meta.get('aliases', []), 'body': body, 'sha256': hashlib.sha256(raw).hexdigest(),
-            'refs': links, 'anchors':anchors, 'external_id':external_id,
+            'refs': links, 'link_text': link_text, 'anchors':anchors, 'callouts':callouts, 'external_id':external_id,
             'warnings': sorted(set(warnings))}
+
+
+def note_structure(path, body):
+    """What Obsidian would show of an indexed note's structure, re-read from its stored text.
+
+    Elements carry line numbers into the stored body. This describes authored syntax;
+    it is not a rendering and says nothing about whether the text is true.
+    """
+    try:
+        parsed = parse_note(path, body.encode('utf-8'))
+    except Fault as exc:
+        return {'available': False, 'reason': exc.code}
+    anchors = parsed['anchors']
+    return {'available': True, 'tags': parsed['tags'], 'aliases': parsed['aliases'],
+            'headings': [{k: a[k] for k in ('name', 'level', 'start_line', 'end_line')} for a in anchors if a['kind'] == 'heading'],
+            'blocks': [{k: a[k] for k in ('name', 'start_line', 'end_line')} for a in anchors if a['kind'] == 'block'],
+            'callouts': parsed['callouts'],
+            'references': [{k: r[k] for k in ('target', 'line', 'syntax', 'relation')} | {'display': text}
+                           for r, text in zip(parsed['refs'], parsed['link_text'])]}
 
 
 def note_id(source, path):
@@ -222,7 +332,11 @@ def resolve_reference(origin, target, syntax, notes):
         return None, 'unsupported_query', None
     suffix = PurePosixPath(path).suffix.lower()
     if suffix and suffix != '.md':
-        return None, 'attachment_not_indexed', None
+        # Obsidian reads `[[v1.2 notes]]` as a note name, not an attachment.
+        # A short alphanumeric suffix is still read as a file extension.
+        if syntax != 'wiki' or suffix in ATTACHMENTS or re.fullmatch(r'\.(?=[a-z0-9]*[a-z])[a-z0-9]{1,5}', suffix):
+            return None, 'attachment_not_indexed', None
+        suffix = ''
     if path and not suffix: path += '.md'
     keys = {}
     for n in notes:
@@ -242,17 +356,31 @@ def resolve_reference(origin, target, syntax, notes):
         for n in notes:
             if PurePosixPath(n['path']).stem.casefold() == stem or stem in {a.casefold() for a in n['aliases']}:
                 found.add(n['id'])
+    elif not found and syntax == 'wiki':
+        # Obsidian also resolves a trailing partial path such as [[sub/Note]] to a/sub/Note.md.
+        tail = '/' + paths[0].casefold()
+        found = {n['id'] for n in notes if n['path'].casefold().endswith(tail)}
     if len(found) != 1: return None, 'ambiguous' if found else 'missing', None
     identity = next(iter(found))
     if fragment is None: return identity, 'resolved', None
-    if not fragment or '#' in fragment or any(c in fragment for c in '[]<>`*'):
+    parts = fragment.split('#')
+    if not all(parts) or any(c in fragment for c in '[]<>`*') or (fragment.startswith('^') and len(parts) > 1):
         return None, 'unsupported_anchor', None
-    kind, name = ('block', fragment[1:]) if fragment.startswith('^') else ('heading', fragment)
+    kind, name = ('block', fragment[1:]) if fragment.startswith('^') else ('heading', parts[-1])
     if kind == 'block' and not re.fullmatch(r'[A-Za-z0-9-]+', name):
         return None, 'unsupported_anchor', None
     note = next((n for n in notes if n['id'] == identity), None)
-    anchors = [a for a in (note or {}).get('anchors', []) if a['kind'] == kind and
+    available = (note or {}).get('anchors', [])
+    anchors = [a for a in available if a['kind'] == kind and
                (a['name'] == name if kind == 'block' else a['name'].casefold() == name.casefold())]
+    if kind == 'heading' and len(parts) > 1:
+        # A nested subpath [[Note#Parent#Child]] names the enclosing headings in order.
+        def enclosing(anchor):
+            outer = [a['name'].casefold() for a in available if a['kind'] == 'heading' and a['level'] < anchor['level']
+                     and a['start_line'] < anchor['start_line'] <= a['end_line']]
+            wanted = iter(outer)
+            return all(any(p.casefold() == o for o in wanted) for p in parts[:-1])
+        anchors = [a for a in anchors if enclosing(a)]
     if len(anchors) != 1: return None, 'ambiguous_anchor' if anchors else 'missing_anchor', None
     return identity, 'resolved', {k:anchors[0][k] for k in ('kind','name','start_line','end_line')}
 
@@ -265,7 +393,7 @@ def resolve_target(origin, target, syntax, notes):
 class KnowledgeStore(DeskStore):
     def __init__(self, path, **kwargs):
         super().__init__(path, **kwargs)
-        # In-process handles for approved inbox writes; the database never stores vault paths.
+        # In-process handles for approved vault writes; the database never stores vault roots.
         self.vault_writers = {}
         with self.connection() as db:
             exists = db.execute("SELECT 1 FROM sqlite_master WHERE name='knowledge_meta'").fetchone()
@@ -304,10 +432,16 @@ class KnowledgeStore(DeskStore):
                        (*key,label,self.now(),'unavailable','[]',''))
             return vault_id
 
+    @staticmethod
+    def vault_write(capability):
+        """The module behind an approved vault write capability, or None for any other action."""
+        from . import inbox, vault_append
+        return {inbox.CAPABILITY: inbox, vault_append.CAPABILITY: vault_append}.get(capability)
+
     def evidence_valid(self, db, row):
-        from . import inbox
-        if row['capability'] == inbox.CAPABILITY:
-            return inbox.current(self, db, row)
+        write = self.vault_write(row['capability'])
+        if write:
+            return write.current(self, db, row)
         if super().evidence_valid(db, row):
             return True
         from .conversation import knowledge_action_current
@@ -322,49 +456,52 @@ class KnowledgeStore(DeskStore):
         return reproposal_current(self, db, row)
 
     def valid_origin(self, db, row):
-        from . import inbox
-        if row['capability'] != inbox.CAPABILITY:
+        write = self.vault_write(row['capability'])
+        if not write:
             return super().valid_origin(db, row)
         paused = db.execute('SELECT paused FROM desk_settings WHERE scope=?', (row['scope'],)).fetchone()
-        return not (paused and paused[0]) and row['expires'] > self.now() and inbox.current(self, db, row)
+        return not (paused and paused[0]) and row['expires'] > self.now() and write.current(self, db, row)
 
     def action_view(self, row):
-        from . import inbox
         view = super().action_view(row)
-        if row['capability'] == inbox.CAPABILITY:
-            view['effect'] = 'vault_inbox_note_create_only_not_sent'
+        write = self.vault_write(row['capability'])
+        if write:
+            view['effect'] = write.EFFECT
+            if 'diff' in view['parameters']:
+                # The exact change the person approves, bound by the fingerprint.
+                view['diff'] = view['parameters']['diff']
         return view
 
     def execute_local(self, bearer, job):
-        from . import inbox
         with self.connection() as db:
             kind = db.execute('SELECT capability FROM actions WHERE scope=? AND id=?', (job['scope'], job['id'])).fetchone()
-        if not kind or kind['capability'] != inbox.CAPABILITY:
+        write = self.vault_write(kind['capability']) if kind else None
+        if not write:
             return super().execute_local(bearer, job)
         with self.transaction() as db:
             p, row = self.leased(db, bearer, job)
             row = dict(row)
-        outcome = inbox.execute(self, row)
+        outcome = write.execute(self, row)
         with self.transaction() as db:
-            if outcome in ('created', 'exists_same'):
-                self.log(db, row['scope'], p['id'], 'connector.inbox_receipt', row['id'])
+            if outcome in write.SUCCESS:
+                self.log(db, row['scope'], p['id'], write.RECEIPT, row['id'])
                 return
             # Nothing was written by this action. Record why, and never retry over a human file.
-            proof = canonical({'type': 'vault_inbox_refused', 'reason': outcome, 'sent': False})
+            proof = canonical({'type': write.REFUSED[0], 'reason': outcome, 'sent': False})
             db.execute("UPDATE actions SET state='failed',proof=? WHERE scope=? AND id=? AND state='executing'", (proof, row['scope'], row['id']))
             db.execute("UPDATE outbox SET state='done' WHERE scope=? AND action_id=?", (row['scope'], row['id']))
-            self.log(db, row['scope'], p['id'], 'action.inbox_refused', row['id'])
+            self.log(db, row['scope'], p['id'], write.REFUSED[1], row['id'])
 
     def verify_draft(self, db, row):
-        from . import inbox
-        if row['capability'] != inbox.CAPABILITY:
+        write = self.vault_write(row['capability'])
+        if not write:
             return super().verify_draft(db, row)
-        proof = inbox.verify(self, row)
+        proof = write.verify(self, row)
         if proof is None:
             return None
         db.execute('UPDATE actions SET state=?,proof=? WHERE scope=? AND id=?', ('verified', canonical(proof), row['scope'], row['id']))
         db.execute('UPDATE outbox SET state=? WHERE scope=? AND action_id=?', ('done', row['scope'], row['id']))
-        self.log(db, row['scope'], row['actor'], 'action.verified_inbox_note', row['id'])
+        self.log(db, row['scope'], row['actor'], write.VERIFIED, row['id'])
         return proof
 
     def finish(self, bearer, job):
@@ -387,7 +524,7 @@ class KnowledgeStore(DeskStore):
                 if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,79}', external): raise Fault('invalid_stable_note_id')
                 if external in external_ids: raise Fault('duplicate_stable_note_id')
                 external_ids.add(external)
-        conflicts = sync_conflicts.checked(conflicts, paths)
+        conflicts = sync_conflicts.checked(conflicts, paths, {n['path'].casefold(): n['sha256'] for n in notes})
         notes = sorted(notes, key=lambda n:n['path'])
         snapshot = hashlib.sha256(json.dumps([(n['path'],n['sha256']) for n in notes], sort_keys=True).encode()).hexdigest()
         with self.transaction() as db:
@@ -549,7 +686,7 @@ class KnowledgeStore(DeskStore):
                     'map_health':{'roots':map_roots,'missing_map_sources':missing_map,'outside_two_hops':[n['id'] for n in notes if n['source'] not in imported and distances.get(n['id'],3)>2]},
                     'sync_conflicts':conflicts,
                     'counts':{'notes':len(notes),'matches':len(selected),'links':len(links),'issues':len(issues),'sync_conflicts':len(conflicts)},
-                    'live_ai':False,'read_only':True,'content_egress':False,'anchor_validation':True,'anchor_support':'ATX plain-text headings and single-line trailing block IDs'}
+                    'live_ai':False,'read_only':True,'content_egress':False,'anchor_validation':True,'anchor_support':'ATX plain-text headings, nested heading subpaths, trailing and standalone block IDs'}
 
     def knowledge_note(self,bearer,identity, *, purpose='read'):
         if not re.fullmatch(r'[0-9a-f]{24}',identity): raise Fault('invalid_note_id')
@@ -558,7 +695,7 @@ class KnowledgeStore(DeskStore):
             row=db.execute('SELECT n.* FROM knowledge_notes n JOIN credentials c ON c.id=n.source AND c.scope=n.scope JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source WHERE n.scope=? AND n.id=? AND n.status=\'ready\' AND c.revoked=0 AND c.expires>? AND s.status IN (\'ready\',\'attention\')', (p['scope'],identity,self.now())).fetchone()
             from .policy import permitted
             if not row or not permitted(db,p,row['source'],self.now(),purpose): raise Fault('note_not_available',404)
-            return {k:row[k] for k in ('id','path','title','kind','body','sha256','revision','modified','indexed')} | {'basis':'authored_note_not_verified_fact'}
+            return {k:row[k] for k in ('id','path','title','kind','body','sha256','revision','modified','indexed')} | {'basis':'authored_note_not_verified_fact','structure':note_structure(row['path'],row['body'])}
 
 
 class MarkdownVault:
@@ -656,6 +793,85 @@ class MarkdownVault:
         try: fd=self._inbox_directory(False)
         except (OSError,Fault): return None
         try: return self._read_regular(fd,filename)
+        finally: os.close(fd)
+
+    def _note_directory(self,path):
+        """Open an indexed note's folder below the verified root without following links."""
+        parts=safe_path(path).split('/')
+        if self.excluded(path) or not path.lower().endswith('.md') or sync_conflicts.conflict_copy(path):
+            raise Fault('note_path_not_writable')
+        fd=self.open_root()
+        try:
+            info=os.fstat(fd)
+            if self.identity is None or (info.st_dev,info.st_ino)!=self.identity:
+                raise Fault('vault_root_replaced')
+            for part in parts[:-1]:
+                nxt=os.open(part,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=fd)
+                os.close(fd);fd=nxt
+            return fd,parts[-1]
+        except BaseException:
+            os.close(fd);raise
+
+    def _read_note_at(self,fd,name):
+        """A regular, single-link note read in one stable observation, or (None, None)."""
+        try: handle=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK|os.O_CLOEXEC,dir_fd=fd)
+        except OSError: return None,None
+        try:
+            before=os.fstat(handle)
+            if not stat.S_ISREG(before.st_mode) or before.st_nlink!=1 or before.st_size>MAX_BYTES: return None,None
+            chunks=[]
+            while True:
+                chunk=os.read(handle,65536)
+                if not chunk: break
+                chunks.append(chunk)
+            data=b''.join(chunks)
+            if self.signature(os.fstat(handle))!=self.signature(before) or len(data)!=before.st_size: return None,None
+            return data,before
+        finally: os.close(handle)
+
+    def read_note(self,path):
+        try: fd,name=self._note_directory(path)
+        except (OSError,Fault): return None
+        try: return self._read_note_at(fd,name)[0]
+        finally: os.close(fd)
+
+    def append_to_note(self,path,base_sha256,offset,inserted,result_sha256):
+        """Insert approved bytes at one offset of an unchanged note. Never clobbers.
+
+        The note must still hash to the approved base. A note that already hashes to
+        the approved result is the same append done before, so it is not repeated.
+        The new content is written beside the note and renamed over it only if the
+        note is still the same untouched file at that moment.
+        """
+        try: fd,name=self._note_directory(path)
+        except (OSError,Fault): return 'vault_unavailable'
+        try:
+            data,info=self._read_note_at(fd,name)
+            if data is None: return 'note_unavailable'
+            digest=hashlib.sha256(data).hexdigest()
+            if digest==result_sha256: return 'exists_same'
+            if digest!=base_sha256: return 'note_changed_since_proposal'
+            result=data[:offset]+inserted+data[offset:]
+            if not 0<=offset<=len(data) or hashlib.sha256(result).hexdigest()!=result_sha256: return 'write_failed'
+            temporary='.alfred-'+secrets.token_hex(8)+'.tmp'
+            out=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,stat.S_IMODE(info.st_mode),dir_fd=fd)
+            try:
+                view=memoryview(result)
+                while view: view=view[os.write(out,view):]
+                os.fsync(out)
+            finally: os.close(out)
+            try:
+                # Last check immediately before the rename: the same file, untouched since it was read.
+                if self.signature(os.stat(name,dir_fd=fd,follow_symlinks=False))!=self.signature(info):
+                    return 'note_changed_since_proposal'
+                os.rename(temporary,name,src_dir_fd=fd,dst_dir_fd=fd)
+                temporary=None
+            finally:
+                if temporary: os.unlink(temporary,dir_fd=fd)
+            os.fsync(fd)
+            return 'appended'
+        except OSError:
+            return 'write_failed'
         finally: os.close(fd)
 
     @staticmethod
@@ -768,6 +984,12 @@ class MarkdownVault:
                     if (current.st_dev,current.st_ino)!=self.identity: raise Fault('vault_root_replaced')
                 finally: os.close(check)
             finally: os.close(fd)
+            # Copies from tools not recognised by name: identical bytes under an extended name.
+            for copy in sync_conflicts.content_copies(notes):
+                notes=[n for n in notes if n['path']!=copy['path']]
+                errors[:]=[e for e in errors if e.get('path')!=copy['path']]
+                copies.append(copy)
+                errors.append({'path':copy['path'],'code':'sync_conflict_copy','original_path':copy['original_path'],'detected_by':'content_hash'})
             self.store.replace_notes(self.bearer,self.label,notes,errors,self.vault_id,conflicts=sync_conflicts.scanned(copies,notes,errors),rebuild=rebuild)
             status='attention' if errors else 'ready'
         except (Fault,OSError) as exc:

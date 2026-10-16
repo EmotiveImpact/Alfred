@@ -8,7 +8,7 @@ background: [infrastructure research, section 4.2](../research/INFRASTRUCTURE_20
 
 | Kind | What moves | Who is the authority | What ALFRED does | State |
 |---|---|---|---|---|
-| Vault file sync | The person's Markdown files | The person's own tool: Syncthing, Dropbox, iCloud Drive, OneDrive, Nextcloud, Obsidian Sync or Git | Reads a selected folder, recognises conflict copies by name, never merges or resolves them, never runs a sync client | Conflict-copy recognition and the placement guard are implemented |
+| Vault file sync | The person's Markdown files | The person's own tool: Syncthing, Dropbox, iCloud Drive, OneDrive, Nextcloud, Obsidian Sync or Git | Reads a selected folder, recognises conflict copies by name, and identical copies by content, never merges or resolves them, never runs a sync client | Conflict-copy recognition and the placement guard are implemented |
 | Identity and grants | Credentials, person and device enrolment, source grants, invitations | The one local SQLite database | Offline provisioning, explicit pairing and offline rotation (M02); revocations are journalled (M05) | Never file-synced; no identity sync between devices exists |
 | Ledger and job state | Reviewed statements, captures, executive records, actions and drafts, audit, jobs, job events and artefacts | The same database, a single authority | One host writes; `backup` makes a consistent copy and `restore` replays the lifecycle journal; see [JOBS.md](JOBS.md) | No replication and no second writer |
 | Runtime or model sync | Model files, prompts, embeddings, caches, sessions, runtime state | None | Nothing | Not implemented |
@@ -95,8 +95,19 @@ its last recorded conflicts along with its notes.
 | Google Drive, Box, pCloud, Seafile, Resilio Sync, rclone bisync | Their conflict naming was not verified for this change. rclone bisync's default suffix does not end in `.md`, so those copies are not scanned at all. |
 | Dropbox variants | Case-conflict and encoding-conflict renames, names in other languages, and a device name that contains parentheses. |
 
-An unrecognised conflict copy is indexed as an ordinary, separate note with its own
-identity. It is never merged with the original, but it is not flagged either.
+### Detected by content (plan item 1.5, 16 October 2026)
+
+A copy from a tool not recognised by name is detected by content instead: a note with
+exactly the same bytes (SHA-256) as another note in the same folder, whose name is the
+other note's name plus a short suffix starting with a space, `.`, `_`, `~`, `(` or `-`
+(`Meeting 2.md` beside `Meeting.md`, `Report-LAPTOP-7F3K2Q.md` beside `Report.md`). It is
+recorded and kept out of the index exactly like a named copy, with tool
+`unrecognised_same_content` and `detected_by: content_hash`. Identical content under an
+unrelated name, in another folder, or an empty or whitespace-only note is left alone, so
+two blank `Untitled` notes are not flagged. A copy that has since been edited no longer
+matches; it is then indexed as an ordinary, separate note with its own identity, never
+merged with the original and not flagged. Obsidian's own "Make a copy" produces the same
+shape (`Note 1.md` with identical bytes) and is reported the same way until it is edited.
 
 ## 2. Where ALFRED's live files may be kept
 
@@ -234,9 +245,10 @@ were added.
 
 ## Not implemented
 
-- Recognising OneDrive, iCloud Drive, Obsidian Sync, Google Drive or other conflict copies,
-  Git conflict markers, or a copy whose tool is unknown.
-- Comparing a copy with its original, or any merge, resolution or write-back by ALFRED.
+- Recognising OneDrive, iCloud Drive, Obsidian Sync, Google Drive or other conflict copies
+  by name, Git conflict markers, or an unrecognised copy whose content already differs from
+  its original (identical copies are detected by content since plan item 1.5).
+- Comparing a copy with its original beyond whole-file hash equality, or any merge, resolution or write-back by ALFRED.
 - Detecting network filesystems, FUSE mounts or sync started after ALFRED started.
 - A console interface that displays the conflict state; only the projection carries it.
 - Identity, grant, ledger, job or runtime sync between devices; replication; encrypted backups

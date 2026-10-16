@@ -357,7 +357,8 @@ class M01Tests(unittest.TestCase):
         self.write('b.md','# B\n## Duplicate\n## Duplicate\nOne ^twice\nTwo ^twice'); self.scan()
         self.assertEqual(self.data()['links'],[])
         self.assertEqual([i['status'] for i in self.data()['issues']],
-                         ['missing_anchor','ambiguous_anchor','ambiguous_anchor','unsupported_anchor','unsupported_anchor'])
+                         # Nested heading subpaths are read since 1.5: b has no Parent heading.
+                         ['missing_anchor','ambiguous_anchor','ambiguous_anchor','missing_anchor','unsupported_anchor'])
 
     def test_fenced_commented_inline_and_frontmatter_anchors_are_not_evidence(self):
         self.write('a.md','[[b#Hidden]]\n[[b#^hidden]]')

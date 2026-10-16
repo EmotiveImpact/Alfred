@@ -54,7 +54,7 @@ class IdentityHTTPTests(unittest.TestCase):
         self.login('owner')
         view = self.req('owner', '/desk/identity')[1]
         self.assertEqual(view['mode'], 'legacy_scope')
-        self.assertEqual(view['sources'][0]['permitted'], {'connector.read': False, 'inbox.write': False, 'model': True, 'read': True, 'sync': False})
+        self.assertEqual(view['sources'][0]['permitted'], {'connector.read': False, 'inbox.write': False, 'model': True, 'read': True, 'sync': False, 'vault.append': False})
 
     def test_owner_grants_and_revokes_with_epoch_and_csrf(self):
         self.login('owner')

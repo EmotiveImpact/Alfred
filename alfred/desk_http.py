@@ -509,6 +509,10 @@ class Handler(BaseHTTPRequestHandler):
                 if not hasattr(store, 'vault_writers'): raise Fault('knowledge_not_configured', 409)
                 from .inbox import propose as propose_inbox
                 result = propose_inbox(store, bearer, body)
+            elif mutation and url.path == '/desk/vault/append-proposals':
+                if not hasattr(store, 'vault_writers'): raise Fault('knowledge_not_configured', 409)
+                from .vault_append import propose as propose_append
+                result = propose_append(store, bearer, body)
             elif mutation and url.path == '/desk/proposals':
                 result = store.propose_from_evidence(bearer, body)
             elif mutation and re.fullmatch(r'/desk/evidence/[0-9]+/acknowledge', url.path):
