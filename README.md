@@ -102,6 +102,9 @@ The vault is read only. ALFRED never writes into it except through the approved 
 | `connector-add --connector ics-export\|vcf-export --connector-label L` | Add a read-only calendar or contacts export connector |
 | `connector-import --connector-source ID --export-file FILE [--dry-run]` | Import an export file you chose |
 | `connectors` | List connectors and their freshness |
+| `doctor [--json]` | Read-only checks: data folder placement, permissions, WAL state, backup age, last stop, console build. Changes nothing |
+| `service-file [--service launchd\|systemd] [--output FILE]` | Print a launchd plist or systemd user unit for `serve`. ALFRED never installs it |
+| `deletion-report --subject-kind source\|entity\|statement --subject ID [--json]` | What the workspace still holds about one subject, and where. Never prints values |
 
 Optional flags: `--port` (1024 to 65535, default 8765), `--local-model NAME --model-port 11434` for an opt-in, tool-free model on an Ollama server you already run (nothing is downloaded; off by default), `--vault-id-key alfred_id` to adopt stable note identifiers from frontmatter.
 

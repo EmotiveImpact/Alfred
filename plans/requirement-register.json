@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "updated_on": "2026-10-02",
+ "updated_on": "2026-10-16",
  "authority": {
   "requirements": "docs/PRD.md",
   "sequence": "docs/ROADMAP.md",
@@ -79,13 +79,15 @@
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_memory_m01.py",
-    "docs/evidence/memory-m01/RECEIPT.md"
+    "docs/evidence/memory-m01/RECEIPT.md",
+    "tests/test_obsidian_compat.py",
+    "docs/evidence/obsidian-compat/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Read-only scanner in main; M01 selected-vault identity integrated on the branch. Full Obsidian compatibility, documents and sync unfinished."
+   "notes": "Read-only scanner in main; M01 selected-vault identity integrated on the branch. Full Obsidian compatibility, documents and sync unfinished. Obsidian syntax read as Obsidian reads it (plan 1.5, 16 October); no Obsidian app acceptance or owner pilot yet."
   },
   {
    "id": "MEM-002",
@@ -107,7 +109,9 @@
    "acceptance_evidence": [
     "tests/test_memory_m01.py",
     "docs/evidence/memory-m01/RECEIPT.md",
-    "tests/test_sync_conflicts.py"
+    "tests/test_sync_conflicts.py",
+    "tests/test_obsidian_compat.py",
+    "docs/evidence/obsidian-compat/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
@@ -168,13 +172,16 @@
    "merge": "main_partial",
    "deployment": "not_deployed",
    "acceptance_evidence": [
-    "tests/test_routines_procedures.py"
+    "tests/test_routines_procedures.py",
+    "tests/test_capture_policies.py",
+    "tools/check_capture_browser.py",
+    "docs/evidence/capture-policies/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Bounded conversations and manual statements exist; memory type is recorded at capture. Commitment-typed statements feed the commitment review routine; procedural ones only the read-only procedure registry; other types are not used by routines. Automatic capture policies remain pending."
+   "notes": "Bounded conversations and manual statements exist; memory type is recorded at capture. Commitment-typed statements feed the commitment review routine; procedural ones only the read-only procedure registry; other types are not used by routines. Owner-authored deterministic capture policies propose typed statements for review with daily budgets (plan 2.4, 16 October); nothing is auto-accepted. Model extraction remains absent."
   },
   {
    "id": "MEM-005",
@@ -196,7 +203,8 @@
    "acceptance_evidence": [
     "tests/test_memory_capture_inbox.py",
     "docs/evidence/memory-m04/RECEIPT.md",
-    "tools/check_console_connected_browser.py"
+    "tools/check_console_connected_browser.py",
+    "tests/test_capture_policies.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
@@ -348,13 +356,16 @@
    "acceptance_evidence": [
     "tests/test_memory_lifecycle.py",
     "docs/evidence/memory-m05/RECEIPT.md",
-    "tools/check_console_connected_browser.py"
+    "tools/check_console_connected_browser.py",
+    "tests/test_deletion_accounting.py",
+    "docs/evidence/deletion-accounting/RECEIPT.md",
+    "docs/evidence/drafts-archive/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided. Forgetting and source removal now leave value-free history rows; restore replays a forget at the journal time."
+   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided. Forgetting and source removal now leave value-free history rows; restore replays a forget at the journal time. Forget receipts count every dependent before and after; deletion-report; restore reports what replay removed again (16 October). Forget withdraws kept and archived drafts."
   },
   {
    "id": "MEM-011",
@@ -376,13 +387,15 @@
    "acceptance_evidence": [
     "tests/test_memory_capture_inbox.py",
     "docs/evidence/memory-m04/RECEIPT.md",
-    "tools/check_console_connected_browser.py"
+    "tools/check_console_connected_browser.py",
+    "tests/test_vault_append.py",
+    "docs/evidence/obsidian-compat/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Create-only inbox notes under ALFRED/Inbox with an explicit inbox.write grant, exact fingerprinted approval and read-back verification."
+   "notes": "Create-only inbox notes under ALFRED/Inbox with an explicit inbox.write grant, exact fingerprinted approval and read-back verification. Second approved vault write vault.append_section under a separate vault.append grant (16 October)."
   },
   {
    "id": "MEM-012",
@@ -434,13 +447,15 @@
    "acceptance_evidence": [
     "tests/test_export.py",
     "docs/SYNC.md",
-    "docs/evidence/memory-m14/RECEIPT.md"
+    "docs/evidence/memory-m14/RECEIPT.md",
+    "tests/test_deletion_accounting.py",
+    "docs/evidence/deletion-accounting/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Credential-scoped portable export (plain JSON and Markdown, hashed manifest, explicit exclusions, private files, never inside a vault) on the branch. Missing: redaction inside records, encryption, export of the index or receipts, export over HTTP or from the console. Statement review history is not yet included in portable exports."
+   "notes": "Credential-scoped portable export (plain JSON and Markdown, hashed manifest, explicit exclusions, private files, never inside a vault) on the branch. Missing: redaction inside records, encryption, export of the index or receipts, export over HTTP or from the console. Statement review history is not yet included in portable exports. Export format 2 includes review history and routine settings and registers exports on disk (16 October)."
   },
   {
    "id": "MEM-014",
@@ -468,13 +483,14 @@
     "tools/check_sync_conflict_browser.py",
     "docs/SYNC.md",
     "docs/evidence/memory-m14/RECEIPT.md",
-    "tools/check_console_connected_browser.py"
+    "tools/check_console_connected_browser.py",
+    "tests/test_obsidian_compat.py"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Syncthing, Dropbox and Nextcloud/ownCloud conflict copies are recognised by exact name, recorded beside their originals, kept out of the index and surfaced in the knowledge view, the console projection and the console inspector; init, serve and restore refuse a data directory in a recognised sync folder, Git working tree or vault (marker detection only, no override); docs/SYNC.md separates the four kinds of sync. Missing: OneDrive, iCloud, Obsidian Sync and Git conflicts, network filesystem detection, acceptance with real sync clients."
+   "notes": "Syncthing, Dropbox and Nextcloud/ownCloud conflict copies are recognised by exact name, recorded beside their originals, kept out of the index and surfaced in the knowledge view, the console projection and the console inspector; init, serve and restore refuse a data directory in a recognised sync folder, Git working tree or vault (marker detection only, no override); docs/SYNC.md separates the four kinds of sync. Missing: OneDrive, iCloud, Obsidian Sync and Git conflicts, network filesystem detection, acceptance with real sync clients. Identical conflict copies from unrecognised tools found by content hash (16 October)."
   },
   {
    "id": "MEM-015",
@@ -611,13 +627,15 @@
    "acceptance_evidence": [
     "tests/test_memory_m03.py",
     "docs/evidence/memory-m03/RECEIPT.md",
-    "tests/test_console_focus.py"
+    "tests/test_console_focus.py",
+    "tests/test_brain_plug.py",
+    "docs/evidence/brain-plug/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Bounded packets and an optional tool-free local model adapter. No dependable reasoning runtime selected. Console questions use the existing queue."
+   "notes": "Bounded packets and an optional tool-free local model adapter. No dependable reasoning runtime selected. Console questions use the existing queue. Agent hub brain plug (docs/AGENT_HUB.md, H1, 16 October): packet and result contracts, brain policy, budget meter and a synthetic brain; no real model."
   },
   {
    "id": "INT-002",
@@ -674,13 +692,15 @@
     "docs/evidence/memory-m04/RECEIPT.md",
     "tests/test_console_api.py",
     "tests/test_memory_capture_inbox.py",
-    "tools/check_console_connected_browser.py"
+    "tools/check_console_connected_browser.py",
+    "tests/test_drafts_archive.py",
+    "docs/evidence/drafts-archive/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Local drafts with exact fingerprints in main; the console now proposes, approves and cancels through the same ledger. No external effects. A second capability, vault.inbox_note, uses the same ledger with create-only execution and read-back reconciliation."
+   "notes": "Local drafts with exact fingerprints in main; the console now proposes, approves and cancels through the same ledger. No external effects. A second capability, vault.inbox_note, uses the same ledger with create-only execution and read-back reconciliation. Drafts are kept after the approval window lapses; archive, search and re-propose with fresh approval and source recheck (owner decision, 16 October)."
   },
   {
    "id": "ATT-001",
@@ -854,13 +874,16 @@
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_console_api.py",
-    "tools/check_console_connected_browser.py"
+    "tools/check_console_connected_browser.py",
+    "tests/test_recovery.py",
+    "tools/check_recovery_browser.py",
+    "docs/evidence/host-recovery/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Foreground local process with pause; no managed or installed service. The host runs one local job worker thread, stopped with the desk. The connected console shows the host's own health report (host state, last cycle, vault scan, waiting questions, jobs, last backup for owners) and lets the owner pause and resume with confirmation. No offline-first operation or service manager."
+   "notes": "Foreground local process with pause; no managed or installed service. The host runs one local job worker thread, stopped with the desk. The connected console shows the host's own health report (host state, last cycle, vault scan, waiting questions, jobs, last backup for owners) and lets the owner pause and resume with confirmation. No offline-first operation or service manager. Restart recovery (16 October): a private clean-stop marker; interrupted questions, started jobs as effect_unknown, unstarted leases requeued and missed routine slots reported at start and in console host health. Read-only doctor; service-file text never installed by ALFRED."
   },
   {
    "id": "UX-002",
