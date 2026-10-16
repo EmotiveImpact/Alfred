@@ -33,6 +33,7 @@ import json
 import re
 import threading
 from .local import Fault, exact, ident, text
+from .policy import ledger
 from .reviewed_memory import MEMORY_TYPES, RELATIONS, ReviewedMemory
 
 VERSION = 1
@@ -285,7 +286,7 @@ class CapturePolicies:
         dismissed = {r[0] for r in db.execute(
             '''SELECT DISTINCT h.claim_id FROM memory_claim_history h JOIN capture_proposals x ON x.claim_id=h.claim_id
                WHERE x.scope=? AND x.actor=? AND h.scope=? AND h.actor=? AND h.state IN ('withdrawn','disputed')''',
-            (p['scope'], p['id'], p['scope'], p['id']))}
+            (p['scope'], p['id'], p['scope'], ledger(db, p)))}
         result = {}
         for row in db.execute('SELECT claim_id FROM capture_proposals WHERE scope=? AND actor=?', (p['scope'], p['id'])):
             state = states.get(row[0], 'forgotten')
@@ -309,7 +310,7 @@ class CapturePolicies:
         now = self.store.now()
         day = now // DAY
         outcomes = self._outcomes(db, p)
-        names = {r['id']: r['name'] for r in db.execute('SELECT id,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], p['id']))}
+        names = {r['id']: r['name'] for r in db.execute('SELECT id,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], ledger(db, p)))}
         policies = []
         for row in db.execute('SELECT * FROM capture_policies WHERE scope=? AND actor=? ORDER BY id', (p['scope'], p['id'])):
             rule = json.loads(row['rule'])
@@ -349,7 +350,7 @@ class CapturePolicies:
         for row in db.execute('SELECT * FROM capture_policies WHERE scope=? AND actor=? AND enabled=1 ORDER BY id', (p['scope'], p['id'])):
             rule = json.loads(row['rule'])
             subject = db.execute('SELECT 1 FROM memory_entities WHERE scope=? AND actor=? AND id=?',
-                                 (p['scope'], p['id'], rule['proposes']['subject_id'])).fetchone()
+                                 (p['scope'], ledger(db, p), rule['proposes']['subject_id'])).fetchone()
             sources = [s for s in rule['sources'] if permitted(db, p, s, now)]
             if not sources:
                 continue

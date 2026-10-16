@@ -15,6 +15,7 @@ from alfred.grounded import retrieve
 from alfred.knowledge import KnowledgeStore, MarkdownVault, parse_note, resolve_reference
 from alfred.local import Fault
 from alfred import sync_conflicts
+from grant_helpers import grant_all
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'obsidian_vault'
 
@@ -28,6 +29,7 @@ class Vault(unittest.TestCase):
         self.store = KnowledgeStore(self.root / 'db', clock=lambda: 1000)
         self.owner = self.store.provision('work', 'owner', 'owner')
         self.source = self.store.provision('work', 'source', 'source')
+        grant_all(self.store, self.owner)
         self.scanner = MarkdownVault(self.store, self.source, self.vault)
 
     def data(self):
@@ -235,6 +237,7 @@ class ContentConflictTests(Vault):
         self.store = KnowledgeStore(self.root / 'db', clock=lambda: 1000)
         self.owner = self.store.provision('work', 'owner', 'owner')
         self.source = self.store.provision('work', 'source', 'source')
+        grant_all(self.store, self.owner)
         self.scanner = MarkdownVault(self.store, self.source, self.vault)
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas launches in spring.\n')
 

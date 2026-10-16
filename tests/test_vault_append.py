@@ -23,6 +23,7 @@ from alfred.desk_http import DeskHTTPServer
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
+from grant_helpers import as_pre_strict_database
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'obsidian_vault'
 NOTE = '# Atlas\n\nIntro line.\n\n## Actions\n\n- Existing human item\n\n## Later\n\nHuman closing text.\n'
@@ -67,6 +68,11 @@ class Base(unittest.TestCase):
 
 class GrantTests(Base):
     def test_legacy_policy_never_allows_appends(self):
+        # Workspaces are strict by default; only one that predates that is legacy, so
+        # reach legacy mode through the real one-time upgrade path.
+        as_pre_strict_database(self.root / 'desk.sqlite')
+        self.store = KnowledgeStore(self.root / 'desk.sqlite', clock=lambda: self.clock[0])
+        self.assertEqual(IdentityPolicy(self.store).view(self.owner)['mode'], 'legacy_scope')
         with self.assertRaises(Fault) as caught:
             self.propose()
         self.assertEqual(caught.exception.code, 'vault_append_not_granted')

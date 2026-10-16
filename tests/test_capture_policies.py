@@ -14,6 +14,7 @@ from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.capture_policies import CapturePolicies, match_line, content_lines
 from alfred import lifecycle
+from grant_helpers import grant_all
 
 MEETING = '''---
 title: Atlas weekly
@@ -38,6 +39,7 @@ class Base(unittest.TestCase):
         self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'; (self.vault / 'Meetings').mkdir(parents=True)
         (self.vault / 'Meetings' / 'Atlas weekly.md').write_text(MEETING)
         (self.vault / 'Journal.md').write_text('# Journal\nDecision: a personal journal line\n')
@@ -272,6 +274,7 @@ class ScopeTests(Base):
     def test_workspaces_and_owners_are_separate(self):
         home_owner = self.store.provision('home', 'home-owner', 'owner', ttl=2592000)
         home_source = self.store.provision('home', 'home-source', 'source', ttl=2592000)
+        grant_all(self.store, home_owner)
         other = self.root / 'home'; other.mkdir(); (other / 'Plans.md').write_text('Decision: a private home decision\n')
         MarkdownVault(self.store, home_source, other).scan()
         self.memory.create_entity(home_owner, {'id': 'house', 'kind': 'project', 'name': 'House'})

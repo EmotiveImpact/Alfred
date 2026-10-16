@@ -32,6 +32,7 @@ from alfred.local import Fault
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.routines import Routines
 from alfred.voice import VoiceLog
+from grant_helpers import grant_all, person_of
 
 T = 1_900_000_000  # 2030-03-17 17:46:40 UTC
 ATLAS = '# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\nCrew call 2030-03-17.\nLaunch in spring.\n'
@@ -48,6 +49,7 @@ class Workspace(unittest.TestCase):
         self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        grant_all(self.store, self.owner)
         project = self.root / 'project'; project.mkdir()
         (project / 'schedule.json').write_text(json.dumps({
             'document_id': 'schedule', 'title': 'Call time has changed', 'revision': 1, 'observed_at': T - 30,
@@ -335,7 +337,8 @@ class ExportHistoryTests(Workspace):
         history = json.loads(files['review-history.json'].read_text())
         manifest = json.loads(files['manifest.json'].read_text())
         with self.store.connection() as db:
-            rows = db.execute("SELECT claim_id,state,at FROM memory_claim_history WHERE actor='owner' ORDER BY seq").fetchall()
+            rows = db.execute('SELECT claim_id,state,at FROM memory_claim_history WHERE actor=? ORDER BY seq',
+                              (person_of(self.store, self.owner),)).fetchall()
         self.assertEqual([(e['statement_id'], e['state'], e['at']) for e in history['entries']], [tuple(r) for r in rows])
         self.assertEqual(manifest['counts']['review_history_entries'], len(rows))
         self.assertEqual(history['basis'], 'alfred_review_records_without_values')

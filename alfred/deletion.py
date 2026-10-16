@@ -179,8 +179,9 @@ def _linked(db, scope, actor, kind, subject, trace):
                 t[key] |= {i for i in recorded.get(key) or [] if isinstance(i, str)}
     if _has(db, 'conversation_turns') and _has(db, 'conversations'):
         sql = '''SELECT t.id,t.result FROM conversation_turns t JOIN conversations s ON s.id=t.session
-                 WHERE s.scope=? AND t.result IS NOT NULL''' + (' AND s.actor=?' if private else '')
-        for row in db.execute(sql, (scope, actor) if private else (scope,)):
+                 WHERE s.scope=? AND t.result IS NOT NULL''' + (f' AND s.actor IN ({_in(keys)})' if private else '')
+        # Conversations are kept per device credential; the ledger actor may be the person.
+        for row in db.execute(sql, (scope, *keys) if private else (scope,)):
             packet = (_json(row['result']) or {}).get('packet') or {}
             memory = [m for m in packet.get('memory') or [] if isinstance(m, dict)]
             cited = {m.get('claim_id') for m in memory}

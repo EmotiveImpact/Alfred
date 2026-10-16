@@ -13,6 +13,7 @@ import unittest
 from alfred import drafts, lifecycle
 from alfred.conversation import ConversationService, TTL
 from alfred.desk import init_demo
+from grant_helpers import grant_all
 from alfred.desk_http import DeskHTTPServer
 from alfred.desk_runtime import Supervisor
 from alfred.desk_store import DeskStore
@@ -208,6 +209,7 @@ class ConversationDraftTests(unittest.TestCase):
         self.store = KnowledgeStore(self.root / 'desk.sqlite', clock=lambda: self.clock[0])
         self.owner = self.store.provision('work', 'owner', 'owner', ttl=2000000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2000000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\n')
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()

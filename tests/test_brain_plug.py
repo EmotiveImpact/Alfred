@@ -22,6 +22,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from alfred.reviewed_memory import ReviewedMemory
+from grant_helpers import grant_all, revoke_all
 
 WORKSPACE = 'ws-alpha-7731'
 PLAN = ('# Plan\nAlpha review is due on Friday.\nremember: Producers prefer short drafts.\n\n'
@@ -44,6 +45,8 @@ class Base(unittest.TestCase):
         self.source = provision(WORKSPACE, 'source', 'source', ttl=100000)
         self.foreign = provision('ws-other-0042', 'foreign', 'owner', ttl=100000)
         self.foreign_source = provision('ws-other-0042', 'foreign-source', 'source', ttl=100000)
+        grant_all(self.store, self.owner)
+        grant_all(self.store, self.foreign)
         self.vault = self.root / 'vault-private-path'
         self.vault.mkdir()
         (self.vault / 'Plan.md').write_text(PLAN)
@@ -369,7 +372,8 @@ class DispatchTests(Base):
         action = self.rows('SELECT * FROM actions WHERE id=?', proposal['action_id'])[0]
         self.store.approve(self.owner, proposal['action_id'], action['fingerprint'])
         policy = IdentityPolicy(self.store)
-        policy.grant(self.owner, 'source', 'model', self.store.now() + 50000, policy.view(self.owner)['epoch'])
+        # The owner withdraws read on the source between approval and dispatch.
+        policy.grant(self.owner, 'source', 'read', self.store.now() + 1, policy.view(self.owner)['epoch'], revoke=True)
         self.assertEqual(self.store.tick(self.owner)['state'], 'blocked')
         self.assertEqual(self.rows('SELECT * FROM drafts'), [])
 
@@ -556,6 +560,7 @@ class IsolationTests(Base):
                    self.request(context=[{'note': foreign_note, 'start_line': 1, 'end_line': 2}]))
 
     def test_strict_grants_need_the_model_capability(self):
+        revoke_all(self.store, self.owner)  # strict with nothing granted, explicitly
         policy = IdentityPolicy(self.store)
         policy.grant(self.owner, 'source', 'read', self.store.now() + 50000, policy.view(self.owner)['epoch'])
         self.fault('context_denied', self.hub.submit, self.owner, self.request())
