@@ -1,7 +1,9 @@
 import {describe,it,expect} from 'vitest';
 import {parseCommand} from '../src/domain/commands';
 import {DeskError} from '../src/integration/deskClient';
-import {amount,attentionLine,autonomyLine,controlRequest,goalMessage,stateLabel,taskLine,usageLines,type DimensionUse,type HubTask,type Usage} from '../src/integration/goals';
+import {acknowledgeNote,acknowledgeRequest,amount,attentionLine,autonomyLine,brainEvidenceLine,canAcknowledge,canRunChecks,checkLabel,controlRequest,
+  evidenceLabel,evidenceTone,goalMessage,runLine,stateLabel,taskLine,usageLines,verifyRequest,type DimensionUse,type HubResult,type HubTask,type Usage}
+  from '../src/integration/goals';
 
 const use=(over:Partial<DimensionUse>={}):DimensionUse=>({used:0,in_flight:0,limit:null,spent:false,warning:false,...over});
 const usage=(daily:Partial<Record<'tokens'|'money_pence'|'wall_seconds'|'tasks',Partial<DimensionUse>>>,total={}):Usage=>({
@@ -61,5 +63,52 @@ describe('goal controls',()=>{
     expect(parseCommand('goals')).toEqual({kind:'dialog',dialog:'goals'});
     expect(parseCommand('/goals')).toEqual({kind:'dialog',dialog:'goals'});
     expect(parseCommand('stop all goals')).toEqual({kind:'search',query:'stop all goals'});
+  });
+});
+
+describe('results and checks',()=>{
+  const run={position:2,outcome:'failed_checks' as const,sha256:'a'.repeat(64),counts:{passed:1,failed:1,unverifiable:0},
+    checks:[{id:'C1',kind:'artefact_sections',status:'passed' as const},{id:'C2',kind:'claims_cited',status:'failed' as const}]};
+  const result=(over:Partial<HubResult>={}):HubResult=>({job:'job-0123456789abcdef01234567',brain:'synthetic',task_id:'goal-1',scope_class:'company',
+    contract:'accepted',contract_reason:null,declared:2,checks:'failed_checks',state:'failed_checks',evidence:'failed_checks',runs:2,
+    acknowledged_over:null,ingested_at:0,updated_at:0,work:{mandate:'mandate-1',goal:'goal-1',goal_title:'Crew brief',work:'research',trigger:'operator'},
+    last_run:run,...over});
+  it('name each class from ALFRED\'s record, and never call a result without checks verified',()=>{
+    expect(evidenceLabel(result())).toBe('Failed checks');
+    expect(evidenceLabel(result({contract:'refused'}))).toBe('Failed checks (refused)');
+    expect(evidenceLabel(result({evidence:'verified',state:'checked',checks:'checked'}))).toBe('Verified by checks');
+    expect(evidenceLabel(result({evidence:'verified',state:'acknowledged',acknowledged_over:'returned'}))).toBe('Acknowledged by you');
+    expect(evidenceLabel(result({evidence:'verified',state:'acknowledged',acknowledged_over:'failed_checks'}))).toBe('Acknowledged over failed checks');
+    expect(evidenceLabel(result({evidence:'unverifiable',runs:0,last_run:null}))).toBe('Not verified: checks not run');
+    expect(evidenceLabel(result({evidence:'unverifiable',runs:1}))).toBe('Not verified: checks could not run');
+    // Acknowledged, but nothing was declared: still not verified.
+    expect(evidenceLabel(result({evidence:'no_checks',declared:0,state:'acknowledged'}))).toBe('No checks declared');
+    expect(evidenceLabel(result({evidence:'not_returned',contract:'stopped'}))).toBe('Not returned');
+    expect([evidenceTone('verified'),evidenceTone('failed_checks'),evidenceTone('no_checks')]).toEqual(['on','warn','']);
+    expect(brainEvidenceLine('synthetic',{results:6,verified:2,failed_checks:1,unverifiable:0,no_checks:3,not_returned:0}))
+      .toBe('synthetic: 2 verified · 1 failed checks · 0 not verified · 3 no checks declared');
+  });
+  it('word declared checks and the last run without the reasons',()=>{
+    expect(checkLabel({id:'C1',kind:'artefact_sections',artefact:'notes.md',sections:['Synthetic brain notes']}))
+      .toBe('C1 notes.md has “Synthetic brain notes”');
+    expect(checkLabel({id:'C2',kind:'claims_cited'})).toBe('C2 every claim cites a sent excerpt');
+    expect(checkLabel({id:'C3',kind:'future_kind'})).toBe('C3 future kind');
+    expect(runLine(result())).toBe('Run 2: 1 passed · 1 failed · 0 could not run');
+    expect(runLine(result({declared:0,evidence:'no_checks'}))).toMatch(/never counted as verified/);
+    expect(runLine(result({last_run:null,runs:0}))).toBe('2 checks declared, not run yet.');
+  });
+  it('offer checks and acknowledgement only where ALFRED would accept them',()=>{
+    expect([canRunChecks(result()),canRunChecks(result({declared:0})),canRunChecks(result({contract:'refused'}))]).toEqual([true,false,false]);
+    expect([canAcknowledge(result()),canAcknowledge(result({last_run:null})),canAcknowledge(result({state:'acknowledged'})),
+      canAcknowledge(result({contract:'stopped'}))]).toEqual([true,false,false,false]);
+  });
+  it('send the runs seen and the exact run acknowledged, explicitly over failed checks',()=>{
+    expect(verifyRequest('job-0123456789abcdef01234567',2)).toEqual({path:'/desk/hub/results/job-0123456789abcdef01234567/verify',body:{runs:2}});
+    expect(acknowledgeRequest('job-0123456789abcdef01234567',run,true))
+      .toEqual({path:'/desk/hub/results/job-0123456789abcdef01234567/acknowledge',body:{run_sha256:'a'.repeat(64),accept_failures:true}});
+    expect(acknowledgeNote(result())).toMatch(/^Run 2 failed C2\. Accepting it over failed checks/);
+    expect(acknowledgeNote(result({declared:0,checks:'returned'}))).toMatch(/stays unverified for routing/);
+    expect(goalMessage(new DeskError('conflict','acknowledgement_mismatch',409))).toMatch(/checked again/);
+    expect(goalMessage(new DeskError('conflict','failed_checks_need_explicit_acceptance',409))).toMatch(/explicitly/);
   });
 });
