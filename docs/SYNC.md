@@ -8,7 +8,7 @@ background: [infrastructure research, section 4.2](../research/INFRASTRUCTURE_20
 
 | Kind | What moves | Who is the authority | What ALFRED does | State |
 |---|---|---|---|---|
-| Vault file sync | The person's Markdown files | The person's own tool: Syncthing, Dropbox, iCloud Drive, OneDrive, Nextcloud, Obsidian Sync or Git | Reads a selected folder, recognises conflict copies by name, never merges or resolves them, never runs a sync client | Conflict-copy recognition and the placement guard are implemented |
+| Vault file sync | The person's Markdown files | The person's own tool: Syncthing, Dropbox, iCloud Drive, OneDrive, Nextcloud, Obsidian Sync or Git | Reads a selected folder, recognises conflict copies by name, and identical copies by content, never merges or resolves them, never runs a sync client | Conflict-copy recognition and the placement guard are implemented |
 | Identity and grants | Credentials, person and device enrolment, source grants, invitations | The one local SQLite database | Offline provisioning, explicit pairing and offline rotation (M02); revocations are journalled (M05) | Never file-synced; no identity sync between devices exists |
 | Ledger and job state | Reviewed statements, captures, executive records, actions and drafts, audit, jobs, job events and artefacts | The same database, a single authority | One host writes; `backup` makes a consistent copy and `restore` replays the lifecycle journal; see [JOBS.md](JOBS.md) | No replication and no second writer |
 | Runtime or model sync | Model files, prompts, embeddings, caches, sessions, runtime state | None | Nothing | Not implemented |
@@ -95,8 +95,19 @@ its last recorded conflicts along with its notes.
 | Google Drive, Box, pCloud, Seafile, Resilio Sync, rclone bisync | Their conflict naming was not verified for this change. rclone bisync's default suffix does not end in `.md`, so those copies are not scanned at all. |
 | Dropbox variants | Case-conflict and encoding-conflict renames, names in other languages, and a device name that contains parentheses. |
 
-An unrecognised conflict copy is indexed as an ordinary, separate note with its own
-identity. It is never merged with the original, but it is not flagged either.
+### Detected by content (plan item 1.5, 16 October 2026)
+
+A copy from a tool not recognised by name is detected by content instead: a note with
+exactly the same bytes (SHA-256) as another note in the same folder, whose name is the
+other note's name plus a short suffix starting with a space, `.`, `_`, `~`, `(` or `-`
+(`Meeting 2.md` beside `Meeting.md`, `Report-LAPTOP-7F3K2Q.md` beside `Report.md`). It is
+recorded and kept out of the index exactly like a named copy, with tool
+`unrecognised_same_content` and `detected_by: content_hash`. Identical content under an
+unrelated name, in another folder, or an empty or whitespace-only note is left alone, so
+two blank `Untitled` notes are not flagged. A copy that has since been edited no longer
+matches; it is then indexed as an ordinary, separate note with its own identity, never
+merged with the original and not flagged. Obsidian's own "Make a copy" produces the same
+shape (`Note 1.md` with identical bytes) and is reported the same way until it is edited.
 
 ## 2. Where ALFRED's live files may be kept
 
@@ -198,8 +209,14 @@ assembled. A source credential cannot export. The bundle holds:
   stays `proposed`), version, value, validity, review time, conflicts, cited note ID, hash,
   revision and line range, the cited text when it is currently permitted, and lineage
   (`replaces`, `replaced_by`); a link to a statement that was left out reads `not_exported`;
+- `review-history.json`: the recorded review history of each exported statement (state,
+  time, whether the time is known, who changed it, origin and valid period), never a value;
+  the history of a statement that was left out is left out too and counted in the manifest;
+  `statements.md` shows the same steps under each statement;
 - `captures.json`: memory type, retention date (or none) and capture origin for each
   exported captured statement;
+- `routines.json`: the routine settings this credential authored (kind, schedule, budgets,
+  quiet hours, pause) and its pulse routine intervals, without runs or nominations;
 - `executive-records.json` and `executive-records.md`: goals, priorities, commitments,
   decisions, milestones and follow-ups with status, dates, project and cited-support state;
 - `manifest.json`: format and version, export time, workspace, credential, role, counts,
@@ -211,7 +228,7 @@ Never included: access keys and credential digests, sessions, invitation codes, 
 people's records, forgotten statements, statements whose support is withheld, captures whose
 retention has ended (even before the supervisor's next retention pass), note bodies beyond the
 cited lines, the knowledge index and note history, the audit log, lifecycle receipts, actions
-and drafts, and jobs. Markdown shows note text inside code spans or fenced blocks, so it is
+and drafts, routine runs and nominations, and jobs. Markdown shows note text inside code spans or fenced blocks, so it is
 displayed literally and cannot act as HTML or links.
 
 The destination must be a new folder or an existing empty one, outside every configured vault
@@ -219,13 +236,19 @@ and any folder holding `.obsidian`, and outside this repository; it may not be a
 its parent must exist. The export is written to a private staging folder (0700, files 0600)
 and renamed into place, so a failure leaves nothing behind and a destination that gains a file
 meanwhile is not overwritten. A synced folder is an acceptable destination. Each export adds
-an `export.written` audit entry naming its export ID.
+an `export.written` audit entry naming its export ID, and a line in the export register
+(`desk.sqlite.exports.jsonl`, beside the database, 0600) holding the export ID, folder and the
+identifiers it included, never values. Forget receipts and `deletion-report` use the register
+to name exports still on disk that hold a forgotten subject. ALFRED never deletes an export
+folder; remove it yourself. The format version is 2 since review history and routine settings
+were added.
 
 ## Not implemented
 
-- Recognising OneDrive, iCloud Drive, Obsidian Sync, Google Drive or other conflict copies,
-  Git conflict markers, or a copy whose tool is unknown.
-- Comparing a copy with its original, or any merge, resolution or write-back by ALFRED.
+- Recognising OneDrive, iCloud Drive, Obsidian Sync, Google Drive or other conflict copies
+  by name, Git conflict markers, or an unrecognised copy whose content already differs from
+  its original (identical copies are detected by content since plan item 1.5).
+- Comparing a copy with its original beyond whole-file hash equality, or any merge, resolution or write-back by ALFRED.
 - Detecting network filesystems, FUSE mounts or sync started after ALFRED started.
 - A console interface that displays the conflict state; only the projection carries it.
 - Identity, grant, ledger, job or runtime sync between devices; replication; encrypted backups

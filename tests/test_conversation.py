@@ -10,6 +10,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.conversation import ConversationService
 from alfred.desk_http import DeskHTTPServer
 from alfred.local_model import LocalOllama
+from grant_helpers import grant_all
 
 
 class FakeModel:
@@ -26,6 +27,7 @@ class ConversationTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.clock=[1000]
         self.store=KnowledgeStore(self.root/'desk.db',clock=lambda:self.clock[0]);self.owner=self.store.provision('work','owner','owner');self.reader=self.store.provision('work','reader','reader');self.source=self.store.provision('work','source','source')
+        grant_all(self.store,self.owner)
         self.vault=self.root/'vault';self.vault.mkdir();(self.vault/'Equipment.md').write_text('# Equipment collection\nMorgan owns equipment collection.\nCollection is booked for 10:00.\n')
         self.scanner=MarkdownVault(self.store,self.source,self.vault);self.scanner.scan();self.model=FakeModel();self.service=ConversationService(self.store,self.model,'work')
         self.sid=self.service.create(self.owner,{'title':'Equipment'})['id'];self.seq=0

@@ -97,6 +97,10 @@ class DeskHTTPServer(HTTPServer):
         from .routines import Routines
         self.routines = Routines(store, supervisor) if self.pulse is not None else None
         if self.routines is not None: supervisor.routines = self.routines
+        # Owner-authored capture policies (MEM-004, M04) propose statements into the review queue.
+        from .capture_policies import CapturePolicies
+        self.capture = CapturePolicies(store, supervisor if hasattr(supervisor, 'owner') else None, self.memory) if self.memory is not None else None
+        if self.capture is not None and self.pulse is not None: supervisor.capture = self.capture
         self.assets = Path(assets) if assets else Path(__file__).resolve().parents[1] / 'web'
         # The built premium console is served from this same loopback origin so
         # it inherits the session, CSRF, Host/Origin and CSP boundary unchanged.
@@ -151,12 +155,18 @@ class Handler(BaseHTTPRequestHandler):
         policy, store = IdentityPolicy(self.server.store), self.server.store
         if not mutation and path == '/desk/identity':
             return policy.view(bearer)
+        if not mutation and path == '/desk/identity/people':
+            return policy.people(bearer)
         if not mutation:
             raise Fault('not_found', 404)
         def expiry(source, days):
             if type(days) is not int or not 1 <= days <= 30:
                 raise Fault('invalid_grant_days')
-            limit = next((s['credential_expires'] for s in policy.view(bearer)['sources'] if s['source'] == source), None)
+            view = policy.view(bearer)
+            if view['role'] != 'owner':
+                # Only an owner grants or invites; say so before anything about sources.
+                raise Fault('forbidden', 403)
+            limit = next((s['credential_expires'] for s in view['sources'] if s['source'] == source), None)
             if limit is None:
                 raise Fault('source_not_available', 404)
             return min(store.now() + days * 86400, limit)
@@ -177,6 +187,21 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/desk/identity/pairing':
             exact(body, {'role'})
             return policy.offer_pairing(bearer, body['role'])
+        if path == '/desk/identity/enrolments':
+            # A new person with their own reader key and no grants (SYS-001).
+            exact(body, {'label', 'epoch'})
+            return policy.offer_enrolment(bearer, body['label'], body['epoch'])
+        match = re.fullmatch(r'/desk/identity/people/(person-[0-9a-f]{24})/grants', path)
+        if match:
+            exact(body, {'source', 'capability', 'days', 'epoch', 'revoke'})
+            if type(body['revoke']) is not bool:
+                raise Fault('invalid_fields')
+            if body['revoke']:
+                policy.grant(bearer, body['source'], body['capability'], store.now() + 1, body['epoch'], revoke=True, person=match.group(1))
+            else:
+                policy.grant(bearer, body['source'], body['capability'], expiry(body['source'], body['days']), body['epoch'],
+                             person=match.group(1))
+            return policy.people(bearer)
         match = re.fullmatch(r'/desk/identity/devices/([A-Za-z0-9-]{1,40})/revoke', path)
         if match:
             exact(body, set())
@@ -422,12 +447,18 @@ class Handler(BaseHTTPRequestHandler):
                     raise Fault('not_found', 404)
             elif mutation and re.fullmatch(r'/desk/sources/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget', url.path):
                 # Removes the source from ALFRED, never the person's own files.
-                exact(body, {'confirm'})
+                exact(body, {'confirm', 'purge_history'} if isinstance(body, dict) and 'purge_history' in body else {'confirm'})
                 if body['confirm'] != url.path.split('/')[3]:
                     raise Fault('confirmation_mismatch')
                 from .lifecycle import forget_source
                 jobs = self.server.jobs
-                result = forget_source(store, bearer, url.path.split('/')[3], cache=jobs.cache if jobs is not None else None)
+                result = forget_source(store, bearer, url.path.split('/')[3], cache=jobs.cache if jobs is not None else None,
+                                       purge_history=body.get('purge_history', False))
+            elif not mutation and url.path.startswith('/desk/deletion-report/') and not url.query:
+                # What the workspace still holds about a subject, and where (MEM-010). Owner only; reads only.
+                from .deletion import route as deletion_route
+                jobs = self.server.jobs
+                result = deletion_route(store, url.path, bearer, cache_dir=jobs.cache.root if jobs is not None and jobs.cache is not None else None)
             elif url.path == '/desk/pulse/history' and not url.query:
                 if self.server.pulse is None: raise Fault('pulse_not_configured',409)
                 result = self.server.pulse.prune_history(bearer,body) if mutation else self.server.pulse.history_plan(bearer)
@@ -473,6 +504,9 @@ class Handler(BaseHTTPRequestHandler):
             elif (url.path == '/desk/routines' or url.path.startswith('/desk/routines/')) and not url.query:
                 from .routines_http import route as routines_route
                 result = routines_route(self.server, url.path, mutation, bearer, body)
+            elif (url.path == '/desk/capture' or url.path.startswith('/desk/capture/')) and not url.query:
+                from .capture_policies import route as capture_route
+                result = capture_route(self.server.capture, url.path, mutation, bearer, body)
             elif url.path == '/desk/jobs' or url.path.startswith('/desk/jobs/'):
                 result = self.jobs_route(url, mutation, bearer, body)
             elif not mutation and url.path == '/desk/console/workspaces' and not url.query:
@@ -503,11 +537,20 @@ class Handler(BaseHTTPRequestHandler):
                 if not hasattr(store, 'vault_writers'): raise Fault('knowledge_not_configured', 409)
                 from .inbox import propose as propose_inbox
                 result = propose_inbox(store, bearer, body)
+            elif mutation and url.path == '/desk/vault/append-proposals':
+                if not hasattr(store, 'vault_writers'): raise Fault('knowledge_not_configured', 409)
+                from .vault_append import propose as propose_append
+                result = propose_append(store, bearer, body)
             elif mutation and url.path == '/desk/proposals':
                 result = store.propose_from_evidence(bearer, body)
             elif mutation and re.fullmatch(r'/desk/evidence/[0-9]+/acknowledge', url.path):
                 exact(body, set())
                 result = store.acknowledge(bearer, int(url.path.split('/')[3]))
+            elif url.path == '/desk/drafts' or url.path.startswith('/desk/drafts/'):
+                # Drafts are kept: list, search, reopen, archive, unarchive, re-propose.
+                from .drafts import route as drafts_route
+                query = parse_qs(url.query, strict_parsing=True) if url.query else {}
+                result = drafts_route(store, url.path, mutation, bearer, body, query)
             elif mutation and re.fullmatch(r'/desk/actions/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/(approve|cancel|reconcile)', url.path):
                 action_id, command = url.path.split('/')[3:5]
                 if command == 'approve':

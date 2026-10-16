@@ -12,6 +12,7 @@ from alfred.knowledge import KnowledgeStore, parse_note
 from alfred.grounded import ask, check_sources, references, retrieve, question_terms, validate_interpretation
 from alfred.local_model import LocalOllama
 from alfred.desk_http import DeskHTTPServer
+from grant_helpers import grant_all
 
 
 class Provider:
@@ -31,6 +32,7 @@ class Fixture(unittest.TestCase):
         self.store=KnowledgeStore(self.home/'test.sqlite',clock=lambda:self.now)
         self.owner=self.store.provision('work','owner','owner');self.reader=self.store.provision('work','reader','reader')
         self.source=self.store.provision('work','source','source');self.other=self.store.provision('other','other','owner')
+        grant_all(self.store,self.owner)
         self.docs={'MAP.md':'# Knowledge map\n[[Projects/Film]]',
                    'Projects/Film.md':'---\ntype: project\n---\n# Opening treatment\nThe opening treatment is monochrome.\n[[Decisions/Opening]]\n[[People/Ada]]',
                    'Decisions/Opening.md':'# Approved look\nMonochrome was approved for the opening.',

@@ -15,6 +15,12 @@ import re
 from .local import Fault, canonical, exact, fingerprint, ident
 
 CAPABILITY = 'vault.inbox_note'
+# How the store reports this capability's outcomes (shared with vault_append).
+EFFECT = 'vault_inbox_note_create_only_not_sent'
+SUCCESS = ('created', 'exists_same')
+RECEIPT = 'connector.inbox_receipt'
+REFUSED = ('vault_inbox_refused', 'action.inbox_refused')
+VERIFIED = 'action.verified_inbox_note'
 FOLDER = ('ALFRED', 'Inbox')
 NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9 _.-]{0,79}\.md')
 MAX_CONTENT = 16000

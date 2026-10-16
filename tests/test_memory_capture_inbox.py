@@ -14,6 +14,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.policy import IdentityPolicy
 from alfred import inbox, lifecycle
+from grant_helpers import grant_all
 
 
 class Base(unittest.TestCase):
@@ -24,6 +25,7 @@ class Base(unittest.TestCase):
         self.owner = self.store.provision('work', 'owner', 'owner', ttl=2592000)
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas launches in spring.\n')
         self.scanner = MarkdownVault(self.store, self.source, self.vault); self.scanner.scan()
@@ -91,7 +93,7 @@ class InboxTests(Base):
     def granted(self):
         self.grant('read'); self.grant('inbox.write')
 
-    def test_legacy_policy_never_allows_writes(self):
+    def test_reading_never_implies_writing(self):
         with self.assertRaises(Fault) as caught:
             self.propose()
         self.assertEqual(caught.exception.code, 'inbox_write_not_granted')

@@ -50,21 +50,25 @@ class IdentityHTTPTests(unittest.TestCase):
     def epoch(self):
         return self.req('owner', '/desk/identity')[1]['epoch']
 
-    def test_legacy_view_lists_sources_and_write_is_never_implied(self):
+    def test_demo_is_strict_and_grants_its_owner_explicitly_and_write_is_never_implied(self):
         self.login('owner')
         view = self.req('owner', '/desk/identity')[1]
-        self.assertEqual(view['mode'], 'legacy_scope')
-        self.assertEqual(view['sources'][0]['permitted'], {'connector.read': False, 'inbox.write': False, 'model': True, 'read': True, 'sync': False})
+        self.assertEqual(view['mode'], 'explicit_grants')
+        self.assertEqual(view['sources'][0]['permitted'], {'connector.read': False, 'inbox.write': False, 'model': True, 'read': True, 'sync': False, 'vault.append': False})
+        self.assertEqual({(g['source'], g['capability']) for g in view['grants']}, {('demo-source', 'read'), ('demo-source', 'model')})
 
     def test_owner_grants_and_revokes_with_epoch_and_csrf(self):
         self.login('owner')
-        self.assertEqual(self.req('owner', '/desk/identity/enable', {'epoch': 0}, csrf=False)[0], 403)
-        self.assertEqual(self.req('owner', '/desk/identity/enable', {'epoch': 0})[1]['mode'], 'explicit_grants')
+        self.assertEqual(self.req('owner', '/desk/identity/enable', {'epoch': self.epoch()}, csrf=False)[0], 403)
+        self.assertEqual(self.req('owner', '/desk/identity/enable', {'epoch': self.epoch()})[1]['mode'], 'explicit_grants')
+        self.assertEqual(self.notes('owner'), 20)  # demo init granted read explicitly
+        self.req('owner', '/desk/identity/grants', {'source': 'demo-source', 'capability': 'read', 'days': 30, 'epoch': self.epoch(), 'revoke': True})
         self.assertEqual(self.notes('owner'), 0)
         body = {'source': 'demo-source', 'capability': 'read', 'days': 30, 'epoch': self.epoch(), 'revoke': False}
         code, view, _ = self.req('owner', '/desk/identity/grants', body)
         self.assertEqual(code, 200)
         grant = view['grants'][0]
+        grant = next(g for g in view['grants'] if g['capability'] == 'read')
         self.assertLessEqual(grant['expires'], next(s['credential_expires'] for s in view['sources']))
         self.assertEqual(self.notes('owner'), 20)
         self.assertEqual(self.req('owner', '/desk/identity/grants', body)[1:2][0]['error'], 'policy_changed')
@@ -73,8 +77,7 @@ class IdentityHTTPTests(unittest.TestCase):
 
     def test_invitation_grants_only_the_redeeming_person(self):
         self.login('owner'); self.login('reader')
-        self.req('owner', '/desk/identity/enable', {'epoch': 0})
-        self.assertEqual(self.notes('reader'), 0)
+        self.assertEqual(self.notes('reader'), 0)  # strict by default: a new reader sees nothing
         self.assertEqual(self.req('reader', '/desk/identity')[1]['sources'], [])
         code, invitation, _ = self.req('owner', '/desk/identity/invitations', {'source': 'demo-source', 'capability': 'read', 'days': 1, 'epoch': self.epoch()})
         self.assertEqual(code, 200); self.assertTrue(invitation['single_use'])
@@ -82,7 +85,7 @@ class IdentityHTTPTests(unittest.TestCase):
         code, view, _ = self.req('reader', '/desk/identity/invitations/redeem', {'code': invitation['code']})
         self.assertEqual((code, view['sources'][0]['permitted']['read']), (200, True))
         self.assertEqual(self.notes('reader'), 20)
-        self.assertEqual(self.notes('owner'), 0)
+        self.assertEqual(self.notes('owner'), 20)  # the owner's own explicit grant is unchanged
         self.assertEqual(self.req('reader', '/desk/identity/invitations/redeem', {'code': invitation['code']})[0], 404)
 
     def test_invitations_are_bounded(self):
@@ -90,11 +93,11 @@ class IdentityHTTPTests(unittest.TestCase):
         self.assertEqual(self.req('owner', '/desk/identity/invitations', {'source': 'demo-source', 'capability': 'inbox.write', 'days': 1, 'epoch': 0})[0], 400)
         self.assertEqual(self.req('reader', '/desk/identity/invitations', {'source': 'demo-source', 'capability': 'read', 'days': 1, 'epoch': 0})[0], 403)
         self.assertEqual(self.req('reader', '/desk/identity/invitations/redeem', {'code': 'x' * 24})[0], 404)
-        self.assertEqual(self.req('owner', '/desk/identity/invitations', {'source': 'nope', 'capability': 'read', 'days': 1, 'epoch': 0})[0], 404)
+        self.assertEqual(self.req('owner', '/desk/identity/invitations', {'source': 'nope', 'capability': 'read', 'days': 1, 'epoch': self.epoch()})[0], 404)
 
     def test_other_workspace_cannot_redeem(self):
         self.login('owner')
-        invitation = self.req('owner', '/desk/identity/invitations', {'source': 'demo-source', 'capability': 'read', 'days': 1, 'epoch': 0})[1]
+        invitation = self.req('owner', '/desk/identity/invitations', {'source': 'demo-source', 'capability': 'read', 'days': 1, 'epoch': self.epoch()})[1]
         stranger = self.store.provision('elsewhere', 'stranger', 'owner')
         with self.assertRaises(Fault) as caught:
             IdentityPolicy(self.store).redeem(stranger, invitation['code'])

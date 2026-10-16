@@ -2,20 +2,24 @@ import {useCallback,useEffect,useState} from 'react';
 import {useConsole} from '../state/ConsoleProvider';
 import {DeskError} from '../integration/deskClient';
 import {ConnectorList,type ConnectorView} from './SourceSafety';
+import {grantRequest,holds,others,type Enrolment,type PeopleView} from '../integration/people';
 interface SourceAccess{source:string;label:string;permitted:Record<string,boolean>;credential_expires:number}
 interface DeviceView{device:string;label:string;role:'owner'|'reader';expires:number;paired_at:number|null;current:boolean}
 interface IdentityView{person_id:string;device_id:string;role:'owner'|'reader';mode:'legacy_scope'|'explicit_grants';epoch:number;sources:SourceAccess[];grants:{source:string;capability:string;expires:number}[];devices:DeviceView[]}
 const CAPS:{id:string;label:string;note:string}[]=[{id:'read',label:'Read',note:'See and search this source'},{id:'model',label:'Model',note:'Send excerpts to the local model'},{id:'inbox.write',label:'Inbox notes',note:'Create approved notes in ALFRED/Inbox'}];
 // An export connector is never written to; its own capability is importing the files you choose.
 const CONNECTOR_CAPS:{id:string;label:string;note:string}[]=[CAPS[0],CAPS[1],{id:'connector.read',label:'Import',note:'Import export files you choose into this source (offline command)'}];
-const ERRORS:Record<string,string>={policy_changed:'Access changed elsewhere. The panel has been refreshed.',invitation_not_valid:'That code is not valid, has been used or has expired.',invalid_capability:'That capability cannot be shared by invitation.',source_not_available:'That source is no longer available.',pairing_capacity:'Too many unused pairing codes. Wait for them to expire.',cannot_revoke_current_device:'This device cannot revoke itself here. Use another device or the offline tools.',invalid_pairing_role:'This device cannot pair one with more authority.'};
+const ERRORS:Record<string,string>={policy_changed:'Access changed elsewhere. The panel has been refreshed.',invitation_not_valid:'That code is not valid, has been used or has expired.',invalid_capability:'That capability cannot be shared with another person.',person_not_available:'That person no longer holds an active key here.',enrolment_capacity:'Too many unused enrolment codes. Wait for them to expire.',person_label_required:'Name the person first.',source_not_available:'That source is no longer available.',pairing_capacity:'Too many unused pairing codes. Wait for them to expire.',cannot_revoke_current_device:'This device cannot revoke itself here. Use another device or the offline tools.',invalid_pairing_role:'This device cannot pair one with more authority.'};
 function message(e:unknown){return e instanceof DeskError?ERRORS[e.code]??`ALFRED refused this (${e.code}).`:'ALFRED could not be reached.';}
 const short=(id:string)=>id.replace(/^(person|device)-/,'').slice(0,8);
 /** Owner-controlled source grants. Changing access rebuilds every view from the server. */
 export function AccessPanel(){
   const c=useConsole(),[view,setView]=useState<IdentityView|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[connectors,setConnectors]=useState<ConnectorView[]>([]);
   const[inviteSource,setInviteSource]=useState(''),[inviteCap,setInviteCap]=useState('read'),[code,setCode]=useState<{code:string;expires:number}|null>(null),[redeem,setRedeem]=useState('');
+  const[people,setPeople]=useState<PeopleView|null>(null),[enrolLabel,setEnrolLabel]=useState(''),[enrolment,setEnrolment]=useState<Enrolment|null>(null);
   const load=useCallback(async()=>{try{const v=await c.live.client.get<IdentityView>('/desk/identity');setView(v);setInviteSource(s=>s||v.sources[0]?.source||'');
+    // People and their grants are listed to the owner only; the server refuses anyone else.
+    if(v.role==='owner'){try{setPeople(await c.live.client.get<PeopleView>('/desk/identity/people'));}catch{setPeople(null);}}else setPeople(null);
     try{setConnectors((await c.live.client.get<{connectors:ConnectorView[]}>('/desk/connectors')).connectors);}catch{setConnectors([]);}}catch(e){setError(message(e));}},[c.live.client]);
   useEffect(()=>{void load();},[load]);
   const[pairRole,setPairRole]=useState<'owner'|'reader'>('reader'),[pairing,setPairing]=useState<{code:string;expires:number;role:string}|null>(null);
@@ -36,6 +40,16 @@ export function AccessPanel(){
       <div className="inline-pair"><label>Source<select value={inviteSource} onChange={e=>setInviteSource(e.target.value)}>{view.sources.map(s=><option key={s.source} value={s.source}>{s.label}</option>)}</select></label><label>Capability<select value={inviteCap} onChange={e=>setInviteCap(e.target.value)}><option value="read">Read</option><option value="model">Model</option></select></label></div>
       <button className="secondary-button" disabled={busy||!inviteSource} onClick={()=>void run('/desk/identity/invitations',{source:inviteSource,capability:inviteCap,days:1,epoch:view.epoch},r=>{const v=r as {code:string;expires_at:number};setCode({code:v.code,expires:v.expires_at});})}>Create one-time code</button>
       {code&&<p className="invitation-code" aria-label="One-time code"><span className="hash">{code.code}</span><small>Expires {new Date(code.expires*1000).toLocaleTimeString('en-GB')}. Share it privately.</small></p>}</section>}
+    {owner&&people&&<section className="ask-section"><h3>People</h3>
+      <p className="dialog-note">Everyone holding a key here. A new person sees nothing until you switch a source on. Others may hold Read and Model only.</p>
+      {others(people).length?others(people).map(p=><div className="access-source person-row" key={p.person_id}><strong>{p.label}</strong><small>{p.roles.join(', ')} · {p.devices} device{p.devices===1?'':'s'} · {short(p.person_id)}</small>
+        {view.sources.map(s=><div className="access-caps" key={s.source} aria-label={`${p.label}: ${s.label}`}><span className="access-caps-source">{s.label}</span>{CAPS.filter(cap=>people.shareable.includes(cap.id)).map(cap=>{const on=holds(p,s.source,cap.id);
+          return <button key={cap.id} role="switch" aria-checked={on} aria-label={`${cap.label} on ${s.label} for ${p.label}`} title={cap.note} className={`access-chip ${on?'on':''}`} disabled={busy}
+            onClick={()=>{const r=grantRequest(p,s.source,cap.id,people.epoch);void run(r.path,r.body);}}>{cap.label}</button>;})}</div>)}</div>)
+        :<p className="quiet-empty">Nobody else holds a key here.</p>}
+      <div className="follow-up"><label className="sr-only" htmlFor="enrol-label">Name for the new person</label><input id="enrol-label" value={enrolLabel} maxLength={60} onChange={e=>setEnrolLabel(e.target.value)} placeholder="Name for the new person"/>
+        <button className="text-button" disabled={busy||!enrolLabel.trim()} onClick={()=>void act('/desk/identity/enrolments',{label:enrolLabel.trim(),epoch:view.epoch},r=>{setEnrolment(r as Enrolment);setEnrolLabel('');})}>Create enrolment code</button></div>
+      {enrolment&&<p className="invitation-code" aria-label="Enrolment code"><span className="hash">{enrolment.code}</span><small>For {enrolment.label}: a reader key with no grants. Enter it on their device's pairing screen before {new Date(enrolment.expires_at*1000).toLocaleTimeString('en-GB')}. Single use.</small></p>}</section>}
     <ConnectorList connectors={connectors}/>
     <section className="ask-section"><h3>Your devices</h3>{view.devices.map(d=><div className="access-source device-row" key={d.device}><span><strong>{d.label}</strong><small>{d.role}{d.current?' · this device':''} · expires {new Date(d.expires*1000).toLocaleDateString('en-GB')}</small></span>
         {!d.current&&<button className="text-button" disabled={busy} aria-label={`Revoke ${d.label}`} onClick={()=>void act(`/desk/identity/devices/${d.device}/revoke`,{},()=>c.setNotice(`${d.label} can no longer sign in.`))}>Revoke</button>}</div>)}

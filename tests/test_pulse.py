@@ -12,6 +12,7 @@ from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor
 from alfred.desk_http import DeskHTTPServer
 from alfred.local import Fault
 from alfred.pulse import Pulse
+from grant_helpers import grant_all
 
 
 class PulseTests(unittest.TestCase):
@@ -22,6 +23,7 @@ class PulseTests(unittest.TestCase):
         # Use freshly provisioned keys relative to the injectable clock.
         self.store=KnowledgeStore(self.home/'desk.sqlite',clock=lambda:self.now[0])
         self.keys={role:self.store.provision('pulse-space','pulse-'+role,role,ttl=2592000) for role in ('owner','reader','source')}
+        grant_all(self.store,self.keys['owner'])
         self.sup=KnowledgeSupervisor(self.store,self.keys['owner'],self.keys['source'],self.home/'project',vault=self.home/'vault')
         self.pulse=Pulse(self.store,self.sup);self.sup.pulse=self.pulse
         self.sup.vault.scan()

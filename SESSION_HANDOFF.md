@@ -1,5 +1,13 @@
 # ALFRED unified build handoff
 
+**Latest checkpoint, 16 October 2026:** the six decision-free items (drafts kept and archived
+per the owner's decision, strict grants 1.2, deletion accounting 1.3, host recovery 1.4,
+Obsidian compatibility 1.5, capture policies 2.4) and the agent hub design with its brain plug
+(H1) were built on branch `claude/project-thread-qj8beq` and merged to `main` with the owner's
+authorisation. Read [CHANGELOG.md](CHANGELOG.md), [docs/AGENT_HUB.md](docs/AGENT_HUB.md) and
+the receipts under `docs/evidence/`. Next: agent hub H2 to H4 (no owner decision needed), the
+Hermes adoption decision for H5, and the console visual direction, which the owner will give.
+
 **Latest checkpoint, 2 October 2026:** resume from
 [CHECKPOINT_2026-10-02.md](docs/CHECKPOINT_2026-10-02.md) on branch
 `claude/alfred-development-qpgxhg` (draft PR #18), which combines PRs #15, #16 and #17 with

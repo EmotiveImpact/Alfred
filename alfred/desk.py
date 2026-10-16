@@ -38,6 +38,14 @@ def init_demo(path):
         raise Fault('desk_already_initialised', 409)
     store = DeskStore(path / 'desk.sqlite')
     credentials = {role: store.provision('demo-production', 'demo-' + role, role) for role in ('owner', 'reader', 'source')}
+    # Strict grants by default (SYS-001): nobody, the owner included, sees a source until it
+    # is granted. The demo grants its owner read and model on its one source, explicitly and
+    # journalled like any grant. The reader key holds nothing until the owner grants it.
+    from .policy import IdentityPolicy
+    policy = IdentityPolicy(store)
+    source_expires = store.principal(credentials['source'], {'source'})['expires']
+    for capability in ('read', 'model'):
+        policy.grant(credentials['owner'], 'demo-source', capability, source_expires, policy.view(credentials['owner'])['epoch'])
     fd = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, 'w') as stream:
         json.dump(credentials, stream)
@@ -75,9 +83,13 @@ def load_keys(path):
 def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60, *, vault_exclusions=(), vault_id_key=None):
     # POSIX development target. A lock prevents accidental duplicate supervisors.
     import fcntl
+    import signal
+    import threading
+    from . import recovery
     check_data_directory(path, (vault,) if vault else ())
     fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-    server = supervisor = None
+    server = supervisor = start = None
+    clean, previous_handler = False, None
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -85,23 +97,54 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
             raise Fault('desk_already_running', 409) from None
         keys = load_keys(path)
         store = DeskStore(path / 'desk.sqlite')
+        # Holding the lock, record this start and settle what an earlier process left (RUN-001).
+        start = recovery.begin(path)
+        report = recovery.reconcile(store, keys['owner'], start)
+        recovery.record_recovery(path, start['run'], report)
+        if threading.current_thread() is threading.main_thread():
+            # A service manager stops the host with SIGTERM; treat it like Ctrl+C so the stop is clean.
+            def terminate(_signum, _frame):
+                raise KeyboardInterrupt
+            previous_handler = signal.signal(signal.SIGTERM, terminate)
         supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None), vault_exclusions=vault_exclusions, vault_id_key=vault_id_key)
         jobs, job_stop = start_local_jobs(store, keys['owner'], path)
         server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs)
+        server.recovery = report
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
         print('Local development data. Microphone OFF. No external messages are sent.', flush=True)
         print('Local model available only on explicit request.' if model else 'Source mode: no model configured.', flush=True)
+        print(recovery_line(report), flush=True)
         print('Use the access command to reveal your local sign-in key in a private terminal. Ctrl+C stops the desk.', flush=True)
         server.serve_forever(poll_interval=0.1)
+        clean = True
+    except KeyboardInterrupt:
+        clean = True
+        raise
     finally:
-        if supervisor:
-            supervisor.stop()
-        if 'job_stop' in locals():
-            job_stop()
-        if server:
-            server.server_close()
-        os.close(fd)
+        try:
+            if supervisor:
+                supervisor.stop()
+            if 'job_stop' in locals() and not job_stop():
+                clean = False  # A job was still running; the next start reports it honestly.
+            if server:
+                server.server_close()
+            if clean and start is not None:
+                recovery.mark_clean_stop(path, start['run'])
+        finally:
+            if previous_handler is not None:
+                signal.signal(signal.SIGTERM, previous_handler)
+            os.close(fd)
+
+
+def recovery_line(report):
+    """One plain line about the previous stop. Counts only; no question text or job content."""
+    stop = {'clean': 'The previous run stopped cleanly.', 'first_start': 'First start of this data directory.',
+            'unclean': 'The previous run did not stop cleanly.', 'unknown': 'The previous stop is unknown.'}[report['previous_stop']]
+    missed = sum(report['routine_slots_due_while_stopped'].values())
+    return (f"{stop} Interrupted questions: {report['questions_interrupted']}. "
+            f"Jobs needing reconciliation (effect unknown): {len(report['jobs_effect_unknown'])}. "
+            f"Jobs returned to the queue: {len(report['jobs_requeued'])}. Routine slots due while stopped: {missed}.")
 
 
 def rotate_key(path, role):
@@ -144,23 +187,52 @@ def start_local_jobs(store, owner, path):
     """One local-subprocess worker thread for this host. Not a sandbox or remote worker."""
     import threading
     from .jobs import BoundedCache, JobCoordinator, JobWorker, LocalSubprocessBackend
-    from .job_kinds import KINDS
+    from .job_kinds import SUBPROCESS_KINDS
     jobs = JobCoordinator(store, cache=BoundedCache(path / 'job-cache', 256 * 1024 * 1024))
     if not any(w['id'] == 'local-host' for w in jobs.workers(owner)):
-        jobs.enrol_worker(owner, 'local-host', 'This computer (local subprocess)', sorted(KINDS))
+        jobs.enrol_worker(owner, 'local-host', 'This computer (local subprocess)', list(SUBPROCESS_KINDS))
     worker = JobWorker(jobs, LocalSubprocessBackend(), owner, 'local-host', poll_seconds=0.2)
     stop = threading.Event()
     thread = threading.Thread(target=worker.run, args=(stop,), kwargs={'idle_seconds': 0.75}, name='alfred-local-jobs', daemon=True)
     thread.start()
     def halt():
         stop.set(); thread.join(10)
+        return not thread.is_alive()
     return jobs, halt
+
+
+def recovery_command(args):
+    from . import recovery
+    if args.command == 'doctor':
+        results = recovery.doctor(args.data_dir, (args.vault,) if args.vault else ())
+        if args.json:
+            print(json.dumps({'data_dir': str(Path(args.data_dir).expanduser().absolute()), 'checks': results,
+                              'changes_made': False}, indent=2))
+        else:
+            for item in results:
+                print(f"{item['status'].upper():4}  {item['check']:<14} {item['detail']}")
+            print('Doctor only reads. It changed nothing, repaired nothing and installed nothing.')
+        return 1 if any(item['status'] == 'fail' for item in results) else 0
+    if not 1024 <= args.port <= 65535:
+        raise Fault('invalid_port')
+    kind = args.service or recovery.default_kind()
+    arguments = recovery.serve_arguments(args.data_dir, args.port, args.vault, tuple(args.vault_exclude),
+                                         args.local_model, args.model_port)
+    text = recovery.service_text(kind, arguments, args.data_dir)
+    if args.output:
+        target = recovery.write_service_file(text, args.output)
+        print('Wrote', kind, 'service text to', target)
+        print('ALFRED has not installed, loaded, enabled or started it. Review it, then install it yourself if you want it.')
+    else:
+        print(text, end='')
+    return 0
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
-                                            'connector-add', 'connector-import', 'connectors'))
+                                            'connector-add', 'connector-import', 'connectors', 'doctor', 'service-file',
+                                            'deletion-report'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
@@ -181,9 +253,19 @@ def main():
     parser.add_argument('--export-file', help='The export file you selected; it is only ever read')
     parser.add_argument('--dry-run', action='store_true', help='Show what an import would change, changing nothing')
     parser.add_argument('--allow-remove-all', action='store_true', help='Accept an export that removes every current item')
+    # Host recovery (RUN-001). doctor only reads; service-file only prints or writes text and never installs.
+    parser.add_argument('--json', action='store_true', help='doctor and deletion-report: print as JSON')
+    parser.add_argument('--service', choices=('launchd', 'systemd'), help='service-file: launchd plist or systemd user unit (default: this platform)')
+    parser.add_argument('--output', help='service-file: write to this new file instead of standard output; never a folder a service manager loads from')
+    # Deletion accounting (MEM-010): what the workspace still holds about one subject, and where.
+    parser.add_argument('--subject-kind', choices=('source', 'entity', 'statement'), help='Kind of subject for deletion-report')
+    parser.add_argument('--subject', help='Source, entity or statement identifier for deletion-report')
     args = parser.parse_args()
     os.umask(0o077)
     try:
+        if args.command in ('doctor', 'service-file'):
+            # Neither creates the data directory nor touches the database.
+            raise SystemExit(recovery_command(args))
         if args.command in ('init', 'serve', 'restore'):
             # Checked before anything is created; backup and access stay available to move out.
             check_data_directory(args.data_dir, (args.vault,) if args.vault else ())
@@ -209,7 +291,7 @@ def main():
             print('Export written:', result['directory'])
             print('Statements:', result['counts']['statements'], '- executive records:', result['counts']['executive_records'],
                   '- left out (forgotten, withheld or past retention):',
-                  sum(v for v in result['excluded'].values() if isinstance(v, int)))
+                  sum(result['excluded'][k] for k in ('forgotten_statements', 'withheld_statements', 'retention_ended_statements')))
             print('Readable JSON and Markdown with SHA256SUMS. Not a backup and not encrypted. Keep it private.')
         elif args.command == 'rotate':
             rotate_key(path, args.role)
@@ -225,10 +307,17 @@ def main():
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                 except BlockingIOError:
                     raise Fault('stop_alfred_before_restore', 409) from None
-                result = restore(args.backup_file, path / 'desk.sqlite')
+                cache = None
+                if (path / 'job-cache').is_dir():
+                    from .jobs import BoundedCache
+                    cache = BoundedCache(path / 'job-cache', 256 * 1024 * 1024)
+                result = restore(args.backup_file, path / 'desk.sqlite', cache=cache)
             finally:
                 os.close(fd)
             print('Restored', result['restored_from'], '- replayed', result['journal_entries_replayed'], 'forget/revocation entries.')
+            again = result['removed_again']
+            print('Removed again from the backup:', ', '.join(f'{k} {v}' for k, v in sorted(again['totals'].items())) or 'nothing',
+                  '- cached results removed:', again['cached_results_removed'])
         elif args.command == 'rebuild-index':
             import fcntl
             from .rebuild import rebuild_index
@@ -249,6 +338,15 @@ def main():
             print('New revisions:', len(notes['new_revision']), '- no longer present:', len(notes['no_longer_present']),
                   '- new:', len(notes['new']), '- links unchanged:', report['links']['unchanged'],
                   '- reviewed statements whose state changed:', len(report['reviewed_statements']['state_changed']))
+        elif args.command == 'deletion-report':
+            if not args.subject_kind or not args.subject:
+                raise Fault('subject_required')
+            from .deletion import lines, report
+            cache = path / 'job-cache'
+            result = report(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], args.subject_kind, args.subject,
+                            cache_dir=cache if cache.is_dir() else None)
+            for line in ([json.dumps(result, indent=1, sort_keys=True)] if args.json else lines(result)):
+                print(line)
         elif args.command in ('connector-add', 'connector-import', 'connectors'):
             from .connectors import command
             for line in command(path, args):

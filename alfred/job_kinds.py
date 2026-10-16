@@ -46,7 +46,20 @@ KINDS = {
         'parameters': {'seconds': ('number', 0, 600)},
         'description': 'Sleeps, then hashes its inputs. Exercises limits, cancellation and reconnection.',
     },
+    # The brain plug (docs/AGENT_HUB.md, step H1). Never run by the local subprocess
+    # backend: only a worker enrolled for it with ``alfred.brain.BrainBackend`` leases it.
+    # Sending excerpts to a brain is model use, so its inputs need the ``model``
+    # capability. The brain only proposes; its result bundle is data, not an effect.
+    'brain_task': {
+        'side_effect_free': True, 'capability': 'model', 'backend': 'brain',
+        'parameters': {'brain': ('name', 1, 64), 'packet': ('object', 2, 12288)},
+        'description': 'Sends one validated task packet to a registered brain and keeps its result bundle.',
+    },
 }
+LOCAL_BACKEND = 'local_subprocess'
+# Kinds this file may run as a child process. Other kinds need their own backend.
+SUBPROCESS_KINDS = tuple(sorted(k for k, v in KINDS.items() if v.get('backend', LOCAL_BACKEND) == LOCAL_BACKEND))
+NAME_CHARACTERS = frozenset('abcdefghijklmnopqrstuvwxyz0123456789_.-')
 
 
 def validate(kind, parameters):
@@ -61,12 +74,30 @@ def validate(kind, parameters):
     result = {}
     for name, (form, low, high) in spec.items():
         value = parameters[name]
-        if form == 'int' and type(value) is not int:
-            raise ValueError('invalid_parameters')
-        if form == 'number' and (type(value) not in (int, float) or value != value):
-            raise ValueError('invalid_parameters')
-        if not low <= value <= high:
-            raise ValueError('invalid_parameters')
+        if form == 'name':
+            # A lower-case registry name, bounded in length.
+            if (not isinstance(value, str) or not low <= len(value) <= high or value[0] in '_.-'
+                    or not set(value) <= NAME_CHARACTERS):
+                raise ValueError('invalid_parameters')
+        elif form == 'object':
+            # A JSON object bounded by its compact encoded size. Its shape is checked by
+            # the module that owns the kind (for brain_task, alfred.brain.validate_packet).
+            if type(value) is not dict:
+                raise ValueError('invalid_parameters')
+            try:
+                size = len(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False,
+                                      ensure_ascii=True).encode('ascii'))
+            except (TypeError, ValueError, RecursionError):
+                raise ValueError('invalid_parameters') from None
+            if not low <= size <= high:
+                raise ValueError('invalid_parameters')
+        else:
+            if form == 'int' and type(value) is not int:
+                raise ValueError('invalid_parameters')
+            if form == 'number' and (type(value) not in (int, float) or value != value):
+                raise ValueError('invalid_parameters')
+            if not low <= value <= high:
+                raise ValueError('invalid_parameters')
         result[name] = value
     return result
 
@@ -82,6 +113,8 @@ def _describe(name, data):
 def run(kind, parameters, inputs):
     """Run one kind over ``inputs`` (a list of (name, bytes)) and return result bytes."""
     parameters = validate(kind, parameters)
+    if kind not in SUBPROCESS_KINDS:
+        raise ValueError('kind_needs_other_backend')
     if kind == 'word_count':
         rows, total = [], {'bytes': 0, 'lines': 0, 'words': 0}
         for name, data in inputs:

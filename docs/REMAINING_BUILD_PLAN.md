@@ -11,6 +11,15 @@ Sizes are rough build-session estimates with the current tooling: **S** under ha
 **M** one session, **L** two or more, or needs a worktree agent. "Owner" marks a decision only
 the owner can make; everything else can be built now against synthetic data.
 
+## Update, 16 October 2026
+
+Items 1.2, 1.3, 1.4, 1.5 and 2.4 and the owner's drafts decision were built on branch
+`claude/project-thread-qj8beq`; see the [changelog](../CHANGELOG.md) and each receipt under
+`docs/evidence/`. Decision 0.3 "re-offering expired drafts" is answered by the owner: drafts
+are kept, archived and can be proposed again with fresh approval. The agent brain is now
+designed in [AGENT_HUB.md](AGENT_HUB.md); its step H1 (the brain plug) is built, and it
+refines item 2.1: the reasoning runtime becomes one or more brains behind that plug.
+
 ## Where we are
 
 33 requirements: 8 implemented on the branch, 24 partial, 1 not started. Every surface exists

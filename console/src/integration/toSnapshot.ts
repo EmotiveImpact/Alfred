@@ -4,7 +4,9 @@ const KIND:Record<ProjectionNode['type'],RecordKind>={person:'person',project:'p
 const ORIGIN_LABEL={authored_note:'Authored note',reviewed_entity:'Reviewed memory entity',source:'Selected source',executive_record:'Executive record'} as const;
 export function dueLabel(due:number|null|undefined,overdue=false){if(due==null)return 'No date';const day=new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short'}).format(new Date(due*1000));return overdue?`Overdue · ${day}`:`Due ${day}`;}
 function category(node:ProjectionNode):Category{return node.category&&(CATEGORIES as string[]).includes(node.category)?node.category:'knowledge';}
-function proposalStatus(state:string):Proposal['status']{
+function proposalStatus(state:string,draftStatus?:string):Proposal['status']{
+  // A lapsed, archived or withdrawn draft is kept but can no longer be approved as it is.
+  if(draftStatus==='lapsed'||draftStatus==='archived'||draftStatus==='withdrawn')return 'closed';
   if(state==='proposed')return 'pending';
   if(state==='queued'||state==='executing'||state==='uncertain')return 'in_progress';
   if(state==='verified')return 'completed';
@@ -29,7 +31,7 @@ export function toSnapshot(projection:ConnectedProjection,expectedWorkspace:stri
   const relationships:Relationship[]=projection.edges.map(edge=>({id:edge.id,from:edge.from,to:edge.to,relation:edge.relation,
     provenanceId:edge.evidence[0].sourceId,basis:edge.layer==='note_reference'||edge.layer==='executive_link'||edge.layer==='executive_responsible'?'authored':'human_review',layer:edge.layer}));
   const proposals:Proposal[]=(projection.approvals??[]).map(a=>({id:a.id,title:a.capability==='message.draft'?'Local message draft':a.capability==='vault.inbox_note'?`Inbox note · ${(a.path??'').split('/').pop()}`:a.capability,path:a.path??undefined,
-    body:a.text??'',scope:w,status:proposalStatus(a.state),effect:'server_action',revision:1,serverState:a.state,fingerprint:a.fingerprint,
+    body:a.text??'',scope:w,status:proposalStatus(a.state,a.draftStatus),draftStatus:a.draftStatus,effect:'server_action',revision:1,serverState:a.state,fingerprint:a.fingerprint,
     capability:a.capability,evidenceCurrent:a.evidenceCurrent,mine:a.mine,createdAt:a.createdAt,expiresAt:a.expiresAt}));
   const names=new Map(records.map(r=>[r.id,r.title]));
   const insights:Insight[]=(projection.executive?.insights??[]).filter(i=>names.has(i.entityId)).map(i=>({id:i.claimId,recordId:i.entityId,

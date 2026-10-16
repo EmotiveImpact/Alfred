@@ -24,6 +24,7 @@ from alfred.jobs import (BoundedCache, JobCoordinator, JobWorker, LocalSubproces
 from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
+from grant_helpers import grant_all, revoke_all
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 PLAN = '# Plan\nAlpha bravo charlie.\n\nDelta echo.\n'
@@ -56,6 +57,7 @@ class Base(unittest.TestCase):
         self.source = provision('work', 'source', 'source', ttl=100000)
         self.hidden = provision('work', 'hidden', 'source', ttl=100000)
         self.foreign = provision('other', 'foreign', 'owner', ttl=100000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'
         self.vault.mkdir()
         (self.vault / 'Plan.md').write_text(PLAN)
@@ -86,6 +88,10 @@ class Base(unittest.TestCase):
         return [e['kind'] for e in self.jobs.events(bearer or self.owner, job_id)['events']]
 
     def grant(self, source='source', *, revoke=False):
+        # These tests narrow the fixture's explicit grants to exactly one source for the owner.
+        if not getattr(self, 'narrowed', False):
+            revoke_all(self.store, self.owner)
+            self.narrowed = True
         policy = IdentityPolicy(self.store)
         return policy.grant(self.owner, source, 'read', self.store.now() + 50000,
                             policy.view(self.owner)['epoch'], revoke=revoke)

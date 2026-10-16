@@ -19,6 +19,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from alfred.local_model import LocalOllama
 from alfred.reviewed_memory import ReviewedMemory, context_references
+from grant_helpers import grant_all
 
 
 class PacketFixture:
@@ -40,6 +41,7 @@ class Fixture(unittest.TestCase):
         self.other=self.store.provision('work','another-owner','owner',ttl=200000)
         self.foreign=self.store.provision('elsewhere','foreign','owner',ttl=200000)
         self.source=self.store.provision('work','source','source',ttl=200000)
+        grant_all(self.store,self.owner)
         self.vault=self.root/'vault';self.vault.mkdir();self.file=self.vault/'Record.md'
         self.file.write_text('# Original record\nThe original assignment names Mina.\nAn alternative assignment names Sam.\nThe recorded stage is planning.\n')
         self.scanner=MarkdownVault(self.store,self.source,self.vault);self.scanner.scan()

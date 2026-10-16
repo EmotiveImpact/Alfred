@@ -31,6 +31,10 @@ Job states and transitions (every transition appends a job event):
     effect_unknown   -> reconciled (owner records a finding; acknowledgement,
                         not verification)
     succeeded, failed, cancelled, reconciled: final.
+
+At host start (``settle_host_restart``, RUN-001) this host's own leftover leases
+settle at once: running or cancel_requested -> effect_unknown, leased (never
+started) -> queued. Nothing is re-run blindly.
 """
 from __future__ import annotations
 import abc
@@ -609,6 +613,34 @@ class JobCoordinator:
             outcome['requeued' if state == 'queued' else state].append(row['id'])
         return outcome
 
+    def settle_host_restart(self, bearer, worker_id) -> dict:
+        """At host start, settle this host's own jobs that the previous process left active.
+
+        Only call this while holding the host lock: the previous process that held
+        these leases is gone. A started job becomes ``effect_unknown`` even when it
+        was declared side-effect free, because its local subprocess may have run
+        part of its work or outlived the host; it is never re-run blindly and needs
+        the owner's reconciliation. A lease that never started ran nothing, so it
+        returns to the queue.
+        """
+        ident(worker_id)
+        outcome = {'effect_unknown': [], 'requeued': []}
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner'})
+            for row in db.execute("""SELECT * FROM jobs WHERE scope=? AND lease_owner=?
+                    AND state IN ('leased','running','cancel_requested') ORDER BY created,id""",
+                                  (p['scope'], worker_id)).fetchall():
+                if row['state'] == 'leased':
+                    state, reason = 'queued', 'host_restarted_before_start'
+                else:
+                    state, reason = 'effect_unknown', 'host_stopped_while_running'
+                self._settle(db, row, state, reason)
+                self._event(db, row['id'], 'host_restart_reconciled', {'worker': worker_id, 'attempt': row['attempt'],
+                                                                       'previous_state': row['state'], 'outcome': state,
+                                                                       'reason': reason, 'by': p['id']})
+                outcome[state if state == 'effect_unknown' else 'requeued'].append(row['id'])
+        return outcome
+
     def recover(self, bearer) -> dict:
         """Explicit sweep of expired leases in the caller's scope (``lease`` also does this)."""
         with self.store.transaction() as db:
@@ -842,6 +874,8 @@ class LocalSubprocessBackend(WorkerBackend):
         ident(handle)
         if kind not in job_kinds.KINDS:
             raise Fault('unknown_job_kind')
+        if kind not in job_kinds.SUBPROCESS_KINDS:
+            raise Fault('kind_not_for_this_backend')
         payload = json.dumps({'kind': kind, 'parameters': parameters,
                               'inputs': [{'name': item['name'], 'data': base64.b64encode(item['data']).decode('ascii')}
                                          for item in inputs]}).encode('ascii')

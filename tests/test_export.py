@@ -25,10 +25,11 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from alfred.reviewed_memory import ReviewedMemory
+from grant_helpers import grant_all
 
 DAY = 86400
 FILES = {'README.md', 'manifest.json', 'statements.json', 'captures.json', 'executive-records.json',
-         'statements.md', 'executive-records.md', 'SHA256SUMS'}
+         'review-history.json', 'routines.json', 'statements.md', 'executive-records.md', 'SHA256SUMS'}
 
 
 class ExportTests(unittest.TestCase):
@@ -40,6 +41,7 @@ class ExportTests(unittest.TestCase):
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=2592000)
         self.source = self.store.provision('work', 'source', 'source', ttl=2592000)
         self.other = self.store.provision('work', 'other', 'source', ttl=2592000)
+        grant_all(self.store, self.owner)
         self.vault = self.root / 'vault'; self.vault.mkdir()
         (self.vault / 'Atlas.md').write_text('# Atlas\nAtlas is awaiting review.\nMina leads Atlas.\n'
                                              'The opening is monochrome.\nThe opening is now in colour.\n'
@@ -75,7 +77,8 @@ class ExportTests(unittest.TestCase):
             'support': {'note_id': note['id'], 'sha256': note['sha256'], 'revision': note['revision'], 'start_line': 7, 'end_line': 7}})
         self.goal = self.records.create(self.owner, {'request_id': 'e2', 'kind': 'goal', 'title': 'Atlas ships in spring', 'detail': '',
                                                       'project': None, 'due': None, 'rank': None, 'support': None})
-        self.invitation = IdentityPolicy(self.store).invite(self.owner, 'source', 'read', self.clock[0] + DAY, 0)['code']
+        policy = IdentityPolicy(self.store)
+        self.invitation = policy.invite(self.owner, 'source', 'read', self.clock[0] + DAY, policy.view(self.owner)['epoch'])['code']
         self.clock[0] += 2 * DAY
 
     def note(self, path='Atlas.md'):
@@ -112,7 +115,7 @@ class ExportTests(unittest.TestCase):
         manifest = json.loads(files['manifest.json'])
         self.assertEqual(manifest, {k: v for k, v in result.items() if k != 'directory'})
         self.assertEqual((manifest['format'], manifest['format_version'], manifest['exported_at']),
-                         ('alfred-portable-export', 1, self.clock[0]))
+                         ('alfred-portable-export', 2, self.clock[0]))
         self.assertEqual((manifest['workspace'], manifest['credential'], manifest['role']), ('work', 'owner', 'owner'))
         self.assertEqual({f['path'] for f in manifest['files']}, FILES - {'manifest.json', 'SHA256SUMS'})
         for entry in manifest['files']:
@@ -121,7 +124,9 @@ class ExportTests(unittest.TestCase):
         sums = dict(reversed(line.split('  ')) for line in files['SHA256SUMS'].decode().splitlines())
         self.assertEqual(set(sums), FILES - {'SHA256SUMS'})
         self.assertTrue(all(hashlib.sha256(files[name]).hexdigest() == digest for name, digest in sums.items()))
-        self.assertEqual(manifest['counts'], {'entities': 3, 'statements': 8, 'captures': 2, 'executive_records': 2})
+        self.assertEqual({k: manifest['counts'][k] for k in ('entities', 'statements', 'captures', 'executive_records', 'routine_settings')},
+                         {'entities': 3, 'statements': 8, 'captures': 2, 'executive_records': 2, 'routine_settings': 0})
+        self.assertEqual(manifest['counts']['review_history_entries'], len(json.loads(files['review-history.json'])['entries']))
         self.assertEqual({k: manifest['excluded'][k] for k in ('forgotten_statements', 'withheld_statements', 'retention_ended_statements')},
                          {'forgotten_statements': 1, 'withheld_statements': 1, 'retention_ended_statements': 1})
         self.assertFalse(manifest['encrypted'] or manifest['restorable'] or manifest['authority_granted'])
@@ -204,7 +209,8 @@ class ExportTests(unittest.TestCase):
         export(self.store, self.reader, self.root / 'reader')
         files = self.bundle(self.root / 'reader')
         manifest = json.loads(files['manifest.json'])
-        self.assertEqual(manifest['counts'], {'entities': 0, 'statements': 0, 'captures': 0, 'executive_records': 0})
+        self.assertEqual(manifest['counts'], {'entities': 0, 'statements': 0, 'captures': 0, 'executive_records': 0,
+                                              'review_history_entries': 0, 'routine_settings': 0})
         everything = b''.join(files.values())
         for owner_text in (b'awaiting review', b'Send the Atlas brief', b'Mina'):
             self.assertNotIn(owner_text, everything)

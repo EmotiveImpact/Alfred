@@ -10,6 +10,7 @@ import secrets
 import threading
 import time
 from .local import Fault, exact, ident, text, fingerprint, canonical
+from .policy import ledger
 from .evidence_review import assess_interpretation
 from .grounded import (retrieve, question_terms, references, check_packet, packet_current_db,
                        sources_current_db, validate_interpretation, parse_focus)
@@ -79,7 +80,10 @@ class ConversationService:
         # Deletes application rows, not secure erasure of WAL/backups/filesystem.
         dead = [r[0] for r in db.execute('''SELECT s.id FROM conversations s JOIN credentials c ON c.id=s.actor
           WHERE s.expires<=? OR c.revoked=1 OR c.expires<=?''', (self.store.now(), self.store.now()))]
+        from .drafts import preserve_conversation_links
         for sid in dead:
+            # Drafts outlive the conversation: keep their value-free source binding.
+            preserve_conversation_links(db, sid)
             db.execute('DELETE FROM conversation_action_sources WHERE session=?', (sid,))
             db.execute('DELETE FROM conversations WHERE id=?', (sid,))
 
@@ -113,6 +117,8 @@ class ConversationService:
     def forget(self,bearer,sid):
         with self.store.transaction() as db:
             self.own(db,bearer,sid)
+            from .drafts import preserve_conversation_links
+            preserve_conversation_links(db,sid)
             db.execute('DELETE FROM conversation_action_sources WHERE session=?',(sid,))
             db.execute('DELETE FROM conversations WHERE id=?',(sid,))
         return {'forgotten':True,'secure_erasure':False,'approved_drafts_undone':False}
@@ -258,6 +264,8 @@ class ConversationService:
             p,session=self.own(db,bearer,sid)
             rows=[dict(r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result,focus FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
             for turn in rows:
+                # A visible reason, so an interrupted question is never mistaken for an unanswerable one.
+                if turn['state']=='interrupted':turn['reason']='host_stopped_before_answer'
                 if not turn['result']:continue
                 result=json.loads(turn['result']);sources=result['packet']['evidence']
                 if not packet_current_db(self.store,db,p,result['packet']):
@@ -284,7 +292,7 @@ class ConversationService:
         if kind=='note':
             return sources_current_db(db,p['scope'],[{'note_id':identity,'sha256':focus['sha256'],'revision':focus['revision']}],self.store.now(),p)
         return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_entities'").fetchone()
-                    and db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],p['id'])).fetchone())
+                    and db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],ledger(db,p))).fetchone())
 
     def propose_draft(self,bearer,sid,body):
         exact(body,{'turn_id','text','request_id'});ident(body['turn_id']);ident(body['request_id']);text(body['text'])

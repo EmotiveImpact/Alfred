@@ -7,8 +7,11 @@ export interface HostHealth{checkedAt:string;paused:boolean;role:'owner'|'reader
   jobs:{configured:boolean;byState:Record<string,number>;backend:string|null};
   questions:{configured:boolean;waiting:number};
   model:{configured:boolean;name:string|null;allowed:boolean};
-  lifecycle:{lastBackup:string|null;journalEntries:number}|null}
+  lifecycle:{lastBackup:string|null;journalEntries:number}|null;
+  recovery?:{previousStop:'clean'|'unclean'|'first_start'|'unknown';lastCleanStop:string|null;startedAt:string;
+    questionsInterrupted:number;jobsEffectUnknown:number;jobsRequeued:number;routineSlotsMissed:number}|null}
 const time=(iso:string|null)=>iso?new Date(iso).toLocaleString('en-GB'):'never';
+const STOP:Record<string,string>={clean:'Stopped cleanly',unclean:'Did not stop cleanly',first_start:'First start',unknown:'Unknown'};
 const HOST:Record<string,string>={paused:'Paused',idle:'Running, nothing to do',running:'Running',error:'Stopped by an error',starting:'Starting'};
 /** What the local host is doing, read on request, with the owner's pause control. */
 export function HealthPanel(){
@@ -25,6 +28,8 @@ export function HealthPanel(){
     <div><span>Vault</span><b>{health.vault.configured?`${health.vault.status??'unknown'} · ${health.vault.notes??0} notes · scanned ${time(health.vault.lastScan)}${health.vault.issues?` · ${health.vault.issues} issues`:''}`:'Not configured'}</b></div>
     <div><span>Questions waiting</span><b>{health.questions.configured?health.questions.waiting:'Not configured'}</b></div>
     <div><span>Jobs</span><b>{health.jobs.configured?`${jobs||'none'} · ${health.jobs.backend}`:'No job worker on this host'}</b></div>
+    {health.recovery&&<div><span>Previous stop</span><b>{STOP[health.recovery.previousStop]??health.recovery.previousStop} · last clean stop {time(health.recovery.lastCleanStop)}</b></div>}
+    {health.recovery&&<div><span>Recovered at start</span><b>{health.recovery.questionsInterrupted} questions interrupted · {health.recovery.jobsEffectUnknown} jobs need reconciliation (effect unknown) · {health.recovery.jobsRequeued} returned to queue · {health.recovery.routineSlotsMissed} routine slots missed</b></div>}
     {health.lifecycle&&<div><span>Last backup</span><b>{time(health.lifecycle.lastBackup)} · {health.lifecycle.journalEntries} journal entries</b></div>}
     <p className="dialog-note">Checked {time(health.checkedAt)}. This is the host's own report; it runs only while the foreground process is open and is not an installed service.</p>
     {error&&<p className="sign-in-error" role="alert">{error}</p>}

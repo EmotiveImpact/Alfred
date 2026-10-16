@@ -4,8 +4,12 @@ An export is not a backup. `backup` copies the whole SQLite database, every tabl
 and every person's records, as a consistent snapshot that `restore` can put back.
 An export is a filtered, self-describing record, in plain JSON and readable
 Markdown, of what this credential may read at the time: reviewed statements with
-their review state, cited source revisions and lineage; capture settings and
-retention; and executive records. It cannot be restored and grants nothing.
+their review state, cited source revisions and lineage; their review history
+(states and times, never values); capture settings and retention; routine
+settings the person authored; and executive records. It cannot be restored and
+grants nothing. ALFRED notes each export it writes (identifiers and folder only)
+in a register beside the database, so deletion accounting can say which exports
+on disk still hold a forgotten subject.
 
 Never exported: access keys, credential digests, sessions, invitation codes,
 other people's records, forgotten statements, statements whose support is
@@ -25,13 +29,14 @@ from pathlib import Path
 import secrets
 import shutil
 from .local import Fault
+from .policy import ledger
 
-FORMAT, FORMAT_VERSION = 'alfred-portable-export', 1
+FORMAT, FORMAT_VERSION = 'alfred-portable-export', 2
 REPOSITORY = Path(__file__).resolve().parents[1]
 NEVER = ['access keys and credential digests', 'browser sessions', 'grant invitation codes',
          "other people's records", 'note bodies (your Markdown files remain the canonical copy)']
 NOT_INCLUDED = ['knowledge index and note history', 'audit log', 'lifecycle receipts',
-                'actions, drafts and approvals', 'jobs and artefacts',
+                'actions, drafts and approvals', 'jobs and artefacts', 'routine runs and nominations',
                 'recommendations and priorities order (recomputed from the records)']
 DIFFERENCE = ('A backup is a consistent copy of the whole database for restore. '
               "This export is a filtered, readable record of one credential's authorised view. It cannot be restored.")
@@ -58,7 +63,9 @@ def collect(store, bearer):
             raise Fault('export_authority_changed', 409)
         captures = {r['claim_id']: dict(r) for r in db.execute(
             'SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',
-            (p['scope'], p['id']))}
+            (p['scope'], ledger(db, p)))}
+        history = _history(db, p)
+        routines = _routines(db, p)
     entities = {e['id']: e for e in memory['entities']}
     replaced_by = {c['replaces_id']: c['id'] for c in memory['claims'] if c['replaces_id']}
     excluded = {'forgotten_statements': 0, 'withheld_statements': 0, 'retention_ended_statements': 0}
@@ -108,6 +115,9 @@ def collect(store, bearer):
     for s in statements:
         s['lineage'] = {k: reference(v) for k, v in s['lineage'].items()}
         s['conflicts_with'] = [reference(i) for i in s['conflicts_with']]
+    # Review history of exported statements only: identifiers, states and times, never a value.
+    review_history = [e | {'related_id': reference(e['related_id'])} for e in history if e['statement_id'] in kept]
+    excluded['history_entries_of_left_out_statements'] = sum(e['statement_id'] not in kept for e in history)
     exported = {s['subject']['id'] for s in statements} | {s['object']['id'] for s in statements if s['object']}
     names = {}
     for e in memory['entities']:
@@ -120,7 +130,43 @@ def collect(store, bearer):
                for r in executive['records']]
     return {'principal': {'workspace': p['scope'], 'credential': p['id'], 'role': p['role'], 'person': p['person_id']},
             'exported_at': now, 'grant_revision': before, 'entities': listed, 'statements': statements,
-            'captures': kept_captures, 'executive_records': records, 'excluded': excluded}
+            'captures': kept_captures, 'executive_records': records, 'review_history': review_history,
+            'routines': routines, 'excluded': excluded}
+
+
+def _has(db, table):
+    return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone())
+
+
+def _history(db, p):
+    """This person's review history rows, in recorded order (MEM-007; decision 0.3)."""
+    if not _has(db, 'memory_claim_history'):
+        return []
+    by = lambda who: 'you' if who == p['id'] else 'alfred' if who == 'alfred' else 'another_credential'
+    return [{'seq': r['seq'], 'statement_id': r['claim_id'], 'state': r['state'], 'at': r['at'], 'at_utc': _utc(r['at']),
+             'time_known': bool(r['time_known']), 'by': by(r['by']), 'origin': r['origin'], 'related_id': r['related_id'],
+             'detail': r['detail'],
+             'valid_period': {'from': r['valid_from'], 'until': r['valid_until']} if r['sets_valid'] else None}
+            for r in db.execute('SELECT * FROM memory_claim_history WHERE scope=? AND actor=? ORDER BY seq', (p['scope'], ledger(db, p)))]
+
+
+def _routines(db, p):
+    """Routine settings this person authored: kinds, schedules, budgets and pauses. No runs."""
+    routines, pulse = [], []
+    if _has(db, 'routine_settings'):
+        for r in db.execute('SELECT * FROM routine_settings WHERE scope=? AND actor=? ORDER BY kind', (p['scope'], p['id'])):
+            try:
+                settings = json.loads(r['settings'])
+            except ValueError:
+                settings = None
+            routines.append({'kind': r['kind'], 'enabled': bool(r['enabled']), 'paused': bool(r['paused']), 'settings': settings,
+                             'version': r['version'], 'next_due': r['next_due'], 'next_due_utc': _utc(r['next_due']),
+                             'updated': r['updated']})
+    if _has(db, 'pulse_routines'):
+        for r in db.execute('SELECT * FROM pulse_routines WHERE scope=? AND actor=? ORDER BY id', (p['scope'], p['id'])):
+            pulse.append({'id': r['id'], 'enabled': bool(r['enabled']), 'interval_seconds': r['interval_seconds'],
+                          'next_due': r['next_due'], 'next_due_utc': _utc(r['next_due'])})
+    return {'routines': routines, 'pulse_routines': pulse}
 
 
 def _longest_backticks(value):
@@ -158,6 +204,13 @@ def render(bundle):
                 'time_unit': 'unix_seconds_utc', 'captures': bundle['captures']}
     executive = {'format': FORMAT, 'kind': 'executive_records', 'basis': 'user_authored_record_not_verified_fact',
                  'time_unit': 'unix_seconds_utc', 'records': bundle['executive_records']}
+    history = {'format': FORMAT, 'kind': 'review_history', 'basis': 'alfred_review_records_without_values',
+               'time_unit': 'unix_seconds_utc', 'entries': bundle['review_history']}
+    routines = {'format': FORMAT, 'kind': 'routine_settings', 'basis': 'settings_chosen_by_the_person_no_runs',
+                'time_unit': 'unix_seconds_utc', **bundle['routines']}
+    steps = {}
+    for e in bundle['review_history']:
+        steps.setdefault(e['statement_id'], []).append(e)
     lines = ['# Reviewed statements', '',
              f'Exported {when} for workspace {_code(who["workspace"])} by credential {_code(who["credential"])}.',
              'These are statements the person reviewed or proposed, not verified facts. A proposed statement has not been reviewed.', '']
@@ -182,6 +235,9 @@ def render(bundle):
                 lines.append(f"  - Conflicts with {', '.join(_code(i) for i in s['conflicts_with'])}, so it is not used until the person resolves it")
             if s['lineage']['replaces'] or s['lineage']['replaced_by']:
                 lines.append(f"  - Replaces {_code(s['lineage']['replaces'])}; replaced by {_code(s['lineage']['replaced_by'])}")
+            if steps.get(s['id']):
+                lines.append('  - Review history: ' + '; '.join(
+                    f"{e['state']} {e['at_utc']}{'' if e['time_known'] else ' (no later than)'} by {e['by']}" for e in steps[s['id']]))
         lines.append('')
     if bundle['captures']:
         lines += ['## Capture settings and retention', '']
@@ -211,21 +267,28 @@ def render(bundle):
             records_md += ['', _block(r['detail'])]
         records_md.append('')
     files = {'statements.json': _json(statements), 'captures.json': _json(captures),
-             'executive-records.json': _json(executive),
+             'executive-records.json': _json(executive), 'review-history.json': _json(history),
+             'routines.json': _json(routines),
              'statements.md': ('\n'.join(lines).rstrip() + '\n').encode(),
              'executive-records.md': ('\n'.join(records_md).rstrip() + '\n').encode()}
     counts = {'entities': len(bundle['entities']), 'statements': len(bundle['statements']),
-              'captures': len(bundle['captures']), 'executive_records': len(bundle['executive_records'])}
+              'captures': len(bundle['captures']), 'executive_records': len(bundle['executive_records']),
+              'review_history_entries': len(bundle['review_history']),
+              'routine_settings': len(bundle['routines']['routines']) + len(bundle['routines']['pulse_routines'])}
     readme = '\n'.join([
         '# ALFRED portable export', '',
         f'Exported {when} for workspace {_code(who["workspace"])}, credential {_code(who["credential"])} ({who["role"]}).', '',
         'This folder holds what that credential could read when the export was assembled: '
         f"{counts['statements']} reviewed statement(s), {counts['entities']} entities, "
-        f"{counts['captures']} capture setting(s) and {counts['executive_records']} executive record(s).", '',
+        f"{counts['captures']} capture setting(s), {counts['executive_records']} executive record(s), "
+        f"{counts['review_history_entries']} review history entr{'y' if counts['review_history_entries'] == 1 else 'ies'} "
+        f"and {counts['routine_settings']} routine setting(s).", '',
         '| File | Contents |', '|---|---|',
         '| `manifest.json` | Format, time, counts, exclusions and the SHA-256 of every other file |',
         '| `statements.json`, `statements.md` | Reviewed statements with review state, cited source revision and lineage |',
+        '| `review-history.json` | When each exported statement entered each review state and who changed it; no values |',
         '| `captures.json` | Memory type and retention chosen at capture |',
+        '| `routines.json` | Routine settings you authored: kind, schedule, budgets, quiet hours and pause; no runs |',
         '| `executive-records.json`, `executive-records.md` | Goals, priorities, commitments, decisions, milestones and follow-ups |',
         '| `SHA256SUMS` | Checksums; verify with `sha256sum -c SHA256SUMS` |', '',
         '## Not a backup', '', DIFFERENCE, '',
@@ -249,7 +312,9 @@ def render(bundle):
                            'media_type': 'application/json' if name.endswith('.json') else 'text/markdown'}
                           for name, data in sorted(files.items())],
                 'basis': {'statements': 'user_reviewed_statements_not_verified_facts',
-                          'executive_records': 'user_authored_record_not_verified_fact'},
+                          'executive_records': 'user_authored_record_not_verified_fact',
+                          'review_history': 'alfred_review_records_without_values',
+                          'routines': 'settings_chosen_by_the_person_no_runs'},
                 'encrypted': False, 'restorable': False, 'authority_granted': False}
     files['manifest.json'] = _json(manifest)
     files['SHA256SUMS'] = ''.join(f'{hashlib.sha256(data).hexdigest()}  {name}\n' for name, data in sorted(files.items())).encode()
@@ -316,9 +381,25 @@ def write(destination, files, vaults=()):
 def export(store, bearer, destination, *, vaults=()):
     """Collect, render and write one export, then note it in the audit log."""
     check_destination(destination, vaults)
-    manifest, files = render(collect(store, bearer))
+    bundle = collect(store, bearer)
+    manifest, files = render(bundle)
     target = write(destination, files, vaults)
+    from .deletion import register_export
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner', 'reader'})
+        notes = sorted({s['source']['note_id'] for s in bundle['statements']}
+                       | {r['support']['note_id'] for r in bundle['executive_records'] if r['support']})
+        sources = set()
+        for table in ('knowledge_notes', 'knowledge_history'):
+            if notes and _has(db, table):
+                sources |= {r[0] for r in db.execute(f'SELECT DISTINCT source FROM {table} WHERE scope=? AND id IN ({",".join("?" * len(notes))})',
+                                                    (p['scope'], *notes))}
+        # Recorded beside the database so forget receipts and the deletion report can count
+        # exports still on disk that hold a subject (MEM-010). Identifiers only.
+        register_export(store.path, {'export_id': manifest['export_id'], 'scope': p['scope'], 'actor': p['id'],
+                                     'directory': str(target), 'exported_at': manifest['exported_at'],
+                                     'statements': sorted(s['id'] for s in bundle['statements']),
+                                     'entities': sorted(e['id'] for e in bundle['entities']),
+                                     'notes': notes, 'sources': sorted(sources)})
         store.log(db, p['scope'], p['id'], 'export.written', manifest['export_id'])
     return manifest | {'directory': str(target)}

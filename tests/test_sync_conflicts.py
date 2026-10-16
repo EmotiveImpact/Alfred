@@ -24,6 +24,7 @@ from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.sync_conflicts import MAX_CONFLICTS, conflict_copy
+from grant_helpers import grant_all, revoke_all
 
 SYNCTHING = 'Atlas.sync-conflict-20261002-101500-ABCDEFG.md'
 DROPBOX = "Atlas (Jo Example's conflicted copy 2026-10-02).md"
@@ -82,6 +83,7 @@ class ScannerConflictTests(unittest.TestCase):
         self.owner = self.store.provision('work', 'owner', 'owner', ttl=100000)
         self.reader = self.store.provision('work', 'reader', 'reader', ttl=100000)
         self.source = self.store.provision('work', 'source', 'source', ttl=100000)
+        grant_all(self.store, self.owner)
         self.scanner = MarkdownVault(self.store, self.source, self.vault)
 
     def write(self, path, body):
@@ -233,6 +235,7 @@ class ScannerConflictTests(unittest.TestCase):
         self.scanner.scan()
         self.assertEqual(len(self.data(self.reader)['sync_conflicts']), 1)
         policy = IdentityPolicy(self.store)
+        revoke_all(self.store, self.owner)  # then only the owner holds read
         policy.grant(self.owner, 'source', 'read', 50000, policy.view(self.owner)['epoch'])
         self.assertEqual(len(self.data()['sync_conflicts']), 1)
         hidden = self.data(self.reader)
@@ -304,6 +307,7 @@ class ConflictHTTPTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         root = Path(self.tmp.name); self.home = root / 'demo'; self.keys = init_demo(self.home)
         self.store = KnowledgeStore(self.home / 'desk.sqlite')
+        grant_all(self.store, self.keys['owner'], ('read',))  # the demo reader holds nothing until granted
         (self.home / 'vault' / 'notes' / 'Brief (Sample Coordinator\'s conflicted copy 2026-10-02).md').write_text(
             '# Creative brief\nA colour opening instead.\n')
         self.sup = KnowledgeSupervisor(self.store, self.keys['owner'], self.keys['source'], self.home / 'project', vault=self.home / 'vault')

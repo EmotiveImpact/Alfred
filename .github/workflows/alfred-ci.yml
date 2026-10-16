@@ -166,6 +166,14 @@ jobs:
         run: |
           set -euo pipefail
           ALFRED_ROUTINES_OUTPUT=/tmp/alfred-console-connected/routines /tmp/alfred-browser/bin/python tools/check_routines_browser.py
+      - name: Browser acceptance of host restart recovery in the console health panel
+        run: |
+          set -euo pipefail
+          ALFRED_RECOVERY_OUTPUT=/tmp/alfred-console-connected/recovery /tmp/alfred-browser/bin/python tools/check_recovery_browser.py
+      - name: Browser acceptance of capture policies in the console
+        run: |
+          set -euo pipefail
+          ALFRED_CAPTURE_OUTPUT=/tmp/alfred-console-connected/capture /tmp/alfred-browser/bin/python tools/check_capture_browser.py
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
