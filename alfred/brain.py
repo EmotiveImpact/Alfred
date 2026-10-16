@@ -160,6 +160,9 @@ def _strings(value):
 
 PACKET_KEYS = {'packet_version', 'task_id', 'goal', 'scope', 'instruction', 'context', 'learned',
                'tools', 'budget', 'autonomy'}
+# H4: acceptance checks declared by the owner or a mandate, never the brain
+# (alfred.verification). A packet without them is exactly the H1 contract.
+OPTIONAL_PACKET_KEYS = {'acceptance'}
 EXCERPT_KEYS = {'id', 'note_id', 'title', 'revision', 'sha256', 'start_line', 'end_line', 'text', 'basis'}
 LEARNED_KEYS = {'id', 'claim_id', 'version', 'statement', 'basis'}
 EXCERPT_BASIS = 'authored_note_not_verified_fact'
@@ -180,7 +183,8 @@ def validate_packet(packet):
     below also refuses any string anywhere in the packet that has the shape of an ALFRED
     bearer token. Autonomy 3 and 4 are valid values here but refused by ``BrainPolicy``.
     """
-    _exact(packet, PACKET_KEYS, 'invalid_packet_fields')
+    if type(packet) is not dict or not PACKET_KEYS <= set(packet) <= PACKET_KEYS | OPTIONAL_PACKET_KEYS:
+        raise Fault('invalid_packet_fields')
     if packet['packet_version'] != PACKET_VERSION or type(packet['packet_version']) is not int:
         raise Fault('unsupported_packet_version')
     ident(packet['task_id'])
@@ -232,6 +236,9 @@ def validate_packet(packet):
         raise Fault('invalid_tools')
     validate_budget(packet['budget'])
     _int(packet['autonomy'], 0, 4, 'invalid_autonomy')
+    if 'acceptance' in packet:
+        from .verification import validate_acceptance
+        validate_acceptance(packet['acceptance'], packet)
     if any(CREDENTIAL_SHAPE.search(s) for s in _strings(packet)):
         raise Fault('credential_shaped_value_in_packet')
     if len(_compact(packet).encode('ascii')) > MAX_PACKET_BYTES:
@@ -856,7 +863,8 @@ class BrainHub:
     def build_packet(self, bearer, request) -> dict:
         """A validated packet from the caller's own permitted material. Sends nothing."""
         keys = {'task_id', 'goal', 'scope', 'instruction', 'context', 'learned', 'tools', 'budget', 'autonomy'}
-        _exact(request, keys | {'brain'}, 'invalid_fields')
+        if type(request) is not dict or not keys | {'brain'} <= set(request) <= keys | {'brain', 'acceptance'}:
+            raise Fault('invalid_fields')
         with self.store.connection() as db:
             principal = self.store.authenticate(db, bearer, {'owner'})
         expected = self.workspace_scopes.get(principal['scope'])
@@ -867,6 +875,9 @@ class BrainHub:
                   'context': self._excerpts(bearer, request['context']),
                   'learned': self._learned(bearer, request['learned']),
                   'tools': request['tools'], 'budget': request['budget'], 'autonomy': request['autonomy']}
+        if 'acceptance' in request:
+            from .verification import declare
+            packet['acceptance'] = declare(request['acceptance'])
         return validate_packet(packet)
 
     def submit(self, bearer, request) -> dict:
@@ -1110,9 +1121,15 @@ def action_current(store, db, row):
                      (link['job_id'], row['scope'], row['actor'])).fetchone()
     if not result or result['status'] != 'accepted' or not job:
         return False
+    packet = json.loads(job['parameters'])['packet']
+    # H4: declared acceptance checks must have run, and none failed unless the owner
+    # acknowledged the result (alfred.verification).
+    from .verification import holds_effects
+    if holds_effects(db, row['scope'], row['actor'], link['job_id'], packet):
+        return False
     from .policy import permitted
     principal, now = {'scope': row['scope'], 'id': row['actor']}, store.now()
-    for item in json.loads(job['parameters'])['packet']['context']:
+    for item in packet['context']:
         note = db.execute('''SELECT n.source,n.revision,n.sha256 FROM knowledge_notes n
             JOIN credentials c ON c.id=n.source AND c.scope=n.scope
             JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source
