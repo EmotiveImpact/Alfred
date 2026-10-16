@@ -97,6 +97,10 @@ class DeskHTTPServer(HTTPServer):
         from .routines import Routines
         self.routines = Routines(store, supervisor) if self.pulse is not None else None
         if self.routines is not None: supervisor.routines = self.routines
+        # Owner-authored capture policies (MEM-004, M04) propose statements into the review queue.
+        from .capture_policies import CapturePolicies
+        self.capture = CapturePolicies(store, supervisor if hasattr(supervisor, 'owner') else None, self.memory) if self.memory is not None else None
+        if self.capture is not None and self.pulse is not None: supervisor.capture = self.capture
         self.assets = Path(assets) if assets else Path(__file__).resolve().parents[1] / 'web'
         # The built premium console is served from this same loopback origin so
         # it inherits the session, CSRF, Host/Origin and CSP boundary unchanged.
@@ -473,6 +477,9 @@ class Handler(BaseHTTPRequestHandler):
             elif (url.path == '/desk/routines' or url.path.startswith('/desk/routines/')) and not url.query:
                 from .routines_http import route as routines_route
                 result = routines_route(self.server, url.path, mutation, bearer, body)
+            elif (url.path == '/desk/capture' or url.path.startswith('/desk/capture/')) and not url.query:
+                from .capture_policies import route as capture_route
+                result = capture_route(self.server.capture, url.path, mutation, bearer, body)
             elif url.path == '/desk/jobs' or url.path.startswith('/desk/jobs/'):
                 result = self.jobs_route(url, mutation, bearer, body)
             elif not mutation and url.path == '/desk/console/workspaces' and not url.query:

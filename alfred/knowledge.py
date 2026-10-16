@@ -796,6 +796,12 @@ class KnowledgeSupervisor(Supervisor):
                     self.memory.apply_retention(self.owner)
                 except Fault as exc:
                     self.error = exc.code
+            if getattr(self, 'capture', None) is not None and not self.store.paused(self.scope):
+                try:
+                    # Owner-authored capture policies: proposals for review only, never accepted here.
+                    self.capture.cycle()
+                except Fault as exc:
+                    self.error = exc.code
             if getattr(self, 'pulse', None) is not None and not self.store.paused(self.scope):
                 try:
                     self.pulse.cycle()
