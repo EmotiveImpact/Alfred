@@ -1,7 +1,8 @@
 # ALFRED agent hub: many brains, one authority
 
 16 October 2026. Design for ALFRED's agent brain, written after the owner's conversation on
-Hermes Agent and Paperclip (development session of 16 October). Status: **design, not built.**
+Hermes Agent and Paperclip (development session of 16 October). Status: **steps H1 to H4 built
+against a synthetic brain; no real brain yet.**
 Nothing here installs, runs or imports Hermes, Paperclip or any other `third_party/` code.
 Adoption of any outside runtime still follows the AGENTS.md rules and needs the owner's
 sign-off, recorded in the [requirement register](../plans/requirement-register.json).
@@ -179,6 +180,19 @@ closed. ALFRED uses both, with `approvals.mode: manual`, so Hermes's own second-
 | Telemetry | off | off, verified |
 | Toolsets | broad default | explicit allowlist per task |
 
+**Upgrades and plugins (owner question, 16 October).**
+
+- *Upgrades* are pinned, never silent. The daily upstream watch writes a brief for each new
+  release. If the owner approves, ALFRED builds the new version in a fresh container, reruns
+  the fence tests below on synthetic data and switches over only if every one passes, keeping
+  the previous version for rollback. A renamed setting or a changed hook fails the fence tests
+  before it reaches the owner's data.
+- *Plugins and skills* are allowed one by one. Each Hermes plugin is approved by name and
+  version, pinned, and never installs itself. Its tool calls still pass ALFRED's approval, and
+  it gets no credentials or network unless a task grants them. Hermes skills arrive in the
+  daily learning list as proposals. Plugins that would replace ALFRED's own roles, such as
+  another memory store or another approval route, are refused.
+
 **Fence tests before any real use** (synthetic vault only):
 
 1. Hermes tries to send a message without approval and is blocked.
@@ -203,10 +217,10 @@ is an owner decision. Its telemetry is on by default and would be switched off.
 | Step | What | Needs |
 |---|---|---|
 | H0 | This design, linked from the build plan. | Done with this document |
-| H1 | The brain plug: task packet, result bundle, autonomy levels and budgets as code, with a deterministic synthetic worker and contract tests. No model. | Nothing |
-| H2 | Goals and mandates, heartbeats through routines, budgets with automatic pause, pause/reassign/stop in the console. | H1 |
-| H3 | The daily learning job: evidence gathering, preference/procedure/routing proposals into the inbox, upstream watch briefs from the source-library manifests. Deterministic first, no model. | H1, capture policies (2.4) |
-| H4 | Independent verification of worker results (tests, read-back, citation checks) as a gate before "done". | H1 |
+| H1 | The brain plug: task packet, result bundle, autonomy levels and budgets as code, with a deterministic synthetic worker and contract tests. No model. | Built (`alfred/brain.py`) |
+| H2 | Goals and mandates, heartbeats through routines, budgets with automatic pause, pause/reassign/stop in the console. | Built (`alfred/hub_goals.py`); console edits mandates later |
+| H3 | The daily learning job: evidence gathering, preference/procedure/routing proposals into the inbox, upstream watch briefs from the source-library manifests. Deterministic first, no model. | Built (`alfred/learning.py`) |
+| H4 | Independent verification of worker results (tests, read-back, citation checks) as a gate before "done". | Built (`alfred/verification.py`) |
 | H5 | Hermes adapter in an isolated container behind the plug, with every override above and the fence tests. | Owner: adoption sign-off and model choice (2.1); isolation backend (3.2) |
 | H6 | Further brains (Claude, local Qwen) behind the same plug; Paperclip only if wanted. | H5 pattern, owner decisions |
 
