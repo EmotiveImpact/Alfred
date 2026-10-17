@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 from pathlib import Path
 import stat
 import subprocess
@@ -297,6 +298,23 @@ class AreaTests(Base):
                 self.opened.add_area(area, kind)
             self.assertEqual(caught.exception.code, code)
 
+    def test_area_names_are_sealed_and_ids_can_be_neutral(self):
+        added = self.opened.add_area(None, 'client', 'Northwind Traders')
+        self.assertRegex(added['area'], r'^client-[0-9a-f]{8}$')
+        self.assertNotIn('Northwind', self.raw())
+        self.assertNotIn('Northwind', json.dumps(keys.Keyring.read(self.path).view()))
+        sealed = self.opened.seal(added['area'], 'Northwind renewal', 'notes/excerpt/9')
+        self.assertNotIn('Northwind', sealed)
+        with keys.Keyring.read(self.path).unlock(keys.RecoveryKey(self.recovery_key)) as again:
+            names = {a['id']: a['label'] for a in again.areas()}
+        self.assertEqual((names[added['area']], names['personal']), ('Northwind Traders', 'personal'))
+        data = json.loads(self.raw())
+        data['areas'][0]['name'], data['areas'][1]['name'] = data['areas'][1]['name'], data['areas'][0]['name']
+        self.path.write_text(json.dumps(data))
+        with self.assertRaises(Fault) as caught:
+            keys.Keyring.read(self.path).unlock(keys.Passphrase(PASSPHRASE))
+        self.assertEqual(caught.exception.code, 'keyring_tampered')
+
     def test_swapped_area_keys_are_refused(self):
         data = json.loads(self.raw())
         first, second = data['areas'][0], data['areas'][1]
@@ -573,13 +591,22 @@ class CommandLineTests(unittest.TestCase):
                           ('check',), ('area-destroy', 'acme', '--confirm', 'acme')):
             done = self.run_keys(*arguments)
             self.assertEqual(done.returncode, 0, done.stderr)
+        named = self.run_keys('area-add', '--kind', 'client', '--label', 'Contoso board')
+        self.assertEqual(named.returncode, 0, named.stderr)
+        neutral = re.search(r'client-[0-9a-f]{8}', named.stdout).group(0)
+        listed = self.run_keys('areas')
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertIn('Contoso board', listed.stdout)
+        self.assertNotIn('Contoso', self.run_keys('status').stdout)
+        self.assertEqual(self.run_keys('area-destroy', neutral, '--confirm', neutral).returncode, 0)
         refused = self.run_keys('area-destroy', 'personal', '--confirm', 'persona')
         self.assertEqual(refused.returncode, 1)
         self.assertIn('confirmation_mismatch', refused.stderr)
         status = self.run_keys('status', '--json')
         self.assertEqual(status.returncode, 0, status.stderr)
         view = json.loads(status.stdout)
-        self.assertEqual(([a['id'] for a in view['areas']], [d['id'] for d in view['destroyed']]), (['personal'], ['acme']))
+        self.assertEqual(([a['id'] for a in view['areas']], [d['id'] for d in view['destroyed']]),
+                         (['personal'], ['acme', neutral]))
         self.assertNotIn(secret.read_text().strip(), status.stdout)
         self.assertNotIn(key, (self.data / keys.KEYRING_FILE).read_text())
         # Recovery from standard input, as a server operator would pipe it.

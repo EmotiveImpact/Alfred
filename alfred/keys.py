@@ -59,6 +59,7 @@ CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 KEYCHAIN_SERVICE = 'alfred.keyring'
 SEAL_PREFIX = 'alfred-seal'
 MAX_SLOTS, MAX_AREAS, MAX_VERSIONS, MAX_KEYRING_BYTES = 16, 256, 16, 1 << 20
+MAX_AREA_NAME = 80
 HEX_ID = re.compile(r'[0-9a-f]{8}')
 B64 = re.compile(r'[A-Za-z0-9_-]{0,4096}')
 
@@ -446,7 +447,7 @@ def _validate(data) -> dict:
     if len({s['id'] for s in slots}) != len(slots) or sum(s['method'] == 'recovery' for s in slots) != 1:
         raise bad()
     for area in areas:
-        if type(area) is not dict or set(area) != {'id', 'kind', 'label', 'created', 'keys'}:
+        if type(area) is not dict or set(area) != {'id', 'kind', 'name', 'created', 'keys'}:
             raise bad()
         try:
             ident(area['id'])
@@ -454,7 +455,9 @@ def _validate(data) -> dict:
             raise bad() from None
         if area['kind'] not in AREA_KINDS or type(area['keys']) is not list or not 1 <= len(area['keys']) <= MAX_VERSIONS:
             raise bad()
-        label(area['label']); number(area['created'])
+        number(area['created'])
+        if not NONCE_BYTES + TAG_BYTES < len(_unb64(area['name'])) <= NONCE_BYTES + TAG_BYTES + 4 * MAX_AREA_NAME:
+            raise bad()
         for position, key in enumerate(area['keys'], 1):
             if type(key) is not dict or set(key) != {'version', 'created', 'key'} or key['version'] != position:
                 raise bad()
@@ -594,7 +597,7 @@ class Keyring:
                 'generation': self.data['generation'],
                 'unlock': [{'slot': s['id'], 'method': s['method'], 'label': s['label'], 'created': s['created'],
                             'where': where(s)} for s in self.data['slots']],
-                'areas': [{'id': a['id'], 'kind': a['kind'], 'label': a['label'], 'created': a['created'],
+                'areas': [{'id': a['id'], 'kind': a['kind'], 'created': a['created'],
                            'key_versions': len(a['keys'])} for a in self.data['areas']],
                 'destroyed': [dict(d) for d in self.data['destroyed']]}
 
@@ -737,13 +740,25 @@ class OpenKeyring:
     def _wrap_label(self, area: str, version: int) -> bytes:
         return _label('area', self.id, area, version)
 
-    def add_area(self, area: str, kind: str, label: str | None = None) -> dict:
-        ident(area)
+    def add_area(self, area: str | None, kind: str, label: str | None = None) -> dict:
+        """Add an area with its own key. ``label`` is its name for people ("Acme Ltd"), kept sealed.
+
+        The area's id is written in the clear beside every value sealed with it, so with no
+        ``area`` ALFRED makes a neutral one, such as ``client-3f9a2b1c``, that names no one.
+        """
         if kind not in AREA_KINDS:
             raise Fault('invalid_area_kind')
-        if label is not None and (not isinstance(label, str) or not 1 <= len(label) <= 80 or any(ord(c) < 32 for c in label)):
+        if area is not None:
+            ident(area)
+        if label is not None and (not isinstance(label, str) or not 1 <= len(label) <= MAX_AREA_NAME
+                                  or any(ord(c) < 32 for c in label)):
             raise Fault('invalid_label')
         with self._change() as data:
+            taken = {a['id'] for a in data['areas']} | {d['id'] for d in data['destroyed']}
+            if area is None:
+                area = f'{kind}-{secrets.token_hex(4)}'
+                while area in taken:
+                    area = f'{kind}-{secrets.token_hex(4)}'
             if any(a['id'] == area for a in data['areas']):
                 raise Fault('area_exists', 409)
             if any(d['id'] == area for d in data['destroyed']):
@@ -752,9 +767,17 @@ class OpenKeyring:
                 raise Fault('too_many_areas', 409)
             now = int(self.clock())
             key = _lock(self._key('wrap'), secrets.token_bytes(KEY_BYTES), self._wrap_label(area, 1))
-            data['areas'].append({'id': area, 'kind': kind, 'label': label or area, 'created': now,
+            name = _lock(self._key('names'), (label or area).encode('utf-8'), _label('area-name', self.id, area))
+            data['areas'].append({'id': area, 'kind': kind, 'name': name, 'created': now,
                                   'keys': [{'version': 1, 'created': now, 'key': key}]})
         return {'area': area, 'kind': kind, 'key_versions': 1}
+
+    def areas(self) -> list[dict]:
+        """The areas with their names opened; ``Keyring.view`` shows them without names."""
+        return [{'id': a['id'], 'kind': a['kind'],
+                 'label': _open(self._key('names'), a['name'], _label('area-name', self.id, a['id']),
+                                fault='keyring_tampered').decode('utf-8'),
+                 'created': a['created'], 'key_versions': len(a['keys'])} for a in self.keyring.data['areas']]
 
     def rotate_area(self, area: str) -> dict:
         """A new key version for new seals. Older versions stay until their values are sealed again."""
@@ -1023,7 +1046,7 @@ def _print_view(view: dict, disk: dict) -> None:
     print('Unlock methods:')
     for slot in view['unlock']:
         print(f"  {slot['slot']}  {slot['method']:<12} {slot['label']} ({slot['where']})")
-    print('Areas:' if view['areas'] else 'Areas: none yet')
+    print('Areas (names are sealed; "areas" shows them):' if view['areas'] else 'Areas: none yet')
     for area in view['areas']:
         print(f"  {area['id']:<24} {area['kind']:<9} key versions: {area['key_versions']}")
     for area in view['destroyed']:
@@ -1084,9 +1107,18 @@ def run_command(args) -> int:
             _show_recovery(opened.new_recovery())
             print('The old recovery key no longer opens this keyring. Older backups of the keyring still open with it\n'
                   'until you delete them, so make a new backup and delete the old ones.')
+        elif args.command == 'areas':
+            listed = opened.areas()
+            if args.json:
+                print(json.dumps(listed, indent=2))
+            else:
+                for area in listed:
+                    print(f"  {area['id']:<24} {area['kind']:<9} {area['label']}")
+                if not listed:
+                    print('No areas yet.')
         elif args.command == 'area-add':
-            opened.add_area(args.area, args.kind, args.label)
-            print(f'Added the {args.kind} area {args.area}.')
+            added = opened.add_area(args.area, args.kind, args.label)
+            print(f"Added the {args.kind} area {added['area']}.")
         elif args.command == 'area-rotate':
             result = opened.rotate_area(args.area)
             print(f"The {args.area} area now seals with key version {result['key_versions']}.")
@@ -1127,10 +1159,12 @@ def main(argv=None) -> int:
     remove = commands.add_parser('remove-unlock', parents=[opening], help='Remove an unlock method by its slot')
     remove.add_argument('slot')
     commands.add_parser('new-recovery', parents=[opening], help='Replace the recovery key')
+    commands.add_parser('areas', parents=[opening, output], help='Open the keyring and list areas with their names')
     area = commands.add_parser('area-add', parents=[opening], help='Add an area with its own key')
-    area.add_argument('area')
+    area.add_argument('area', nargs='?', help='A short id, written in the clear beside sealed values; '
+                      'left out, ALFRED makes a neutral one')
     area.add_argument('--kind', required=True, choices=AREA_KINDS)
-    area.add_argument('--label')
+    area.add_argument('--label', help='Its name, such as "Acme Ltd"; kept sealed')
     rotate = commands.add_parser('area-rotate', parents=[opening], help='Start a new key version for an area')
     rotate.add_argument('area')
     destroy = commands.add_parser('area-destroy', parents=[opening], help='Destroy an area\'s keys, for good')

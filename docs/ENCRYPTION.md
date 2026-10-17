@@ -33,6 +33,11 @@ All of this lives in one small file, the **keyring** (`desk-keyring.json` in ALF
 folder). It holds only locked keys. It is kept apart from the database, so a database backup
 never carries the keys that open it.
 
+Each area has a name for you, such as "Acme Ltd", which the keyring keeps sealed, and a short
+id that is written in the clear beside every value sealed with it. So that the id names no
+one, ALFRED makes a neutral one such as `client-3f9a2b1c` unless you choose your own.
+`areas` opens the keyring and lists the names; `status` shows only ids and kinds.
+
 ## On your Mac
 
 At setup ALFRED makes a random secret and stores it in your login keychain, under the name
@@ -51,6 +56,7 @@ python3 -m venv ~/.local/share/alfred/python
 # Areas, each with its own key
 ~/.local/share/alfred/python/bin/python -m alfred.keys area-add personal --kind personal
 ~/.local/share/alfred/python/bin/python -m alfred.keys area-add company --kind company
+~/.local/share/alfred/python/bin/python -m alfred.keys area-add --kind client --label "Acme Ltd"
 
 # The recovery kit copy of the keyring (see Recovery below)
 ~/.local/share/alfred/python/bin/python -m alfred.keys backup --to ~/Documents/ALFRED-recovery
@@ -143,7 +149,8 @@ recovered. That is what makes it private.
 ## Destroying an area
 
 ```sh
-python3 -m alfred.keys area-destroy client-acme --confirm client-acme
+python3 -m alfred.keys areas                                          # find the area's id
+python3 -m alfred.keys area-destroy client-3f9a2b1c --confirm client-3f9a2b1c
 ```
 
 This deletes the area's keys from the keyring and records that the area was destroyed.
@@ -177,6 +184,8 @@ network or other file systems, other operating systems). The doctor warns on any
 - **Area keys** are sealed under a key derived from the master key, bound to the area and
   version. Rotation adds a version for new seals; older versions stay until step 2 seals their
   values again.
+- **Area names** are sealed under a key derived from the master key and bound to the area's
+  id, so they are unreadable without unlocking and cannot be swapped between areas.
 - **Integrity.** The whole keyring carries an HMAC-SHA256 seal under a master-derived key, so
   any change (a hidden destruction, swapped keys, a redirected keychain item) is refused on
   unlock. Every change rereads the file under a lock and refuses if another command changed it.

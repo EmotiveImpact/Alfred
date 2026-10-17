@@ -22,7 +22,8 @@ built against the recommended `cryptography` and does not merge without that sig
   `$CREDENTIALS_DIRECTORY`; regular file, owner or root only, no group or other access, 32
   bytes or more) and `RecoveryKey` (184 random bits, 40 Crockford base32 characters with a
   16-bit check, shown once). `register` adds further methods without a format change.
-- **Areas.** `add_area` (personal, company or client, the brain plug's scope classes),
+- **Areas.** `add_area` (personal, company or client, the brain plug's scope classes; the
+  area's name sealed, its id neutral such as `client-3f9a2b1c` unless one is given),
   `rotate_area` (new version for new seals, old versions still open) and `destroy_area`
   (keys removed, area recorded as destroyed, name never reused). `seal` and `open` use
   AES-256-GCM bound to keyring, area, version and caller context.
@@ -38,7 +39,7 @@ built against the recommended `cryptography` and does not merge without that sig
 - **Disk check.** `disk_encryption` reports FileVault through `fdesetup status` and dm-crypt
   (LUKS) by walking `/sys/dev/block` down through device-mapper layers.
 - **Command line.** `python3 -m alfred.keys` with `init`, `status`, `check`, `add-unlock`,
-  `remove-unlock`, `new-recovery`, `area-add`, `area-rotate`, `area-destroy`, `backup`,
+  `remove-unlock`, `new-recovery`, `areas`, `area-add`, `area-rotate`, `area-destroy`, `backup`,
   `restore`, `server-secret` and `disk`. `init` and `restore` refuse the same places as the
   database (sync folders, Git working trees, vaults).
 - **Doctor.** New `disk_encryption` check (warn unless on) and, when a keyring exists, a
@@ -51,14 +52,15 @@ built against the recommended `cryptography` and does not merge without that sig
 
 ## Tests
 
-- `tests/test_keys.py`, 40 tests: HKDF against RFC 5869 case 1; recovery key format, typing
+- `tests/test_keys.py`, 41 tests: HKDF against RFC 5869 case 1; recovery key format, typing
   tolerance and that the check catches every single-character change; the keyring file holds
   no key, passphrase or recovery key in any encoding; each method opens the same master key;
   wrong passphrase and recovery key refused; production scrypt cost recorded; short
   passphrases refused; no overwrite and no symlink; tampering (hidden destruction, swapped
   area keys, redirected keychain item, inflated scrypt cost, damaged fields) refused;
   concurrent writers refused; closing clears the master key; seal and open bound to area and
-  context; per-area keys distinct; destroying an area defeats even the recovery key, while a
+  context; per-area keys distinct; area names sealed, never in the file or `status`, and
+  refused when swapped between areas; neutral area ids; destroying an area defeats even the recovery key, while a
   copy made before still opens it (the stated limit); rotation; keychain secret never in
   arguments and withdrawn on removal; secret files by path, systemd credential and
   Kubernetes-style symlink, and refusals for loose permissions, short content, a pipe and a
@@ -69,7 +71,7 @@ built against the recommended `cryptography` and does not merge without that sig
 - `tests/test_recovery.py`: the fresh-workspace doctor test now sets aside the new
   `disk_encryption` check, whose status depends on the machine.
 - Whole suite with the pinned library in a fresh virtual environment (Python 3.13.16):
-  1,467 tests, all passing (`python -m unittest discover -s tests`, 208 seconds).
+  1,468 tests, all passing (`python -m unittest discover -s tests`, 213 seconds).
 - `tools/check_memory_plan.py` and `tools/check_requirement_register.py`, with self-tests: pass.
 
 ## Not exercised
