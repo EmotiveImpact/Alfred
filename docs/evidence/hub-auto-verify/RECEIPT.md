@@ -1,7 +1,9 @@
 # Automatic verification receipt (backlog A3)
 
 17 October 2026. Branch `claude/project-thread-att046-hub-auto-verify`, started from `main` at
-`d81a5d509`. **Tested commit: `c3ce35297`** (the commit that adds this receipt changes no code).
+`d81a5d509`. **Tested commits: `c3ce35297`** (the change and its unit tests) **and `417600bc4`** (the
+goals panel browser check updated to match; no other code). The commits that add this receipt change
+no code.
 Synthetic data only. Not merged, not deployed. The shared registers (CHANGELOG.md,
 SESSION_HANDOFF.md, docs/INDEX.md) are updated after the merge.
 
@@ -67,6 +69,27 @@ python3 -m unittest discover -s tests -p "test_learning*.py"         # 39 tests 
 python3 -m unittest discover -s tests                                # Ran 1444 tests in 234.8s, OK
 python3 tools/check_claims.py --base origin/main --branch claude/project-thread-att046-hub-auto-verify   # claims ok
 ```
+
+## Browser checks at `417600bc4`
+
+`tools/check_hub_integrate_browser.py` asserted that results stayed unverifiable until the owner
+ran the checks, so it now waits for the automatic run. It checks that each declared result has one
+run recorded as `automatic` (`failed_checks` for the failing goal, `verified` for the passing one),
+and that the panel shows those classes on arrival with `Run 1`. The owner's re-runs count from
+`Run 2` and are recorded as `owner`. The stale-count refusal, the acknowledgement confirmation and
+the per-brain line are checked as before. The screenshot taken before the owner acts is now named
+`results-on-arrival.png`.
+
+Run locally with Playwright 1.57.0 and the preinstalled Chromium, after `npm ci && npm run build` in
+`console/`:
+
+```
+tools/check_hub_integrate_browser.py   # {"passed": 23, "page_errors": []}
+tools/check_hub_goals_browser.py       # {"passed": 19, "page_errors": []}
+tools/check_learning_browser.py        # {"passed": 28, "page_errors": []}
+```
+
+Before the update, the first check failed at "before any run, declared checks are not verified".
 
 ## Left for later
 
