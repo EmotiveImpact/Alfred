@@ -822,15 +822,25 @@ class OpenKeyring:
 
     # Sealing ---------------------------------------------------------------
 
+    def _value_key(self, key: bytes, salt: bytes, area: str, version: int) -> bytes:
+        return hkdf(key, salt, _label('value-key', self.id, area, version))
+
     def seal(self, area: str, plaintext: bytes | str, context: str) -> str:
-        """Seal a value with its area's newest key. ``context`` (table, column, row) must match to open it."""
+        """Seal a value with its area's newest key. ``context`` (table, column, row) must match to open it.
+
+        Each value is sealed under its own key, derived from the area key and a random salt.
+        An area key can then seal any number of values without reaching AES-GCM's limit on
+        random nonces under one key, and the area key itself is only ever used to derive keys.
+        """
         if isinstance(plaintext, str):
             plaintext = plaintext.encode('utf-8')
         if not isinstance(context, str):
             raise Fault('invalid_context')
         version, key = self.area_key(area)
-        body = _lock(key, plaintext, _label('seal', self.id, area, version, context))
-        return f'{SEAL_PREFIX}:{VERSION}:{area}:{version}:{body}'
+        salt, nonce = secrets.token_bytes(SALT_BYTES), secrets.token_bytes(NONCE_BYTES)
+        sealed = _aesgcm(self._value_key(key, salt, area, version)).encrypt(
+            nonce, plaintext, _label('seal', self.id, area, version, context))
+        return f'{SEAL_PREFIX}:{VERSION}:{area}:{version}:{_b64(salt + nonce + sealed)}'
 
     def open(self, area: str, sealed: str, context: str) -> bytes:
         parts = sealed.split(':') if isinstance(sealed, str) else []
@@ -841,7 +851,16 @@ class OpenKeyring:
         if not isinstance(context, str):
             raise Fault('invalid_context')
         version, key = self.area_key(area, int(parts[3]))
-        return _open(key, parts[4], _label('seal', self.id, area, version, context), fault='seal_does_not_match')
+        raw = _unb64(parts[4])
+        if len(raw) < SALT_BYTES + NONCE_BYTES + TAG_BYTES:
+            raise Fault('seal_does_not_match', 403)
+        salt, nonce, body = raw[:SALT_BYTES], raw[SALT_BYTES:SALT_BYTES + NONCE_BYTES], raw[SALT_BYTES + NONCE_BYTES:]
+        cipher = _aesgcm(self._value_key(key, salt, area, version))
+        from cryptography.exceptions import InvalidTag
+        try:
+            return cipher.decrypt(nonce, body, _label('seal', self.id, area, version, context))
+        except InvalidTag:
+            raise Fault('seal_does_not_match', 403) from None
 
     # Copies ----------------------------------------------------------------
 

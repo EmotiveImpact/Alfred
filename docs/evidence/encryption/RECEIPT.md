@@ -27,7 +27,8 @@ built against the recommended `cryptography` and does not merge without that sig
   area's name sealed, its id neutral such as `client-3f9a2b1c` unless one is given),
   `rotate_area` (new version for new seals, old versions still open) and `destroy_area`
   (keys removed, area recorded as destroyed, name never reused). `seal` and `open` use
-  AES-256-GCM bound to keyring, area, version and caller context.
+  AES-256-GCM bound to keyring, area, version and caller context, each value under its own
+  key derived (HKDF-SHA256) from the area key and a random 16-byte salt.
 - **Integrity and safety.** HMAC-SHA256 over the whole keyring under a master-derived key;
   strict structural checks before any use, with scrypt limits so a tampered file cannot
   demand excess memory; changes reread the file under an exclusive lock and refuse when
@@ -53,14 +54,15 @@ built against the recommended `cryptography` and does not merge without that sig
 
 ## Tests
 
-- `tests/test_keys.py`, 42 tests: HKDF against RFC 5869 case 1; recovery key format, typing
+- `tests/test_keys.py`, 43 tests: HKDF against RFC 5869 case 1; recovery key format, typing
   tolerance and that the check catches every single-character change; the keyring file holds
   no key, passphrase or recovery key in any encoding; each method opens the same master key;
   wrong passphrase and recovery key refused; production scrypt cost recorded; short
   passphrases refused; no overwrite and no symlink; tampering (hidden destruction, swapped
   area keys, redirected keychain item, inflated scrypt cost, damaged fields) refused;
   concurrent writers refused; closing clears the master key; seal and open bound to area and
-  context; values of any size (a 200 KB value) seal and open; per-area keys distinct; area
+  context; each value under its own derived key, which the bare area key does not open, and a
+  shortened value refused; values of any size (a 200 KB value) seal and open; per-area keys distinct; area
   names sealed, never in the file or `status`, and
   refused when swapped between areas; neutral area ids; destroying an area defeats even the recovery key, while a
   copy made before still opens it (the stated limit); rotation; keychain secret never in

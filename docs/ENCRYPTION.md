@@ -172,7 +172,10 @@ network or other file systems, other operating systems). The doctor warns on any
 ## How it works
 
 - **Keys.** Master and area keys are 32 random bytes from the operating system.
-- **Sealing.** AES-256-GCM with a random 12-byte nonce. Every sealed value is bound to the
+- **Sealing.** AES-256-GCM with a random 12-byte nonce, under a key made for that one value
+  from the area key and a random 16-byte salt (HKDF-SHA256). An area key can therefore seal
+  any number of values without reaching AES-GCM's limit on random nonces under one key, and
+  the area key itself is only ever used to derive keys. Every sealed value is bound to the
   keyring, its area, the area key version and a caller context such as table, column and row
   (`seal(area, value, context)`), so a value moved to another row or area fails to open.
   Sealed text looks like `alfred-seal:1:AREA:VERSION:...`.

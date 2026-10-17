@@ -254,6 +254,25 @@ class AreaTests(Base):
             self.opened.open('company', relabelled, 'reviewed_values/value/42')
         self.assertEqual(caught.exception.code, 'seal_does_not_match')
 
+    def test_each_value_has_its_own_key(self):
+        # Salt, nonce, then ciphertext and tag. The value key comes from the area key and the
+        # salt, so the area key alone does not open the value: it never meets the cipher.
+        from cryptography.exceptions import InvalidTag
+        from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+        context = 'reviewed_values/value/42'
+        first, second = (self.opened.seal('personal', 'Dentist on Tuesday', context) for _ in range(2))
+        raw = keys._unb64(first.split(':')[4])
+        self.assertEqual(len(raw), keys.SALT_BYTES + keys.NONCE_BYTES + len('Dentist on Tuesday') + keys.TAG_BYTES)
+        self.assertNotEqual(raw[:keys.SALT_BYTES], keys._unb64(second.split(':')[4])[:keys.SALT_BYTES])
+        version, area_key = self.opened.area_key('personal')
+        with self.assertRaises(InvalidTag):
+            AESGCM(area_key).decrypt(raw[keys.SALT_BYTES:keys.SALT_BYTES + keys.NONCE_BYTES], raw[keys.SALT_BYTES + keys.NONCE_BYTES:],
+                                    keys._label('seal', self.opened.id, 'personal', version, context))
+        shortened = first[:first.rindex(':') + 1] + keys._b64(raw[:keys.SALT_BYTES + keys.NONCE_BYTES])
+        with self.assertRaises(Fault) as caught:
+            self.opened.open('personal', shortened, context)
+        self.assertEqual(caught.exception.code, 'seal_does_not_match')
+
     def test_large_values_seal_and_open(self):
         # A whole note (up to 64 KiB) or a job's output is sealed as one value.
         value = 'Long note line with private words.\n' * 6000
