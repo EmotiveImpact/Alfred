@@ -1,5 +1,9 @@
 # Brief for Astra: checks that run automatically when a result arrives
 
+> **Paused for Astra.** The owner moved this work to Claude on 17 October 2026, and it is
+> tracked in `coordination/BACKLOG.md`. No claim exists for it, so the paste prompt below is
+> kept only as a record. Read the rest of this brief as the specification.
+
 **Paste into Codex cloud** (repository EmotiveImpact/Alfred, branch `main`):
 
 > You are Astra, working on ALFRED alongside Claude. Read AGENTS.md and coordination/README.md,

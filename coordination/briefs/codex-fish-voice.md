@@ -1,5 +1,9 @@
 # Brief for Astra: Fish Audio voice, speaking only
 
+> **Paused for Astra.** The owner moved this work to Claude on 17 October 2026, and it is
+> tracked in `coordination/BACKLOG.md`. No claim exists for it, so the paste prompt below is
+> kept only as a record. Read the rest of this brief as the specification.
+
 **Waiting for the owner.** This brief has no claim yet, so Astra cannot start it. Claude adds
 the claim once the owner has said yes to three things: using Fish Audio, which areas may send
 text to it (plan choice 2), and that the owner holds a Fish Audio account whose key stays on
