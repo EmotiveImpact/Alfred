@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "updated_on": "2026-10-16",
+ "updated_on": "2026-10-17",
  "authority": {
   "requirements": "docs/PRD.md",
   "sequence": "docs/ROADMAP.md",
@@ -602,14 +602,16 @@
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_memory_lifecycle.py",
-    "docs/evidence/memory-m05/RECEIPT.md"
+    "docs/evidence/memory-m05/RECEIPT.md",
+    "tests/test_keys.py",
+    "docs/evidence/encryption/RECEIPT.md"
    ],
    "delivery": {
-    "branch": "claude/alfred-development-qpgxhg",
-    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+    "branch": "claude/project-thread-9npowk",
+    "pull_request": "EmotiveImpact/Alfred (draft, phase 1 step 1)"
    },
-   "notes": "Consistent backups and journal-replaying restore without resurrection are implemented. Application encryption and key custody are not.",
-   "owner_decision_needed": "Key custody approach for application encryption (OS keychain versus passphrase) before private data."
+   "notes": "Consistent backups and journal-replaying restore without resurrection are implemented. Key custody (17 October, phase 1 step 1, on branch): a keyring with a master key and a key per area, unlock by macOS keychain, passphrase, server secret file or recovery key, area key destruction, recovery-kit copies and a full-disk encryption check (docs/ENCRYPTION.md). Records, indexes, exports and backups are not sealed yet (phase 1 step 2).",
+   "owner_decision_needed": "Key custody chosen 17 October 2026: keychain on a Mac, passphrase or a server secret store on a server, one offline recovery key. Pending: adopting cryptography 50.0.2."
   },
   {
    "id": "INT-001",

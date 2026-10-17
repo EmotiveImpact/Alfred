@@ -2,6 +2,16 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 17 October 2026 (evening): encryption keys and unlocking, phase 1 step 1, branch `claude/project-thread-9npowk`
+
+Key custody for plan item 1.1 (SYS-002, M05), on the owner's choice of both a Mac and a server. Nothing ALFRED stores is sealed yet; that is step 2. No model ran and nothing under `third_party/` was installed, run or imported.
+
+- **Keyring (`alfred/keys.py`).** One master key and one key per area (personal, company, each client), kept in `desk-keyring.json` beside the database and never inside it. The master key is locked separately for each unlock method: the macOS login keychain, a passphrase (scrypt), a server secret file (systemd credentials, Docker or Kubernetes secrets, a Vault agent) and a recovery key shown once. Methods are pluggable through `keys.register`. Values are sealed with AES-256-GCM, each under its own key derived from the area key and a random salt, and bound to keyring, area, key version and row context. The file carries an integrity seal, refuses swapped keys or a hidden destruction, and changes are locked and checked against concurrent writers.
+- **Areas and erasure.** `area-add`, `areas`, `area-rotate` and `area-destroy`. An area's name ("Acme Ltd") is sealed in the keyring and its id is neutral by default (`client-3f9a2b1c`), because the id is written beside every sealed value. Destroying an area deletes its keys, so everything sealed with them stops opening, even with the recovery key. A test shows the stated limit: a keyring copy made before the destruction still opens it until deleted.
+- **Recovery kit.** `backup` writes a keyring copy that only the recovery key opens; `restore` puts it in place on a new machine, where a local unlock method is then added.
+- **Full-disk encryption check.** FileVault on a Mac, LUKS on Linux; `python3 -m alfred.keys disk` and a new `doctor` check, which also reads the keyring's layout without unlocking it. `placement` lists the keyring as a live file.
+- **First adopted runtime dependency.** `cryptography` 50.0.2 with `cffi` 2.1.1 and `pycparser` 3.0, pinned with every file hash in `requirements/encryption.txt`; CI installs it in a fresh virtual environment for the test suite. The adoption record is in [docs/ENCRYPTION.md](docs/ENCRYPTION.md); the owner's sign-off is pending. [Receipt](docs/evidence/encryption/RECEIPT.md).
+
 ## 17 October 2026 (evening): two agents, one repository, branch `claude/project-thread-r6ndba`
 
 Process and tooling only; no runtime change.

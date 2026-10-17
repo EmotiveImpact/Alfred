@@ -30,6 +30,7 @@ import sqlite3
 import stat
 import sys
 import time
+from . import keys
 from .local import Fault
 
 STATE_FILE = 'host-state.json'
@@ -218,7 +219,8 @@ def doctor(data_dir, vaults=(), *, console_dist=None, clock=time.time):
         problems.append('the data directory belongs to another user')
     if stat.S_IMODE(info.st_mode) & 0o077:
         problems.append(f'the data directory is mode {stat.S_IMODE(info.st_mode):o}; it should be 700')
-    for name in ('desk-access.json', 'desk.sqlite', 'desk.sqlite-wal', 'desk.sqlite-shm', 'desk.lock', STATE_FILE):
+    for name in ('desk-access.json', 'desk.sqlite', 'desk.sqlite-wal', 'desk.sqlite-shm', 'desk.lock', STATE_FILE,
+                 keys.KEYRING_FILE):
         file = path / name
         if file.is_symlink():
             problems.append(f'{name} is a symbolic link')
@@ -298,6 +300,20 @@ def doctor(data_dir, vaults=(), *, console_dist=None, clock=time.time):
     else:
         add('last_stop', 'warn', 'The last host did not stop cleanly. The next start marks interrupted questions and '
             'reports started jobs as effect unknown for you to reconcile.')
+    disk = keys.disk_encryption(path)
+    add('disk_encryption', 'ok' if disk['status'] == 'on' else 'warn', disk['detail'])
+    keyring = path / keys.KEYRING_FILE
+    if keyring.exists() or keyring.is_symlink():
+        # Read only: the keyring's layout is checked, and nothing is unlocked.
+        try:
+            view = keys.Keyring.read(keyring).view()
+        except Fault as exc:
+            add('keyring', 'fail', f'{keys.KEYRING_FILE} could not be read ({exc.code}).')
+        else:
+            methods = sorted({slot['method'] for slot in view['unlock']})
+            areas = len(view['areas'])
+            add('keyring', 'ok', f'The keyring has {areas} area{"s" if areas != 1 else ""} and opens with: '
+                + ', '.join(methods) + '. Doctor did not unlock it.')
     dist = Path(console_dist) if console_dist else REPOSITORY / 'console' / 'dist'
     if (dist / 'index.html').is_file():
         add('console_build', 'ok', f'The console build is present at {dist}.')

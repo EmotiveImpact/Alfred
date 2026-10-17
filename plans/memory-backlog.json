@@ -215,7 +215,8 @@
       "targets": [
         "alfred/reviewed_memory.py",
         "alfred/conversation.py",
-        "alfred/knowledge.py"
+        "alfred/knowledge.py",
+        "alfred/keys.py"
       ],
       "acceptance": [
         "Deletion/revocation removes or blocks all current dependent projections with a receipt",
@@ -224,7 +225,9 @@
       ],
       "evidence": [
         "tests/test_memory_lifecycle.py",
-        "docs/evidence/memory-m05/RECEIPT.md"
+        "docs/evidence/memory-m05/RECEIPT.md",
+        "tests/test_keys.py",
+        "docs/evidence/encryption/RECEIPT.md"
       ]
     },
     {

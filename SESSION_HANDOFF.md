@@ -2,7 +2,14 @@
 
 **Two agents, 17 October 2026:** Claude and Astra (OpenAI Codex) now share this repository through claims. Read [coordination/README.md](coordination/README.md) and the live claims in `coordination/claims/` before starting any work, and run `python3 tools/check_claims.py`.
 
-**Latest checkpoint, 16 October 2026:** the six decision-free items (drafts kept and archived
+**Latest checkpoint, 17 October 2026:** encryption phase 1 step 1 (key custody) on branch
+`claude/project-thread-9npowk`: `alfred/keys.py`, a keyring with a master key and a key per
+area, unlocked by the macOS keychain, a passphrase, a server secret file or the recovery key.
+Read [docs/ENCRYPTION.md](docs/ENCRYPTION.md). Records are not sealed yet; step 2 does that.
+`cryptography` is the first adopted runtime dependency (`requirements/encryption.txt`); the
+owner's sign-off is pending.
+
+**Previous checkpoint, 16 October 2026:** the six decision-free items (drafts kept and archived
 per the owner's decision, strict grants 1.2, deletion accounting 1.3, host recovery 1.4,
 Obsidian compatibility 1.5, capture policies 2.4) and the agent hub design with its brain plug
 (H1) were built on branch `claude/project-thread-qj8beq` and merged to `main` with the owner's
