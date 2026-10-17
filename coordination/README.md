@@ -1,5 +1,7 @@
 # Two agents on one repository
 
+**Paused on 17 October 2026.** The owner moved all of Astra's work to Claude. No Astra claim is live, Claude builds every item in [BACKLOG.md](BACKLOG.md), and the rules below apply again only if the owner brings Astra back.
+
 Claude (Claude Code) and Astra (OpenAI Codex, run from Codex cloud) both build ALFRED. This
 folder is how they split the work so they never edit the same file at once, and how each can
 see what the other is doing. The rules that bind both agents are in the root
