@@ -52,6 +52,7 @@ claimed and briefed by the Astra thread in PR #27. Claude wires each into CI aft
 | C3 | Show who started each verification run (automatic or owner) in the web desk | `web/` hub view, `docs/AGENT_HUB.md` | A3 merged | waiting |
 | C4 | Scrub secrets from brain packets before they leave and from harvested text before it is proposed | `alfred/brain.py`, `alfred/learning.py` (harvest only), their tests | A2 merged | waiting |
 | C5 | Run A5 to A7 in CI | `.github/workflows/` | each of A5 to A7 merged | waiting |
+| C7 | Fix B-030: a question asked before the capability answer left the Ask page's model option disabled (found by CI on this pull request) | `web/ask.js`, `tools/check_memory_context_browser.py`, `BUGS_AND_FIXES.md` | none | building |
 | C6 | Mark claims done, update `CHANGELOG.md`, `SESSION_HANDOFF.md`, `docs/INDEX.md` and `docs/AGENT_HUB.md` after each merge | shared files | each merge | ongoing |
 
 C2 in one paragraph: `desk serve --hub synthetic` builds the `BrainHub` and `GoalHub` over
