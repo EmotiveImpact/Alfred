@@ -33,7 +33,8 @@ Each run:
    new evidence arrives after the dismissal.
 4. ``harvest`` and ``harvest_staged`` turn text a worker produced (artefacts of an
    accepted brain result, or skills and memories a worker staged for approval) into
-   proposals in the same inbox. Nothing harvested runs or is trusted.
+   proposals in the same inbox. Credentials in the text are blanked first (alfred.scrub)
+   and only their kinds and counts are kept. Nothing harvested runs or is trusted.
 5. Compares the pinned commit of every project in the source library catalogue with an
    owner-supplied file of latest known upstream versions and writes an update brief per
    project. There is no network here: fetching is a declared future capability. Nothing
@@ -1279,21 +1280,30 @@ class Learning:
         return content
 
     def _harvest(self, bearer, job, items, origin):
+        # The hash and the refusals above were checked on the text as supplied, so the
+        # artefact is still the one recorded; what is proposed is the scrubbed text.
+        from .scrub import scrub
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             result = self._harvest_result(db, p, job)
-            candidates = []
+            candidates, scrubbed = [], {}
             for item in items(result):
                 evidence = [{'id': f'brain_result:{job}', 'at': result['created']},
                             {'id': f'artefact:{item["sha256"]}', 'at': result['created']}]
+                (content, found), (name, named) = scrub(item['content']), scrub(item['name'])
+                counts = {}
+                for finding in found + named:
+                    counts[finding.kind] = counts.get(finding.kind, 0) + 1
+                    scrubbed[finding.kind] = scrubbed.get(finding.kind, 0) + 1
+                detail = {'brain': result['brain'], 'job': job, 'name': name, 'sha256': item['sha256'], 'source': origin,
+                          'basis': 'worker_text_needs_review_never_run'}
+                if counts:
+                    detail['scrubbed'] = dict(sorted(counts.items()))
                 candidates.append(_candidate(item['kind'], item['category'], origin, 'harvest:' + item['sha256'], item['sha256'],
-                                             item['content'], {'brain': result['brain'], 'job': job, 'name': item['name'],
-                                                               'sha256': item['sha256'], 'source': origin,
-                                                               'basis': 'worker_text_needs_review_never_run'},
-                                             evidence, threshold=1, origin=origin))
+                                             content, detail, evidence, threshold=1, origin=origin))
             offered, skipped = self._offer(db, p, candidates, None, self.store.now(), None)
             return {'proposed': offered, 'not_proposed': skipped, 'auto_accepted': 0, 'executed': False,
-                    'basis': 'harvested_worker_text_is_a_proposal_only'}
+                    'scrubbed': dict(sorted(scrubbed.items())), 'basis': 'harvested_worker_text_is_a_proposal_only'}
 
     def harvest(self, bearer, body):
         """Text artefacts of an accepted brain result become proposals only. Each artefact
