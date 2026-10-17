@@ -2,6 +2,14 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 17 October 2026 (evening): two agents, one repository, branch `claude/project-thread-r6ndba`
+
+Process and tooling only; no runtime change.
+
+- **Claude and Astra share the work through claims.** Astra (OpenAI Codex, from Codex cloud) joins Claude. [coordination/README.md](coordination/README.md) explains the split: each piece of work has a claim in `coordination/claims/` listing its exact paths; Astra edits only its live claims on `main`, Claude keeps every shared file and everything unclaimed, and the owner approves every merge. Root `AGENTS.md` gains the rules for both agents and a shared engineering bar (tests first, small pull requests, green CI, no weakened checks).
+- **The boundary is checked, not trusted.** `tools/check_claims.py` validates claims (format, no overlapping live paths, no shared files claimed by Astra) and, on every pull request, fails a `codex/` branch that changes anything outside its claims and a `claude/` branch that changes a path Astra has claimed. Synthetic Git tests in `tools/test_claims.py`; both run in unified CI.
+- **First claims.** Astra: the real question set harness and the secret scrubber, with briefs in `coordination/briefs/`. Claude: the encryption foundation (plan phase 1), being built in its own thread.
+
 ## 17 October 2026: research shelf and integration plan, branch `claude/project-thread-t9ssyl`
 
 Documentation and inert reference data only; no runtime change. Nothing under `third_party/` was installed, run or imported.

@@ -1,5 +1,7 @@
 # ALFRED unified build handoff
 
+**Two agents, 17 October 2026:** Claude and Astra (OpenAI Codex) now share this repository through claims. Read [coordination/README.md](coordination/README.md) and the live claims in `coordination/claims/` before starting any work, and run `python3 tools/check_claims.py`.
+
 **Latest checkpoint, 16 October 2026:** the six decision-free items (drafts kept and archived
 per the owner's decision, strict grants 1.2, deletion accounting 1.3, host recovery 1.4,
 Obsidian compatibility 1.5, capture policies 2.4) and the agent hub design with its brain plug

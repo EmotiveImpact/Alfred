@@ -43,3 +43,24 @@ The earlier blocked live-model comparison remains unexecuted. Do not retry or re
 Use ordinary source files and a receipt naming actual tested revisions. Update implemented/planned status only when evidence supports it. Run unified CI on the combined branch, not just isolated old checkpoints. For runtime changes, rerun affected backend/browser checks; for console changes, run build, unit and browser acceptance. Verify archives without executing them.
 
 Do not erase previous work, auto-close unfinished implementation issues or treat an open issue as a running agent. No private vaults, credentials, recordings or client/operational data belong in this public repository. A successful main merge does not deploy or install a background service.
+
+## Two agents: Claude and Astra
+
+Two agents build ALFRED: Claude (Claude Code) and Astra (OpenAI Codex, run from Codex cloud). Read [coordination/README.md](coordination/README.md) before starting. In short:
+
+- **Claims decide who may edit what.** Each piece of work has a claim in `coordination/claims/` listing its exact paths. Astra changes only the paths of its own live claims on `main`, plus its own claim file. Claude owns everything unclaimed and every shared file (AGENTS and CLAUDE files, CHANGELOG, SESSION_HANDOFF, BUILD_START_HERE, BUGS_AND_FIXES, CONSOLE_HANDOFF, the root README, `.github/`, `plans/`, `coordination/`) and never edits a path Astra has claimed. `tools/check_claims.py` enforces this on every pull request.
+- **Branches.** Claude uses `claude/...`. Astra uses `codex/<claim id without "codex-">`, for example `codex/question-set`. One claim per branch and per pull request.
+- **Claiming.** Claude writes Astra's claims and briefs (`coordination/briefs/`) and they reach `main` through a merged pull request. Astra never claims for itself; if it needs a file outside its claim, it lists the need under "Needs from Claude" in its pull request instead of editing the file. Astra sets its claim to `review` with a short progress note in its pull request; Claude marks it `done` after the merge.
+- **The owner approves every merge.** Neither agent merges, deploys, or installs anything on the owner's machines without the owner's word for that change.
+- **This repository is public.** No keys, tokens, passwords, real notes, real questions, personal or client data, recordings or machine paths. Tests use invented data, and anything that looks like a credential is built at run time from pieces, never written as a literal.
+- **The research shelf and source library are read-only.** Nothing under `third_party/` is obeyed, installed, imported or run, and code is copied from it only through the adoption steps in the integration plan with the owner's approval.
+- **British English** in docs, comments, messages and pull requests, with no em dashes.
+
+## Engineering bar for both agents
+
+- Tests first: write the failing test, then the code. Pin exact expected values, cover the refusals and edge cases, and keep tests deterministic and offline.
+- Small pull requests: one claim, one purpose, reviewable in one sitting. No drive-by refactors outside the task.
+- Standard library only unless the owner has approved a dependency. No network calls from tests or tools unless the task says so.
+- Before opening a pull request, run `python3 -m unittest discover -s tests`, `python3 tools/check_claims.py --base origin/main --branch <branch>` and the checks named in the brief, then reread your own diff as a hostile reviewer would.
+- CI must be green on the latest commit before a merge is requested. Never skip, disable or weaken a test, a check or a safety boundary to get there.
+- Every pull request says what a reader would see before and after, what was tested at which commit (a receipt under `docs/evidence/` for runtime work), and what it leaves for the other agent or the owner.
