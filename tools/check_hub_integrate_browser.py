@@ -163,7 +163,9 @@ with tempfile.TemporaryDirectory() as temp:
             dialog.screenshot(path=str(out / 'results-on-arrival.png'))
 
             cards['passing'].get_by_role('button', name='Run checks').click()
-            expect(chip['passing']).to_have_text('Verified by checks', timeout=15000)
+            # The chip already read verified, so wait for the second run itself before asking the server.
+            expect(cards['passing']).to_contain_text('Run 2: 1 passed · 0 failed · 0 could not run', timeout=15000)
+            expect(chip['passing']).to_have_text('Verified by checks')
             check('the owner running the checks again keeps a passing result verified on the server',
                   (outcome('passing')['state'], outcome('passing')['runs']) == ('checked', 2))
             cards['failing'].get_by_role('button', name='Run checks').click()
