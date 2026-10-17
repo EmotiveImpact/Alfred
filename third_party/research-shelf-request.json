@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "requested_on": "2026-10-17",
+  "product": "ALFRED: operational and executive intelligence",
+  "scope": "Outside repositories studied in the 17 October 2026 memory and brain research (project files research/*.md), pinned to the commits reviewed. Reference text only, never a dependency.",
+  "repositories": [
+    {
+      "repository": "Tencent-Hunyuan/Hy-Memory",
+      "commit": "20b92d8a8940b94736590ddfc83a95f2bccf4f0c",
+      "licence": "Apache-2.0",
+      "licence_path": "LICENSE",
+      "licence_blob": "fbcfb3ce24c5eed11aebe84a37f4480bb9834c4e",
+      "licence_review_basis": "Root LICENSE read on 17 October 2026: Tencent preamble stating Apache-2.0 with no additional restrictions, followed by the full Apache-2.0 text. Model weights are not copied.",
+      "why": "Memory writer and graph clean-up ideas; candidate local model for drafting daily-list items (trial needs owner approval)"
+    },
+    {
+      "repository": "mnemosyne-oss/mnemosyne",
+      "commit": "c396ef7447b21fd6f690c3bd48a8a2a7063e11fb",
+      "licence": "MIT",
+      "licence_path": "LICENSE",
+      "licence_blob": "59a460f86381e499a837aa804847535087421a2c",
+      "licence_review_basis": "Root LICENSE read on 17 October 2026: MIT, copyright 2026 Abdias J. Contributor CLA does not affect downstream reading.",
+      "why": "One-file SQLite memory with FTS5 and sqlite-vec; closest reference for ALFRED's own Hermes memory plug (H5)"
+    },
+    {
+      "repository": "vectorize-io/hindsight",
+      "commit": "5331da2f4db369528bb122075341a7de9c3df6df",
+      "licence": "MIT",
+      "licence_path": "LICENSE",
+      "licence_blob": "8dce7b4d4c2632990bdf8b4101694ea19ba6ad46",
+      "licence_review_basis": "Root LICENSE read on 17 October 2026: MIT, copyright 2025 Vectorize AI, Inc. Hosted Hindsight cloud terms are separate and not covered.",
+      "why": "Evidence-backed observations, mental models and the memory graph view; ideas for daily learning and the console"
+    },
+    {
+      "repository": "OSU-NLP-Group/HippoRAG",
+      "commit": "d5c8329422e0a0b834a15874545cb6a74b4f9b26",
+      "licence": "MIT",
+      "licence_path": "LICENSE",
+      "licence_blob": "281b68077e52aa0edc708b0daeeab60d4601c1d1",
+      "licence_review_basis": "Root LICENSE read on 17 October 2026: MIT, copyright 2025 OSU Natural Language Processing. Bundled benchmark data is excluded.",
+      "why": "HippoRAG and HippoRAG 2: personalised PageRank recall over a fact graph, blended with plain search (brain-like option B)"
+    },
+    {
+      "repository": "joonspk-research/generative_agents",
+      "commit": "fe05a71d3e4ed7d10bf68aa4eda6dd995ec070f4",
+      "licence": "Apache-2.0",
+      "licence_path": "LICENSE",
+      "licence_blob": "e0d8210e8009de93c35050c71db7af0d88c37660",
+      "licence_review_basis": "Root LICENSE read on 17 October 2026: standard Apache-2.0 text. Only the memory and reasoning back end is kept; 208,000 simulation storage files and game assets are left out.",
+      "include_prefixes": ["README.md", "reverie/backend_server/persona"],
+      "why": "Generative Agents memory stream: recency, importance and relevance scoring plus reflection; model for overnight consolidation"
+    },
+    {
+      "repository": "agiresearch/A-mem",
+      "commit": "ceffb860f0712bbae97b184d440df62bc910ca8d",
+      "licence": "MIT",
+      "licence_path": "LICENSE",
+      "licence_blob": "12597231b2c37fef747a2e39df55cccba71c3ceb",
+      "licence_review_basis": "Root LICENSE read on 17 October 2026: MIT, copyright 2025 AGI Research.",
+      "why": "A-Mem: notes that link themselves and evolve; shows why model-made links must stay suggestions until reviewed"
+    }
+  ]
+}

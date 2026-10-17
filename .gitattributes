@@ -1,3 +1,4 @@
 # Upstream archives are data for inspection, not ALFRED runtime source.
 third_party/** linguist-vendored
 third_party/library/** -text -filter -ident -working-tree-encoding
+third_party/research-shelf/** -text -filter -ident -working-tree-encoding

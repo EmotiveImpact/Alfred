@@ -1,0 +1,120 @@
+{
+  "files": [
+    {
+      "path": ".gitignore",
+      "bytes": 4688,
+      "sha256": "48b33f9f89ef24f8a66f461ea9278e7ecf21b4660c26088989d231e53c578724",
+      "git_blob_sha1": "b7faf403d915ca307532bb0eb9cceaf0214e8e5b"
+    },
+    {
+      "path": ".pre-commit-config.yaml",
+      "bytes": 355,
+      "sha256": "3b20e64ca3826d9e17ac1eb8436aec7a5193ab840b8fa8936174dbe06636761c",
+      "git_blob_sha1": "6d2a68f59a56ec94b6cfab4f6707542ba5d6acbd"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1068,
+      "sha256": "c8a51c83455b8afc3a11b085ce57c7b9b34c6725d6b2329ce3dd9a273f0add6d",
+      "git_blob_sha1": "12597231b2c37fef747a2e39df55cccba71c3ceb"
+    },
+    {
+      "path": "README.md",
+      "bytes": 6390,
+      "sha256": "6f7185bb241d8ed5f7c0b8c4716b4f5e5cf1e9a3c630c3a1a92e54c3f5fb88b0",
+      "git_blob_sha1": "c2c7eb0f255dab75eed8e3e3bdaa6ec0ca61bda0"
+    },
+    {
+      "path": "agentic_memory/__init__.py",
+      "bytes": 1,
+      "sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+      "git_blob_sha1": "0519ecba6ea913e21689ec692e81e9e4973fbf73"
+    },
+    {
+      "path": "agentic_memory/llm_controller.py",
+      "bytes": 3810,
+      "sha256": "44e7d228326fe78dd8ecb8c8176364511547f5fef7cd7d58e433e883caeae0bb",
+      "git_blob_sha1": "6211f6100e1cba75462c94fcd07f49d5edcd6e09"
+    },
+    {
+      "path": "agentic_memory/memory_system.py",
+      "bytes": 32697,
+      "sha256": "fa58c3ed405e37d298a3d11e5cd69459bc9709004461c0e01fc0c497c77c949b",
+      "git_blob_sha1": "594b2f94c2bbdccc439f8294aa797a1e22d9db56"
+    },
+    {
+      "path": "agentic_memory/retrievers.py",
+      "bytes": 10661,
+      "sha256": "a4cd9645b9df0774f7f67bdfff3cf4d1a41911b4bac3843208db2019b57e311d",
+      "git_blob_sha1": "3fdc993c91885755cef7b4a036dc69aeeafd1e3c"
+    },
+    {
+      "path": "examples/sovereign_memory.py",
+      "bytes": 1700,
+      "sha256": "0d95d0a4e8381badd85dd196dfaa49ef53f23372fb1df3cf5831f078351bcc4a",
+      "git_blob_sha1": "21c61d74556229d3ec7eea0f9014c73bbe54c535"
+    },
+    {
+      "path": "pyproject.toml",
+      "bytes": 1184,
+      "sha256": "d0cb38f6860dfa50cdc0141896bc6115501bd181fd6c122910cdf0fb07db9dc5",
+      "git_blob_sha1": "ea824397f2e44ff70029e68df8cb062d1a79d44d"
+    },
+    {
+      "path": "requirements.txt",
+      "bytes": 175,
+      "sha256": "d01b0399ebf1903f2b88d92f238eb229cebe1ddc434ba2c65c4e716642f636ec",
+      "git_blob_sha1": "c36b530870887a01ccd4faecb8e37e2875173213"
+    },
+    {
+      "path": "tests/__init__.py",
+      "bytes": 1,
+      "sha256": "36a9e7f1c95b82ffb99743e0c5c4ce95d83c9a430aac59f84ef3cbfab6145068",
+      "git_blob_sha1": "0519ecba6ea913e21689ec692e81e9e4973fbf73"
+    },
+    {
+      "path": "tests/conftest.py",
+      "bytes": 1376,
+      "sha256": "e41ea100d618f9e393ac247b17b601f363d56ade8464eee979eb98ca6b43d9ea",
+      "git_blob_sha1": "e18a804379b2ce4bfd8891822729c02009583e55"
+    },
+    {
+      "path": "tests/test_memory_system.py",
+      "bytes": 10019,
+      "sha256": "3f52bc7102423169aa8ff9b63f1c17b146242ad0186c2d56588926cd6e948a1d",
+      "git_blob_sha1": "03c8b898bdf08f73f897197c463ae164b92d4c74"
+    },
+    {
+      "path": "tests/test_retriever.py",
+      "bytes": 6647,
+      "sha256": "3545a2b068706543df0ebc72abf6f74f3e7e1a405e7523a8d4365f071e136790",
+      "git_blob_sha1": "f8227d901c4ee80b28100d9faec4844bcc811655"
+    },
+    {
+      "path": "tests/test_utils.py",
+      "bytes": 658,
+      "sha256": "65683d5fc84ae06d5587a5581a04b53a4dd9a393fdcf4d2d08f88742a299e27b",
+      "git_blob_sha1": "778c2d30a05866f5d772138b0bfc6514a749c2a9"
+    }
+  ],
+  "excluded": [
+    {
+      "path": "Figure/framework.jpg",
+      "reason": "binary/media/model/database/archive asset",
+      "bytes": 750519
+    },
+    {
+      "path": "Figure/intro-a.jpg",
+      "reason": "binary/media/model/database/archive asset",
+      "bytes": 72509
+    },
+    {
+      "path": "Figure/intro-b.jpg",
+      "reason": "binary/media/model/database/archive asset",
+      "bytes": 90473
+    }
+  ],
+  "file_count": 16,
+  "bytes": 81430,
+  "archive_members": 19
+}

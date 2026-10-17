@@ -2,6 +2,13 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 17 October 2026: research shelf and integration plan, branch `claude/project-thread-t9ssyl`
+
+Documentation and inert reference data only; no runtime change. Nothing under `third_party/` was installed, run or imported.
+
+- **Research shelf.** `third_party/research-shelf/` pins Tencent-Hunyuan/Hy-Memory, mnemosyne-oss/mnemosyne, vectorize-io/hindsight, OSU-NLP-Group/HippoRAG, joonspk-research/generative_agents (memory back end only) and agiresearch/A-mem at the commits reviewed, with each licence file's Git blob recorded after a manual read (MIT or Apache-2.0). 7,328 source-text files, every omission listed per manifest. `tools/build_research_shelf.py` reads files straight from Git objects, so no upstream filter or script runs; `--verify` checks every byte offline and runs in unified CI with its own synthetic tests. The 27 September library stays untouched.
+- **Integration plan.** [research/INTEGRATION_PLAN_2026-10-17.md](research/INTEGRATION_PLAN_2026-10-17.md) combines the memory, brain-layer, Hermes and voice research into phases 0 to 7 with the owner's eight decisions marked. The five underlying write-ups are in [research/2026-10-17/](research/2026-10-17/).
+
 ## 16 October 2026 (afternoon): agent hub steps H2 to H4, branch `claude/project-thread-qj8beq`
 
 All three run against the synthetic brain only; no model ran and nothing under `third_party/` was installed, run or imported.
