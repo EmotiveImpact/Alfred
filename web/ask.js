@@ -38,8 +38,9 @@
     const results=node('div','ask-results');results.id='ask-results';
     const boundary=node('div','ask-boundary');boundary.append(node('strong','','Your notes stay in charge.'),node('p','','The graph helps find connected material. Source files remain canonical. A model interpretation never becomes a permission, a verified fact or a completed action.'));
     shell.append(intro,form,examples,status,results,boundary);root.append(shell);draw();
-    const epoch=state.epoch,generation=ui.generation;
-    api('/desk/ask/status').then(value=>{if(!active(epoch,generation))return;state.capability=value;const allowed=value.local_model_configured&&value.model_allowed;mode.querySelector('option[value=local_model]').disabled=!allowed;if(!allowed){mode.value='sources';state.mode='sources';}if(!state.result)$('ask-status').textContent=allowed?'Local model configured: '+value.model+'. Only an explicit model request sends selected excerpts.':'Source mode active. No model is configured; excerpts and graph navigation work offline.';}).catch(e=>{if(active(epoch,generation))$('ask-status').textContent=errorText(e);});
+    // Bound to this mount, not to state.epoch: asking a question before the answer arrives must not leave the model option disabled.
+    const generation=ui.generation,mounted=()=>state.root===root&&root.contains(mode)&&ui.generation===generation&&ui.csrf&&ui.view==='ask';
+    api('/desk/ask/status').then(value=>{if(!mounted())return;state.capability=value;const allowed=value.local_model_configured&&value.model_allowed;mode.querySelector('option[value=local_model]').disabled=!allowed;if(!allowed){mode.value='sources';state.mode='sources';}if(!state.result&&!state.busy)$('ask-status').textContent=allowed?'Local model configured: '+value.model+'. Only an explicit model request sends selected excerpts.':'Source mode active. No model is configured; excerpts and graph navigation work offline.';}).catch(e=>{if(mounted()&&!state.busy)$('ask-status').textContent=errorText(e);});
   }
   async function submit(){
     if(state.busy||!ui.connected)return;
