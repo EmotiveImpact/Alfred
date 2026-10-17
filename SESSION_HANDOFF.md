@@ -1,5 +1,7 @@
 # ALFRED unified build handoff
 
+**Two agents, 17 October 2026:** Claude and Astra (OpenAI Codex) now share this repository through claims. Read [coordination/README.md](coordination/README.md) and the live claims in `coordination/claims/` before starting any work, and run `python3 tools/check_claims.py`.
+
 **Latest checkpoint, 17 October 2026:** encryption phase 1 step 1 (key custody) on branch
 `claude/project-thread-9npowk`: `alfred/keys.py`, a keyring with a master key and a key per
 area, unlocked by the macOS keychain, a passphrase, a server secret file or the recovery key.

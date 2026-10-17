@@ -12,6 +12,14 @@ Key custody for plan item 1.1 (SYS-002, M05), on the owner's choice of both a Ma
 - **Full-disk encryption check.** FileVault on a Mac, LUKS on Linux; `python3 -m alfred.keys disk` and a new `doctor` check, which also reads the keyring's layout without unlocking it. `placement` lists the keyring as a live file.
 - **First adopted runtime dependency.** `cryptography` 50.0.2 with `cffi` 2.1.1 and `pycparser` 3.0, pinned with every file hash in `requirements/encryption.txt`; CI installs it in a fresh virtual environment for the test suite. The adoption record is in [docs/ENCRYPTION.md](docs/ENCRYPTION.md); the owner's sign-off is pending. [Receipt](docs/evidence/encryption/RECEIPT.md).
 
+## 17 October 2026 (evening): two agents, one repository, branch `claude/project-thread-r6ndba`
+
+Process and tooling only; no runtime change.
+
+- **Claude and Astra share the work through claims.** Astra (OpenAI Codex, from Codex cloud) joins Claude. [coordination/README.md](coordination/README.md) explains the split: each piece of work has a claim in `coordination/claims/` listing its exact paths; Astra edits only its live claims on `main`, Claude keeps every shared file and everything unclaimed, and the owner approves every merge. Root `AGENTS.md` gains the rules for both agents and a shared engineering bar (tests first, small pull requests, green CI, no weakened checks).
+- **The boundary is checked, not trusted.** `tools/check_claims.py` validates claims (format, no overlapping live paths, no shared files claimed by Astra) and, on every pull request, fails a `codex/` branch that changes anything outside its claims and a `claude/` branch that changes a path Astra has claimed. Synthetic Git tests in `tools/test_claims.py`; both run in unified CI.
+- **First claims.** Astra: the real question set harness and the secret scrubber, with briefs in `coordination/briefs/`. Claude: the encryption foundation (plan phase 1), being built in its own thread.
+
 ## 17 October 2026: research shelf and integration plan, branch `claude/project-thread-t9ssyl`
 
 Documentation and inert reference data only; no runtime change. Nothing under `third_party/` was installed, run or imported.

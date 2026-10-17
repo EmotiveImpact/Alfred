@@ -34,6 +34,8 @@ jobs:
           /tmp/alfred-python/bin/pip freeze | tee /tmp/alfred-unified-core/encryption-packages.txt
           python3 tools/test_source_library.py 2>&1 | tee /tmp/alfred-unified-core/archive-tests.txt
           python3 tools/test_research_shelf.py 2>&1 | tee /tmp/alfred-unified-core/research-shelf-tests.txt
+          python3 tools/test_claims.py 2>&1 | tee /tmp/alfred-unified-core/claims-tests.txt
+          python3 tools/check_claims.py 2>&1 | tee /tmp/alfred-unified-core/claims.txt
           python3 tools/check_memory_plan.py --self-test 2>&1 | tee /tmp/alfred-unified-core/plan-tests.txt
           python3 tools/check_memory_plan.py | tee /tmp/alfred-unified-core/plan-report.json
           python3 tools/check_requirement_register.py --self-test 2>&1 | tee /tmp/alfred-unified-core/register-tests.txt
@@ -43,6 +45,14 @@ jobs:
           python3 tools/build_research_shelf.py --verify | tee /tmp/alfred-unified-core/research-shelf.txt
           python3 tools/import_sources.py --verify | tee /tmp/alfred-unified-core/original-archive.txt
           python3 tools/extend_sources.py --verify | tee /tmp/alfred-unified-core/extension-archive.txt
+      - name: Check the pull request stays inside each agent's claims
+        if: github.event_name == 'pull_request'
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          # A pull_request run checks out the merge commit, whose first parent is the base it merges into.
+          python3 tools/check_claims.py --base HEAD^1 --branch "$HEAD_REF" 2>&1 | tee /tmp/alfred-unified-core/claims-diff.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
