@@ -2,8 +2,8 @@
 
 `alfred/scrub.py` finds credentials in text and blanks them before ALFRED saves the text or
 sends it to a model. It is integration plan phase 5 ("secret scrubbing before anything is
-saved or sent") and backlog item A2. The module is built and tested, but nothing calls it
-yet. "Where it will be called" below is the follow-up.
+saved or sent") and backlog item A2. Brain packets and harvested worker text are scrubbed
+with it (backlog C4); "Where it will be called" below lists what is wired and what is not yet.
 
 ## What it does
 
