@@ -61,7 +61,8 @@ SEAL_PREFIX = 'alfred-seal'
 MAX_SLOTS, MAX_AREAS, MAX_VERSIONS, MAX_KEYRING_BYTES = 16, 256, 16, 1 << 20
 MAX_AREA_NAME = 80
 HEX_ID = re.compile(r'[0-9a-f]{8}')
-B64 = re.compile(r'[A-Za-z0-9_-]{0,4096}')
+# No length cap here: every keyring field checks its decoded length, and sealed values may be large.
+B64 = re.compile(r'[A-Za-z0-9_-]*')
 
 
 # Encoding and derivation -------------------------------------------------

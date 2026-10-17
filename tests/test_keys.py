@@ -254,6 +254,12 @@ class AreaTests(Base):
             self.opened.open('company', relabelled, 'reviewed_values/value/42')
         self.assertEqual(caught.exception.code, 'seal_does_not_match')
 
+    def test_large_values_seal_and_open(self):
+        # A whole note (up to 64 KiB) or a job's output is sealed as one value.
+        value = 'Long note line with private words.\n' * 6000
+        sealed = self.opened.seal('personal', value, 'knowledge_notes/body/1')
+        self.assertEqual(self.opened.open('personal', sealed, 'knowledge_notes/body/1').decode(), value)
+
     def test_each_area_has_its_own_key(self):
         found = {self.opened.area_key(a)[1] for a in ('personal', 'company', 'client-acme')}
         self.assertEqual(len(found), 3)

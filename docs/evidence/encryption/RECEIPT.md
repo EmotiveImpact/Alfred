@@ -52,14 +52,15 @@ built against the recommended `cryptography` and does not merge without that sig
 
 ## Tests
 
-- `tests/test_keys.py`, 41 tests: HKDF against RFC 5869 case 1; recovery key format, typing
+- `tests/test_keys.py`, 42 tests: HKDF against RFC 5869 case 1; recovery key format, typing
   tolerance and that the check catches every single-character change; the keyring file holds
   no key, passphrase or recovery key in any encoding; each method opens the same master key;
   wrong passphrase and recovery key refused; production scrypt cost recorded; short
   passphrases refused; no overwrite and no symlink; tampering (hidden destruction, swapped
   area keys, redirected keychain item, inflated scrypt cost, damaged fields) refused;
   concurrent writers refused; closing clears the master key; seal and open bound to area and
-  context; per-area keys distinct; area names sealed, never in the file or `status`, and
+  context; values of any size (a 200 KB value) seal and open; per-area keys distinct; area
+  names sealed, never in the file or `status`, and
   refused when swapped between areas; neutral area ids; destroying an area defeats even the recovery key, while a
   copy made before still opens it (the stated limit); rotation; keychain secret never in
   arguments and withdrawn on removal; secret files by path, systemd credential and
@@ -71,7 +72,7 @@ built against the recommended `cryptography` and does not merge without that sig
 - `tests/test_recovery.py`: the fresh-workspace doctor test now sets aside the new
   `disk_encryption` check, whose status depends on the machine.
 - Whole suite with the pinned library in a fresh virtual environment (Python 3.13.16):
-  1,468 tests, all passing (`python -m unittest discover -s tests`, 213 seconds).
+  1,469 tests, all passing (`python -m unittest discover -s tests`, 203 seconds).
 - `tools/check_memory_plan.py` and `tools/check_requirement_register.py`, with self-tests: pass.
 
 ## Not exercised
