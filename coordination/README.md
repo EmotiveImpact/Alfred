@@ -5,6 +5,9 @@ folder is how they split the work so they never edit the same file at once, and 
 see what the other is doing. The rules that bind both agents are in the root
 [AGENTS.md](../AGENTS.md); this page explains the mechanics.
 
+The ordered list of work both agents build without waiting for the owner is
+[BACKLOG.md](BACKLOG.md).
+
 ## Who owns what
 
 - **Astra owns only what a live claim gives it.** A claim is a file in [claims/](claims/)
