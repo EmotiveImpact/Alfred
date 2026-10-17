@@ -93,7 +93,7 @@ export function controlRequest(level:Level,target:string|null,operation:Operatio
 export type EvidenceClass='verified'|'failed_checks'|'unverifiable'|'no_checks'|'not_returned';
 export interface CheckStatus{id:string;kind:string;status:'passed'|'failed'|'unverifiable'}
 export interface ResultRun{position:number;outcome:'returned'|'checked'|'failed_checks';sha256:string;
-  counts:{passed:number;failed:number;unverifiable:number};checks:CheckStatus[]}
+  initiated?:'automatic'|'owner';counts:{passed:number;failed:number;unverifiable:number};checks:CheckStatus[]}
 export interface HubResult{job:string;brain:string;task_id:string;scope_class:string;contract:'accepted'|'refused'|'stopped';contract_reason:string|null;
   declared:number;checks:string;state:string;evidence:EvidenceClass;runs:number;acknowledged_over:string|null;ingested_at:number;updated_at:number|null;
   work:{mandate:string;goal:string;goal_title:string|null;work:string;trigger:string}|null;last_run:ResultRun|null}
@@ -132,13 +132,14 @@ const CHECK_WORDS:Record<string,(c:AcceptanceCheck)=>string>={
 };
 export function checkLabel(c:AcceptanceCheck){return `${c.id} ${(CHECK_WORDS[c.kind]??(()=>c.kind.replaceAll('_',' ')))(c)}`;}
 
-/** What the last run found, without reasons (they may quote what the brain returned). */
+/** What the last run found and who started it, without reasons (they may quote what the brain returned). */
 export function runLine(r:HubResult){
   if(r.contract==='stopped')return 'The job stopped without a result, so nothing was checked.';
   if(r.declared===0)return 'No acceptance checks were declared for this task, so it is never counted as verified.';
   if(!r.last_run)return `${r.declared} ${r.declared===1?'check':'checks'} declared, not run yet.`;
   const n=r.last_run.counts;
-  return `Run ${r.last_run.position}: ${n.passed} passed · ${n.failed} failed · ${n.unverifiable} could not run`;
+  const by=r.last_run.initiated==='automatic'?' (automatic, when the result arrived)':r.last_run.initiated==='owner'?' (by you)':'';
+  return `Run ${r.last_run.position}${by}: ${n.passed} passed · ${n.failed} failed · ${n.unverifiable} could not run`;
 }
 
 export function canRunChecks(r:HubResult){return r.contract==='accepted'&&r.declared>0;}
