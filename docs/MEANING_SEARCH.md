@@ -79,7 +79,8 @@ related. That is the model's job.
 
 - **In memory only.** Vectors and passage locators live in the running process and nowhere
   else. The index refuses to be pickled or copied, and the module imports nothing that can
-  reach a file, database or network (a test checks its imports).
+  reach a file, database or network (a test checks its imports). The embedder keeps nothing
+  between calls either, so once a note is removed no trace of its words is left in the process.
 - **One area per index.** An index is created for one scope and holds only the notes that
   scope's credential may already read. Nothing is shared between indexes, so a search can never
   reach another area's notes, counts or neighbours. Two indexes holding the same note ID keep

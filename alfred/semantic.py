@@ -18,7 +18,6 @@ Design and limits: docs/MEANING_SEARCH.md.
 from __future__ import annotations
 from bisect import bisect_right
 from fractions import Fraction
-from functools import lru_cache
 import hashlib
 import heapq
 import math
@@ -159,7 +158,6 @@ def _texts(texts):
     return texts
 
 
-@lru_cache(maxsize=65536)
 def _features(word, dimensions):
     """One word's hashed slots: the word itself, weight 1, and its character trigrams, together weight 1."""
     padded = '<' + word + '>'
@@ -187,12 +185,19 @@ class HashingEmbedder:
         self.dimensions, self.name = dimensions, f'alfred-hashing-v1-d{dimensions}'
 
     def embed(self, texts):
-        return [self._vector(t) for t in _texts(texts)]
+        # Word slots are reused within one call only: nothing derived from a note's words
+        # outlives the call, so a removed note leaves nothing behind in the embedder.
+        seen = {}
+        return [self._vector(t, seen) for t in _texts(texts)]
 
-    def _vector(self, text):
+    def _vector(self, text, seen):
         vector = [0.0] * self.dimensions
         for word in _WORD.findall(unicodedata.normalize('NFKC', text).casefold()):
-            for slot, weight in _features(word[:MAX_WORD], self.dimensions):
+            word = word[:MAX_WORD]
+            slots = seen.get(word)
+            if slots is None:
+                slots = seen[word] = _features(word, self.dimensions)
+            for slot, weight in slots:
                 vector[slot] += weight
         norm = math.sqrt(math.sumprod(vector, vector))
         return [x / norm for x in vector] if norm > 1e-9 else [0.0] * self.dimensions

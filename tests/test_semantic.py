@@ -189,6 +189,13 @@ class EmbedderTests(unittest.TestCase):
         self.assertEqual(punctuation, [0.0] * 64)
         self.assertEqual(e.embed([]), [])
 
+    def test_the_embedder_keeps_nothing_from_the_text_it_embedded(self):
+        import alfred.semantic as semantic
+        e = HashingEmbedder(32)
+        e.embed(['Harbour budget review for the crew'])
+        self.assertEqual(vars(e), {'dimensions': 32, 'name': 'alfred-hashing-v1-d32'})
+        self.assertFalse(hasattr(semantic._features, 'cache_info'))  # No process-wide word cache.
+
     def test_pinned_vector(self):
         v = HashingEmbedder(16).embed(['Budget'])[0]
         self.assertEqual([(i, round(x, 6)) for i, x in enumerate(v) if x], PINNED_BUDGET_16)
