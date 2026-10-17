@@ -17,7 +17,7 @@ files. Written against `main` at `d81a5d509`, with the claims in draft pull requ
   only when its claim is on `main`. A Claude item never touches a live Astra claim, and
   stays out of the encryption claim (`coordination/claims/claude-encryption.md`), which the
   "Encryption with both unlock options" thread owns.
-- **One item, one pull request**, tests first, CI green, a receipt for runtime work. Every
+- **One item, one pull request**, each on its own `claude/project-thread-att046-<item>` branch (the owner agreed on 17 October), tests first, CI green, a receipt for runtime work. Every
   merge still needs the owner's word; Claude batches ready pull requests into one digest.
 - **Synthetic data only.** Real notes wait for encryption step 2.
 
@@ -47,12 +47,12 @@ claimed and briefed by the Astra thread in PR #27. Claude wires each into CI aft
 
 | # | Item | Paths | Depends on | Status |
 | ---: | --- | --- | --- | --- |
-| C1 | This backlog | `coordination/BACKLOG.md`, `coordination/README.md`, `coordination/claims/claude-hub-host.md` | none | review |
-| C2 | The host builds the goal hub, behind a switch that defaults to off | `alfred/hub_host.py`, `alfred/desk.py` (one hook in `serve`), `tests/test_hub_host.py`, `docs/evidence/hub-host/`, `docs/AGENT_HUB.md` | none | building |
+| C1 | This backlog | `coordination/BACKLOG.md`, `coordination/README.md`, `coordination/claims/claude-hub-host.md` | none | review (PR #28) |
+| C2 | The host builds the goal hub, behind a switch that defaults to off | `alfred/hub_host.py`, `alfred/desk.py` (one hook in `serve`), `tests/test_hub_host.py`, `docs/evidence/hub-host/`, `docs/AGENT_HUB.md` | none | review (PR #29) |
 | C3 | Show who started each verification run (automatic or owner) in the web desk | `web/` hub view, `docs/AGENT_HUB.md` | A3 merged | waiting |
 | C4 | Scrub secrets from brain packets before they leave and from harvested text before it is proposed | `alfred/brain.py`, `alfred/learning.py` (harvest only), their tests | A2 merged | waiting |
 | C5 | Run A5 to A7 in CI | `.github/workflows/` | each of A5 to A7 merged | waiting |
-| C7 | Fix B-030: a question asked before the capability answer left the Ask page's model option disabled (found by CI on this pull request) | `web/ask.js`, `tools/check_memory_context_browser.py`, `BUGS_AND_FIXES.md` | none | building |
+| C7 | Fix B-030: a question asked before the capability answer left the Ask page's model option disabled (found by CI on this pull request) | `web/ask.js`, `tools/check_memory_context_browser.py`, `BUGS_AND_FIXES.md` | none | review (PR #30) |
 | C6 | Mark claims done, update `CHANGELOG.md`, `SESSION_HANDOFF.md`, `docs/INDEX.md` and `docs/AGENT_HUB.md` after each merge | shared files | each merge | ongoing |
 
 C2 in one paragraph: `desk serve --hub synthetic` builds the `BrainHub` and `GoalHub` over
