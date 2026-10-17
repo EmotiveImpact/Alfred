@@ -1,8 +1,9 @@
 # Encryption step 1 receipt: keys and unlocking (plan 1.1, integration plan phase 1)
 
 17 October 2026. Branch `claude/project-thread-9npowk`, started from `main` at `8233a4588`
-(the PR #24 merge). Tested revision: the commit carrying this receipt (a commit cannot name
-itself; the pull request shows its hash). Synthetic secrets only. Nothing under `third_party/`
+(the PR #24 merge), with `main` at `d81a5d509` (the PR #25 merge, two-agent claims) merged in
+at `91b8d5450`. Tested revision: `91b8d5450`; the commit carrying this receipt changes only
+this file. Synthetic secrets only. Nothing under `third_party/`
 was read, imported or executed, and no model ran.
 
 Requirements: SYS-002 (private storage, secrets, exports, backups and restore), memory job
@@ -72,8 +73,11 @@ built against the recommended `cryptography` and does not merge without that sig
 - `tests/test_recovery.py`: the fresh-workspace doctor test now sets aside the new
   `disk_encryption` check, whose status depends on the machine.
 - Whole suite with the pinned library in a fresh virtual environment (Python 3.13.16):
-  1,469 tests, all passing (`python -m unittest discover -s tests`, 203 seconds).
+  1,469 tests, all passing (`python -m unittest discover -s tests`, 215 seconds at
+  `91b8d5450`).
 - `tools/check_memory_plan.py` and `tools/check_requirement_register.py`, with self-tests: pass.
+- `tools/test_claims.py` and `tools/check_claims.py --base origin/main --branch
+  claude/project-thread-9npowk` (no path Astra has claimed is changed): pass.
 
 ## Not exercised
 

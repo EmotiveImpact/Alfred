@@ -1,30 +1,32 @@
 ---
 id: claude-encryption
 agent: claude
-status: review
+status: active
 task: Encryption foundation, plan phase 1 (keys, unlock methods, sealed records, disk check)
 claimed: 2026-10-17
 paths:
   - alfred/keys.py
-  - alfred/sealing.py
-  - alfred/recovery.py
+  - alfred/crypto/
   - alfred/placement.py
+  - alfred/recovery.py
+  - alfred/core.py
+  - alfred/local.py
+  - alfred/desk_store.py
+  - alfred/knowledge.py
+  - alfred/grounded.py
+  - alfred/deletion.py
+  - alfred/export.py
+  - alfred/rebuild.py
   - requirements/
-  - tests/test_keys.py
-  - tests/test_sealing.py
-  - tests/sealed_suite.py
+  - tests/test_keys*.py
+  - tests/test_encryption*.py
   - tests/test_recovery.py
   - docs/ENCRYPTION.md
+  - docs/MEMORY_SECURITY.md
+  - docs/SECURITY_AND_DATA.md
   - docs/evidence/encryption/
-  - docs/REMAINING_BUILD_PLAN.md
-  - research/INTEGRATION_PLAN_2026-10-17.md
 ---
 
-Built by Claude in the "Encryption with both unlock options" project thread. Astra stays out
-of these paths.
-
-17 October 2026: step 1 (keys and unlocking) is PR #26, with the paths above except
-`alfred/sealing.py`, `tests/test_sealing.py` and `tests/sealed_suite.py`, which step 2
-(sealing stored records) adds. Step 2 also changes the existing modules that read or write
-private text (notes, reviewed memory, conversations, executive records, drafts, learning,
-jobs); each of its pull requests widens this claim to the modules it touches.
+Built by Claude in the "Encryption with both unlock options" project thread: step 1 (keys and
+unlocking) is PR #26; step 2 seals the stored records. The storage, search and export modules
+are listed because sealing reaches them. Astra stays out of them.
