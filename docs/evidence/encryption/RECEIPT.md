@@ -2,7 +2,7 @@
 
 17 October 2026. Branch `claude/project-thread-9npowk`, started from `main` at `8233a4588`
 (the PR #24 merge), with `main` at `d81a5d509` (the PR #25 merge, two-agent claims) merged in
-at `91b8d5450`. Tested revision: `2ad0a418a` (each value sealed under its own derived key);
+at `91b8d5450`. Tested revision: `4fac4cedd` (three tries for a typed passphrase or recovery key);
 the commit carrying this receipt changes only this file. Synthetic secrets only. Nothing under `third_party/`
 was read, imported or executed, and no model ran.
 
@@ -79,8 +79,8 @@ built against the recommended `cryptography` and does not merge without that sig
 - `tests/test_recovery.py`: the fresh-workspace doctor test now sets aside the new
   `disk_encryption` check, whose status depends on the machine.
 - Whole suite with the pinned library in a fresh virtual environment (Python 3.13.16):
-  1,470 tests, all passing (`python -m unittest discover -s tests`, 200 seconds at
-  `2ad0a418a`).
+  1,472 tests, all passing (`python -m unittest discover -s tests`, 204 seconds at
+  `4fac4cedd`).
 - `tools/check_memory_plan.py` and `tools/check_requirement_register.py`, with self-tests: pass.
 - `tools/test_claims.py` and `tools/check_claims.py --base origin/main --branch
   claude/project-thread-9npowk` (no path Astra has claimed is changed): pass.
