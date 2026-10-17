@@ -4,7 +4,7 @@ on:
     branches: [feat/alfred-local-core-2026-09-25]
     paths: [alfred/**, tests/**, docs/**, research/**, README.md, SESSION_HANDOFF.md, .github/workflows/local-core.yml]
   pull_request:
-    paths: [alfred/**, tests/**, docs/**, research/**, .github/workflows/local-core.yml]
+    paths: [alfred/**, tests/**, docs/**, research/**, requirements/**, .github/workflows/local-core.yml]
 permissions:
   contents: read
 jobs:
@@ -18,7 +18,9 @@ jobs:
       - name: Test original code, real loopback HTTP and restart behaviour
         run: |
           python3 --version
-          python3 -m unittest discover -s tests -v
+          python3 -m venv /tmp/alfred-python
+          /tmp/alfred-python/bin/pip install --require-hashes --only-binary :all: -r requirements/encryption.txt
+          /tmp/alfred-python/bin/python -m unittest discover -s tests -v
           python3 -m alfred.demo
           python3 -m alfred.run demo
       - name: Verify both inert upstream archives

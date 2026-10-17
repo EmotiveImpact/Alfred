@@ -68,6 +68,11 @@ worked. **Your choice** marks a step that waits for you.
 
 ### Phase 1. Encryption foundation (plan 1.1 and 1.3)
 
+**Update, 17 October 2026.** Choice 1 is made: both. The keychain on a Mac, a passphrase or the
+server's secret store on a server, one offline recovery key. Step 1 (the keys and unlocking)
+is built; see [docs/ENCRYPTION.md](../docs/ENCRYPTION.md). Choice 3 is on the owner's card,
+with `cryptography` recommended and built against. Step 2 seals the records.
+
 - Seal ALFRED's records, search indexes, exports and backups, with one key per area under a
   master key. Destroying an area's key erases that area, including old copies.
 - Check full-disk encryption at start. Deleting a fact also deletes what was built from it.
