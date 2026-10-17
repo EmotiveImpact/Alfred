@@ -2,6 +2,10 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 17 October 2026 (night): the host builds the goal hub when asked, branch `claude/project-thread-att046-hub-host`
+
+- **`desk serve --hub synthetic` (backlog C2).** `alfred/hub_host.py` builds the brain hub and goal hub over the host's own job coordinator, registers only the deterministic synthetic test brain, allows no cloud scope and no tool, and enrols one `local-brain` worker that takes brain tasks only. The host's supervisor loop accounts results and runs heartbeats, so `/desk/hub`, mandates, budgets and verification work end to end on the real desk with test data. Off by default: without the switch no hub tables or brain worker are created and `/desk/hub` still answers `hub_not_configured`. No real brain is offered, because which brain comes first is the owner's choice. [Receipt](docs/evidence/hub-host/RECEIPT.md).
+
 ## 17 October 2026 (evening): two agents, one repository, branch `claude/project-thread-r6ndba`
 
 Process and tooling only; no runtime change.
