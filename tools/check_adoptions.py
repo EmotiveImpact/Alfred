@@ -17,7 +17,7 @@ manifests read as JSON data:
 - the path is a file the manifest lists for that snapshot;
 - the Licence line matches the catalogue, and the licence has a notice rule here: MIT needs a
   Copyright line, Apache-2.0 needs a Notice line and a Changes line;
-- any Copyright or Notice text is found in the upstream licence, NOTICE or adapted file.
+- any Copyright or Notice text quotes whole lines of the upstream licence, NOTICE or adapted file.
 
 A loose comment line that starts with those words but is not a complete credit fails, and so
 does a file of at least MIN_COPY_BYTES bytes that is byte-identical to a snapshot file but has
@@ -312,8 +312,23 @@ def _normal(text):
     return ' '.join(text.split())
 
 
+def _quotes_whole_lines(wanted, text):
+    """Whether wanted equals one or more consecutive whole lines of text, ignoring comment
+    markers and spacing, so a fragment such as a bare name or year is not a quote."""
+    lines = [t for t in (_normal(_comment_text(line)[1]) for line in text.splitlines()) if t]
+    for start in range(len(lines)):
+        joined = ''
+        for line in lines[start:]:
+            joined = (joined + ' ' + line).strip()
+            if joined == wanted:
+                return True
+            if len(joined) >= len(wanted):
+                break
+    return False
+
+
 def _found_upstream(value, snap, path):
-    """Whether quoted notice text appears in the upstream adapted file, NOTICE file or licence."""
+    """Whether quoted notice text is whole lines of the upstream adapted file, NOTICE file or licence."""
     names = [path] + list(NOTICE_FILES) + ([snap.licence_path] if snap.licence_path else [])
     base = snap.folder.resolve()
     wanted = _normal(value)
@@ -323,7 +338,7 @@ def _found_upstream(value, snap, path):
         target = (snap.folder / name).resolve()
         if not target.is_relative_to(base) or not target.is_file():
             continue
-        if wanted in _normal(target.read_bytes().decode('utf-8', errors='replace')):
+        if _quotes_whole_lines(wanted, target.read_bytes().decode('utf-8', errors='replace')):
             return True
     return False
 

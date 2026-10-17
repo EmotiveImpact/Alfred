@@ -27,7 +27,7 @@ folders exists.
 ## Writing a credit
 
 Put the credit at the top of the adapted file, one field per comment line, opening with the
-`Adapted from:` line and ending with a blank line. In Python:
+`Adapted from:` line and ending with a blank line (or an empty comment line). In Python:
 
     # Adapted from: mnemosyne-oss/mnemosyne
     # Path: <the file's path inside that snapshot>
@@ -46,7 +46,7 @@ than the field it continues.
 | `Path:` | always | a file the snapshot's manifest lists (a file the snapshot left out is named with the reason) |
 | `Commit:` | always | the full 40-character commit the catalogue pins for that project |
 | `Licence:` | always | the licence string the catalogue records, exactly (British spelling; `License:` is reported) |
-| `Copyright:` | MIT | must appear in the upstream licence file, NOTICE file or the adapted upstream file |
+| `Copyright:` | MIT | must quote one or more whole lines of the upstream licence file, NOTICE file or adapted upstream file (comment markers and spacing aside) |
 | `Notice:` | Apache-2.0 | the same: it must quote an upstream notice |
 | `Changes:` | Apache-2.0 | a statement of what was changed; free text |
 
@@ -68,7 +68,8 @@ A file may carry more than one credit block if it draws on more than one upstrea
   PostgreSQL, GPL, AGPL, the Unlicense and every other licence fail until you agree what their
   credit must carry and the rule is added here;
 - a missing Copyright line for MIT, or a missing Notice or Changes line for Apache-2.0;
-- Copyright or Notice text that is not in the upstream licence, NOTICE or adapted file;
+- Copyright or Notice text that is not whole lines of the upstream licence, NOTICE or adapted file
+  (a fragment such as a bare name or year is not a quote);
 - a comment line that starts with the words "adapted from" but is not a complete credit. To credit
   an idea rather than code, use other words, such as "Based on the approach in";
 - a file of at least 256 bytes that is byte-identical to a snapshot file but carries no credit.

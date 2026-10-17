@@ -209,6 +209,19 @@ class ManifestMatchTests(AdoptionCase):
                          ['alfred/adapted.py:5: Copyright "Copyright (c) 2024 Someone Else" is not in the upstream licence, '
                           'notice or adapted file at the pinned commit'])
 
+    def test_copyright_must_quote_whole_upstream_lines(self):
+        for partial in ('Example Labs', 'Copyright', 'c', '2025 Example Labs'):
+            with self.subTest(partial):
+                text = MIT.replace('Copyright: Copyright (c) 2025 Example Labs', 'Copyright: ' + partial)
+                self.assertEqual(self.findings(text),
+                                 [f'alfred/adapted.py:5: Copyright "{partial}" is not in the upstream licence, '
+                                  'notice or adapted file at the pinned commit'])
+
+    def test_notice_may_quote_a_comment_in_the_adapted_upstream_file(self):
+        text = APACHE.replace('// Notice: Graph Kit\n//   Copyright 2024 Sample Works Ltd.\n',
+                              '// Notice: Synthetic upstream file for tests/test_check_adoptions.py. Inert text, never run.\n')
+        self.assertEqual(self.findings(text, 'console/src/rank.ts'), [])
+
     def test_apache_notice_must_be_found_upstream(self):
         text = APACHE.replace('//   Copyright 2024 Sample Works Ltd.', '//   Copyright 2023 Sample Works Ltd.')
         self.assertEqual(self.findings(text, 'console/src/rank.ts'),
