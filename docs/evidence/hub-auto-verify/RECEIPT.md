@@ -1,7 +1,7 @@
 # Automatic verification receipt (backlog A3)
 
 17 October 2026. Branch `claude/project-thread-att046-hub-auto-verify`, started from `main` at
-`d81a5d509`. **Tested commits: `c3ce35297`** (the change and its unit tests) **and `417600bc4`** (the
+`d81a5d509`. **Tested commits: `c3ce35297`** (the change and its unit tests) **and `417600bc4`, `7945e5c4e`** (the
 goals panel browser check updated to match; no other code). The commits that add this receipt change
 no code.
 Synthetic data only. Not merged, not deployed. The shared registers (CHANGELOG.md,
@@ -70,7 +70,7 @@ python3 -m unittest discover -s tests                                # Ran 1444 
 python3 tools/check_claims.py --base origin/main --branch claude/project-thread-att046-hub-auto-verify   # claims ok
 ```
 
-## Browser checks at `417600bc4`
+## Browser checks at `417600bc4` and `7945e5c4e`
 
 `tools/check_hub_integrate_browser.py` asserted that results stayed unverifiable until the owner
 ran the checks, so it now waits for the automatic run. It checks that each declared result has one
@@ -90,6 +90,10 @@ tools/check_learning_browser.py        # {"passed": 28, "page_errors": []}
 ```
 
 Before the update, the first check failed at "before any run, declared checks are not verified".
+
+`7945e5c4e` closes a race found when rerunning: the passing result's chip already read verified, so
+the check could ask the server before the owner's second run was recorded. It now waits for
+`Run 2` on the card. The goals panel check then passed three times in a row.
 
 ## Left for later
 
