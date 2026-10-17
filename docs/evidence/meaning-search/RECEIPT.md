@@ -78,3 +78,12 @@ were the two scanner codes for unclosed fences and front matter.
   nothing was measured against the real question set.
 - Any real embedding model, `sqlite-vec`, saved or sealed vectors, or wiring into
   `alfred/grounded.py`.
+
+## Review change at `a3ad599c5`
+
+The lead's review found that `_features` was wrapped in a process-wide `lru_cache` of up to
+65,536 words. Words from every area's notes stayed in memory for the life of the process, even
+after a note was removed. The cache is now one dictionary per `embed` call. A new test,
+`test_the_embedder_keeps_nothing_from_the_text_it_embedded`, failed on `5e0f1c31e` and passes at
+`a3ad599c5`. `python3 -m unittest discover -s tests -p test_semantic.py`: 44 tests OK. No other
+code changed.
