@@ -1,0 +1,764 @@
+{
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 11335,
+      "sha256": "171fd8201c63d379bccf5a770b26c6c535f33be98f541c02b5d069937070f32b",
+      "git_blob_sha1": "e0d8210e8009de93c35050c71db7af0d88c37660"
+    },
+    {
+      "path": "README.md",
+      "bytes": 12518,
+      "sha256": "ae25b22ffa0a44d4e4a5135a9d4c12dd5e98b561d229842ea481239935c357a4",
+      "git_blob_sha1": "2ee1ba3877bd8ba572024a2ea9fc96fd4a525a18"
+    },
+    {
+      "path": "reverie/backend_server/persona/cognitive_modules/converse.py",
+      "bytes": 10928,
+      "sha256": "c9ecad22a5bd4dc40902fab6503fc2da433adcdea5870aec19ab83f7eadb0238",
+      "git_blob_sha1": "183ded39da3285a797aea61ec88b595afebd2ccc"
+    },
+    {
+      "path": "reverie/backend_server/persona/cognitive_modules/execute.py",
+      "bytes": 6454,
+      "sha256": "1696505486cc71bb6a7a125a2da06f1a56d8c80d696d0c897f81e703cbeff8ac",
+      "git_blob_sha1": "a8794ad7a3ddd2a3793a10c48ee8dae79d87e3fc"
+    },
+    {
+      "path": "reverie/backend_server/persona/cognitive_modules/perceive.py",
+      "bytes": 7847,
+      "sha256": "e0243136ac0bd78fd39e38c3dcb8239a219e9da1398a3d9d0224c2785befe29a",
+      "git_blob_sha1": "732d3755d0362ed52369fa4c48ca7266fb067208"
+    },
+    {
+      "path": "reverie/backend_server/persona/cognitive_modules/plan.py",
+      "bytes": 41880,
+      "sha256": "d0cf387a9015750b05606693d126d1d5e1c2d12b95a85b22937a2b3d8b14042a",
+      "git_blob_sha1": "901d2433111b931401b77690191eb6d57a9739d9"
+    },
+    {
+      "path": "reverie/backend_server/persona/cognitive_modules/reflect.py",
+      "bytes": 8569,
+      "sha256": "5e2658a90f658ce4f42f6a7c3859fe47fd08925eb77c179a4c38e9233d1c205c",
+      "git_blob_sha1": "2daf2fd9a0b4fc8ee670a20294bc86e63db85117"
+    },
+    {
+      "path": "reverie/backend_server/persona/cognitive_modules/retrieve.py",
+      "bytes": 9984,
+      "sha256": "a609d9ba431dd8cb0f3ec804d128ff9d1755719221127b45a248d20c51dc7120",
+      "git_blob_sha1": "ab97a4f175664bc813840418afe140b7463b674f"
+    },
+    {
+      "path": "reverie/backend_server/persona/memory_structures/associative_memory.py",
+      "bytes": 10692,
+      "sha256": "bf05caf83661c1f870a26f80d326c104500763e77a54eee05368e56bd7daa791",
+      "git_blob_sha1": "49c496d7f1a3345336b0ce72ccefa2b2635cff14"
+    },
+    {
+      "path": "reverie/backend_server/persona/memory_structures/scratch.py",
+      "bytes": 21884,
+      "sha256": "00513be615158c39954322fc58572c9abaac8e5a6cf13650ac5ca804f674f537",
+      "git_blob_sha1": "eac23800d6b828f6072ec1486abdbd73209b6b6a"
+    },
+    {
+      "path": "reverie/backend_server/persona/memory_structures/spatial_memory.py",
+      "bytes": 3318,
+      "sha256": "bad3a1faae494ef9acf1604171afc9179995fab4de62fdac58c9302769de7eb8",
+      "git_blob_sha1": "1fe510b3f4717500d272c20d48f05e3f461e347a"
+    },
+    {
+      "path": "reverie/backend_server/persona/persona.py",
+      "bytes": 9223,
+      "sha256": "02f9ee127aec991f8212fd1ee31aa320a6b866358703ffe9b1ed2e6f1af21226",
+      "git_blob_sha1": "c4a3966fdd37f4e919d1203b74c8433e18a13a96"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/defunct_run_gpt_prompt.py",
+      "bytes": 75030,
+      "sha256": "6d11349d8e28f03a2594eecfe371016fdb9f30662f96de70410b7122acb3f63f",
+      "git_blob_sha1": "d47ec3c9ce75c328679b6a6546bbb5d98a797908"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/gpt_structure.py",
+      "bytes": 10144,
+      "sha256": "600463e35a02263210cd1946361f30020df8edaefc81a8e229d6983cb9c85c99",
+      "git_blob_sha1": "f9c4718949671f51e202cea8c0c2e6f37f0bdf96"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/print_prompt.py",
+      "bytes": 1481,
+      "sha256": "cb9cba775d25285d03a49101b40a2f13f84fdf5ccc5de88eaeac3cbf8c389e3d",
+      "git_blob_sha1": "646c0f74af35ada350d2480a2de4924cf7dd3ca9"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/run_gpt_prompt.py",
+      "bytes": 106718,
+      "sha256": "3f51a49724721865980961b67da2873ff9262fc9b48b79a405974ebca903233d",
+      "git_blob_sha1": "b25615e707739e4f9ac4ce0a5413a1569ec8a820"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/safety/anthromorphosization_v1.txt",
+      "bytes": 573,
+      "sha256": "d871ea39a9d43eca7b97f1f60c526decceb6bff00fc96e0bc6de1f95aeff437f",
+      "git_blob_sha1": "ecbd15a4bc6a8af99dc1234de44214a01895e2ff"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_location_object_v1.txt",
+      "bytes": 1393,
+      "sha256": "b71c1681ce712621068bc7593de92d156bc691296c0e4f96669080292fdf7097",
+      "git_blob_sha1": "0eb75c2f67fc296fe1b9f62ba771dc36d831bf7d"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_location_object_vMar11.txt",
+      "bytes": 1450,
+      "sha256": "524741dfa83a4d8e6150f73778c1820d4874dd03902285acfca293ea6527e17e",
+      "git_blob_sha1": "908750646d703df719e8752e609eb0e146d03e10"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_location_sector_v1.txt",
+      "bytes": 2110,
+      "sha256": "64a22707f361b27879ab5198865118c16e3f53ab483c7d6c498defbd8c85c40f",
+      "git_blob_sha1": "f93ed96e090b87510ad557c6c287ad4f2c448ced"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_location_sector_v2.txt",
+      "bytes": 1002,
+      "sha256": "7d99eace3d8becefa0821e3a8942ecfbc093ff0d8612891216a832ac257dfd45",
+      "git_blob_sha1": "c55321348a696979e496206a3999cf733765c644"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_location_v1.txt",
+      "bytes": 617,
+      "sha256": "21267917fe413205c34f87d5577e25e9c32870ec29e2af8b6315cf755f4762c2",
+      "git_blob_sha1": "ea12fa0850891355784f32cce92581fa5f533c6f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_location_v2.txt",
+      "bytes": 2330,
+      "sha256": "08ced99e2b05069e7c6589f2681f2df3fbfa8caf4e319753b3d65eaab5ebb418",
+      "git_blob_sha1": "0c5c48c1ffab0ae691f8e3c2ce01ad364b39d953"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_location_v3.txt",
+      "bytes": 2417,
+      "sha256": "eb9d22c9c706aeb4b4ae5eed602b2bb6bfc489f4cc01bad17fb1dbb43301919a",
+      "git_blob_sha1": "bde84c7f0cb97b9ef47551d46026612f48c4123b"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_object_v1.txt",
+      "bytes": 311,
+      "sha256": "d177f34a4e578a5953b49d18bde7cdcc6e6d44415921bf705f47359e166210ae",
+      "git_blob_sha1": "2c5420fcb0ff5f0c37f112e968b98f45c39f34f6"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_object_v2.txt",
+      "bytes": 1127,
+      "sha256": "21103e53e962e6234c3199085b99e9f8484918037b76316ff09be7afd844076d",
+      "git_blob_sha1": "1a8a78e165145e610d74c113b2abc1be56295994"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_sequencing_v1.txt",
+      "bytes": 524,
+      "sha256": "e8e9bf9896987190f04a479bd3fa921ce9914885d955ecc70fa44a8eb5744ae2",
+      "git_blob_sha1": "ee7632ee7c547a89305c58bde93dfbaf98d52693"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/action_sequencing_v2.txt",
+      "bytes": 1336,
+      "sha256": "76e120b7eb56c7688da54d389172b31bf1808232f87ff26eba8017888d41572e",
+      "git_blob_sha1": "03bdbc4d63beabd5dddfc55783259609fd285692"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/daily_planning_v1.txt",
+      "bytes": 625,
+      "sha256": "86201902ce49a598d8088c36ce52e1a866dd6bfe642d3b980c676d0e0bf64dee",
+      "git_blob_sha1": "1ca9bb5f30f29154cefcf870cb6c257e20fd3e93"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/daily_planning_v2.txt",
+      "bytes": 791,
+      "sha256": "55acccfa53b346d350484c21567ca546c462aef5fa7bc1d94193fa691f5ea47a",
+      "git_blob_sha1": "a34000a639071d2c20d5f69553db5a120c293add"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/daily_scheduling_v1.txt",
+      "bytes": 770,
+      "sha256": "c9f8e0db9ac8e793baed07fdcd659dc254f1f50f37a90315eb9bd818b570d843",
+      "git_blob_sha1": "8e07a0cf2c597ec43dd238dba0e324036d4b6cd7"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/next_step_scheduling_init_v1.txt",
+      "bytes": 1042,
+      "sha256": "46152167faf76c444269b719608dfa4d7672eb04bd391bfc32aacee8ac1566eb",
+      "git_blob_sha1": "0ad6e0c30637a40949e30c31408d3218145bd00d"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/next_step_scheduling_v1.txt",
+      "bytes": 1088,
+      "sha256": "bd1dc4433419876bfa52fff97f0a7ef1280374527d00a34ae4af691e4cd531bb",
+      "git_blob_sha1": "7d1cb52e2369157c319b5aaa1e55a9b1ca3a32cc"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/next_step_scheduling_v1_pt2.txt",
+      "bytes": 208,
+      "sha256": "2c8424d8148f576e611ab601318ba620866c3f44db42aea73d8141d8b430d540",
+      "git_blob_sha1": "e1fe7a6153ee5facda6c36bfd8827aecd6d2a1bd"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v1/test_prompt_July5.txt",
+      "bytes": 352,
+      "sha256": "93eca6510a288421ed1244b4ed2df84f3d1ea7f45e30e411e99535cb32b4dd6e",
+      "git_blob_sha1": "c65e2e9ed2ffbbae81735fd359ffe287ecda3521"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/agent_chat_v1.txt",
+      "bytes": 531,
+      "sha256": "75cb1e91a3758d0425f42b6c9da7b1f3b1887610b06e7674186a53c779f1d054",
+      "git_blob_sha1": "fb4ac83bfa605b6001f7f5f3458f274ed217e5a0"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/bed_hour_v1.txt",
+      "bytes": 375,
+      "sha256": "fa774ba649e405f9e6f0e9e8f62d8ab7451db545755ca8cc29cb7ccbeae0ac19",
+      "git_blob_sha1": "29045211885e41c933d1dbed717a7661c38020de"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/convo_to_thoughts_v1.txt",
+      "bytes": 479,
+      "sha256": "92d5b0399264944fc90a1dd05a1263207912992d71dc67a906872299c51b53b4",
+      "git_blob_sha1": "f9a656effa008ea2f81f7f6993d4ed5459555f1f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/create_conversation_v1.txt",
+      "bytes": 875,
+      "sha256": "3011df3370eea063a5ef9c5946a0f7cb6ac24c5572cb84d1607a48e9e444ea36",
+      "git_blob_sha1": "60221ffb76f49a2cef04417da39bb550b15398e0"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/create_conversation_v2.txt",
+      "bytes": 1071,
+      "sha256": "874dc293b127ac0b9ed49a533e036b718e4118194827a91b42e7e4b39eb0d61a",
+      "git_blob_sha1": "f004bbb4295ca0bf8d33c17c5cba7642e132e7fe"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/daily_planning_v3.txt",
+      "bytes": 853,
+      "sha256": "a6c5f23cb75aec4cd234a533f38952338d7e278703c837c3b188ae96ed07b6b5",
+      "git_blob_sha1": "a03382d543c58d24a7085380523ba0cefacf5bbf"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/daily_planning_v4.txt",
+      "bytes": 880,
+      "sha256": "bed43f3b846402b50bcdcddf37396582ce5974a3fda90068ca31e05b09522b25",
+      "git_blob_sha1": "4f4eec29b0a813702c314deb6b4be147c0b00848"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/daily_planning_v5.txt",
+      "bytes": 1043,
+      "sha256": "f96835d2132c71ea576cebfe887b34a65d19723d7e70245411b741560d1a3044",
+      "git_blob_sha1": "349dcffeea9727cfe9c8f34aa763f20b22ef360c"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/daily_planning_v6.txt",
+      "bytes": 487,
+      "sha256": "1c45746da0fe3f47fb5370728af5f0658fdd0c60cdd6e3e41c609c9e6b3bde97",
+      "git_blob_sha1": "dea6a28d7b5fc7f79808fc77f1330f4bd465e71c"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/decide_to_react_v1.txt",
+      "bytes": 2045,
+      "sha256": "00fc42c4968ec210c78623a24195fa364bbb63a0ec783ae5d5e80dd1ab8d9581",
+      "git_blob_sha1": "6971183d96a694ea5a246e583844f2ad85b0c38d"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/decide_to_react_v2.txt",
+      "bytes": 603,
+      "sha256": "3e9f0eb27bbda44bae36f63606d2b2796f9537c3409592d3b01a031ba2d5e4e1",
+      "git_blob_sha1": "72de5b05a83d07b96692984b29468847654e0447"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/decide_to_talk_v1.txt",
+      "bytes": 2235,
+      "sha256": "ed5c0cd7003c4791b8b6cdb9cf4182539dc1a9c277fcce5008b1cbbac78933ad",
+      "git_blob_sha1": "5718c1116f87f49abfa3b1b7261ecace62e19268"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/decide_to_talk_v2.txt",
+      "bytes": 508,
+      "sha256": "fe8839103427289eb23d610cd83956b85290c233ef173ce2075d3918ad521c25",
+      "git_blob_sha1": "94204f9eb6bc4b12f1dd905cbeb0e7ab9aabf705"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/generate_event_triple_v1.txt",
+      "bytes": 844,
+      "sha256": "6ec467695305c3f977f0c882ef0a13c594b58034b5f21676ec6b1e6af3faed00",
+      "git_blob_sha1": "699ce154c6dbdc783d6e59c44a4f3108968a09b0"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/generate_focal_pt_v1.txt",
+      "bytes": 303,
+      "sha256": "3857c7d4549d8e044297b5dd166ab05fa006a16216052af589254ab5add266aa",
+      "git_blob_sha1": "9f26fbd28cdf603e19bdd6ba25f4f50a04110308"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/generate_hourly_schedule_v1.txt",
+      "bytes": 893,
+      "sha256": "3aa0a48ce6a7fbed0437d9630bc9925e7b4281ffeef83af87ead191de5786e4d",
+      "git_blob_sha1": "f2d8e51317959babd67e529096e4f827282132f5"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/generate_hourly_schedule_v2.txt",
+      "bytes": 367,
+      "sha256": "3501a8fd19b1d57943c21276ab73010aa96f2c2a33c9184eedf5ef193b583fa8",
+      "git_blob_sha1": "2d6f5762c064bbb46e8f8a790aeee1f657990101"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/generate_next_convo_line_v1.txt",
+      "bytes": 537,
+      "sha256": "2051e6a5d0bbf8f89553439c8077658e193bd0d857f1818b8dceb46fc7c9bc37",
+      "git_blob_sha1": "7f643d3d9b591b9eb5c57fa4bd89cb3073ccc0fd"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/generate_obj_event_v1.txt",
+      "bytes": 1126,
+      "sha256": "508212790c1656538e866380cf7c5a8ff779c5f3b15c93e2fa710b48094a18fe",
+      "git_blob_sha1": "4a610c2820f1b473a59094731238e2a745ddfd68"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/generate_pronunciatio_v1.txt",
+      "bytes": 673,
+      "sha256": "d3d8d9fca4356be90d218fba1b02cb01914cfe289ae05d2337cd43d2414771d1",
+      "git_blob_sha1": "79a0676277856a67aaaa67584da8daec404aaa36"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/get_keywords_v1.txt",
+      "bytes": 517,
+      "sha256": "681e532ea9a824bb45f370b4ebc405dbbff641c956f8f8c8e5769db1b67ea861",
+      "git_blob_sha1": "0ead7d68eeb53d6e113793c6c96bc6519176da3d"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/insight_and_evidence_v1.txt",
+      "bytes": 348,
+      "sha256": "712e56cfca41b27cbae946f6f6a6054b62ab7bf8faf7d8df008992da9470cbe2",
+      "git_blob_sha1": "579c816379a6542cf6d22e1ec13fc0c61cbcb032"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/interpret_day_v1.txt",
+      "bytes": 445,
+      "sha256": "795fa9bdbe76a160f7d1b21b56d66b2a485571269ed611ee2f0185c2bc6f49bf",
+      "git_blob_sha1": "e869c8b3ed99d4b0e34316acaa24625c0f91f69f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/keyword_to_thoughts_v1.txt",
+      "bytes": 373,
+      "sha256": "cc1c922c2fbeff8180850ab77f0031f6783325b1d54a5300c6862cc01e54550b",
+      "git_blob_sha1": "767dc76f6222fc9d4ee1e03a1fe7e5994642e5a7"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/memo_on_convo_v1.txt",
+      "bytes": 394,
+      "sha256": "246186c702dac36b6d98e10863218673cbf53ae8ddc8ec196f1fbb738239c1d7",
+      "git_blob_sha1": "38b34bfbd15e32f6e6c8a1bfd10822f3ac0d7cc4"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/new_daily_plan_v1.txt",
+      "bytes": 688,
+      "sha256": "533a529bc0ea114950bdc4a7b1f21997158575a554671060e8812c0b17f218c8",
+      "git_blob_sha1": "dea9796d9459fb8d823126af6449d94b65698264"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/new_decomp_schedule_v1.txt",
+      "bytes": 739,
+      "sha256": "2f5a70d19768146e80545cd75890902fc4094d99071b5f864756a6c7ceb668d9",
+      "git_blob_sha1": "e21dc69eb03bf5114dfb0ad8bba59474e8622f56"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/next_step_scheduling_v2.txt",
+      "bytes": 1295,
+      "sha256": "e23135a914db251cb545c37c92391af940a2e7164b9d937870bb36cca4b19438",
+      "git_blob_sha1": "30dfb2572b0dc2f103d57b0bceeb402cf025db34"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/next_step_scheduling_v3.txt",
+      "bytes": 781,
+      "sha256": "d596f260700f7c1dcdd8b29fe5e122d593bbca6d2d7d7ad4e33de6a4e3623c31",
+      "git_blob_sha1": "6caf4923c87e5a9cbc5164571ef793ec522d7095"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/planning_thought_on_convo_v1.txt",
+      "bytes": 411,
+      "sha256": "378f6d1eaefa29e31ff3e8088bfb7b3f992904c9c49b7cb9d7fa1c11fcfed47f",
+      "git_blob_sha1": "0563dcee94b46d19d87fc62c78fe22886b1972e3"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/poignancy_chat_v1.txt",
+      "bytes": 524,
+      "sha256": "107a91dcbf7c8dce8d1a69cf7f7c1aaae4c840c9a2e991319862820f023d8b1a",
+      "git_blob_sha1": "572dd8a05a9c5ec98a1b7439683a636f46517723"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/poignancy_event_v1.txt",
+      "bytes": 499,
+      "sha256": "553edbf4cdf6878ea0ecea3ca04a92d1e9953068062e6de7557ce135df55d808",
+      "git_blob_sha1": "34975696b3dfa042e576b6ccf9e15787d9201c9e"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/poignancy_thought_v1.txt",
+      "bytes": 543,
+      "sha256": "05e4196bd6025f9610c27a99603ee1b6fbd96e60804b46fce07e917a57bb7a47",
+      "git_blob_sha1": "9a4db5166bb5abc5728e6b09cc69d080c6f2476f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/summarize_chat_ideas_v1.txt",
+      "bytes": 456,
+      "sha256": "f6debec70ac6e28471dcffb95b7ac38ae6c14d738e94b489c14674ceede2d7e9",
+      "git_blob_sha1": "dab3e0821f869c58e37376587d3600c532bec70b"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/summarize_chat_relationship_v1.txt",
+      "bytes": 312,
+      "sha256": "b46aec745dbc96560d36d68a6e377d1d3e039326feaa93de1a7a666f01670217",
+      "git_blob_sha1": "bca1aa08eae65be9a23677667b47ebe1f85623f3"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/summarize_conversation_v1.txt",
+      "bytes": 228,
+      "sha256": "2d9224528334498fd4e71738c2995840fc79dc313a63c0032a7462610536c1d5",
+      "git_blob_sha1": "1cb423c7d7a7d2f844eb70235df66d5b2ecc96a0"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/summarize_day_v1.txt",
+      "bytes": 300,
+      "sha256": "76c97883040e28f5ed9b681010d62671cd2d3b2bffec955f8a0dfd7a4010d3c8",
+      "git_blob_sha1": "61848b1ebd0d63ab7633148ea3297ab8e43e52ae"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/summarize_ideas_v1.txt",
+      "bytes": 324,
+      "sha256": "aef340b6cff290d88df19bc585fd778f987d2186553cad03b14f45b44db157f2",
+      "git_blob_sha1": "a0f96f69f89df181e5f5bebaf64b69ca7d5f8e68"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/task_decomp_v1.txt",
+      "bytes": 5859,
+      "sha256": "fafbcc21d5db052c413506440599f7e0e119401c04f7e1159265c22d3e423b61",
+      "git_blob_sha1": "5cdf316c27d394aac86ab3414b254f53e0a25edb"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/task_decomp_v2.txt",
+      "bytes": 5324,
+      "sha256": "760c3dcb7dc6a3a79e9f7999072c73b70d3023aa97e6309d45fd958981fec1d1",
+      "git_blob_sha1": "f313fc51b2d28c3391e3bc5c91fa886502e56e10"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/task_decomp_v3.txt",
+      "bytes": 2584,
+      "sha256": "04fdf8e48fabdaa490df7f28c32305cfd987b46c13c631b8e5202cfa6b179969",
+      "git_blob_sha1": "2ba016c217ba4aa065d953ae4fdf499919e53fec"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/wake_up_hour_v1.txt",
+      "bytes": 238,
+      "sha256": "ba2218100e5f5f39fa8994b99233c43c63983133f3751ccbc312e48436bf6966",
+      "git_blob_sha1": "c0a635654c09c4cdea16240a2edbae76da209706"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v2/whisper_inner_thought_v1.txt",
+      "bytes": 249,
+      "sha256": "0a9ad409da6db6a51260e2f1cacf19fc8bdb1376b5950dd0d78d7b14be0a92ac",
+      "git_blob_sha1": "b1ed50aaae795240623fc90dc74c4a0cda0f085e"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/action_location_object_v1.txt",
+      "bytes": 737,
+      "sha256": "57dcfaa319917a2cc6761030b442f7b9547ed58b20dcef024cf7511e535bb254",
+      "git_blob_sha1": "bf75c1897a2d267a0c46ae4fa56433f39fe2f5a5"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/action_location_sector_v2.txt",
+      "bytes": 998,
+      "sha256": "77f378056a7d6c7c1f0d209cd18afb34ad1d0229b4bcaf895ca5769328c5bcf5",
+      "git_blob_sha1": "586381f5b255524cea2a9ac5bb8091308f302079"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/action_object_v2.txt",
+      "bytes": 247,
+      "sha256": "9cb9ff5ec7e6f73e2ded1d9bf25b809101f609fbde998f84ea2a14d51598b377",
+      "git_blob_sha1": "754ae6a110193eaf6ad96a5d67354dfb109558a5"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/agent_chat_v1.txt",
+      "bytes": 795,
+      "sha256": "a5bad662e3068f32fe89c677357ba407f37a4fa2654ba3844b9f8947e30e05c9",
+      "git_blob_sha1": "8faae3b9cfbcea9ec780186fbeb89fe860fb65be"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/bed_hour_v1.txt",
+      "bytes": 375,
+      "sha256": "fa774ba649e405f9e6f0e9e8f62d8ab7451db545755ca8cc29cb7ccbeae0ac19",
+      "git_blob_sha1": "29045211885e41c933d1dbed717a7661c38020de"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/convo_to_thoughts_v1.txt",
+      "bytes": 479,
+      "sha256": "92d5b0399264944fc90a1dd05a1263207912992d71dc67a906872299c51b53b4",
+      "git_blob_sha1": "f9a656effa008ea2f81f7f6993d4ed5459555f1f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/create_conversation_v1.txt",
+      "bytes": 875,
+      "sha256": "3011df3370eea063a5ef9c5946a0f7cb6ac24c5572cb84d1607a48e9e444ea36",
+      "git_blob_sha1": "60221ffb76f49a2cef04417da39bb550b15398e0"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/create_conversation_v2.txt",
+      "bytes": 1071,
+      "sha256": "874dc293b127ac0b9ed49a533e036b718e4118194827a91b42e7e4b39eb0d61a",
+      "git_blob_sha1": "f004bbb4295ca0bf8d33c17c5cba7642e132e7fe"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/daily_planning_v3.txt",
+      "bytes": 853,
+      "sha256": "a6c5f23cb75aec4cd234a533f38952338d7e278703c837c3b188ae96ed07b6b5",
+      "git_blob_sha1": "a03382d543c58d24a7085380523ba0cefacf5bbf"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/daily_planning_v4.txt",
+      "bytes": 880,
+      "sha256": "bed43f3b846402b50bcdcddf37396582ce5974a3fda90068ca31e05b09522b25",
+      "git_blob_sha1": "4f4eec29b0a813702c314deb6b4be147c0b00848"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/daily_planning_v5.txt",
+      "bytes": 1043,
+      "sha256": "f96835d2132c71ea576cebfe887b34a65d19723d7e70245411b741560d1a3044",
+      "git_blob_sha1": "349dcffeea9727cfe9c8f34aa763f20b22ef360c"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/daily_planning_v6.txt",
+      "bytes": 487,
+      "sha256": "1c45746da0fe3f47fb5370728af5f0658fdd0c60cdd6e3e41c609c9e6b3bde97",
+      "git_blob_sha1": "dea6a28d7b5fc7f79808fc77f1330f4bd465e71c"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/decide_to_react_v1.txt",
+      "bytes": 2045,
+      "sha256": "00fc42c4968ec210c78623a24195fa364bbb63a0ec783ae5d5e80dd1ab8d9581",
+      "git_blob_sha1": "6971183d96a694ea5a246e583844f2ad85b0c38d"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/decide_to_react_v2.txt",
+      "bytes": 603,
+      "sha256": "3e9f0eb27bbda44bae36f63606d2b2796f9537c3409592d3b01a031ba2d5e4e1",
+      "git_blob_sha1": "72de5b05a83d07b96692984b29468847654e0447"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/decide_to_talk_v1.txt",
+      "bytes": 2235,
+      "sha256": "ed5c0cd7003c4791b8b6cdb9cf4182539dc1a9c277fcce5008b1cbbac78933ad",
+      "git_blob_sha1": "5718c1116f87f49abfa3b1b7261ecace62e19268"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/decide_to_talk_v2.txt",
+      "bytes": 508,
+      "sha256": "fe8839103427289eb23d610cd83956b85290c233ef173ce2075d3918ad521c25",
+      "git_blob_sha1": "94204f9eb6bc4b12f1dd905cbeb0e7ab9aabf705"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/generate_event_triple_v1.txt",
+      "bytes": 296,
+      "sha256": "c7c6c1aee5032bc1c4df947884ea2cbc69363e32efe066ffd5abeb65a258a309",
+      "git_blob_sha1": "be229eaedd4c5e2d16dad382f66e927c90c0d344"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/generate_focal_pt_v1.txt",
+      "bytes": 312,
+      "sha256": "40a5a54af1b84b9272dfa5486cf1d0a4494cdee3826b83994bb979daf9012ac8",
+      "git_blob_sha1": "73f76ec61b2fef49d0a97d4018d0e45c3fcd125f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/generate_hourly_schedule_v1.txt",
+      "bytes": 893,
+      "sha256": "3aa0a48ce6a7fbed0437d9630bc9925e7b4281ffeef83af87ead191de5786e4d",
+      "git_blob_sha1": "f2d8e51317959babd67e529096e4f827282132f5"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/generate_hourly_schedule_v2.txt",
+      "bytes": 367,
+      "sha256": "3501a8fd19b1d57943c21276ab73010aa96f2c2a33c9184eedf5ef193b583fa8",
+      "git_blob_sha1": "2d6f5762c064bbb46e8f8a790aeee1f657990101"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/generate_next_convo_line_v1.txt",
+      "bytes": 537,
+      "sha256": "2051e6a5d0bbf8f89553439c8077658e193bd0d857f1818b8dceb46fc7c9bc37",
+      "git_blob_sha1": "7f643d3d9b591b9eb5c57fa4bd89cb3073ccc0fd"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/generate_obj_event_v1.txt",
+      "bytes": 506,
+      "sha256": "e31446d50767c22af7c0d8f9a8bd561a4b446a9c147501771bdb1b0a06627f0b",
+      "git_blob_sha1": "e8d45e6381f95d7b47e6c1952d4945d1d1ceb559"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/generate_pronunciatio_v1.txt",
+      "bytes": 240,
+      "sha256": "374ec9f22b6eb31c5c07bf9af02a77087de77779bace523f591aeb7425a33a93",
+      "git_blob_sha1": "fd208df1872bf6cf6d44722cda1d6eea2989f1fe"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/get_keywords_v1.txt",
+      "bytes": 517,
+      "sha256": "681e532ea9a824bb45f370b4ebc405dbbff641c956f8f8c8e5769db1b67ea861",
+      "git_blob_sha1": "0ead7d68eeb53d6e113793c6c96bc6519176da3d"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/insight_and_evidence_v1.txt",
+      "bytes": 348,
+      "sha256": "712e56cfca41b27cbae946f6f6a6054b62ab7bf8faf7d8df008992da9470cbe2",
+      "git_blob_sha1": "579c816379a6542cf6d22e1ec13fc0c61cbcb032"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/interpret_day_v1.txt",
+      "bytes": 445,
+      "sha256": "795fa9bdbe76a160f7d1b21b56d66b2a485571269ed611ee2f0185c2bc6f49bf",
+      "git_blob_sha1": "e869c8b3ed99d4b0e34316acaa24625c0f91f69f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/iterative_convo_v1.txt",
+      "bytes": 1110,
+      "sha256": "d4cef51cd6c8eabfc197907f6a4eea7c31db0417f4aecc21dad520b3b5dea184",
+      "git_blob_sha1": "7bd4e7216979e600d1c14688dec13532cabc1b71"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/keyword_to_thoughts_v1.txt",
+      "bytes": 373,
+      "sha256": "cc1c922c2fbeff8180850ab77f0031f6783325b1d54a5300c6862cc01e54550b",
+      "git_blob_sha1": "767dc76f6222fc9d4ee1e03a1fe7e5994642e5a7"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/memo_on_convo_v1.txt",
+      "bytes": 394,
+      "sha256": "246186c702dac36b6d98e10863218673cbf53ae8ddc8ec196f1fbb738239c1d7",
+      "git_blob_sha1": "38b34bfbd15e32f6e6c8a1bfd10822f3ac0d7cc4"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/new_daily_plan_v1.txt",
+      "bytes": 688,
+      "sha256": "533a529bc0ea114950bdc4a7b1f21997158575a554671060e8812c0b17f218c8",
+      "git_blob_sha1": "dea9796d9459fb8d823126af6449d94b65698264"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/new_decomp_schedule_v1.txt",
+      "bytes": 739,
+      "sha256": "2f5a70d19768146e80545cd75890902fc4094d99071b5f864756a6c7ceb668d9",
+      "git_blob_sha1": "e21dc69eb03bf5114dfb0ad8bba59474e8622f56"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/next_step_scheduling_v2.txt",
+      "bytes": 1295,
+      "sha256": "e23135a914db251cb545c37c92391af940a2e7164b9d937870bb36cca4b19438",
+      "git_blob_sha1": "30dfb2572b0dc2f103d57b0bceeb402cf025db34"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/next_step_scheduling_v3.txt",
+      "bytes": 781,
+      "sha256": "d596f260700f7c1dcdd8b29fe5e122d593bbca6d2d7d7ad4e33de6a4e3623c31",
+      "git_blob_sha1": "6caf4923c87e5a9cbc5164571ef793ec522d7095"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/planning_thought_on_convo_v1.txt",
+      "bytes": 411,
+      "sha256": "378f6d1eaefa29e31ff3e8088bfb7b3f992904c9c49b7cb9d7fa1c11fcfed47f",
+      "git_blob_sha1": "0563dcee94b46d19d87fc62c78fe22886b1972e3"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/poignancy_chat_v1.txt",
+      "bytes": 524,
+      "sha256": "107a91dcbf7c8dce8d1a69cf7f7c1aaae4c840c9a2e991319862820f023d8b1a",
+      "git_blob_sha1": "572dd8a05a9c5ec98a1b7439683a636f46517723"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/poignancy_event_v1.txt",
+      "bytes": 499,
+      "sha256": "553edbf4cdf6878ea0ecea3ca04a92d1e9953068062e6de7557ce135df55d808",
+      "git_blob_sha1": "34975696b3dfa042e576b6ccf9e15787d9201c9e"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/poignancy_thought_v1.txt",
+      "bytes": 543,
+      "sha256": "05e4196bd6025f9610c27a99603ee1b6fbd96e60804b46fce07e917a57bb7a47",
+      "git_blob_sha1": "9a4db5166bb5abc5728e6b09cc69d080c6f2476f"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/summarize_chat_ideas_v1.txt",
+      "bytes": 456,
+      "sha256": "f6debec70ac6e28471dcffb95b7ac38ae6c14d738e94b489c14674ceede2d7e9",
+      "git_blob_sha1": "dab3e0821f869c58e37376587d3600c532bec70b"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/summarize_chat_relationship_v1.txt",
+      "bytes": 354,
+      "sha256": "5038ce2c1c0d05e9cf740bbee98694f5e6d71730893f4a7dba380bb013ef6bcf",
+      "git_blob_sha1": "fdeac630194a65f264a49ffc004b98d9d8cff8df"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/summarize_chat_relationship_v2.txt",
+      "bytes": 354,
+      "sha256": "f64f3ebdbb770371d30a6c7cedfde3d767b057d512f6afb4b1da1114a0f5d9bd",
+      "git_blob_sha1": "6f71824da19ecad076104c004c8c0e119bc3c185"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/summarize_conversation_v1.txt",
+      "bytes": 228,
+      "sha256": "2d9224528334498fd4e71738c2995840fc79dc313a63c0032a7462610536c1d5",
+      "git_blob_sha1": "1cb423c7d7a7d2f844eb70235df66d5b2ecc96a0"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/summarize_day_v1.txt",
+      "bytes": 300,
+      "sha256": "76c97883040e28f5ed9b681010d62671cd2d3b2bffec955f8a0dfd7a4010d3c8",
+      "git_blob_sha1": "61848b1ebd0d63ab7633148ea3297ab8e43e52ae"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/summarize_ideas_v1.txt",
+      "bytes": 324,
+      "sha256": "aef340b6cff290d88df19bc585fd778f987d2186553cad03b14f45b44db157f2",
+      "git_blob_sha1": "a0f96f69f89df181e5f5bebaf64b69ca7d5f8e68"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/task_decomp_v1.txt",
+      "bytes": 5859,
+      "sha256": "fafbcc21d5db052c413506440599f7e0e119401c04f7e1159265c22d3e423b61",
+      "git_blob_sha1": "5cdf316c27d394aac86ab3414b254f53e0a25edb"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/task_decomp_v2.txt",
+      "bytes": 5324,
+      "sha256": "760c3dcb7dc6a3a79e9f7999072c73b70d3023aa97e6309d45fd958981fec1d1",
+      "git_blob_sha1": "f313fc51b2d28c3391e3bc5c91fa886502e56e10"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/task_decomp_v3.txt",
+      "bytes": 2584,
+      "sha256": "04fdf8e48fabdaa490df7f28c32305cfd987b46c13c631b8e5202cfa6b179969",
+      "git_blob_sha1": "2ba016c217ba4aa065d953ae4fdf499919e53fec"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/wake_up_hour_v1.txt",
+      "bytes": 238,
+      "sha256": "ba2218100e5f5f39fa8994b99233c43c63983133f3751ccbc312e48436bf6966",
+      "git_blob_sha1": "c0a635654c09c4cdea16240a2edbae76da209706"
+    },
+    {
+      "path": "reverie/backend_server/persona/prompt_template/v3_ChatGPT/whisper_inner_thought_v1.txt",
+      "bytes": 249,
+      "sha256": "0a9ad409da6db6a51260e2f1cacf19fc8bdb1376b5950dd0d78d7b14be0a92ac",
+      "git_blob_sha1": "b1ed50aaae795240623fc90dc74c4a0cda0f085e"
+    }
+  ],
+  "excluded": [],
+  "file_count": 126,
+  "bytes": 450549,
+  "archive_members": 126
+}

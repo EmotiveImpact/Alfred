@@ -76,6 +76,7 @@ Every document in the repository, what it is for and when to read it. Documents 
 | [plans/memory-backlog.json](../plans/memory-backlog.json) | The 12 memory jobs M01 to M12 | `tools/check_memory_plan.py` |
 | [plans/source-coverage.json](../plans/source-coverage.json) | Which owner documents each requirement came from | `tools/check_requirement_register.py` |
 | [research/](../research/) | Memory landscape and infrastructure research behind the plans | |
+| [research/INTEGRATION_PLAN_2026-10-17.md](../research/INTEGRATION_PLAN_2026-10-17.md) | How the 17 October memory and brain research fits together, in phases, with the owner's decisions marked | |
 
 ## Evidence and receipts
 
@@ -109,6 +110,7 @@ Each receipt names the exact tested commit, the commands run and their results, 
 | Document | Purpose |
 |---|---|
 | [third_party/library/README.md](../third_party/library/README.md) | The catalogue of research repositories, their licences and what was copied |
+| [third_party/research-shelf/README.md](../third_party/research-shelf/README.md) | Repositories studied on 17 October (Hy-Memory, Mnemosyne, Hindsight, HippoRAG, Generative Agents, A-Mem), pinned and licence-checked | `tools/build_research_shelf.py --verify` |
 | [third_party/BUILD_REFERENCE_SHELF.md](../third_party/BUILD_REFERENCE_SHELF.md) | The earlier focused shelf |
 
 Nothing under `third_party/` is ALFRED code. It is not installed, imported, executed or obeyed.
