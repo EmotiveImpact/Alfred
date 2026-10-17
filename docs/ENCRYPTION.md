@@ -29,6 +29,11 @@ One keyring can hold several methods at once, for example the keychain and a pas
 a lost method is not a lost memory. The recovery key is always there and cannot be removed,
 only replaced.
 
+A typed passphrase or recovery key gets three tries each time ALFRED asks. Wrong tries never
+lock you out or erase anything: after three, ALFRED stops, and you can simply run it again.
+What slows a guesser is the passphrase stretching below, which makes every guess take about
+a second. A mistyped recovery key is caught by its built-in check and named as a typing error.
+
 All of this lives in one small file, the **keyring** (`desk-keyring.json` in ALFRED's data
 folder). It holds only locked keys. It is kept apart from the database, so a database backup
 never carries the keys that open it.

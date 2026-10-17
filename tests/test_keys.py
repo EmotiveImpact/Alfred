@@ -473,6 +473,50 @@ class UnlockMethodTests(Base):
         self.assertEqual(caught.exception.code, 'no_unlock_available')
         self.assertEqual(len(caught.exception.reasons), 5)
 
+    def test_a_typed_secret_gets_three_tries_and_wrong_ones_lock_nothing(self):
+        opened, recovery = self.make(keys.Passphrase(PASSPHRASE))
+        opened.close()
+        keyring = keys.Keyring.read(self.path)
+        passphrase = lambda typed: keyring.unlock(keys.Passphrase(typed))
+        answers, warned = iter(['wrong one', 'wrong two', PASSPHRASE]), []
+        again = keys.ask_until_open(passphrase, lambda label: next(answers), 'Passphrase: ',
+                                    warn=lambda code, left: warned.append((code, left)))
+        again.close()
+        self.assertEqual(warned, [('wrong_key', 2), ('wrong_key', 1)])
+        asked = []
+        with self.assertRaises(Fault) as caught:
+            keys.ask_until_open(passphrase, lambda label: asked.append(label) or 'wrong again', 'Passphrase: ')
+        self.assertEqual((caught.exception.code, len(asked)), ('wrong_key', keys.TRIES))
+        self.assertEqual(keys.TRIES, 3)
+        # Wrong tries locked nothing: the right passphrase still opens at once.
+        keys.ask_until_open(passphrase, lambda label: PASSPHRASE, 'Passphrase: ').close()
+        # A mistyped recovery key asks again too.
+        answers = iter(['0' * 40, recovery])
+        keys.ask_until_open(lambda typed: keyring.unlock(keys.RecoveryKey(typed)), lambda label: next(answers),
+                            'Recovery key: ').close()
+        # Input piped in that runs out stops asking; an empty run says nothing was typed.
+        answers = iter(['wrong one', None, PASSPHRASE])
+        with self.assertRaises(Fault) as caught:
+            keys.ask_until_open(passphrase, lambda label: next(answers), 'Passphrase: ')
+        self.assertEqual((caught.exception.code, next(answers)), ('wrong_key', PASSPHRASE))
+        with self.assertRaises(Fault) as caught:
+            keys.ask_until_open(passphrase, lambda label: None, 'Passphrase: ')
+        self.assertEqual((caught.exception.code, caught.exception.status), ('no_unlock_available', 423))
+        # Anything other than a wrong answer is refused at once.
+        asked = []
+
+        def tampered(typed):
+            asked.append(typed)
+            raise Fault('keyring_tampered')
+        with self.assertRaises(Fault) as caught:
+            keys.ask_until_open(tampered, lambda label: PASSPHRASE, 'Passphrase: ')
+        self.assertEqual((caught.exception.code, len(asked)), ('keyring_tampered', 1))
+        # Automatic unlocking stops asking when piped input runs out.
+        answers = iter(['wrong one', None])
+        with self.assertRaises(Fault) as caught:
+            keys.unlock(keyring, run=FakeSecurity(), prompt=lambda label: next(answers))
+        self.assertEqual(caught.exception.reasons, ['passphrase: wrong_key'])
+
     def test_another_method_can_be_registered(self):
         class Vault(keys.UnlockMethod):
             name, title = 'test-vault', 'test vault'
@@ -641,6 +685,29 @@ class CommandLineTests(unittest.TestCase):
         wrong = self.run_keys('check', '--with', 'recovery', stdin='0' * 40 + '\n')
         self.assertEqual(wrong.returncode, 1)
         self.assertIn('recovery_key_mistyped', wrong.stderr)
+
+    def test_typed_passphrase_and_recovery_key_get_three_tries(self):
+        init = self.run_keys('init', '--unlock', 'passphrase', stdin=PASSPHRASE + '\n')
+        self.assertEqual(init.returncode, 0, init.stderr)
+        key = next(line.strip() for line in init.stdout.splitlines() if line.startswith('    '))
+        third = self.run_keys('check', '--with', 'passphrase', stdin=f'wrong one\nwrong two\n{PASSPHRASE}\n')
+        self.assertEqual(third.returncode, 0, third.stderr)
+        self.assertIn('2 tries left', third.stderr)
+        self.assertIn('1 try left', third.stderr)
+        fourth = self.run_keys('check', '--with', 'passphrase', stdin=f'wrong one\nwrong two\nwrong three\n{PASSPHRASE}\n')
+        self.assertEqual(fourth.returncode, 1)
+        self.assertIn('wrong_key', fourth.stderr)
+        mistyped = self.run_keys('check', '--with', 'recovery', stdin='0' * 40 + '\n' + key + '\n')
+        self.assertEqual(mistyped.returncode, 0, mistyped.stderr)
+        self.assertIn('typing error', mistyped.stderr)
+        automatic = self.run_keys('check', stdin=f'wrong one\n{PASSPHRASE}\n')
+        self.assertEqual(automatic.returncode, 0, automatic.stderr)
+        kit = self.root / 'kit'; kit.mkdir()
+        self.assertEqual(self.run_keys('backup', '--to', str(kit), stdin=PASSPHRASE + '\n').returncode, 0)
+        copy = next(kit.iterdir())
+        (self.data / keys.KEYRING_FILE).unlink()
+        restored = self.run_keys('restore', '--from', str(copy), stdin='0' * 40 + '\n' + key + '\n')
+        self.assertEqual(restored.returncode, 0, restored.stderr)
 
     def test_missing_keyring_and_unavailable_methods_are_explained(self):
         missing = self.run_keys('status')

@@ -893,9 +893,43 @@ def restore(source, path, recovery: RecoveryKey, *, clock=time.time) -> OpenKeyr
     return opened
 
 
-def unlock(keyring: Keyring, *, prompt=None, environ=None, run=None, attempts=3, clock=time.time):
+# A typed passphrase or recovery key gets this many tries each time ALFRED asks. Wrong tries
+# lock nothing and erase nothing; each passphrase guess costs about a second of scrypt.
+TRIES = 3
+RETRY = ('wrong_key', 'recovery_key_mistyped')
+
+
+def ask_until_open(open_with, prompt, label, *, attempts=TRIES, warn=None, reasons=None):
+    """Ask for a typed secret and open with it, up to ``attempts`` times.
+
+    ``open_with(answer)`` opens and returns what was opened. A wrong or mistyped answer asks
+    again (``warn(code, tries_left)`` is told first); any other refusal stops at once. A
+    ``prompt`` returning None, as when input piped in has run out, stops asking.
+    """
+    failed = None
+    for left in reversed(range(attempts)):
+        answer = prompt(label)
+        if answer is None:
+            break
+        try:
+            return open_with(answer)
+        except Fault as exc:
+            if exc.code not in RETRY:
+                raise
+            failed = exc
+            if reasons is not None:
+                reasons.append(exc.code)
+            if left and warn is not None:
+                warn(exc.code, left)
+    if failed is None:
+        raise Fault('no_unlock_available', 423)
+    raise failed
+
+
+def unlock(keyring: Keyring, *, prompt=None, environ=None, run=None, attempts=TRIES, warn=None, clock=time.time):
     """Open with the first method that works here: a server secret file, the macOS keychain, then a
-    typed passphrase if ``prompt`` is given. The recovery key is only ever used when asked for.
+    typed passphrase if ``prompt`` is given, with ``attempts`` tries. The recovery key is only ever
+    used when asked for.
 
     Returns the open keyring and the name of the method that opened it.
     """
@@ -912,13 +946,16 @@ def unlock(keyring: Keyring, *, prompt=None, environ=None, run=None, attempts=3,
                     raise
                 reasons.append(f'{name}: {exc.code}')
     if keyring.slots('passphrase') and prompt is not None:
-        for _ in range(attempts):
-            try:
-                return keyring.unlock(Passphrase(prompt('ALFRED passphrase: ')), clock=clock), 'passphrase'
-            except Fault as exc:
-                if exc.code != 'wrong_key':
-                    raise
-                reasons.append('passphrase: wrong_key')
+        tried = []
+        try:
+            opened = ask_until_open(lambda typed: keyring.unlock(Passphrase(typed), clock=clock), prompt,
+                                    'ALFRED passphrase: ', attempts=attempts, warn=warn, reasons=tried)
+        except Fault as exc:
+            if exc.code not in ('wrong_key', 'no_unlock_available'):
+                raise
+        else:
+            return opened, 'passphrase'
+        reasons += [f'passphrase: {code}' for code in tried]
     error = Fault('no_unlock_available', 423)
     error.reasons = reasons
     raise error
@@ -1018,11 +1055,16 @@ MESSAGES = {
 }
 
 
-def _ask(label: str) -> str:
+def _ask(label: str) -> str | None:
     if sys.stdin.isatty():
         return getpass.getpass(label)
-    # Piped in, for example from systemd-ask-password on a server.
-    return sys.stdin.readline().rstrip('\n')
+    # Piped in, for example from systemd-ask-password on a server. None once the input runs out.
+    line = sys.stdin.readline()
+    return line.rstrip('\n') if line else None
+
+
+def _warn(code: str, left: int) -> None:
+    print(f"{MESSAGES.get(code, 'That did not work.')} {left} {'try' if left == 1 else 'tries'} left.", file=sys.stderr)
 
 
 def _method(name: str, args) -> UnlockMethod:
@@ -1043,14 +1085,14 @@ def _method(name: str, args) -> UnlockMethod:
 def _open_keyring(args) -> tuple[OpenKeyring, str]:
     keyring = Keyring.read(keyring_path(args.data_dir, args.keyring))
     if args.using == 'recovery':
-        return keyring.unlock(RecoveryKey(_ask('Recovery key: '))), 'recovery'
+        return ask_until_open(lambda typed: keyring.unlock(RecoveryKey(typed)), _ask, 'Recovery key: ', warn=_warn), 'recovery'
     if args.using == 'passphrase':
-        return keyring.unlock(Passphrase(_ask('ALFRED passphrase: '))), 'passphrase'
+        return ask_until_open(lambda typed: keyring.unlock(Passphrase(typed)), _ask, 'ALFRED passphrase: ', warn=_warn), 'passphrase'
     if args.using == 'keychain':
         return keyring.unlock(Keychain()), 'keychain'
     if args.using == 'secret-file':
         return keyring.unlock(SecretFile()), 'secret-file'
-    return unlock(keyring, prompt=_ask)
+    return unlock(keyring, prompt=_ask, warn=_warn)
 
 
 def _show_recovery(text: str) -> None:
@@ -1109,7 +1151,7 @@ def run_command(args) -> int:
     if args.command == 'restore':
         from .placement import check_data_directory
         check_data_directory(path.parent)
-        opened = restore(args.source, path, RecoveryKey(_ask('Recovery key: ')))
+        opened = ask_until_open(lambda typed: restore(args.source, path, RecoveryKey(typed)), _ask, 'Recovery key: ', warn=_warn)
         with opened:
             print(f'Restored the keyring to {path}. Add an unlock method for this machine with "add-unlock".')
         return 0

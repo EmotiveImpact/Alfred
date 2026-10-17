@@ -54,7 +54,7 @@ built against the recommended `cryptography` and does not merge without that sig
 
 ## Tests
 
-- `tests/test_keys.py`, 43 tests: HKDF against RFC 5869 case 1; recovery key format, typing
+- `tests/test_keys.py`, 45 tests: HKDF against RFC 5869 case 1; recovery key format, typing
   tolerance and that the check catches every single-character change; the keyring file holds
   no key, passphrase or recovery key in any encoding; each method opens the same master key;
   wrong passphrase and recovery key refused; production scrypt cost recorded; short
@@ -69,6 +69,10 @@ built against the recommended `cryptography` and does not merge without that sig
   arguments and withdrawn on removal; secret files by path, systemd credential and
   Kubernetes-style symlink, and refusals for loose permissions, short content, a pipe and a
   missing file; recovery key cannot be removed and is replaced whole; automatic unlock order;
+  three tries for a typed passphrase or recovery key (a wrong or mistyped answer asks again,
+  a fourth answer is never read, wrong tries lock nothing, piped input that runs out stops,
+  other refusals stop at once), in the library and on the command line for `check` with a
+  passphrase, the recovery key, automatic unlocking and `restore`;
   a registered extra method; backup and restore onto a second machine; disk checks for LUKS
   under LVM, a plain disk, virtual file systems, FileVault on and off; doctor checks; and
   the command line end to end with a server secret, including the recovery key piped in.
