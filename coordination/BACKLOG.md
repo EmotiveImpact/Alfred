@@ -35,24 +35,29 @@ A7 are in pull request #27.
 Order: the scrubber first (C4 and A7 build on it), then the question set, auto-verify,
 meaning search, and the three checks.
 
+Merge order for the open pull requests: this one (#28) first, because it releases the claims
+#32 and #38 need. Then #32 and #38, each with `main` merged in first so the claims check sees
+the release. #36 and #39 follow #32, #40 follows #33, and the others can go in any order. A
+stacked pull request (#36, #39, #40) gets CI only once GitHub retargets it to `main`.
+
 | # | Item | Paths | Depends on | Status |
 | ---: | --- | --- | --- | --- |
-| A2 | Secret scrubber module, not yet wired in | `alfred/scrub.py`, `tests/test_scrub.py`, `docs/SECRET_SCRUBBING.md`, `docs/evidence/secret-scrubbing/` | this pull request merged | building |
-| A1 | Real question set harness: runs a question file against a search and scores it | `tools/question_set.py`, `tests/test_question_set.py`, `tests/fixtures/question_set/`, `docs/QUESTION_SET.md`, `docs/evidence/question-set/` | this pull request merged | queued |
-| A3 | Checks run automatically when a brain's result arrives | `alfred/hub_goals.py`, `alfred/verification.py` and their tests (brief in PR #27) | none | queued |
-| A4 | Meaning search groundwork: passages, embedder interface, in-memory index, blending | `alfred/semantic.py` and its tests (brief in PR #27); no wiring into search | none | queued |
-| A5 | Network egress audit: a tool that fails when a module outside an allowlist imports a network library | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | queued |
-| A6 | Adoption header check: code copied from the shelf must name upstream project, path, commit and licence, matching the shelf manifest | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | queued |
-| A7 | Public hygiene check: credential-shaped literals, machine paths and email addresses in tracked files, using the scrubber's patterns | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | A2 | waiting |
+| A2 | Secret scrubber module, not yet wired in | `alfred/scrub.py`, `tests/test_scrub.py`, `docs/SECRET_SCRUBBING.md`, `docs/evidence/secret-scrubbing/` | this pull request merged | review (PR #32) |
+| A1 | Real question set harness: runs a question file against a search and scores it | `tools/question_set.py`, `tests/test_question_set.py`, `tests/fixtures/question_set/`, `docs/QUESTION_SET.md`, `docs/evidence/question-set/` | this pull request merged | review (PR #38) |
+| A3 | Checks run automatically when a brain's result arrives | `alfred/hub_goals.py`, `alfred/verification.py` and their tests (brief in PR #27) | none | review (PR #33) |
+| A4 | Meaning search groundwork: passages, embedder interface, in-memory index, blending | `alfred/semantic.py` and its tests (brief in PR #27); no wiring into search | none | review (PR #37) |
+| A5 | Network egress audit: a tool that fails when a module outside an allowlist imports a network library | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | review (PR #34) |
+| A6 | Adoption header check: code copied from the shelf must name upstream project, path, commit and licence, matching the shelf manifest | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | review (PR #35) |
+| A7 | Public hygiene check: credential-shaped literals, machine paths and email addresses in tracked files, using the scrubber's patterns | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | A2 | review (PR #39, stacked on #32) |
 
 | # | Item | Paths | Depends on | Status |
 | ---: | --- | --- | --- | --- |
 | C1 | This backlog and the claim release | `coordination/` | none | review (PR #28) |
 | C2 | The host builds the goal hub, behind a switch that defaults to off | `alfred/hub_host.py`, `alfred/desk.py` (one hook in `serve`), `tests/test_hub_host.py`, `docs/evidence/hub-host/`, `docs/AGENT_HUB.md` | none | review (PR #29) |
 | C7 | Fix B-030: a question asked before the capability answer left the Ask page's model option disabled (found by CI on this pull request) | `web/ask.js`, `tools/check_memory_context_browser.py`, `BUGS_AND_FIXES.md` | none | review (PR #30) |
-| C3 | Show who started each verification run (automatic or owner) in the web desk | `web/` hub view, `docs/AGENT_HUB.md` | A3 | waiting |
-| C4 | Scrub secrets from brain packets before they leave and from harvested text before it is proposed | `alfred/brain.py`, `alfred/learning.py` (harvest only), their tests | A2 | waiting |
-| C5 | Run A5 to A7 in CI | `.github/workflows/` | A5 to A7 | waiting |
+| C3 | Show who started each verification run (automatic or owner) in the console goals panel | `console/src/integration/goals.ts`, the goals panel browser check, `docs/AGENT_HUB.md` | A3 | review (PR #40, stacked on #33) |
+| C4 | Scrub secrets from brain packets before they leave and from harvested text before it is proposed | `alfred/brain.py`, `alfred/learning.py` (harvest only), their tests | A2 | review (PR #36, stacked on #32) |
+| C5 | Run A5 to A7 in CI | `.github/workflows/` | A5 to A7 | waiting (on #34, #35 and #39 merging) |
 | C6 | Mark claims done, update `CHANGELOG.md`, `SESSION_HANDOFF.md`, `docs/INDEX.md` and `docs/AGENT_HUB.md` after each merge | shared files | each merge | ongoing |
 
 C2 in one paragraph: `desk serve --hub synthetic` builds the `BrainHub` and `GoalHub` over
