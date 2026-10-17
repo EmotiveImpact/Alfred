@@ -55,6 +55,12 @@ unless its **Needs** line says so.
 
 ### 1.1 Application encryption and key custody (SYS-002, M05) · L · Owner first
 
+**Update, 17 October 2026.** The owner chose both: the macOS keychain on a Mac, a passphrase
+or the server's secret store on a server, all behind one offline recovery key, with a key per
+area. Step 1 (keys, unlock methods, recovery, area erasure, disk check) is built on branch
+`claude/project-thread-9npowk`; see [ENCRYPTION.md](ENCRYPTION.md). Step 2 seals the records,
+indexes, exports and backups with those keys.
+
 **Decide (owner):** where the key lives. Options, from least to most work: (a) rely on OS disk encryption (FileVault, LUKS, BitLocker) and have ALFRED verify and record it; (b) a passphrase-derived key held only in memory while the host runs, entered at `serve`; (c) OS keychain integration per platform. The backend is standard-library only, which has no AES; (b) or (c) needs a vetted dependency (`cryptography`) or the SQLCipher build of SQLite. That dependency is a deliberate adoption under AGENTS.md rules.
 
 **Build:** `alfred/crypto.py` sealing the fields that hold private text (note excerpts in the index, reviewed values, conversation packets, job artefacts, exports and backups) with a per-workspace key; key rotation with re-sealing; `serve` refuses to open an encrypted workspace without the key; `backup` and `export` stay encrypted unless `--plain` is typed with a warning. Secure erasure stays explicitly out of scope (free pages and WAL); `VACUUM` after forget as a best effort, documented.

@@ -177,6 +177,8 @@ class DoctorTests(unittest.TestCase):
     def test_fresh_workspace_has_no_failures(self):
         dist = self.root / 'dist'; dist.mkdir(); (dist / 'index.html').write_text('<!doctype html>')
         results = self.checks(console_dist=dist)
+        # Full-disk encryption depends on the machine running the tests; alfred/keys.py's tests cover it.
+        self.assertIn(results.pop('disk_encryption')['status'], ('ok', 'warn'))
         self.assertEqual({k: v['status'] for k, v in results.items()},
                          {'placement': 'ok', 'permissions': 'ok', 'database': 'ok', 'wal': 'ok', 'backup': 'warn',
                           'last_stop': 'ok', 'console_build': 'ok'})
