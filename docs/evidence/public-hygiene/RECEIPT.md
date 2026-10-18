@@ -60,3 +60,10 @@ After `main` (with #28 to #30, #32 to #35, #37, #38 and #40) was merged into thi
 named `secret`, to prove refusal messages never repeat question text. It is not a credential,
 so it gained one reviewed exception. Then 136 findings were allowed by 63 exceptions, with
 0 stale, and `tests/test_public_hygiene.py` passed.
+
+After #36 (scrubbing wired into brain packets) was merged and `main` brought in again at
+`a120045a2`, the check found 137 findings over 629 tracked files. One was new:
+`tests/test_scrub_wiring.py` line 23 builds an invented password from pieces and writes it as
+`password: ...` into a test note, so the test can prove packets leave with it blanked. It is
+not a credential and gained one reviewed exception. Then 137 findings were allowed by 64
+exceptions, with 0 stale.

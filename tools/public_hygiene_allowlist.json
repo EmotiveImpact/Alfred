@@ -356,6 +356,12 @@
       "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
     },
     {
+      "file": "tests/test_scrub_wiring.py",
+      "kind": "password",
+      "sha256": "d712d28b06e0c0c8024da92d3545c0f79e3e55b8f1d7c319c3697290e9a591dd",
+      "reason": "An invented password assembled from pieces at run time and written into a test note, so the test can prove brain packets leave with it blanked; it is not a credential."
+    },
+    {
       "file": "tools/check_console_connected_browser.py",
       "kind": "email",
       "sha256": "ad7b548ee9f882abcd5178773bd5027eb402338551c3df42be92c9be47ff6996",
