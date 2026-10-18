@@ -35,6 +35,7 @@ Every document in the repository, what it is for and when to read it. Documents 
 | [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md) | Governed memory: sources, reviewed statements, history, deletion |
 | [MEMORY_SECURITY.md](MEMORY_SECURITY.md) | Privacy and lifecycle gates for memory |
 | [SECURITY_AND_DATA.md](SECURITY_AND_DATA.md) | Data boundaries, sessions, CSRF, loopback, what is never sent |
+| [DISK_ENCRYPTION.md](DISK_ENCRYPTION.md) | The full-disk encryption check `desk serve` runs at start, and `--disk-encryption require` |
 | [SYNC.md](SYNC.md) | Four kinds of sync kept apart; placement guard; conflict copies |
 | [OBSIDIAN_INTEGRATION.md](OBSIDIAN_INTEGRATION.md) | Optional Obsidian over user-owned Markdown |
 | [adr/MEMORY-001.md](adr/MEMORY-001.md) | Decision: optional Obsidian, first-party governed memory |
