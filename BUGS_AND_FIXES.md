@@ -12,6 +12,10 @@ Format: **ID. Title** · found · fixed in commit · status.
 
 ## Fixed
 
+### B-031. Two older workflows cut the full test suite off at five minutes (*environment*)
+Found 18 October 2026 when the `validate` job (`.github/workflows/local-core.yml`) was cancelled on pull request #41 after 5 minutes 16 seconds, part-way through `test_placement`, with every test so far passing · fixed in the commit that adds this entry.
+`local-core.yml` (`validate`) and `contract-checks.yml` (`original-contracts`) still run `python3 -m unittest discover -s tests` under the 5-minute limit they were given in September, when the suite was small. The suite now has over 1,700 tests and takes about 3.5 minutes on a typical runner, so a slower runner crosses the limit and GitHub reports the job as cancelled rather than failed. Nothing in the pull request was at fault: its 26 new tests take under a second. Both limits are now 15 minutes, the same as the unified CI's core job. No test or step was removed or skipped.
+
 ### B-030. Asking before the capability answer arrived left the model option disabled
 Found 17 October 2026 when unified CI failed on pull request #28 (`backend-browser`, `tools/check_memory_context_browser.py`, `Page.select_option` timed out on a disabled `local_model` option) · fixed in the commit that adds this entry.
 `web/ask.js` starts every mount with the "Local model" option disabled and enables it when `/desk/ask/status` answers. That answer was dropped if `state.epoch` had moved on, and asking a question moves it on. So a question asked before the status answer arrived (a quick person, or a busy machine in CI) left the option disabled for the rest of the visit, even with a model configured and allowed. The status answer is now bound to its own mount (same root, same controls, same session generation, still on the ask view) instead of the question epoch, and it no longer overwrites the status line while a question is running. The browser check now holds `/desk/ask/status` until a question has been asked and then requires the option to become enabled; it failed before the fix and passes after. The other six backend browser checks pass unchanged.
