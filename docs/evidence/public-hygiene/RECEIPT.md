@@ -51,3 +51,12 @@ values are built at run time from pieces.
 Limits: synthetic data only, no network. The CI step is not added here; `.github/` is
 unchanged. A clean result does not mean the repository holds nothing private:
 docs/PUBLIC_HYGIENE.md lists what the check cannot catch.
+
+## Re-checked on the merged tree (18 October 2026)
+
+After `main` (with #28 to #30, #32 to #35, #37, #38 and #40) was merged into this branch at
+`77babf000`, the check scanned 627 tracked files and found 136 findings. One was new:
+`tests/test_question_set.py` line 181 assigns an invented question sentence to a variable
+named `secret`, to prove refusal messages never repeat question text. It is not a credential,
+so it gained one reviewed exception. Then 136 findings were allowed by 63 exceptions, with
+0 stale, and `tests/test_public_hygiene.py` passed.

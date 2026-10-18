@@ -260,6 +260,12 @@
       "reason": "A deliberately wrong CSRF token that proves the request is refused."
     },
     {
+      "file": "tests/test_question_set.py",
+      "kind": "secret_assignment",
+      "sha256": "bc7cc02d9d1314b0274990fa93cd3c4d62e38dc306952d65113854dd702b0cea",
+      "reason": "A test variable named secret holding an invented question sentence, used to prove refusal messages never repeat question text; it is not a credential."
+    },
+    {
       "file": "tests/test_routines.py",
       "kind": "secret_assignment",
       "sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
