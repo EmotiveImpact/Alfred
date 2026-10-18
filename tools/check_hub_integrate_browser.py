@@ -154,8 +154,8 @@ with tempfile.TemporaryDirectory() as temp:
             expect(chip['passing']).to_have_text('Verified by checks')
             expect(chip['unchecked']).to_have_text('No checks declared')
             expect(cards['unchecked']).to_contain_text('never counted as verified')
-            expect(cards['failing']).to_contain_text('Run 1: 1 passed · 1 failed · 0 could not run')
-            check('each result shows its class from ALFRED, after the automatic run and before the owner acts')
+            expect(cards['failing']).to_contain_text('Run 1 (automatic, when the result arrived): 1 passed · 1 failed · 0 could not run')
+            check('each result shows its class from ALFRED and that its first run was automatic, before the owner acts')
             check('a result with no checks offers no run and no acknowledgement', cards['unchecked'].get_by_role('button').count() == 0)
             expect(results.get_by_label('Results per brain')).to_contain_text('synthetic: 1 verified · 1 failed checks · 0 not verified · 1 no checks declared')
             check('the per-brain line counts verified, failed, unverifiable and unchecked results apart')
@@ -164,12 +164,12 @@ with tempfile.TemporaryDirectory() as temp:
 
             cards['passing'].get_by_role('button', name='Run checks').click()
             # The chip already read verified, so wait for the second run itself before asking the server.
-            expect(cards['passing']).to_contain_text('Run 2: 1 passed · 0 failed · 0 could not run', timeout=15000)
+            expect(cards['passing']).to_contain_text('Run 2 (by you): 1 passed · 0 failed · 0 could not run', timeout=15000)
             expect(chip['passing']).to_have_text('Verified by checks')
             check('the owner running the checks again keeps a passing result verified on the server',
                   (outcome('passing')['state'], outcome('passing')['runs']) == ('checked', 2))
             cards['failing'].get_by_role('button', name='Run checks').click()
-            expect(cards['failing']).to_contain_text('Run 2: 1 passed · 1 failed · 0 could not run', timeout=15000)
+            expect(cards['failing']).to_contain_text('Run 2 (by you): 1 passed · 1 failed · 0 could not run', timeout=15000)
             expect(chip['failing']).to_have_text('Failed checks')
             expect(cards['failing']).to_contain_text('C2 claims cited: failed')
             check('a failing check is shown as failed, matching the server',
