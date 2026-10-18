@@ -25,7 +25,7 @@ Exit code 0 means clean, 1 means at least one credit problem (one line each, wit
 folders exists.
 
 CI runs it on every pull request to `main` and every push to it, in the unified build's step
-"Check network egress and adoption credits" (`.github/workflows/alfred-ci.yml`).
+"Check network egress, adoption credits and public hygiene" (`.github/workflows/alfred-ci.yml`).
 
 ## Writing a credit
 

@@ -222,8 +222,8 @@ change to the audit itself and needs its tests updated first.
 ## In CI
 
 The unified build (`.github/workflows/alfred-ci.yml`, job `core-and-sources`) runs both on
-every pull request to `main` and every push to it, in the step "Check network egress and
-adoption credits":
+every pull request to `main` and every push to it, in the step "Check network egress,
+adoption credits and public hygiene":
 
 ```
 python3 tools/egress_audit.py --self-test
