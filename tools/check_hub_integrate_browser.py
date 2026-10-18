@@ -5,8 +5,9 @@ Runs the real loopback ALFRED server over the synthetic demo vault with the H1
 SyntheticBrain plugged in through a GoalHub (and its verifier), a real job coordinator and
 a brain worker thread, serves the built console from the same origin and drives it in
 Chromium. Three synthetic goals: one whose mandate declares checks the brain's result fails,
-one whose checks it passes and one with no checks. The owner runs the checks and
-acknowledges a failed result through the confirmation; the server's records are compared
+one whose checks it passes and one with no checks. The checks run once on their own as each
+result arrives (backlog A3); the owner runs them again and acknowledges a failed result
+through the confirmation; the server's records are compared
 after each step. Testing-only tooling; requires `npm run build` in console/ first. No model,
 network brain, account or private data.
 
@@ -108,12 +109,19 @@ with tempfile.TemporaryDirectory() as temp:
     def outcome(name):
         return next(r for r in hub.verifier.outcomes(owner)['results'] if r['job'] == job[name])
 
+    def settled():
+        results = hub.verifier.outcomes(owner)['results']
+        return len(results) == 3 and all(outcome(n)['runs'] == 1 for n in ('failing', 'passing'))
+
     deadline = time.time() + 30
-    while time.time() < deadline and len(hub.verifier.outcomes(owner)['results']) < 3:
+    while time.time() < deadline and not settled():
         time.sleep(.1)
     check('the supervisor cycle ingested all three results', len(hub.verifier.outcomes(owner)['results']) == 3)
-    check('before any run, declared checks are not verified and the unchecked result has no checks',
-          [outcome(n)['evidence'] for n in ('failing', 'passing', 'unchecked')] == ['unverifiable', 'unverifiable', 'no_checks'])
+    check('the declared checks ran once on their own as the results arrived, and the unchecked result has none',
+          [(outcome(n)['evidence'], outcome(n)['runs']) for n in ('failing', 'passing', 'unchecked')]
+          == [('failed_checks', 1), ('verified', 1), ('no_checks', 0)])
+    check('the automatic runs are recorded as automatic',
+          [r['initiated'] for n in ('failing', 'passing') for r in hub.verifier.runs(owner, job[n])] == ['automatic', 'automatic'])
 
     try:
         with sync_playwright() as p:
@@ -142,34 +150,41 @@ with tempfile.TemporaryDirectory() as temp:
             expect(results).to_contain_text('A result with no declared checks is never counted as verified')
             cards = {name: results.get_by_label(f'Result {job[name]}', exact=True) for name in job}
             chip = {name: cards[name].get_by_label(f'Result {job[name]} verification', exact=True) for name in job}
-            expect(chip['failing']).to_have_text('Not verified: checks not run')
-            expect(chip['passing']).to_have_text('Not verified: checks not run')
+            expect(chip['failing']).to_have_text('Failed checks')
+            expect(chip['passing']).to_have_text('Verified by checks')
             expect(chip['unchecked']).to_have_text('No checks declared')
             expect(cards['unchecked']).to_contain_text('never counted as verified')
-            check('each result shows its class from ALFRED, before any check has run')
+            expect(cards['failing']).to_contain_text('Run 1: 1 passed · 1 failed · 0 could not run')
+            check('each result shows its class from ALFRED, after the automatic run and before the owner acts')
             check('a result with no checks offers no run and no acknowledgement', cards['unchecked'].get_by_role('button').count() == 0)
-            expect(results.get_by_label('Results per brain')).to_contain_text('synthetic: 0 verified · 0 failed checks · 2 not verified · 1 no checks declared')
+            expect(results.get_by_label('Results per brain')).to_contain_text('synthetic: 1 verified · 1 failed checks · 0 not verified · 1 no checks declared')
             check('the per-brain line counts verified, failed, unverifiable and unchecked results apart')
             page.wait_for_timeout(300)
-            dialog.screenshot(path=str(out / 'results-before-checks.png'))
+            dialog.screenshot(path=str(out / 'results-on-arrival.png'))
 
             cards['passing'].get_by_role('button', name='Run checks').click()
-            expect(chip['passing']).to_have_text('Verified by checks', timeout=15000)
-            check('running the checks on a passing result verifies it on the server', outcome('passing')['state'] == 'checked')
+            # The chip already read verified, so wait for the second run itself before asking the server.
+            expect(cards['passing']).to_contain_text('Run 2: 1 passed · 0 failed · 0 could not run', timeout=15000)
+            expect(chip['passing']).to_have_text('Verified by checks')
+            check('the owner running the checks again keeps a passing result verified on the server',
+                  (outcome('passing')['state'], outcome('passing')['runs']) == ('checked', 2))
             cards['failing'].get_by_role('button', name='Run checks').click()
-            expect(chip['failing']).to_have_text('Failed checks', timeout=15000)
+            expect(cards['failing']).to_contain_text('Run 2: 1 passed · 1 failed · 0 could not run', timeout=15000)
+            expect(chip['failing']).to_have_text('Failed checks')
             expect(cards['failing']).to_contain_text('C2 claims cited: failed')
-            expect(cards['failing']).to_contain_text('Run 1: 1 passed · 1 failed · 0 could not run')
-            check('a failing check is shown as failed, matching the server', outcome('failing')['state'] == 'failed_checks')
+            check('a failing check is shown as failed, matching the server',
+                  (outcome('failing')['state'], outcome('failing')['runs']) == ('failed_checks', 2))
+            check('the owner\'s runs are recorded as the owner\'s',
+                  [r['initiated'] for r in hub.verifier.runs(owner, job['failing'])] == ['automatic', 'owner'])
             # Another run recorded elsewhere: the panel's run count is now stale and the server refuses it.
             hub.verifier.verify(owner, job['passing'])
             cards['passing'].get_by_role('button', name='Run checks').click()
             expect(results.get_by_role('alert')).to_contain_text('Checks ran again since you opened this')
-            check('a stale run count is refused by the server', outcome('passing')['runs'] == 2)
+            check('a stale run count is refused by the server', outcome('passing')['runs'] == 3)
 
             cards['failing'].get_by_role('button', name=f'Acknowledge result {job["failing"]}').click()
             confirm = cards['failing'].get_by_role('group', name=f'Confirm acknowledge result {job["failing"]}')
-            expect(confirm).to_contain_text('Run 1 failed C2. Accepting it over failed checks is recorded as your decision')
+            expect(confirm).to_contain_text('Run 2 failed C2. Accepting it over failed checks is recorded as your decision')
             check('acknowledging asks for confirmation first and nothing is sent yet', outcome('failing')['state'] == 'failed_checks')
             confirm.scroll_into_view_if_needed()
             page.wait_for_timeout(200)
