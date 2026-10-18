@@ -12,6 +12,10 @@ Format: **ID. Title** · found · fixed in commit · status.
 
 ## Fixed
 
+### B-030. Asking before the capability answer arrived left the model option disabled
+Found 17 October 2026 when unified CI failed on pull request #28 (`backend-browser`, `tools/check_memory_context_browser.py`, `Page.select_option` timed out on a disabled `local_model` option) · fixed in the commit that adds this entry.
+`web/ask.js` starts every mount with the "Local model" option disabled and enables it when `/desk/ask/status` answers. That answer was dropped if `state.epoch` had moved on, and asking a question moves it on. So a question asked before the status answer arrived (a quick person, or a busy machine in CI) left the option disabled for the rest of the visit, even with a model configured and allowed. The status answer is now bound to its own mount (same root, same controls, same session generation, still on the ask view) instead of the question epoch, and it no longer overwrites the status line while a question is running. The browser check now holds `/desk/ask/status` until a question has been asked and then requires the option to become enabled; it failed before the fix and passes after. The other six backend browser checks pass unchanged.
+
 ### B-029. Hub budget test lowered the limit before the brain had taken a step
 Found 16 October 2026 while wiring the agent hub steps together · fixed in the commit that adds this entry.
 `tests/test_hub_goals.py` `test_lowering_a_limit_cancels_running_work_through_the_coordinator` lowered a goal's token limit as soon as the job was marked running. Under load the synthetic brain had not yet taken its first metered step, so the cancelled task was recorded as `brain_not_started` instead of `metered` and the test failed (once in 12 parallel runs, reproduced). The product behaviour was right; the test now waits until the brain's meter shows tokens used before lowering the limit, and passed 36 parallel runs.

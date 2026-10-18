@@ -100,6 +100,8 @@ OUTCOMES = ('returned', 'checked', 'failed_checks')
 VERIFIED = ('checked', 'acknowledged')
 EVIDENCE = ('verified', 'failed_checks', 'unverifiable', 'no_checks', 'not_returned')
 CHECK_STATUSES = ('passed', 'failed', 'unverifiable')
+# Who started a run. Both are judged and counted the same; runs from before this field read as 'owner'.
+INITIATORS = ('automatic', 'owner')
 DECLARERS = ('owner', 'mandate')
 MAX_CHECKS, MAX_ACCEPTANCE_BYTES, MAX_REASONS = 8, 4096, 20
 BASIS = 'deterministic_checks_on_returned_bytes_not_truth_or_entailment'
@@ -134,8 +136,8 @@ INSERT INTO verification_meta SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM verificati
 CREATE TABLE IF NOT EXISTS verification_runs(
  id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES brain_tasks(job_id), scope TEXT NOT NULL, actor TEXT NOT NULL,
  position INTEGER NOT NULL, outcome TEXT NOT NULL, report TEXT NOT NULL, report_sha256 TEXT NOT NULL,
- created INTEGER NOT NULL, UNIQUE(job_id,position),
- CHECK(outcome IN ('returned','checked','failed_checks')));
+ created INTEGER NOT NULL, initiated TEXT CHECK(initiated IS NULL OR initiated IN ('automatic','owner')),
+ UNIQUE(job_id,position), CHECK(outcome IN ('returned','checked','failed_checks')));
 CREATE TRIGGER IF NOT EXISTS verification_runs_no_update BEFORE UPDATE ON verification_runs
  BEGIN SELECT RAISE(ABORT,'verification_runs_append_only'); END;
 CREATE TABLE IF NOT EXISTS verification_results(
@@ -719,6 +721,10 @@ class Verifier:
             if versions != [VERSION]:
                 raise Fault('unsupported_verification_version')
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
+            if 'initiated' not in {r[1] for r in db.execute('PRAGMA table_info(verification_runs)')}:
+                # Additive: runs recorded before automatic verification read as the owner's.
+                db.executescript("BEGIN IMMEDIATE;\nALTER TABLE verification_runs ADD COLUMN initiated TEXT "
+                                 "CHECK(initiated IS NULL OR initiated IN ('automatic','owner'));\nCOMMIT;")
 
     # Reading what was sent and returned ------------------------------------------
 
@@ -995,14 +1001,18 @@ class Verifier:
 
     # Runs ----------------------------------------------------------------------------
 
-    def verify(self, bearer, job_id, *, expected_runs=None) -> dict:
+    def verify(self, bearer, job_id, *, expected_runs=None, initiated='owner') -> dict:
         """Run the packet's declared checks on the ingested result and record the run.
 
         ``expected_runs`` is the number of runs the caller saw; when given, the run is
-        refused if another run was recorded meanwhile."""
+        refused if another run was recorded meanwhile. ``initiated`` records who started the
+        run: ``owner``, or ``automatic`` when the goal hub ran it as the result arrived. It
+        changes nothing about how the run is judged or counted."""
         ident(job_id)
         if expected_runs is not None and (type(expected_runs) is not int or expected_runs < 0):
             raise Fault('invalid_runs')
+        if type(initiated) is not str or initiated not in INITIATORS:
+            raise Fault('invalid_initiated')
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             task = dict(self._submitted(db, p, job_id))
@@ -1043,7 +1053,7 @@ class Verifier:
                   'declared_ref': acceptance['ref'] if acceptance else None,
                   'contract': result['status'], 'declared': len(declared), 'checks': checks, 'counts': counts,
                   'outcome': outcome, 'basis': BASIS, 'limits': LIMITS, 'brain_claims_counted': False}
-        return self._record(bearer, job_id, task, report, expected_runs)
+        return self._record(bearer, job_id, task, report, expected_runs, initiated)
 
     @staticmethod
     def _expect(db, p, task, job_id, expected_runs):
@@ -1053,7 +1063,7 @@ class Verifier:
         if (row['runs'] if row else 0) != expected_runs:
             raise Fault('verification_changed', 409)
 
-    def _record(self, bearer, job_id, task, report, expected_runs=None) -> dict:
+    def _record(self, bearer, job_id, task, report, expected_runs=None, initiated='owner') -> dict:
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             actor = self._submitted(db, p, job_id)['actor']
@@ -1063,8 +1073,9 @@ class Verifier:
             report = dict(report, position=position, at=now)
             body = _compact(report)
             digest, run_id = _sha(body), 'vr-' + _sha(f'{job_id}|{position}')[:24]
-            db.execute('INSERT INTO verification_runs VALUES (?,?,?,?,?,?,?,?,?)',
-                       (run_id, job_id, p['scope'], actor, position, report['outcome'], body, digest, now))
+            db.execute('''INSERT INTO verification_runs(id,job_id,scope,actor,position,outcome,report,report_sha256,created,
+                initiated) VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                       (run_id, job_id, p['scope'], actor, position, report['outcome'], body, digest, now, initiated))
             failed_now = sorted(c['id'] for c in report['checks'] if c['status'] == 'failed')
             failed = sorted(set(json.loads(row['failed']) if row else []) | set(failed_now))
             complete = int(bool(row and row['passed_complete']) or report['outcome'] == 'checked')
@@ -1140,7 +1151,7 @@ class Verifier:
                 'declared': report['declared'],
                 'evidence': evidence_class(report['contract'], report['declared'], row['state'], failed),
                 'last_run': {'position': run['position'], 'outcome': run['outcome'], 'sha256': run['report_sha256'],
-                             'report': report},
+                             'initiated': run['initiated'] or 'owner', 'report': report},
                 'basis': BASIS, 'brain_claims_counted': False, 'authority_granted': False}
 
     def state(self, bearer, job_id) -> dict:
@@ -1174,7 +1185,7 @@ class Verifier:
             p = self.store.authenticate(db, bearer, {'owner'})
             task = self._submitted(db, p, job_id)
             return [{'position': r['position'], 'outcome': r['outcome'], 'sha256': r['report_sha256'],
-                     'report': json.loads(r['report'])}
+                     'initiated': r['initiated'] or 'owner', 'report': json.loads(r['report'])}
                     for r in db.execute('SELECT * FROM verification_runs WHERE job_id=? AND scope=? AND actor=? ORDER BY position',
                                         (job_id, p['scope'], task['actor']))]
 
