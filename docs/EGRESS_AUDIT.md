@@ -221,13 +221,14 @@ change to the audit itself and needs its tests updated first.
 
 ## In CI
 
-The tool is not yet a separate CI step; wiring it in is a follow-up. The step to add is:
+The unified build (`.github/workflows/alfred-ci.yml`, job `core-and-sources`) runs both on
+every pull request to `main` and every push to it, in the step "Check network egress and
+adoption credits":
 
 ```
 python3 tools/egress_audit.py --self-test
 python3 tools/egress_audit.py
 ```
 
-Until then, `tests/test_egress_audit.py` already audits the real tree against the shipped
-list, so the existing `python3 -m unittest discover -s tests` run in CI fails on an
-unlisted or stale network import.
+`tests/test_egress_audit.py` also audits the real tree against the shipped list, so the
+`python3 -m unittest discover -s tests` run fails on an unlisted or stale network import too.

@@ -24,6 +24,9 @@ Exit code 0 means clean, 1 means at least one credit problem (one line each, wit
 2 means the check could not run: the shelf records could not be read, or none of the source
 folders exists.
 
+CI runs it on every pull request to `main` and every push to it, in the unified build's step
+"Check network egress and adoption credits" (`.github/workflows/alfred-ci.yml`).
+
 ## Writing a credit
 
 Put the credit at the top of the adapted file, one field per comment line, opening with the
