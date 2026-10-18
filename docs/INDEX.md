@@ -12,6 +12,8 @@ Every document in the repository, what it is for and when to read it. Documents 
 | [BUILD_START_HERE.md](../BUILD_START_HERE.md) | Orientation for anyone about to build |
 | [AGENTS.md](../AGENTS.md) | Engineering rules that bind every contributor and agent |
 | [SESSION_HANDOFF.md](../SESSION_HANDOFF.md) | Pointer to the latest checkpoint and what remains |
+| [coordination/README.md](../coordination/README.md) | How work is claimed, so two threads never edit the same files |
+| [coordination/BACKLOG.md](../coordination/BACKLOG.md) | The ordered build list that needs none of the owner's open decisions, with status |
 | [CHECKPOINT_2026-10-02.md](CHECKPOINT_2026-10-02.md) | The current resume point: branch, state, verification, owner decisions |
 
 ## Product
@@ -55,6 +57,10 @@ Every document in the repository, what it is for and when to read it. Documents 
 | [ROUTINES.md](ROUTINES.md) | Authored routines, nominations and the procedure registry |
 | [JOBS.md](JOBS.md) | The bounded local job coordinator |
 | [CONNECTORS.md](CONNECTORS.md) | Read-only calendar and contacts export connectors |
+| [AGENT_HUB.md](AGENT_HUB.md) | The agent hub: the brain plug, goals and mandates, budgets, daily learning and verification |
+| [SECRET_SCRUBBING.md](SECRET_SCRUBBING.md) | Blanking credentials in text before it is saved or sent, and where that is wired in |
+| [MEANING_SEARCH.md](MEANING_SEARCH.md) | Groundwork for searching notes by meaning; not wired into search yet |
+| [QUESTION_SET.md](QUESTION_SET.md) | Writing your own question file and scoring ALFRED's search against it |
 | [console/docs/CONNECTED_CONSOLE.md](../console/docs/CONNECTED_CONSOLE.md) | Every console feature that talks to the real backend, with routes |
 
 ## Console
@@ -79,6 +85,14 @@ Every document in the repository, what it is for and when to read it. Documents 
 | [research/](../research/) | Memory landscape and infrastructure research behind the plans | |
 | [research/INTEGRATION_PLAN_2026-10-17.md](../research/INTEGRATION_PLAN_2026-10-17.md) | How the 17 October memory and brain research fits together, in phases, with the owner's decisions marked | |
 
+## Repository checks
+
+| Document | What the check guards | Check |
+|---|---|---|
+| [EGRESS_AUDIT.md](EGRESS_AUDIT.md) | No ALFRED code reaches the network outside a reviewed list | `tools/egress_audit.py` |
+| [ADOPTION_CHECK.md](ADOPTION_CHECK.md) | Any code borrowed from the shelf credits its project, file, commit and licence | `tools/check_adoptions.py` |
+| [PUBLIC_HYGIENE.md](PUBLIC_HYGIENE.md) | No credential-shaped literal, home-directory path or personal email address in a tracked file | `tools/check_public_hygiene.py` |
+
 ## Evidence and receipts
 
 Each receipt names the exact tested commit, the commands run and their results, and what is not done. They are evidence of their checkpoint, never a claim about the current branch.
@@ -94,6 +108,9 @@ Each receipt names the exact tested commit, the commands run and their results, 
 | [evidence/connectors](evidence/connectors/RECEIPT.md) | Export connectors |
 | [evidence/int-002](evidence/int-002/RECEIPT.md) | Answer support evaluation |
 | [evidence/voice](evidence/voice/RECEIPT.md) | Spoken output |
+| [evidence/drafts-archive](evidence/drafts-archive/RECEIPT.md), [strict-grants](evidence/strict-grants/RECEIPT.md), [deletion-accounting](evidence/deletion-accounting/RECEIPT.md), [host-recovery](evidence/host-recovery/RECEIPT.md), [obsidian-compat](evidence/obsidian-compat/RECEIPT.md), [capture-policies](evidence/capture-policies/RECEIPT.md) | The six decision-free items of 16 October |
+| [evidence/brain-plug](evidence/brain-plug/RECEIPT.md), [hub-goals](evidence/hub-goals/RECEIPT.md), [hub-learning](evidence/hub-learning/RECEIPT.md), [hub-verify](evidence/hub-verify/RECEIPT.md), [hub-integrate](evidence/hub-integrate/RECEIPT.md), [hub-host](evidence/hub-host/RECEIPT.md), [hub-auto-verify](evidence/hub-auto-verify/RECEIPT.md), [run-initiator](evidence/run-initiator/RECEIPT.md) | Agent hub steps H1 to H4, the host switch, automatic verification and who started each run |
+| [evidence/secret-scrubbing](evidence/secret-scrubbing/RECEIPT.md), [scrub-wiring](evidence/scrub-wiring/RECEIPT.md), [question-set](evidence/question-set/RECEIPT.md), [meaning-search](evidence/meaning-search/RECEIPT.md), [egress-audit](evidence/egress-audit/RECEIPT.md), [adoption-check](evidence/adoption-check/RECEIPT.md), [public-hygiene](evidence/public-hygiene/RECEIPT.md), [disk-encryption](evidence/disk-encryption/RECEIPT.md) | The 17 and 18 October backlog items |
 | [evidence/unified-2026-09-27](evidence/unified-2026-09-27/) | The unified baseline |
 | desk-v03, knowledge-v04, grounded-v05, personal-os-v06, conversation-v07, memory-v08 | The pre-baseline increments |
 
