@@ -777,9 +777,10 @@ class AuthorityTests(Base, BrainMixin):
         run = self.run_now()['outcome']
         self.assertTrue(run['proposed'])
         self.assertEqual(run['accepted_by_rule'], 2)
-        # The run read the goal outcomes and the verified result.
+        # The run read the goal outcomes and the verified results: both were checked on their own
+        # when they arrived, and the owner's re-run of the first adds no second count.
         self.assertEqual((run['window']['evidence']['hub_hard_stops'], run['window']['evidence']['mandate_refusals'],
-                          run['window']['evidence']['results_verified']), (1, 3, 1))
+                          run['window']['evidence']['results_verified']), (1, 3, 2))
         self.assertTrue(self.by_key('routing-goals:synthetic'))
         after = self.snapshot()
         for table in ('source_policy', 'source_grants', 'credentials', 'identity_devices', 'workspaces', 'routine_settings',

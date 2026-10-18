@@ -24,8 +24,9 @@ Later the same day, hub steps H2 (goals, mandates, budgets, heartbeats and opera
 H3 (the daily learning job with its review list and trusted-kinds rule) and H4 (independent
 verification of brain results) were built on the same branch for a second PR. H5, the Hermes
 adapter, waits on the owner's adoption decision and model choice.
-The three were then wired together. Remaining hub work: the host constructs the goal hub,
-checks run automatically when a brain result arrives, and a real brain (H5, H6).
+The three were then wired together. The host now builds the goal hub when started with
+`--hub synthetic` (off by default, synthetic test brain only). Remaining hub work: checks run
+automatically when a brain result arrives, and a real brain (H5, H6).
 
 ## Where we are
 
