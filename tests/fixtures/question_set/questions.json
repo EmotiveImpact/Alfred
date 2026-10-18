@@ -1,0 +1,82 @@
+{
+ "schema": "alfred.question-set.v1",
+ "note": "Invented example set for the synthetic vault beside this file. Nothing here is real.",
+ "questions": [
+  {
+   "id": "fact-depot-hours",
+   "category": "fact",
+   "question": "What are the loading bay hours at the Grellmouth depot?",
+   "expect": ["places/grellmouth-depot.md"],
+   "avoid": ["clients/pellham-glassworks/account.md"],
+   "note": "A client note mentions a depot too, but it must not come up for a question about our own depot."
+  },
+  {
+   "id": "fact-orrin-renewal",
+   "category": "fact",
+   "question": "When is the Orrin Textiles contract renewal due?",
+   "expect": ["clients/orrin-textiles/renewal.md"],
+   "avoid": ["clients/pellham-glassworks/renewal.md", "clients/pellham-glassworks/account.md"],
+   "note": "Deliberate leak case: another client's renewal notes share the same words."
+  },
+  {
+   "id": "fact-scanner-lead-time",
+   "category": "fact",
+   "question": "What is the delivery lead time for new scanners?",
+   "expect": ["people/corin-dask.md"]
+  },
+  {
+   "id": "connected-heron-supplier",
+   "category": "connected",
+   "question": "Who supplies the scanners for Project Heron, and how do they like to be contacted?",
+   "expect": ["projects/heron.md", "people/corin-dask.md"]
+  },
+  {
+   "id": "connected-heron-lead",
+   "category": "connected",
+   "question": "Who leads Project Heron, and when are they away?",
+   "expect": ["projects/heron.md", "people/nell-vantrick.md"]
+  },
+  {
+   "id": "connected-pilot-count",
+   "category": "connected",
+   "question": "Who ran the first stock count of the Heron pilot?",
+   "expect": ["daily/2026-05-14.md", "people/nell-vantrick.md"]
+  },
+  {
+   "id": "time-budget-change",
+   "category": "time",
+   "question": "How did the Heron budget change between February and March?",
+   "expect": ["meetings/2026-02-heron-kickoff.md", "meetings/2026-03-heron-review.md"]
+  },
+  {
+   "id": "time-shipment-date",
+   "category": "time",
+   "question": "What new delivery date was given for the delayed scanner shipment?",
+   "expect": ["daily/2026-04-02.md"]
+  },
+  {
+   "id": "preference-weekly-review",
+   "category": "preference",
+   "question": "How do I like to run my weekly review?",
+   "expect": ["personal/preferences.md"]
+  },
+  {
+   "id": "preference-running-shoes",
+   "category": "preference",
+   "question": "What running shoes do I prefer?",
+   "expect": ["personal/running.md"]
+  },
+  {
+   "id": "refuse-telescope",
+   "category": "refuse",
+   "question": "Which telescope eyepiece suits Saturn?",
+   "note": "Nothing in the vault is about this, so a good search returns nothing."
+  },
+  {
+   "id": "refuse-quarrow-office",
+   "category": "refuse",
+   "question": "What did the board decide about opening a Quarrow office?",
+   "note": "No note covers this, but shared words such as office pull in unrelated notes."
+  }
+ ]
+}
