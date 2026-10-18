@@ -105,7 +105,7 @@ def dev(major, minor):
 
 
 class MacTests(unittest.TestCase):
-    def check(self, answers, path='/Users/owner/alfred', mount='/'):
+    def check(self, answers, path='/Users/user/alfred', mount='/'):
         run = runner(answers)
         result = de.check(path, system='darwin', run=run, realpath=lambda p: str(p),
                           ismount=lambda p: str(p) in (mount, '/'))
@@ -166,7 +166,7 @@ class MacTests(unittest.TestCase):
         def run(argv, **kwargs):
             seen.update(kwargs, argv=argv)
             return subprocess.CompletedProcess(argv, 0, 'FileVault is On.\n', '')
-        de.check('/Users/owner', system='darwin', run=run, realpath=lambda p: str(p), ismount=lambda p: str(p) == '/')
+        de.check('/Users/user', system='darwin', run=run, realpath=lambda p: str(p), ismount=lambda p: str(p) == '/')
         self.assertEqual(seen['timeout'], de.TIMEOUT)
         self.assertFalse(seen.get('shell', False))
         self.assertIs(seen['check'], False)
@@ -182,7 +182,7 @@ class LinuxTests(unittest.TestCase):
     def test_a_luks_volume_is_on(self):
         self.tree.device('nvme0n1p2', '259:2')
         self.tree.device('dm-0', '253:0', dm_uuid='CRYPT-LUKS2-0a1b2c3d-root', slaves=('nvme0n1p2',))
-        result = self.tree.check('/home/owner/alfred', FakeStat({'/': (dev(253, 0), 0)}))
+        result = self.tree.check('/home/user/alfred', FakeStat({'/': (dev(253, 0), 0)}))
         self.assertEqual((result.state, result.method), ('on', 'LUKS (dm-crypt)'))
 
     def test_lvm_on_luks_is_on_and_luks_on_one_of_two_raid_members_is_not(self):
@@ -205,14 +205,14 @@ class LinuxTests(unittest.TestCase):
 
     def test_a_plain_partition_is_off_and_says_what_it_cannot_see(self):
         self.tree.device('sda1', '8:1')
-        result = self.tree.check('/home/owner/alfred', FakeStat({'/': (dev(8, 1), 0)}))
+        result = self.tree.check('/home/user/alfred', FakeStat({'/': (dev(8, 1), 0)}))
         self.assertEqual((result.state, result.method), ('off', 'LUKS (dm-crypt)'))
         self.assertIn('fscrypt', result.detail)
 
     def test_a_non_crypt_device_mapper_layer_alone_is_off(self):
         self.tree.device('sda3', '8:3')
         self.tree.device('dm-4', '253:4', dm_uuid='LVM-bbbb', slaves=('sda3',))
-        result = self.tree.check('/home/owner', FakeStat({'/': (dev(253, 4), 0)}))
+        result = self.tree.check('/home/user', FakeStat({'/': (dev(253, 4), 0)}))
         self.assertEqual(result.state, 'off')
 
     def test_btrfs_is_followed_through_its_mount_source(self):
@@ -220,7 +220,7 @@ class LinuxTests(unittest.TestCase):
         self.tree.device('dm-0', '253:0', dm_uuid='CRYPT-LUKS2-77-root', slaves=('nvme0n1p3',))
         self.tree.mounts([('0:27', '/', 'btrfs', '/dev/mapper/root'), ('0:30', '/home', 'btrfs', '/dev/mapper/root')])
         stat = FakeStat({'/home': (dev(0, 31), 0), '/dev/mapper/root': (0, dev(253, 0))})
-        result = self.tree.check('/home/owner/alfred', stat)
+        result = self.tree.check('/home/user/alfred', stat)
         self.assertEqual(result.state, 'on')
 
     def test_mount_points_with_spaces_are_read(self):

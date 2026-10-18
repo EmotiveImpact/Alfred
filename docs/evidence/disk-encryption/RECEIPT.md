@@ -37,3 +37,11 @@ the check reads OFF here. `require` refused in a real `serve` process, with noth
   kernel's.
 
 Paths the encryption thread claims (`coordination/claims/claude-encryption.md`) are untouched.
+
+## After `main` gained the public hygiene check (18 October 2026)
+
+With `main` (now carrying #36 and #39) merged in, `tools/check_public_hygiene.py` read the
+test folders `/home/owner/...` and `/Users/owner/...` as real home-directory paths. They were
+invented, but the tests now use the placeholder name `user`, which the check ignores, rather
+than adding exceptions. `tests/test_disk_encryption.py` still passes its 26 tests, and the
+hygiene check reports 137 findings, all under reviewed exceptions, with none stale.
