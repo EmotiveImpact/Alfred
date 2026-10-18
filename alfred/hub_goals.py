@@ -132,7 +132,7 @@ CREATE TABLE IF NOT EXISTS hub_tasks(
  work TEXT NOT NULL, brain TEXT NOT NULL, autonomy INTEGER NOT NULL, trigger TEXT NOT NULL, slot TEXT,
  ceil_tokens INTEGER NOT NULL, ceil_money INTEGER NOT NULL, ceil_wall INTEGER NOT NULL, created INTEGER NOT NULL,
  accounted INTEGER, used_tokens INTEGER, used_money INTEGER, used_wall INTEGER, usage_basis TEXT, result TEXT,
- CHECK(trigger IN ('operator','heartbeat')));
+ auto_verify TEXT, CHECK(trigger IN ('operator','heartbeat')));
 CREATE INDEX IF NOT EXISTS hub_tasks_owner ON hub_tasks(scope,actor,created);
 CREATE TABLE IF NOT EXISTS hub_meter(
  job_id TEXT PRIMARY KEY, state TEXT NOT NULL, steps INTEGER, tokens INTEGER, money_pence INTEGER,
@@ -350,6 +350,9 @@ class GoalHub:
             if 'acceptance' not in {r[1] for r in db.execute('PRAGMA table_info(hub_mandates)')}:
                 # Additive: mandates written before H4 acceptance checks have none.
                 db.executescript('BEGIN IMMEDIATE;\nALTER TABLE hub_mandates ADD COLUMN acceptance TEXT;\nCOMMIT;')
+            if 'auto_verify' not in {r[1] for r in db.execute('PRAGMA table_info(hub_tasks)')}:
+                # Additive: tasks accounted before automatic verification are never run late.
+                db.executescript('BEGIN IMMEDIATE;\nALTER TABLE hub_tasks ADD COLUMN auto_verify TEXT;\nCOMMIT;')
         self.verifier = verification.Verifier(brains)
         brains.gate = self
 
@@ -673,11 +676,11 @@ class GoalHub:
         the mandate and goal it serves, with the ceilings its budget allows."""
         row = db.execute('SELECT goal FROM hub_mandates WHERE id=?', (binding['mandate'],)).fetchone()
         ceiling = _ceilings(spec, packet['budget'])
-        inserted = db.execute('INSERT OR IGNORE INTO hub_tasks VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        inserted = db.execute('''INSERT OR IGNORE INTO hub_tasks(job_id,scope,actor,mandate,goal,work,brain,autonomy,trigger,
+            slot,ceil_tokens,ceil_money,ceil_wall,created) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                               (job['id'], p['scope'], p['id'], binding['mandate'], row['goal'], binding['work'], spec.id,
                                packet['autonomy'], binding['trigger'], binding['slot'], ceiling['tokens'],
-                               ceiling['money_pence'], ceiling['wall_seconds'], self.store.now(),
-                               None, None, None, None, None, None)).rowcount
+                               ceiling['money_pence'], ceiling['wall_seconds'], self.store.now())).rowcount
         if inserted:
             self.store.log(db, p['scope'], p['id'], 'hub.task_admitted', job['id'])
 
@@ -1016,7 +1019,8 @@ class GoalHub:
 
     def cycle(self):
         """Called by the existing supervisor; no thread of its own. Accounts finished tasks
-        (ingesting each result through the brain hub) and then runs due heartbeats."""
+        (ingesting each result through the brain hub), runs the declared checks once on each
+        newly accepted result, and then runs due heartbeats."""
         with self.lock:
             try:
                 with self.store.transaction() as db:
@@ -1024,6 +1028,7 @@ class GoalHub:
             except Fault:
                 return  # Authority lost: nothing is submitted, ingested or cancelled.
             self._account()
+            self._auto_verify()
             self._heartbeats()
 
     def _account(self):
@@ -1038,6 +1043,7 @@ class GoalHub:
                 continue
             if not job['finished']:
                 continue
+            declared = bool(((job.get('parameters') or {}).get('packet') or {}).get('acceptance'))
             try:
                 result = self.brains.ingest(self.host, job_id)['status']
             except Fault as exc:
@@ -1053,12 +1059,38 @@ class GoalHub:
                     used, basis = (task['ceil_tokens'], task['ceil_money'], task['ceil_wall']), 'unknown_charged_at_ceiling'
                 else:
                     used, basis = (0, 0, 0), 'brain_not_started'
-                db.execute('''UPDATE hub_tasks SET accounted=?,used_tokens=?,used_money=?,used_wall=?,usage_basis=?,result=?
-                    WHERE job_id=?''', (self.store.now(), *used, basis, result[:80], job_id))
+                auto = 'pending' if result == 'accepted' and declared else 'not_needed'
+                db.execute('''UPDATE hub_tasks SET accounted=?,used_tokens=?,used_money=?,used_wall=?,usage_basis=?,result=?,
+                    auto_verify=? WHERE job_id=?''', (self.store.now(), *used, basis, result[:80], auto, job_id))
                 self.store.log(db, task['scope'], task['actor'], 'hub.task_accounted', job_id)
                 touched.append((task['mandate'], task['brain']))
         for mandate, brain in dict.fromkeys(touched):
             self._enforce(mandate=mandate, brain=brain, cause=brain)
+
+    def _auto_verify(self):
+        """Run the declared checks once on each newly accepted result, as the host, recorded
+        as ``automatic``. Never again automatically: later runs are the owner's, through
+        ``verify_result``. A run that cannot start is recorded and the cycle carries on; a check
+        that crashes inside a run is already ``unverifiable`` (``Verifier._check``). A task left
+        ``pending`` by a stopped process is finished on the next cycle, unless a run was already
+        recorded: the run is made only at zero runs, checked in the same transaction that records
+        it, so neither a restart nor the owner verifying at the same moment gives a second run."""
+        with self.store.connection() as db:
+            pending = [r[0] for r in db.execute('''SELECT job_id FROM hub_tasks WHERE scope=? AND actor=?
+                AND auto_verify='pending' ORDER BY accounted,job_id LIMIT ?''', (self.scope, self.host_id, ACCOUNT_PER_CYCLE))]
+        for job_id in pending:
+            outcome = 'ran'
+            try:
+                self.verifier.verify(self.host, job_id, expected_runs=0, initiated='automatic')
+            except Fault as exc:
+                if exc.code != 'verification_changed':  # Otherwise a run already exists: nothing to add.
+                    outcome = 'not_run:' + exc.code if plug.REASON.fullmatch(exc.code) else 'not_run'
+            except Exception:  # Whatever went wrong, the other tasks and the heartbeats still run.
+                outcome = 'not_run'
+            with self.store.transaction() as db:
+                db.execute("UPDATE hub_tasks SET auto_verify=? WHERE job_id=? AND auto_verify='pending'", (outcome[:80], job_id))
+                if outcome != 'ran':
+                    self.store.log(db, self.scope, self.host_id, 'hub.auto_verify_not_run', job_id)
 
     def _heartbeats(self):
         with self.store.connection() as db:
@@ -1230,13 +1262,13 @@ class GoalHub:
         """The latest run's position, hash, outcome and per-check statuses. No reasons."""
         if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='verification_results'").fetchone():
             return None
-        row = db.execute('''SELECT r.position,r.outcome,r.report,r.report_sha256 FROM verification_results v
+        row = db.execute('''SELECT r.position,r.outcome,r.report,r.report_sha256,r.initiated FROM verification_results v
             JOIN verification_runs r ON r.id=v.last_run WHERE v.job_id=?''', (job_id,)).fetchone()
         if not row:
             return None
         report = json.loads(row['report'])
         return {'position': row['position'], 'outcome': row['outcome'], 'sha256': row['report_sha256'],
-                'counts': report['counts'],
+                'initiated': row['initiated'] or 'owner', 'counts': report['counts'],
                 'checks': [{'id': c['id'], 'kind': c['kind'], 'status': c['status']} for c in report['checks']]}
 
     def results(self, bearer):

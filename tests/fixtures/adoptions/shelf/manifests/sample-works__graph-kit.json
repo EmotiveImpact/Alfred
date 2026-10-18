@@ -1,0 +1,25 @@
+{
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 167,
+      "sha256": "c50edf8eff0e04f23271e9e6a37dd284b1911b1b5331d0809a994a3ffb651e88",
+      "git_blob_sha1": "fcf956093af4ade65740e839be17cf2fa8ad7283"
+    },
+    {
+      "path": "NOTICE",
+      "bytes": 127,
+      "sha256": "75bbd5f68c542610af29d7dcf66fdfab1cdc55a254bdf2e562cf014f6da88ffa",
+      "git_blob_sha1": "365807c76a93f40f10530858941a5c60c3984e32"
+    },
+    {
+      "path": "graph/rank.ts",
+      "bytes": 182,
+      "sha256": "f9d61c3f5bacd110810c15688bf080e60da18e599dcfa61caaa8655be539ec53",
+      "git_blob_sha1": "4a600147b21846b9a9002ad083a2453c1ae4259d"
+    }
+  ],
+  "excluded": [],
+  "file_count": 3,
+  "bytes": 476
+}

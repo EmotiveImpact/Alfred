@@ -373,7 +373,9 @@ class LearningTests(Base):
         run = self.hub.verifier.verify(self.owner, unchecked[0])
         acknowledged = self.hub.verifier.acknowledge(self.owner, unchecked[0], run['last_run']['sha256'])
         self.assertEqual((acknowledged['state'], acknowledged['evidence']), ('acknowledged', 'no_checks'))
-        # Declared but never run: not verified either.
+        # A brain that claims every task is done: its checks now run on their own and fail, so its
+        # own word never counts as verified. (Declared but never run stays unverifiable; see
+        # test_hub_auto_verify.)
         pending = self.mandate(goal=self.make_goal('Brief the crew'), assigned_brain='confident', acceptance=[SECTIONS])
         for _ in range(3):
             self.run_task(pending['id'])
@@ -387,7 +389,7 @@ class LearningTests(Base):
                          (3, 0, 0))
         self.assertIn('mostly not verified', plain['statement'])
         confident = notes['routing:confident:research:company']
-        self.assertEqual((confident['detail']['verification']['unverifiable'], confident['detail']['verified']), (3, 0))
+        self.assertEqual((confident['detail']['verification']['failed_checks'], confident['detail']['verified']), (3, 0))
         self.assertNotIn('100 percent', json.dumps(confident))
         self.assertNotIn('12 of 12', json.dumps(confident))
         summary = self.hub.verifier.outcomes(self.owner)
@@ -475,21 +477,23 @@ class HTTPTests(Base):
         status, listing = self.raw('/desk/hub/results')
         self.assertEqual((status, listing['available'], listing['no_checks_counted_as_verified']), (200, True, False))
         item = listing['results'][0]
-        self.assertEqual((item['job'], item['evidence'], item['declared'], item['runs'], item['last_run']),
-                         (job_id, 'unverifiable', 2, 0, None))
+        # The checks already ran once on their own when the result arrived.
+        self.assertEqual((item['job'], item['evidence'], item['declared'], item['runs'], item['last_run']['initiated']),
+                         (job_id, 'failed_checks', 2, 1, 'automatic'))
         self.assertEqual((item['work']['goal_title'], item['work']['work']), ('Deliver the quarterly review', 'research'))
-        self.assertEqual(listing['by_brain']['synthetic']['unverifiable'], 1)
-        self.assertEqual(self.raw(path + '/verify', {'runs': 0}, {'X-CSRF-Token': 'wrong'}), (403, {'error': 'csrf_rejected'}))
-        self.assertEqual(self.raw(path + '/verify', {'runs': 0}, {'Origin': 'http://evil.example'}), (403, {'error': 'invalid_origin'}))
+        self.assertEqual(listing['by_brain']['synthetic']['failed_checks'], 1)
+        self.assertEqual(self.raw(path + '/verify', {'runs': 1}, {'X-CSRF-Token': 'wrong'}), (403, {'error': 'csrf_rejected'}))
+        self.assertEqual(self.raw(path + '/verify', {'runs': 1}, {'Origin': 'http://evil.example'}), (403, {'error': 'invalid_origin'}))
+        self.assertEqual(self.raw(path + '/verify', {'runs': 0}), (409, {'error': 'verification_changed'}))
         self.assertEqual(self.raw(path + '/verify', {'runs': 3}), (409, {'error': 'verification_changed'}))
-        self.assertEqual(self.raw(path + '/verify', {'runs': 0, 'extra': 1})[0], 400)
-        status, verified = self.raw(path + '/verify', {'runs': 0})
+        self.assertEqual(self.raw(path + '/verify', {'runs': 1, 'extra': 1})[0], 400)
+        status, verified = self.raw(path + '/verify', {'runs': 1})
         self.assertEqual((status, verified['result']['state'], verified['result']['failed']), (200, 'failed_checks', ['C2']))
-        self.assertEqual(verified['declared']['by'], 'mandate')
+        self.assertEqual((verified['declared']['by'], verified['result']['last_run']['initiated']), ('mandate', 'owner'))
         self.assertTrue(verified['sources_readable'])
         reasons = verified['result']['last_run']['report']['checks'][1]['reasons']
         self.assertEqual(reasons, [{'code': 'section_missing', 'section': 'Risks'}])
-        self.assertEqual(self.raw(path + '/verify', {'runs': 0}), (409, {'error': 'verification_changed'}))
+        self.assertEqual(self.raw(path + '/verify', {'runs': 1}), (409, {'error': 'verification_changed'}))
         sha = verified['result']['last_run']['sha256']
         self.assertEqual(self.raw(path + '/acknowledge', {'run_sha256': 'b' * 64, 'accept_failures': True}),
                          (409, {'error': 'acknowledgement_mismatch'}))
@@ -499,7 +503,7 @@ class HTTPTests(Base):
         self.assertEqual((status, acknowledged['result']['state'], acknowledged['result']['acknowledged']['over']),
                          (200, 'acknowledged', 'failed_checks'))
         status, detail = self.raw(path)
-        self.assertEqual((status, detail['runs_total'], detail['authority_granted']), (200, 1, False))
+        self.assertEqual((status, detail['runs_total'], detail['authority_granted']), (200, 2, False))
         item = self.raw('/desk/hub/results')[1]['results'][0]
         self.assertEqual((item['evidence'], item['state'], item['last_run']['counts']),
                          ('verified', 'acknowledged', {'passed': 1, 'failed': 1, 'unverifiable': 0}))
@@ -513,18 +517,19 @@ class HTTPTests(Base):
         status, listing = self.raw('/desk/hub/results')
         self.assertEqual((status, listing['available'], listing['results']), (200, False, []))
         self.assertEqual(self.raw(path), (403, {'error': 'forbidden'}))
-        self.assertEqual(self.raw(path + '/verify', {'runs': 0}), (403, {'error': 'forbidden'}))
+        self.assertEqual(self.raw(path + '/verify', {'runs': 1}), (403, {'error': 'forbidden'}))
         self.login(self.second)  # Another person, also an owner.
         self.assertEqual(self.raw('/desk/hub/results')[1]['results'], [])
         self.assertEqual(self.raw(path), (404, {'error': 'not_found'}))
-        self.assertEqual(self.raw(path + '/verify', {'runs': 0}), (404, {'error': 'not_found'}))
-        self.assertEqual(self.rows('SELECT * FROM verification_runs'), [])
+        self.assertEqual(self.raw(path + '/verify', {'runs': 1}), (404, {'error': 'not_found'}))
+        # Only the run made on its own when the result arrived; nobody else's attempt added one.
+        self.assertEqual([r['initiated'] for r in self.rows('SELECT initiated FROM verification_runs')], ['automatic'])
         # Another device of the same person is the submitter too (policy.ledger), with no more authority.
         policy = IdentityPolicy(self.store)
         tablet = policy.redeem_pairing(policy.offer_pairing(self.owner, 'owner')['code'], 'Fictional tablet')['key']
         self.login(tablet)
         self.assertEqual(self.raw('/desk/hub')[1]['reason'], 'not_hosted')
-        status, verified = self.raw(path + '/verify', {'runs': 0})
+        status, verified = self.raw(path + '/verify', {'runs': 1})
         self.assertEqual((status, verified['result']['state']), (200, 'failed_checks'))
         self.assertEqual(self.raw('/desk/hub/results')[1]['results'][0]['job'], job_id)
         self.assertEqual(self.rows('SELECT actor FROM verification_results'), [{'actor': self.rows('SELECT actor FROM brain_tasks')[0]['actor']}])

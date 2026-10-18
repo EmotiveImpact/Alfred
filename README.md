@@ -106,7 +106,7 @@ The vault is read only. ALFRED never writes into it except through the approved 
 | `service-file [--service launchd\|systemd] [--output FILE]` | Print a launchd plist or systemd user unit for `serve`. ALFRED never installs it |
 | `deletion-report --subject-kind source\|entity\|statement --subject ID [--json]` | What the workspace still holds about one subject, and where. Never prints values |
 
-Optional flags: `--port` (1024 to 65535, default 8765), `--local-model NAME --model-port 11434` for an opt-in, tool-free model on an Ollama server you already run (nothing is downloaded; off by default), `--vault-id-key alfred_id` to adopt stable note identifiers from frontmatter.
+Optional flags: `--port` (1024 to 65535, default 8765), `--local-model NAME --model-port 11434` for an opt-in, tool-free model on an Ollama server you already run (nothing is downloaded; off by default), `--vault-id-key alfred_id` to adopt stable note identifiers from frontmatter, `--hub synthetic` to build the goal hub with the synthetic test brain only (no model, no cloud, no tools; off by default).
 
 ### Verify your checkout
 

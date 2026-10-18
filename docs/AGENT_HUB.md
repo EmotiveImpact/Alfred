@@ -221,9 +221,19 @@ is an owner decision. Its telemetry is on by default and would be switched off.
 | H2 | Goals and mandates, heartbeats through routines, budgets with automatic pause, pause/reassign/stop in the console. | Built (`alfred/hub_goals.py`); console edits mandates later |
 | H3 | The daily learning job: evidence gathering, preference/procedure/routing proposals into the inbox, upstream watch briefs from the source-library manifests. Deterministic first, no model. | Built (`alfred/learning.py`) |
 | H4 | Independent verification of worker results (tests, read-back, citation checks) as a gate before "done". | Built (`alfred/verification.py`) |
-| H2 to H4 wiring | Mandates carry acceptance checks into every task; daily learning reads verification outcomes and goal setbacks for routing notes; verification over HTTP and in the console. | Built. Still to do: the host constructs the goal hub, and checks run automatically when a result arrives |
+| H2 to H4 wiring | Mandates carry acceptance checks into every task; daily learning reads verification outcomes and goal setbacks for routing notes; verification over HTTP and in the console. | Built. The host builds the goal hub with `desk serve --hub synthetic` (off by default; synthetic test brain only, `alfred/hub_host.py`). Still to do: checks run automatically when a result arrives |
 | H5 | Hermes adapter in an isolated container behind the plug, with every override above and the fence tests. | Owner: adoption sign-off and model choice (2.1); isolation backend (3.2) |
 | H6 | Further brains (Claude, local Qwen) behind the same plug; Paperclip only if wanted. | H5 pattern, owner decisions |
+
+**Checks now run on their own.** When a goal task's result is accepted and its mandate declared
+acceptance checks, the goal hub's next cycle runs those checks once, as the host, and records
+the run as `automatic` (`GoalHub._auto_verify`). It runs at most once per result, even across a
+restart or an owner verifying at the same moment. An owner's later re-run is recorded as
+`owner`. Both count the same: an automatic run that passes is the same evidence as an owner's,
+and one that fails is `failed_checks`. A brain's own "done" still counts for nothing. Results
+without declared checks, refused bundles and tasks accounted before this change are left
+alone. A run that cannot start is logged (`hub.auto_verify_not_run`), the result stays
+`unverifiable` and the cycle carries on. Evidence: `docs/evidence/hub-auto-verify/`.
 
 ## Decisions the owner holds
 
