@@ -59,11 +59,17 @@ def main():
                 browser=p.chromium.launch(**options);page=browser.new_page(viewport={'width':1512,'height':982})
                 page.on('pageerror',lambda e:errors.append(str(e)))
                 page.goto(server.origin);page.fill('#access-key',keys['owner']);page.locator('#login-form button').click();page.locator('.presence').wait_for()
+                # Hold the capability answer so the first question is asked before it arrives.
+                held=[];page.route('**/desk/ask/status',lambda route:held.append(route))
                 page.locator('.os-dock [data-view=ask]').click()
                 def ask_question(mode='sources'):
                     page.select_option('#ask-mode',mode);page.fill('#ask-question','Beacon Programme');page.locator('#ask-submit').click()
                     expect(page.locator('#ask-submit')).to_be_enabled(timeout=10000)
+                while not held:page.wait_for_timeout(20)
                 ask_question();expect(page.locator('#ask-status')).to_contain_text('No supporting notes',timeout=10000)
+                held[0].continue_();page.unroute('**/desk/ask/status')
+                expect(page.locator('#ask-mode option[value=local_model]')).to_be_enabled(timeout=10000)
+                check('the configured model option is offered even when a question was asked before the capability answer arrived')
                 check('unaccepted proposal cannot retrieve an entity absent from authored text',page.locator('.ask-memory').count()==0)
                 review('accept');ask_question();expect(page.locator('.ask-memory')).to_have_count(1,timeout=10000)
                 expect(page.locator('.ask-memory')).to_contain_text('beacon-context')
