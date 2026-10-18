@@ -45,8 +45,9 @@ Cost is linear in the input: every pattern is anchored on a literal or a bounded
 character class, and PEM blocks are matched by searching for their END line once rather
 than with a lazy match that rescans. Standard library only; no model, no network.
 
-This module is pure. Nothing imports it yet; the save and send paths call it in a later
-change (docs/SECRET_SCRUBBING.md, "Where it will be called").
+This module is pure. Brain packets (alfred/brain.py) and harvested worker text
+(alfred/learning.py) are scrubbed with it; the other call sites are listed in
+docs/SECRET_SCRUBBING.md, "Where it will be called".
 """
 from __future__ import annotations
 from bisect import bisect_left

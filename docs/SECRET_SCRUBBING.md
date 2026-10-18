@@ -2,8 +2,8 @@
 
 `alfred/scrub.py` finds credentials in text and blanks them before ALFRED saves the text or
 sends it to a model. It is integration plan phase 5 ("secret scrubbing before anything is
-saved or sent") and backlog item A2. The module is built and tested, but nothing calls it
-yet. "Where it will be called" below is the follow-up.
+saved or sent") and backlog item A2. Brain packets and harvested worker text are scrubbed
+with it (backlog C4); "Where it will be called" below lists what is wired and what is not yet.
 
 ## What it does
 
@@ -114,17 +114,45 @@ the slowest takes about 0.14 s. 1 MB of genuine fake secrets takes about 0.07 s.
 
 ## Where it will be called
 
-This is the follow-up, backlog item C4 and onward. Every call must scrub before the text is
-hashed, quoted or stored. Otherwise a stored hash or citation would point at text that no
-longer exists.
+Every call must scrub before the text is hashed, quoted or stored. Otherwise a stored hash
+or citation would point at text that no longer exists. Steps 1 and 2 are wired (backlog
+item C4); the rest are still to come.
 
-1. **Brain packets** (`alfred/brain.py`, when the packet is built): the excerpts and
-   instruction are scrubbed before they leave for any brain. The findings are recorded on
-   the task as kinds and counts, never values.
-2. **Harvested text** (`alfred/learning.py`, the harvest step): text a run harvests is
-   scrubbed before it is proposed as something learned.
-3. **Task results** returned by a brain, before they are stored.
+1. **Brain packets** (`alfred/brain.py`, wired). `BrainHub` scrubs every free-text field
+   when it builds a packet: the goal statement, the instruction, each excerpt's title and
+   text, and each learned statement. This happens before the length budgets are checked,
+   before `packet_sha256` is computed and before the job is stored, so the recorded hash,
+   the stored packet and what the brain receives are all the same scrubbed text.
+   - **Citations** must quote the scrubbed text, because that is what was sent. A brain
+     quoting the original secret is refused (`citation_quote_not_literal`).
+   - **Excerpt binding** still holds. Before a brain starts, the backend scrubs the slice
+     of the delivered note bytes in the same way and compares it with the excerpt, so a
+     forged excerpt is still refused (`excerpt_not_in_bound_revision`).
+   - **An excerpt's `sha256`** is unchanged: it is the hash of the whole note revision as
+     stored, never of the excerpt. It already existed in the index, and it is what the
+     revision checks (at dispatch, approval and action time) compare against.
+   - **A packet built anywhere else** is refused if any string in it still holds a
+     secret (`secret_shaped_value_in_packet`). The older refusal of anything shaped like
+     an ALFRED bearer token stays.
+   - **What was blanked** is recorded on the task (`brain_tasks.scrubbed`) as kinds and
+     counts only, for example `{"github_token":1}`, and the audit gains a
+     `brain.packet_scrubbed` entry naming the job. A clean packet is byte-identical to
+     before and records `{}`. Older databases gain the column when they are opened; their
+     earlier tasks show nothing there.
+   - **Not scrubbed:** the owner's acceptance checks. They are refused rather than
+     blanked if they hold a secret.
+2. **Harvested text** (`alfred/learning.py`, wired). `harvest` and `harvest_staged` check
+   the hash and refuse anything shaped like an ALFRED bearer token on the text as
+   supplied, exactly as before. Then they scrub the content and the item's name before
+   the proposal is made, so a proposal never holds a credential the scrubber can find.
+   The proposal's `detail.scrubbed` and the call's `scrubbed` give kinds and counts only.
+   The proposal keeps the supplied artefact's SHA-256, which still names the recorded
+   artefact.
+3. **Task results** returned by a brain, before they are stored. Not yet wired: a brain
+   that invents or leaks a credential in its answer or artefacts still has it stored in
+   the job result, though harvest blanks it before it can become a proposal.
 4. **Notes** as they are read from the vault into the index. This waits on encryption
-   step 2, because those storage modules are in the encryption claim.
+   step 2, because those storage modules are in the encryption claim. Until then the
+   note index keeps a note as written.
 5. **The public hygiene check** (backlog A7) reuses these patterns to fail CI when a
    tracked file contains a credential-shaped literal.
