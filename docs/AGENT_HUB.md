@@ -229,7 +229,8 @@ is an owner decision. Its telemetry is on by default and would be switched off.
 acceptance checks, the goal hub's next cycle runs those checks once, as the host, and records
 the run as `automatic` (`GoalHub._auto_verify`). It runs at most once per result, even across a
 restart or an owner verifying at the same moment. An owner's later re-run is recorded as
-`owner`. Both count the same: an automatic run that passes is the same evidence as an owner's,
+`owner`. The goals panel says which on each run line ("automatic, when the result arrived" or
+"by you"). Both count the same: an automatic run that passes is the same evidence as an owner's,
 and one that fails is `failed_checks`. A brain's own "done" still counts for nothing. Results
 without declared checks, refused bundles and tasks accounted before this change are left
 alone. A run that cannot start is logged (`hub.auto_verify_not_run`), the result stays
