@@ -94,6 +94,10 @@ describe('results and checks',()=>{
     expect(checkLabel({id:'C2',kind:'claims_cited'})).toBe('C2 every claim cites a sent excerpt');
     expect(checkLabel({id:'C3',kind:'future_kind'})).toBe('C3 future kind');
     expect(runLine(result())).toBe('Run 2: 1 passed · 1 failed · 0 could not run');
+    // Who started the run, as ALFRED recorded it; it changes nothing about how the run counts.
+    expect(runLine(result({last_run:{...run,position:1,initiated:'automatic'}})))
+      .toBe('Run 1 (automatic, when the result arrived): 1 passed · 1 failed · 0 could not run');
+    expect(runLine(result({last_run:{...run,initiated:'owner'}}))).toBe('Run 2 (by you): 1 passed · 1 failed · 0 could not run');
     expect(runLine(result({declared:0,evidence:'no_checks'}))).toMatch(/never counted as verified/);
     expect(runLine(result({last_run:null,runs:0}))).toBe('2 checks declared, not run yet.');
   });
