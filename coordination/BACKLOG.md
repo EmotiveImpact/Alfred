@@ -56,9 +56,9 @@ passed. They went in with ordinary merge commits, #28 first because it released 
 | C7 | Fix B-030: a question asked before the capability answer left the Ask page's model option disabled (found by CI on this pull request) | `web/ask.js`, `tools/check_memory_context_browser.py`, `BUGS_AND_FIXES.md` | none | merged (PR #30) |
 | C3 | Show who started each verification run (automatic or owner) in the console goals panel | `console/src/integration/goals.ts`, the goals panel browser check, `docs/AGENT_HUB.md` | A3 | merged (PR #40) |
 | C4 | Scrub secrets from brain packets before they leave and from harvested text before it is proposed | `alfred/brain.py`, `alfred/learning.py` (harvest only), their tests | A2 | merged (PR #36) |
-| C5 | Run A5 to A7 in CI | `.github/workflows/` | A5 to A7 | review (PR #42) |
+| C5 | Run A5 to A7 in CI | `.github/workflows/` | A5 to A7 | merged (PR #42) |
 | C6 | Mark claims done, update `CHANGELOG.md`, `SESSION_HANDOFF.md`, `docs/INDEX.md` and `docs/AGENT_HUB.md` after each merge | shared files | each merge | ongoing |
-| C8 | Full-disk encryption check when the host starts (master plan phase 1): `--disk-encryption warn` by default, `require` refuses to start | `alfred/disk_encryption.py`, `alfred/desk.py` (one call in `serve`), `tests/test_disk_encryption.py`, `docs/DISK_ENCRYPTION.md`, `docs/evidence/disk-encryption/` | none | review (PR #41) |
+| C8 | Full-disk encryption check when the host starts (master plan phase 1): `--disk-encryption warn` by default, `require` refuses to start | `alfred/disk_encryption.py`, `alfred/desk.py` (one call in `serve`), `tests/test_disk_encryption.py`, `docs/DISK_ENCRYPTION.md`, `docs/evidence/disk-encryption/` | none | merged (PR #41) |
 
 C2 in one paragraph: `desk serve --hub synthetic` builds the `BrainHub` and `GoalHub` over
 the host's own job coordinator, registers only the deterministic `SyntheticBrain`, attaches

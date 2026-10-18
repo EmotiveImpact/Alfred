@@ -152,5 +152,8 @@ path and address patterns, and require each to finish within a second.
 
 ## Continuous integration
 
-Not yet wired. Claude, who keeps `.github/`, adds the CI step after this merges. Until then,
-run it by hand before pushing.
+The unified CI (`.github/workflows/alfred-ci.yml`, job `core-and-sources`) runs
+`python3 tools/check_public_hygiene.py` on every push and pull request, in the step that also
+runs the egress audit and the adoption check. A finding outside the reviewed exceptions, or a
+stale exception, fails the job. Its tests run with the rest of `tests/` in the same job. Run it
+by hand before pushing, and add an exception only after reading the match, as above.

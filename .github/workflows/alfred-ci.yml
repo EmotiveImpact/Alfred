@@ -41,6 +41,15 @@ jobs:
           python3 tools/build_research_shelf.py --verify | tee /tmp/alfred-unified-core/research-shelf.txt
           python3 tools/import_sources.py --verify | tee /tmp/alfred-unified-core/original-archive.txt
           python3 tools/extend_sources.py --verify | tee /tmp/alfred-unified-core/extension-archive.txt
+      - name: Check network egress, adoption credits and public hygiene
+        run: |
+          set -euo pipefail
+          # Every network import is on the reviewed list (docs/EGRESS_AUDIT.md), every adopted file credits its source (docs/ADOPTION_CHECK.md),
+          # and no tracked file holds a credential-shaped literal, home-directory path or personal email address outside the reviewed exceptions (docs/PUBLIC_HYGIENE.md).
+          python3 tools/egress_audit.py --self-test 2>&1 | tee /tmp/alfred-unified-core/egress-tests.txt
+          python3 tools/egress_audit.py 2>&1 | tee /tmp/alfred-unified-core/egress.txt
+          python3 tools/check_adoptions.py 2>&1 | tee /tmp/alfred-unified-core/adoptions.txt
+          python3 tools/check_public_hygiene.py 2>&1 | tee /tmp/alfred-unified-core/hygiene.txt
       - name: Check the pull request stays inside each agent's claims
         if: github.event_name == 'pull_request'
         env:

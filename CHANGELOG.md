@@ -2,6 +2,14 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 18 October 2026: the disk encryption check and the checks in CI, branches `claude/project-thread-att046-disk-check` and `-ci-checks`
+
+Merged with the owner's word on 18 October. Synthetic data only; nothing deployed.
+
+- **Full-disk encryption check at start (C8, #41; master plan phase 1).** `desk serve` says once, for the data folder and the vault, whether full-disk encryption covers them: FileVault on macOS, a dm-crypt (LUKS) layer through LVM and RAID on Linux, and "not confirmed" for anything it cannot read. `--disk-encryption require` refuses to start, before the lock or the database, unless every folder is confirmed. It only reads; commands run without a shell, with no input and a five-second deadline. [Guide](docs/DISK_ENCRYPTION.md), [receipt](docs/evidence/disk-encryption/RECEIPT.md).
+- **The three repository checks run in CI (C5, #42).** The unified build's core job runs the egress audit, the adoption credit check and the public hygiene check on every pull request to `main` and every push to it.
+- **B-031.** Two older workflows cut the full test suite off at five minutes; both now have fifteen. See [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
+
 ## 17 and 18 October 2026 (night): the background build backlog, branches `claude/project-thread-att046-<item>`
 
 Eleven pull requests from [coordination/BACKLOG.md](coordination/BACKLOG.md), plus C2 (#29) in its own entry below, each built tests first on its own branch and merged with ordinary merge commits after the owner's word on 18 October. Synthetic data only; no model ran and nothing under `third_party/` was installed, run or imported. Nothing is deployed.
