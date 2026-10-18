@@ -1,0 +1,31 @@
+{
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 333,
+      "sha256": "5cc4286ac69cf3fe3f61c251ef6f88a6ab2c4c7de390e21ae1b405f86ff49908",
+      "git_blob_sha1": "1537d50db5ba49a778437e8ee1de3b478553c971"
+    },
+    {
+      "path": "src/tidy/store.py",
+      "bytes": 557,
+      "sha256": "89f9184572094233feb49998fec79bda5a87171472cd485d1ddf8c2f41134cc0",
+      "git_blob_sha1": "f56e47edec5633b6508883022c13df0ae61ab146"
+    },
+    {
+      "path": "src/tidy/version.py",
+      "bytes": 39,
+      "sha256": "35e0932fc3af64e4284bcbfef5b2ef1602777ee9dbb486678b806bb509f09040",
+      "git_blob_sha1": "fc2f8e16c763fa0284b28ea2eb98a64c46371ae1"
+    }
+  ],
+  "excluded": [
+    {
+      "path": "data/sample.db",
+      "reason": "binary/media/model/database/archive asset",
+      "bytes": 4096
+    }
+  ],
+  "file_count": 3,
+  "bytes": 929
+}

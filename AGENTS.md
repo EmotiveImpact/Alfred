@@ -46,6 +46,8 @@ Do not erase previous work, auto-close unfinished implementation issues or treat
 
 ## Two agents: Claude and Astra
 
+**Paused on 17 October 2026.** The owner moved all of Astra's work to Claude. No Astra claim is live, Claude builds every backlog item, and the rules below apply again only if the owner brings Astra back.
+
 Two agents build ALFRED: Claude (Claude Code) and Astra (OpenAI Codex, run from Codex cloud). Read [coordination/README.md](coordination/README.md) before starting. In short:
 
 - **Claims decide who may edit what.** Each piece of work has a claim in `coordination/claims/` listing its exact paths. Astra changes only the paths of its own live claims on `main`, plus its own claim file. Claude owns everything unclaimed and every shared file (AGENTS and CLAUDE files, CHANGELOG, SESSION_HANDOFF, BUILD_START_HERE, BUGS_AND_FIXES, CONSOLE_HANDOFF, the root README, `.github/`, `plans/`, `coordination/`) and never edits a path Astra has claimed. `tools/check_claims.py` enforces this on every pull request.

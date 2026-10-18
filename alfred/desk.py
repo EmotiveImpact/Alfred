@@ -9,6 +9,7 @@ import time
 from .knowledge import KnowledgeStore as DeskStore
 from .knowledge import KnowledgeSupervisor as Supervisor
 from .desk_http import DeskHTTPServer
+from .hub_host import CHOICES as HUB_CHOICES, start_goal_hub
 from .local import Fault
 from .knowledge_demo import seed_vault
 from .local_model import LocalOllama
@@ -80,7 +81,7 @@ def load_keys(path):
         os.close(fd)
 
 
-def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60, *, vault_exclusions=(), vault_id_key=None):
+def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60, *, vault_exclusions=(), vault_id_key=None, hub='off'):
     # POSIX development target. A lock prevents accidental duplicate supervisors.
     import fcntl
     import signal
@@ -89,7 +90,7 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
     check_data_directory(path, (vault,) if vault else ())
     fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
     server = supervisor = start = None
-    clean, previous_handler = False, None
+    clean, previous_handler, hub_stop = False, None, None
     try:
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -108,12 +109,16 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
             previous_handler = signal.signal(signal.SIGTERM, terminate)
         supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None), vault_exclusions=vault_exclusions, vault_id_key=vault_id_key)
         jobs, job_stop = start_local_jobs(store, keys['owner'], path)
-        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs)
+        # Off unless asked for; only the synthetic test brain exists (alfred/hub_host.py).
+        goals, hub_stop = start_goal_hub(store, jobs, keys['owner'], hub)
+        server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs, goals=goals)
         server.recovery = report
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
         print('Local development data. Microphone OFF. No external messages are sent.', flush=True)
         print('Local model available only on explicit request.' if model else 'Source mode: no model configured.', flush=True)
+        if goals is not None:
+            print('Goal hub on: synthetic test brain only. No model, no cloud, no tools.', flush=True)
         print(recovery_line(report), flush=True)
         print('Use the access command to reveal your local sign-in key in a private terminal. Ctrl+C stops the desk.', flush=True)
         server.serve_forever(poll_interval=0.1)
@@ -125,6 +130,8 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
         try:
             if supervisor:
                 supervisor.stop()
+            if hub_stop is not None and not hub_stop():
+                clean = False
             if 'job_stop' in locals() and not job_stop():
                 clean = False  # A job was still running; the next start reports it honestly.
             if server:
@@ -245,6 +252,7 @@ def main():
     parser.add_argument('--model-port', type=int, default=11434)
     parser.add_argument('--model-timeout', type=int, default=60, help='Bounded conversation model deadline, 1 to 90 seconds')
     parser.add_argument('--role', choices=('owner', 'reader', 'source'), default='owner')
+    parser.add_argument('--hub', choices=HUB_CHOICES, default='off', help='serve: build the goal hub with the synthetic test brain only (default: off)')
     # Read-only connectors over export files you select (CON-001). ALFRED must be stopped.
     parser.add_argument('--connector', choices=('ics-export', 'vcf-export'), help='Calendar (.ics) or contacts (.vcf) export connector')
     parser.add_argument('--connector-label', help='Label for a new connector source, for example "Calendar export"')
@@ -359,7 +367,7 @@ def main():
         else:
             if not 1024 <= args.port <= 65535:
                 raise Fault('invalid_port')
-            serve(path, args.port, args.vault, args.local_model, args.model_port, args.model_timeout, vault_exclusions=args.vault_exclude, vault_id_key=args.vault_id_key)
+            serve(path, args.port, args.vault, args.local_model, args.model_port, args.model_timeout, vault_exclusions=args.vault_exclude, vault_id_key=args.vault_id_key, hub=args.hub)
     except KeyboardInterrupt:
         print('ALFRED desk stopped. Stored events and drafts remain on disk.')
     except (Fault, OSError, ValueError) as exc:
