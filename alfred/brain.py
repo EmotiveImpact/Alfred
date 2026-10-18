@@ -30,7 +30,10 @@ Models propose, independent policy decides:
 
 What a brain never receives: credentials, database or vault paths, workspace
 identifiers, other scopes' content, full note bodies beyond the granted excerpts, or a
-way to schedule itself.
+way to schedule itself. Every free-text field of a packet (goal, instruction, excerpt
+titles and text, learned statements) is scrubbed by ``alfred.scrub`` when the packet is
+built, before it is hashed, stored or sent; only the kinds and counts of what was blanked
+are recorded, on the task (docs/SECRET_SCRUBBING.md).
 """
 from __future__ import annotations
 import abc
@@ -47,6 +50,7 @@ import time
 from .jobs import BackendResult, JobCoordinator, MAX_ARTEFACT_BYTES, REASON, WorkerBackend
 from . import job_kinds
 from .local import Fault, ident, text
+from .scrub import find_secrets, scrub
 
 PACKET_VERSION = 1
 BUNDLE_VERSION = 1
@@ -89,7 +93,7 @@ INSERT INTO brain_meta SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM brain_meta);
 CREATE TABLE IF NOT EXISTS brain_tasks(
  job_id TEXT PRIMARY KEY REFERENCES jobs(id), scope TEXT NOT NULL, actor TEXT NOT NULL,
  task_id TEXT NOT NULL, brain TEXT NOT NULL, scope_class TEXT NOT NULL, autonomy INTEGER NOT NULL,
- packet_sha256 TEXT NOT NULL, created INTEGER NOT NULL, UNIQUE(scope,actor,task_id));
+ packet_sha256 TEXT NOT NULL, created INTEGER NOT NULL, scrubbed TEXT, UNIQUE(scope,actor,task_id));
 CREATE TABLE IF NOT EXISTS brain_results(
  job_id TEXT PRIMARY KEY REFERENCES brain_tasks(job_id), scope TEXT NOT NULL, actor TEXT NOT NULL,
  status TEXT NOT NULL, reason TEXT, envelope_sha256 TEXT, outcome TEXT NOT NULL, created INTEGER NOT NULL,
@@ -144,6 +148,16 @@ def _body(value, limit, code):
     return value
 
 
+def _clean(value, counts):
+    """``value`` scrubbed, adding the kinds blanked to ``counts``. Never keeps a value."""
+    if not isinstance(value, str):
+        return value
+    cleaned, findings = scrub(value)
+    for finding in findings:
+        counts[finding.kind] = counts.get(finding.kind, 0) + 1
+    return cleaned
+
+
 def _strings(value):
     if isinstance(value, str):
         yield value
@@ -179,9 +193,11 @@ def validate_budget(budget):
 def validate_packet(packet):
     """Return the packet unchanged if it satisfies contract version 1, else raise a Fault.
 
-    The shape has no field for a credential, path, workspace or person, and the check
-    below also refuses any string anywhere in the packet that has the shape of an ALFRED
-    bearer token. Autonomy 3 and 4 are valid values here but refused by ``BrainPolicy``.
+    The shape has no field for a credential, path, workspace or person, and the checks
+    below also refuse any string anywhere in the packet that has the shape of an ALFRED
+    bearer token or that ``alfred.scrub`` finds a secret in (``BrainHub`` scrubs first, so
+    only a packet built elsewhere can fail that). Autonomy 3 and 4 are valid values here
+    but refused by ``BrainPolicy``.
     """
     if type(packet) is not dict or not PACKET_KEYS <= set(packet) <= PACKET_KEYS | OPTIONAL_PACKET_KEYS:
         raise Fault('invalid_packet_fields')
@@ -241,6 +257,8 @@ def validate_packet(packet):
         validate_acceptance(packet['acceptance'], packet)
     if any(CREDENTIAL_SHAPE.search(s) for s in _strings(packet)):
         raise Fault('credential_shaped_value_in_packet')
+    if any(find_secrets(s) for s in _strings(packet)):
+        raise Fault('secret_shaped_value_in_packet')
     if len(_compact(packet).encode('ascii')) > MAX_PACKET_BYTES:
         raise Fault('packet_too_large', 413)
     return packet
@@ -542,9 +560,9 @@ class BrainBackend(WorkerBackend):
     Holds no job authority; ``JobCoordinator`` keeps leases, cancellation, input policy
     and hash checks. Before a brain starts, the backend revalidates the packet, asks
     ``BrainPolicy`` again (a brain may have been unplugged or the policy tightened since
-    submission), and checks every excerpt against the note bytes the coordinator
-    delivered for the bound revision. The brain then receives a copy of the packet only,
-    never the delivered note bytes.
+    submission), and checks every excerpt against the scrubbed slice of the note bytes
+    the coordinator delivered for the bound revision. The brain then receives a copy of
+    the packet only, never the delivered note bytes.
 
     Honest scope: an in-process thread cannot be killed. At the wall-clock limit the
     backend reports the job over budget at once and discards anything the thread
@@ -576,7 +594,8 @@ class BrainBackend(WorkerBackend):
                 raise Fault('packet_inputs_mismatch') from None
         for item in packet['context']:
             lines = bodies[item['note_id']]
-            if item['end_line'] > len(lines) or '\n'.join(lines[item['start_line'] - 1:item['end_line']]) != item['text']:
+            # The packet carries the scrubbed slice, so the slice is scrubbed the same way here.
+            if item['end_line'] > len(lines) or scrub('\n'.join(lines[item['start_line'] - 1:item['end_line']]))[0] != item['text']:
                 raise Fault('excerpt_not_in_bound_revision')
 
     def submit(self, handle, kind, parameters, inputs) -> None:
@@ -822,10 +841,13 @@ class BrainHub:
             if versions != [1]:
                 raise Fault('unsupported_brain_version')
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
+            if 'scrubbed' not in {r[1] for r in db.execute('PRAGMA table_info(brain_tasks)')}:
+                # Additive: tasks submitted before packets were scrubbed (C4) record nothing here.
+                db.executescript('BEGIN IMMEDIATE;\nALTER TABLE brain_tasks ADD COLUMN scrubbed TEXT;\nCOMMIT;')
 
     # Packet ------------------------------------------------------------
 
-    def _excerpts(self, bearer, selections):
+    def _excerpts(self, bearer, selections, counts):
         if type(selections) is not list or len(selections) > MAX_EXCERPTS:
             raise Fault('invalid_context')
         context, total = [], 0
@@ -844,7 +866,7 @@ class BrainHub:
             lines = note['body'].splitlines()
             if last > len(lines):
                 raise Fault('invalid_context')
-            body = '\n'.join(lines[first - 1:last])
+            body = _clean('\n'.join(lines[first - 1:last]), counts)
             if not body.strip():
                 raise Fault('empty_excerpt')
             if len(body) > MAX_ONE_EXCERPT:
@@ -852,12 +874,13 @@ class BrainHub:
             total += len(body)
             if total > MAX_EXCERPT_CHARACTERS:
                 raise Fault('context_over_budget')
-            context.append({'id': f'E{index}', 'note_id': note['id'], 'title': note['title'],
+            # sha256 and revision name the bound note revision as stored, not the excerpt.
+            context.append({'id': f'E{index}', 'note_id': note['id'], 'title': _clean(note['title'], counts),
                             'revision': note['revision'], 'sha256': note['sha256'],
                             'start_line': first, 'end_line': last, 'text': body, 'basis': EXCERPT_BASIS})
         return context
 
-    def _learned(self, bearer, claim_ids):
+    def _learned(self, bearer, claim_ids, counts):
         if type(claim_ids) is not list or len(claim_ids) > MAX_LEARNED or len(set(map(str, claim_ids))) != len(claim_ids):
             raise Fault('invalid_learned')
         if not claim_ids:
@@ -885,6 +908,7 @@ class BrainHub:
                 other = entities[claim['object_id']]['name'] if claim['object_id'] else claim['value']
                 statement = f"{entities[claim['subject_id']]['name']} {claim['predicate'].replace('_', ' ')} {other}"
                 version = claim['version']
+            statement = _clean(statement, counts)
             total += len(statement)
             if total > MAX_LEARNED_CHARACTERS:
                 raise Fault('learned_over_budget')
@@ -893,7 +917,11 @@ class BrainHub:
         return learned
 
     def build_packet(self, bearer, request) -> dict:
-        """A validated packet from the caller's own permitted material. Sends nothing."""
+        """A validated, scrubbed packet from the caller's own permitted material. Sends nothing."""
+        return self._build(bearer, request)[0]
+
+    def _build(self, bearer, request):
+        """(packet, counts): the packet with its free text scrubbed, and the kinds blanked."""
         keys = {'task_id', 'goal', 'scope', 'instruction', 'context', 'learned', 'tools', 'budget', 'autonomy'}
         if type(request) is not dict or not keys | {'brain'} <= set(request) <= keys | {'brain', 'acceptance'}:
             raise Fault('invalid_fields')
@@ -902,15 +930,18 @@ class BrainHub:
         expected = self.workspace_scopes.get(principal['scope'])
         if expected is not None and request['scope'] != expected:
             raise Fault('scope_class_mismatch', 403)
-        packet = {'packet_version': PACKET_VERSION, 'task_id': request['task_id'], 'goal': request['goal'],
-                  'scope': request['scope'], 'instruction': request['instruction'],
-                  'context': self._excerpts(bearer, request['context']),
-                  'learned': self._learned(bearer, request['learned']),
+        counts, goal = {}, request['goal']
+        if type(goal) is dict and 'statement' in goal:
+            goal = dict(goal, statement=_clean(goal['statement'], counts))
+        packet = {'packet_version': PACKET_VERSION, 'task_id': request['task_id'], 'goal': goal,
+                  'scope': request['scope'], 'instruction': _clean(request['instruction'], counts),
+                  'context': self._excerpts(bearer, request['context'], counts),
+                  'learned': self._learned(bearer, request['learned'], counts),
                   'tools': request['tools'], 'budget': request['budget'], 'autonomy': request['autonomy']}
         if 'acceptance' in request:
             from .verification import declare
             packet['acceptance'] = declare(request['acceptance'])
-        return validate_packet(packet)
+        return validate_packet(packet), dict(sorted(counts.items()))
 
     def submit(self, bearer, request, *, binding=None) -> dict:
         """Build a packet, ask policy, and submit it as a ``brain_task`` job.
@@ -919,7 +950,7 @@ class BrainHub:
         is attached, refuses a task without one or outside it."""
         if type(request) is not dict or 'brain' not in request:
             raise Fault('invalid_fields')
-        packet = self.build_packet(bearer, request)
+        packet, scrubbed = self._build(bearer, request)
         brain = self.registry.get(request['brain'])
         self.policy.decide(brain.spec, packet)
         if self.gate is not None:
@@ -938,15 +969,19 @@ class BrainHub:
             p = self.store.authenticate(db, bearer, {'owner'})
             prior = db.execute('SELECT * FROM brain_tasks WHERE job_id=?', (job['id'],)).fetchone()
             if prior is None:
-                db.execute('INSERT INTO brain_tasks VALUES (?,?,?,?,?,?,?,?,?)',
+                db.execute('''INSERT INTO brain_tasks(job_id,scope,actor,task_id,brain,scope_class,autonomy,packet_sha256,
+                              created,scrubbed) VALUES (?,?,?,?,?,?,?,?,?,?)''',
                            (job['id'], p['scope'], p['id'], packet['task_id'], brain.spec.id, packet['scope'],
-                            packet['autonomy'], digest, self.store.now()))
+                            packet['autonomy'], digest, self.store.now(), _compact(scrubbed)))
                 self.store.log(db, p['scope'], p['id'], 'brain.task_submitted', job['id'])
+                if scrubbed:
+                    self.store.log(db, p['scope'], p['id'], 'brain.packet_scrubbed', job['id'])
                 if self.gate is not None:
                     self.gate.bind(db, p, job, brain.spec, packet, binding)
             elif prior['packet_sha256'] != digest:
                 raise Fault('idempotency_key_collision', 409)
-        return {'job': job, 'packet_sha256': digest, 'brain': brain.spec.id, 'autonomy': AUTONOMY[packet['autonomy']]}
+        return {'job': job, 'packet_sha256': digest, 'brain': brain.spec.id, 'autonomy': AUTONOMY[packet['autonomy']],
+                'scrubbed': scrubbed}
 
     # Ingestion ----------------------------------------------------------
 
