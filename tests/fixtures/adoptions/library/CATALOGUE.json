@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-27",
+  "purpose": "Synthetic source library for tests/test_check_adoptions.py",
+  "repositories": [
+    {
+      "repository": "quiet-co/closed-notes",
+      "commit": "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "source_url": "https://github.com/quiet-co/closed-notes/tree/c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+      "status": "reference_only",
+      "source_copied": false,
+      "runtime_installed": false,
+      "licence": "MIT",
+      "files": 0,
+      "reason": "Synthetic: too large to copy, so recorded as a reference only."
+    },
+    {
+      "repository": "quiet-co/headless-client",
+      "commit": "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+      "source_url": "https://github.com/quiet-co/headless-client/tree/d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
+      "status": "reference_only",
+      "source_copied": false,
+      "runtime_installed": false,
+      "licence": "UNLICENSED (package declaration)",
+      "files": 0,
+      "reason": "Synthetic: package declares UNLICENSED; no redistribution grant established."
+    },
+    {
+      "repository": "odd-hands/unlicensed-pkg",
+      "commit": "e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+      "source_url": "https://github.com/odd-hands/unlicensed-pkg/tree/e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5",
+      "status": "copied",
+      "source_copied": true,
+      "runtime_installed": false,
+      "licence": "UNLICENSED (package declaration)",
+      "licence_path": "LICENSE"
+    },
+    {
+      "repository": "odd-hands/no-assertion",
+      "commit": "f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+      "source_url": "https://github.com/odd-hands/no-assertion/tree/f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6f6",
+      "status": "copied",
+      "source_copied": true,
+      "runtime_installed": false,
+      "licence": "NOASSERTION",
+      "licence_path": "LICENSE"
+    },
+    {
+      "repository": "plain-tools/free-bits",
+      "commit": "0707070707070707070707070707070707070707",
+      "source_url": "https://github.com/plain-tools/free-bits/tree/0707070707070707070707070707070707070707",
+      "status": "copied",
+      "source_copied": true,
+      "runtime_installed": false,
+      "licence": "Unlicense",
+      "licence_path": "LICENSE"
+    }
+  ]
+}

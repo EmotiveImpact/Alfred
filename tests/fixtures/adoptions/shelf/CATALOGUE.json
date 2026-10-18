@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-17",
+  "purpose": "Synthetic research shelf for tests/test_check_adoptions.py",
+  "repositories": [
+    {
+      "repository": "example-labs/tidy-memory",
+      "commit": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "source_url": "https://github.com/example-labs/tidy-memory/tree/a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+      "status": "copied",
+      "source_copied": true,
+      "runtime_installed": false,
+      "licence": "MIT",
+      "licence_path": "LICENSE"
+    },
+    {
+      "repository": "sample-works/graph-kit",
+      "commit": "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "source_url": "https://github.com/sample-works/graph-kit/tree/b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
+      "status": "copied",
+      "source_copied": true,
+      "runtime_installed": false,
+      "licence": "Apache-2.0",
+      "licence_path": "LICENSE"
+    }
+  ]
+}

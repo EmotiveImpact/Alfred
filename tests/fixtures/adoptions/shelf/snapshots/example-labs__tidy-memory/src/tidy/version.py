@@ -1,0 +1,1 @@
+"""Tidy memory (synthetic fixture)."""
