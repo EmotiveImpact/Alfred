@@ -1,8 +1,10 @@
 # ALFRED unified build handoff
 
-**Two agents, 17 October 2026:** Claude and Astra (OpenAI Codex) now share this repository through claims. Read [coordination/README.md](coordination/README.md) and the live claims in `coordination/claims/` before starting any work, and run `python3 tools/check_claims.py`.
+**Who builds, 17 October 2026:** the owner moved all of Astra's (OpenAI Codex) work to Claude, so Claude builds everything. The claim files in `coordination/claims/` still decide ownership between threads (the encryption thread holds its own claim); read [coordination/README.md](coordination/README.md) and run `python3 tools/check_claims.py` before starting.
 
-**Latest checkpoint, 16 October 2026:** the six decision-free items (drafts kept and archived
+**Latest checkpoint, 18 October 2026:** the background build backlog ([coordination/BACKLOG.md](coordination/BACKLOG.md)) is merged to `main`: the hub host switch (C2), automatic verification and who started each run (A3, C3), the secret scrubber and its wiring into brain packets and harvest (A2, C4), the question set harness (A1), meaning search groundwork (A4), the egress, adoption and public hygiene checks (A5 to A7) and fix B-030. Read the 17 and 18 October entries in [CHANGELOG.md](CHANGELOG.md) and their receipts. Still open: encryption step 1 (PR #26, waiting on the owner's library choice), the full-disk encryption check at start, and running A5 to A7 in CI (C5). Everything in "Waiting on the owner" in the backlog stays unstarted. The integration plan's phase order and parked choices are in [research/INTEGRATION_PLAN_2026-10-17.md](research/INTEGRATION_PLAN_2026-10-17.md).
+
+**Checkpoint, 16 October 2026:** the six decision-free items (drafts kept and archived
 per the owner's decision, strict grants 1.2, deletion accounting 1.3, host recovery 1.4,
 Obsidian compatibility 1.5, capture policies 2.4) and the agent hub design with its brain plug
 (H1) were built on branch `claude/project-thread-qj8beq` and merged to `main` with the owner's

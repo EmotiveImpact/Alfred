@@ -17,7 +17,7 @@ builds it").
   claim, and every item stays out of the encryption claim (`coordination/claims/claude-encryption.md`), which the
   "Encryption with both unlock options" thread owns.
 - **One item, one pull request**, each on its own `claude/project-thread-att046-<item>` branch (the owner agreed on 17 October), tests first, CI green, a receipt for runtime work. Every
-  merge still needs the owner's word; Claude batches ready pull requests into one digest.
+  merge still needs the owner's word. The owner dropped the daily digest on 18 October; Claude asks once, in one plain line, when pull requests are ready.
 - **Synthetic data only.** Real notes wait for encryption step 2.
 
 Status words: `queued` (not started), `building`, `review` (pull request open), `merged`,
@@ -35,30 +35,30 @@ A7 are in pull request #27.
 Order: the scrubber first (C4 and A7 build on it), then the question set, auto-verify,
 meaning search, and the three checks.
 
-Merge order for the open pull requests: this one (#28) first, because it releases the claims
-#32 and #38 need. Then #32 and #38, each with `main` merged in first so the claims check sees
-the release. #36 and #39 follow #32, #40 follows #33, and the others can go in any order. A
-stacked pull request (#36, #39, #40) gets CI only once GitHub retargets it to `main`.
+On 18 October the owner said yes to merging the 17 October pull requests as their checks
+passed. They went in with ordinary merge commits, #28 first because it released the claims
+#32 and #38 needed, and each stacked pull request after `main` had been merged into it.
 
 | # | Item | Paths | Depends on | Status |
 | ---: | --- | --- | --- | --- |
-| A2 | Secret scrubber module, not yet wired in | `alfred/scrub.py`, `tests/test_scrub.py`, `docs/SECRET_SCRUBBING.md`, `docs/evidence/secret-scrubbing/` | this pull request merged | review (PR #32) |
-| A1 | Real question set harness: runs a question file against a search and scores it | `tools/question_set.py`, `tests/test_question_set.py`, `tests/fixtures/question_set/`, `docs/QUESTION_SET.md`, `docs/evidence/question-set/` | this pull request merged | review (PR #38) |
-| A3 | Checks run automatically when a brain's result arrives | `alfred/hub_goals.py`, `alfred/verification.py` and their tests (brief in PR #27) | none | review (PR #33) |
-| A4 | Meaning search groundwork: passages, embedder interface, in-memory index, blending | `alfred/semantic.py` and its tests (brief in PR #27); no wiring into search | none | review (PR #37) |
-| A5 | Network egress audit: a tool that fails when a module outside an allowlist imports a network library | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | review (PR #34) |
-| A6 | Adoption header check: code copied from the shelf must name upstream project, path, commit and licence, matching the shelf manifest | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | review (PR #35) |
-| A7 | Public hygiene check: credential-shaped literals, machine paths and email addresses in tracked files, using the scrubber's patterns | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | A2 | review (PR #39, stacked on #32) |
+| A2 | Secret scrubber module, not yet wired in | `alfred/scrub.py`, `tests/test_scrub.py`, `docs/SECRET_SCRUBBING.md`, `docs/evidence/secret-scrubbing/` | C1 | merged (PR #32) |
+| A1 | Real question set harness: runs a question file against a search and scores it | `tools/question_set.py`, `tests/test_question_set.py`, `tests/fixtures/question_set/`, `docs/QUESTION_SET.md`, `docs/evidence/question-set/` | C1 | merged (PR #38) |
+| A3 | Checks run automatically when a brain's result arrives | `alfred/hub_goals.py`, `alfred/verification.py` and their tests (brief in PR #27) | none | merged (PR #33) |
+| A4 | Meaning search groundwork: passages, embedder interface, in-memory index, blending | `alfred/semantic.py` and its tests (brief in PR #27); no wiring into search | none | merged (PR #37) |
+| A5 | Network egress audit: a tool that fails when a module outside an allowlist imports a network library | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | merged (PR #34) |
+| A6 | Adoption header check: code copied from the shelf must name upstream project, path, commit and licence, matching the shelf manifest | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | none | merged (PR #35) |
+| A7 | Public hygiene check: credential-shaped literals, machine paths and email addresses in tracked files, using the scrubber's patterns | new `tools/`, `tests/`, `docs/` files (brief in PR #27) | A2 | merged (PR #39) |
 
 | # | Item | Paths | Depends on | Status |
 | ---: | --- | --- | --- | --- |
-| C1 | This backlog and the claim release | `coordination/` | none | review (PR #28) |
-| C2 | The host builds the goal hub, behind a switch that defaults to off | `alfred/hub_host.py`, `alfred/desk.py` (one hook in `serve`), `tests/test_hub_host.py`, `docs/evidence/hub-host/`, `docs/AGENT_HUB.md` | none | review (PR #29) |
-| C7 | Fix B-030: a question asked before the capability answer left the Ask page's model option disabled (found by CI on this pull request) | `web/ask.js`, `tools/check_memory_context_browser.py`, `BUGS_AND_FIXES.md` | none | review (PR #30) |
-| C3 | Show who started each verification run (automatic or owner) in the console goals panel | `console/src/integration/goals.ts`, the goals panel browser check, `docs/AGENT_HUB.md` | A3 | review (PR #40, stacked on #33) |
-| C4 | Scrub secrets from brain packets before they leave and from harvested text before it is proposed | `alfred/brain.py`, `alfred/learning.py` (harvest only), their tests | A2 | review (PR #36, stacked on #32) |
+| C1 | This backlog and the claim release | `coordination/` | none | merged (PR #28) |
+| C2 | The host builds the goal hub, behind a switch that defaults to off | `alfred/hub_host.py`, `alfred/desk.py` (one hook in `serve`), `tests/test_hub_host.py`, `docs/evidence/hub-host/`, `docs/AGENT_HUB.md` | none | merged (PR #29) |
+| C7 | Fix B-030: a question asked before the capability answer left the Ask page's model option disabled (found by CI on this pull request) | `web/ask.js`, `tools/check_memory_context_browser.py`, `BUGS_AND_FIXES.md` | none | merged (PR #30) |
+| C3 | Show who started each verification run (automatic or owner) in the console goals panel | `console/src/integration/goals.ts`, the goals panel browser check, `docs/AGENT_HUB.md` | A3 | merged (PR #40) |
+| C4 | Scrub secrets from brain packets before they leave and from harvested text before it is proposed | `alfred/brain.py`, `alfred/learning.py` (harvest only), their tests | A2 | merged (PR #36) |
 | C5 | Run A5 to A7 in CI | `.github/workflows/` | A5 to A7 | waiting (on #34, #35 and #39 merging) |
 | C6 | Mark claims done, update `CHANGELOG.md`, `SESSION_HANDOFF.md`, `docs/INDEX.md` and `docs/AGENT_HUB.md` after each merge | shared files | each merge | ongoing |
+| C8 | Full-disk encryption check when the host starts (master plan phase 1): `--disk-encryption warn` by default, `require` refuses to start | `alfred/disk_encryption.py`, `alfred/desk.py` (one call in `serve`), `tests/test_disk_encryption.py`, `docs/DISK_ENCRYPTION.md`, `docs/evidence/disk-encryption/` | none | review (PR #41) |
 
 C2 in one paragraph: `desk serve --hub synthetic` builds the `BrainHub` and `GoalHub` over
 the host's own job coordinator, registers only the deterministic `SyntheticBrain`, attaches
@@ -71,7 +71,7 @@ owner's choice.
 
 | Work | Waits on |
 | --- | --- |
-| Sealing records, indexes, exports and backups; the full-disk check; deleting what was built from a deleted fact | Encryption thread (PR #26, then step 2) |
+| Sealing records, indexes, exports and backups; deleting what was built from a deleted fact (the full-disk check moved to C8 by agreement with that thread) | Encryption thread (PR #26, then step 2) |
 | Wiring meaning search into ALFRED's search and storing vectors | Encryption step 2 (search modules are in its claim); adopting `sqlite-vec` and an embedding model (decision 5) |
 | A real brain behind the plug, the first real job, a Hermes memory plug | Claude direct or Hermes (decision 4) |
 | Linked memories, spreading recall, intentions that fire, self-knowledge, surprise | Brain layer option A to D (decision 6) |
