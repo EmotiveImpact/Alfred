@@ -420,7 +420,18 @@ class PromptInjectionTests(Base):
         self.assertEqual(self.rows('SELECT * FROM actions'), [])
         self.assert_no_effects()
 
-    def test_planted_instruction_as_a_draft_waits_for_exact_approval(self):
+    def test_planted_instruction_as_a_draft_is_held_by_default(self):
+        # The address came from the note, not the owner (alfred/provenance.py, enforce mode).
+        job_id = self.run_task(self.request(autonomy=2, context=self.inject_context()),
+                               registry=self.plugged('send_everything_as_draft'))
+        self.assertEqual(self.hub.ingest(self.owner, job_id)['proposals'], {'refused': 1})
+        proposal = self.hub.proposals(self.owner)[0]
+        self.assertEqual((proposal['refusal'], proposal['action_id']), ('steered_by_untrusted_text', None))
+        self.assertEqual(self.rows('SELECT * FROM actions'), [])
+        self.assert_no_effects()
+
+    def test_planted_instruction_as_a_draft_waits_for_exact_approval_when_only_watched(self):
+        self.hub = BrainHub(self.store, self.jobs, self.registry, self.policy, provenance_mode='watch')
         job_id = self.run_task(self.request(autonomy=2, context=self.inject_context()),
                                registry=self.plugged('send_everything_as_draft'))
         self.assertEqual(self.hub.ingest(self.owner, job_id)['proposals'], {'pending_approval': 1})
