@@ -2,6 +2,12 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 20 October 2026: the provenance gate, branch `claude/project-thread-att046-provenance-gate`
+
+Merged with the owner's word on 20 October, after the owner chose blocking over warning. Synthetic data only; nothing deployed.
+
+- **Provenance gate (C9, #44; master plan phase 2, the CaMeL idea).** Every brain proposal is labelled with where its contents came from. An email address, web address, domain, handle or phone number that appears only in a note, or nowhere, and not in the owner's own words, makes the proposal `steered_by_untrusted_text`; under the default `enforce` mode it is kept with its reason but never becomes an action to approve. `watch` only labels it. No screen shows brain proposals yet. [Guide](docs/PROVENANCE_GATE.md), [receipt](docs/evidence/provenance-gate/RECEIPT.md).
+
 ## 18 October 2026: the disk encryption check and the checks in CI, branches `claude/project-thread-att046-disk-check` and `-ci-checks`
 
 Merged with the owner's word on 18 October. Synthetic data only; nothing deployed.
