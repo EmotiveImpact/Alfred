@@ -26,6 +26,9 @@ Models propose, independent policy decides:
   through the existing exact-approval path (``LocalCore.propose``), which still needs
   the owner's ``approve`` with the exact fingerprint. Levels 3 and 4 are refused until
   the private-pilot gates exist.
+* Each proposal is labelled with where its contents came from (``alfred.provenance``,
+  docs/PROVENANCE_GATE.md). By default one steered by an address or link found only in a
+  note, never in the owner's own words, is refused before it can become an action.
 * Memory suggestions go to a review inbox as suggestions. Nothing here accepts them.
 
 What a brain never receives: credentials, database or vault paths, workspace
@@ -50,6 +53,7 @@ import time
 from .jobs import BackendResult, JobCoordinator, MAX_ARTEFACT_BYTES, REASON, WorkerBackend
 from . import job_kinds
 from .local import Fault, ident, text
+from . import provenance
 from .scrub import find_secrets, scrub
 
 PACKET_VERSION = 1
@@ -102,7 +106,7 @@ CREATE TABLE IF NOT EXISTS brain_proposals(
  id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES brain_tasks(job_id), scope TEXT NOT NULL,
  actor TEXT NOT NULL, position INTEGER NOT NULL, capability TEXT NOT NULL, parameters TEXT,
  fingerprint TEXT NOT NULL, reason TEXT NOT NULL, cites TEXT NOT NULL, disposition TEXT NOT NULL,
- refusal TEXT, action_id TEXT, created INTEGER NOT NULL,
+ refusal TEXT, action_id TEXT, created INTEGER NOT NULL, provenance TEXT,
  CHECK(disposition IN ('dropped_observe','draft_only','pending_approval','refused')));
 CREATE TABLE IF NOT EXISTS brain_suggestions(
  id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES brain_tasks(job_id), scope TEXT NOT NULL,
@@ -827,8 +831,13 @@ class BrainHub:
     """
 
     def __init__(self, store, jobs: JobCoordinator, registry: BrainRegistry, policy: BrainPolicy, *,
-                 workspace_scopes=None, gate=None):
+                 workspace_scopes=None, gate=None, provenance_mode=provenance.DEFAULT_MODE):
         self.store, self.jobs, self.registry, self.policy = store, jobs, registry, policy
+        # Master plan phase 2 (alfred/provenance.py): 'enforce' refuses, before it becomes a
+        # pending action, any proposal steered by text from a note; 'watch' only labels it.
+        if type(provenance_mode) is not str or provenance_mode not in provenance.MODES:
+            raise Fault('invalid_provenance_mode')
+        self.provenance_mode = provenance_mode
         # H2 (alfred.hub_goals.GoalHub attaches itself here): with a gate, every task must
         # serve a current mandate and fit its budgets, or it is refused before a job exists.
         self.gate = gate
@@ -844,6 +853,9 @@ class BrainHub:
             if 'scrubbed' not in {r[1] for r in db.execute('PRAGMA table_info(brain_tasks)')}:
                 # Additive: tasks submitted before packets were scrubbed (C4) record nothing here.
                 db.executescript('BEGIN IMMEDIATE;\nALTER TABLE brain_tasks ADD COLUMN scrubbed TEXT;\nCOMMIT;')
+            if 'provenance' not in {r[1] for r in db.execute('PRAGMA table_info(brain_proposals)')}:
+                # Additive: proposals recorded before the provenance gate carry no label.
+                db.executescript('BEGIN IMMEDIATE;\nALTER TABLE brain_proposals ADD COLUMN provenance TEXT;\nCOMMIT;')
 
     # Packet ------------------------------------------------------------
 
@@ -1016,9 +1028,14 @@ class BrainHub:
             artefact = self.jobs.artefact(bearer, job['result']['sha256'])
             envelope_sha = artefact['sha256']
             status, refusal, envelope = self._judge(task, job, artefact['data'])
-        pending = {}
+        # Observe keeps no parameters, so it keeps no labels either.
+        labelled = status == 'accepted' and task['autonomy'] > 0 and self.provenance_mode != 'off'
+        pending, labels = {}, {}
+        if labelled:
+            labels = {position: provenance.label(job['parameters']['packet'], action)
+                      for position, action in enumerate(envelope['bundle']['proposed_actions'])}
         if status == 'accepted' and task['autonomy'] == 2:
-            pending = self._pending(bearer, task, envelope['bundle']['proposed_actions'])
+            pending = self._pending(bearer, task, envelope['bundle']['proposed_actions'], labels)
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             task = self._task(db, p, job_id)
@@ -1028,12 +1045,15 @@ class BrainHub:
             outcome = {'job_state': job['state'], 'over_budget': bool(refusal and refusal.startswith('over_budget_')),
                        'autonomy': AUTONOMY[task['autonomy']], 'proposals': {}, 'suggestions': 0, 'answer': None,
                        'artefacts': [], 'metered': envelope['metered'] if envelope else None,
-                       'basis': 'brain_claim_checked_for_citations_hashes_tools_budget_not_verified_true'}
+                       'basis': 'brain_claim_checked_for_citations_hashes_tools_budget_not_verified_true',
+                       'provenance': {'mode': self.provenance_mode,
+                                      'steered': sum(item['verdict'] == provenance.STEERED for item in labels.values())
+                                      if labelled else None}}
             if status == 'accepted':
                 bundle = envelope['bundle']
                 outcome['answer'] = bundle['answer']
                 outcome['artefacts'] = [{k: a[k] for k in ('name', 'media_type', 'sha256')} for a in bundle['artefacts']]
-                outcome['proposals'] = self._proposals(db, p, task, bundle['proposed_actions'], pending)
+                outcome['proposals'] = self._proposals(db, p, task, bundle['proposed_actions'], pending, labels)
                 outcome['suggestions'] = self._suggestions(db, p, task, bundle['memory_suggestions'])
             self._record(db, p, task, status, refusal, envelope_sha, outcome)
             return self._result_view(db, db.execute('SELECT * FROM brain_results WHERE job_id=?', (job_id,)).fetchone())
@@ -1071,15 +1091,19 @@ class BrainHub:
     def _proposal_id(task, position):
         return 'bp-' + hashlib.sha256(f"{task['job_id']}|{position}".encode()).hexdigest()[:24]
 
-    def _pending(self, bearer, task, actions) -> dict:
+    def _pending(self, bearer, task, actions, labels) -> dict:
         """Autonomy 2: each allowed proposal becomes an action through the existing
         ``LocalCore.propose``, bound to its exact parameters. It stays 'proposed': only
-        ``LocalCore.approve`` with that exact fingerprint queues it. Returns, per position,
-        (disposition, refusal, action_id)."""
+        ``LocalCore.approve`` with that exact fingerprint queues it. Under the 'enforce'
+        provenance mode a proposal steered by text from a note is refused first, so no
+        action exists to approve. Returns, per position, (disposition, refusal, action_id)."""
         decided = {}
         for position, action in enumerate(actions):
             if action['capability'] not in PROPOSABLE:
                 decided[position] = ('refused', 'capability_not_allowed_for_brains', None)
+                continue
+            if self.provenance_mode == 'enforce' and labels[position]['verdict'] == provenance.STEERED:
+                decided[position] = ('refused', provenance.STEERED, None)
                 continue
             action_id = 'act-' + self._proposal_id(task, position)
             with self.store.connection() as db:
@@ -1098,9 +1122,10 @@ class BrainHub:
                 decided[position] = ('refused', exc.code, None)
         return decided
 
-    def _proposals(self, db, p, task, actions, pending) -> dict:
+    def _proposals(self, db, p, task, actions, pending, labels) -> dict:
         counts = {}
         for position, action in enumerate(actions):
+            label = labels.get(position)
             pid = self._proposal_id(task, position)
             digest = hashlib.sha256(_compact({'capability': action['capability'],
                                               'parameters': action['parameters']}).encode()).hexdigest()
@@ -1111,9 +1136,13 @@ class BrainHub:
                 disposition = 'draft_only'
             else:
                 disposition, refusal, action_id = pending[position]
-            db.execute('INSERT INTO brain_proposals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            db.execute('''INSERT INTO brain_proposals(id,job_id,scope,actor,position,capability,parameters,fingerprint,
+                          reason,cites,disposition,refusal,action_id,created,provenance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                        (pid, task['job_id'], p['scope'], p['id'], position, action['capability'], parameters, digest,
-                        action['reason'], _compact(action['cites']), disposition, refusal, action_id, self.store.now()))
+                        action['reason'], _compact(action['cites']), disposition, refusal, action_id, self.store.now(),
+                        _compact(label) if label else None))
+            if label and label['verdict'] == provenance.STEERED:
+                self.store.log(db, p['scope'], p['id'], 'brain.proposal_steered_by_untrusted_text', pid)
             counts[disposition] = counts.get(disposition, 0) + 1
         return counts
 
@@ -1149,7 +1178,7 @@ class BrainHub:
                      'parameters': json.loads(r['parameters']) if r['parameters'] else None,
                      'fingerprint': r['fingerprint'], 'reason': r['reason'], 'cites': json.loads(r['cites']),
                      'disposition': r['disposition'], 'refusal': r['refusal'], 'action_id': r['action_id'],
-                     'executed': False}
+                     'provenance': json.loads(r['provenance']) if r['provenance'] else None, 'executed': False}
                     for r in db.execute('SELECT * FROM brain_proposals WHERE scope=? AND actor=? ORDER BY created,job_id,position',
                                         (p['scope'], p['id']))]
 

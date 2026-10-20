@@ -59,6 +59,7 @@ passed. They went in with ordinary merge commits, #28 first because it released 
 | C5 | Run A5 to A7 in CI | `.github/workflows/` | A5 to A7 | merged (PR #42) |
 | C6 | Mark claims done, update `CHANGELOG.md`, `SESSION_HANDOFF.md`, `docs/INDEX.md` and `docs/AGENT_HUB.md` after each merge | shared files | each merge | ongoing |
 | C8 | Full-disk encryption check when the host starts (master plan phase 1): `--disk-encryption warn` by default, `require` refuses to start | `alfred/disk_encryption.py`, `alfred/desk.py` (one call in `serve`), `tests/test_disk_encryption.py`, `docs/DISK_ENCRYPTION.md`, `docs/evidence/disk-encryption/` | none | merged (PR #41) |
+| C9 | Provenance gate (master plan phase 2, the CaMeL idea): label each brain proposal with where its contents came from, and refuse one steered by an address or link found only in a note (`enforce` by default, `watch` and `off` too) | `alfred/provenance.py`, `alfred/brain.py`, `tests/test_provenance_gate.py`, `tests/test_brain_plug.py`, `docs/PROVENANCE_GATE.md`, `docs/evidence/provenance-gate/` | none | review |
 
 C2 in one paragraph: `desk serve --hub synthetic` builds the `BrainHub` and `GoalHub` over
 the host's own job coordinator, registers only the deterministic `SyntheticBrain`, attaches
