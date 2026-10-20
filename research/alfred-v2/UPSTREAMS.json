@@ -1,0 +1,187 @@
+{
+  "schema_version": 1,
+  "created_utc": "2026-10-18",
+  "project": "ALFRED V2 environmental intelligence",
+  "base_commit": "4cdd4d4174bd03c3ab40ca2db2af83e9650a44e4",
+  "description": "Curated pinned upstream source text, not complete git clones",
+  "source_executed": false,
+  "binaries_downloaded": false,
+  "upstream_models_downloaded": false,
+  "source_selection_errors": [],
+  "repositories": [
+    {
+      "repository": "espressif/esp-csi",
+      "source_commit": "8633d67152db2808f141cc1595970aa9cf406045",
+      "licence_observed": "Apache-2.0",
+      "purpose": "Wi-Fi channel-state information and presence detection",
+      "availability": "curated_pinned_source_snapshot_not_full_clone",
+      "copied_files": [
+        {
+          "path": "examples/README.md",
+          "blob_sha": "b93668dd5e85bcd56cfdd89bdc347f5152ac8df7",
+          "size_chars": 1582
+        },
+        {
+          "path": "LICENSE",
+          "blob_sha": "d645695673349e3947e8e5ae42332d0ac3164cd7",
+          "size_chars": 11358
+        },
+        {
+          "path": "README.md",
+          "blob_sha": "5a18bba700b363206a0417650c446882d1271a73",
+          "size_chars": 7206
+        }
+      ],
+      "upstream_url": "https://github.com/espressif/esp-csi/tree/8633d67152db2808f141cc1595970aa9cf406045",
+      "runtime_installed": false,
+      "executed": false,
+      "models_downloaded": false,
+      "full_clone_command": "git clone --filter=blob:none https://github.com/espressif/esp-csi.git; git -C esp-csi checkout --detach 8633d67152db2808f141cc1595970aa9cf406045"
+    },
+    {
+      "repository": "esphome/bluetooth-proxies",
+      "source_commit": "6387b836d61375b273065501a31fe936225eb620",
+      "licence_observed": "Apache-2.0",
+      "purpose": "Room-scale trusted-device and BLE proxy infrastructure",
+      "availability": "curated_pinned_source_snapshot_not_full_clone",
+      "copied_files": [
+        {
+          "path": "esp32-generic/esp32-generic.yaml",
+          "blob_sha": "2b88d70be6f3dd0e6be84158eb407ace92060950",
+          "size_chars": 678
+        },
+        {
+          "path": "LICENSE",
+          "blob_sha": "786294e00b4c397b08b8f95f127da28b26746410",
+          "size_chars": 10866
+        },
+        {
+          "path": "README.md",
+          "blob_sha": "730a978ef753d43d41bd7fdfdc5fa4245a57d5dd",
+          "size_chars": 1229
+        }
+      ],
+      "upstream_url": "https://github.com/esphome/bluetooth-proxies/tree/6387b836d61375b273065501a31fe936225eb620",
+      "runtime_installed": false,
+      "executed": false,
+      "models_downloaded": false,
+      "full_clone_command": "git clone --filter=blob:none https://github.com/esphome/bluetooth-proxies.git; git -C bluetooth-proxies checkout --detach 6387b836d61375b273065501a31fe936225eb620"
+    },
+    {
+      "repository": "dscripka/openWakeWord",
+      "source_commit": "368c03716d1e92591906a84949bc477f3a834455",
+      "licence_observed": "Apache-2.0 code; included pretrained models CC BY-NC-SA 4.0",
+      "purpose": "Local wake word and speech activation",
+      "availability": "curated_pinned_source_snapshot_not_full_clone",
+      "copied_files": [
+        {
+          "path": "LICENSE",
+          "blob_sha": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64",
+          "size_chars": 11357
+        },
+        {
+          "path": "openwakeword/model.py",
+          "blob_sha": "1296ac179032fca6d2f65c669d07742c946b3c6e",
+          "size_chars": 26577
+        },
+        {
+          "path": "openwakeword/vad.py",
+          "blob_sha": "b332ee67935d10440fce62075a6a693c98679b4c",
+          "size_chars": 5363
+        },
+        {
+          "path": "README.md",
+          "blob_sha": "2f393c2b8ec2b416e959730b304f8b140559f3ff",
+          "size_chars": 27414
+        }
+      ],
+      "upstream_url": "https://github.com/dscripka/openWakeWord/tree/368c03716d1e92591906a84949bc477f3a834455",
+      "runtime_installed": false,
+      "executed": false,
+      "models_downloaded": false,
+      "full_clone_command": "git clone --filter=blob:none https://github.com/dscripka/openWakeWord.git; git -C openWakeWord checkout --detach 368c03716d1e92591906a84949bc477f3a834455"
+    },
+    {
+      "repository": "pyannote/pyannote-audio",
+      "source_commit": "b749285c5cdd4636b2edc7f766f1352c8dde9369",
+      "licence_observed": "MIT source; model weights and gated models separately licensed",
+      "purpose": "Speech activity, speaker diarisation and overlap",
+      "availability": "curated_pinned_source_snapshot_not_full_clone",
+      "copied_files": [
+        {
+          "path": "LICENSE",
+          "blob_sha": "9712e8a75f3b007849124dfb5653863925fdaaf9",
+          "size_chars": 1061
+        },
+        {
+          "path": "README.md",
+          "blob_sha": "8d64ca7ed05f2a4d20f73f707e1bc7288e41d6ee",
+          "size_chars": 12421
+        },
+        {
+          "path": "src/pyannote/audio/__init__.py",
+          "blob_sha": "67a84f841d0143d030a574eef4f40a50c53a7b0f",
+          "size_chars": 1379
+        }
+      ],
+      "upstream_url": "https://github.com/pyannote/pyannote-audio/tree/b749285c5cdd4636b2edc7f766f1352c8dde9369",
+      "runtime_installed": false,
+      "executed": false,
+      "models_downloaded": false,
+      "full_clone_command": "git clone --filter=blob:none https://github.com/pyannote/pyannote-audio.git; git -C pyannote-audio checkout --detach b749285c5cdd4636b2edc7f766f1352c8dde9369"
+    },
+    {
+      "repository": "blakeblackshear/frigate",
+      "source_commit": "1a8644fed5f842c4d9c1b53129bab787c9db2180",
+      "licence_observed": "MIT source; trademarks and model weights separate",
+      "purpose": "Local camera detection, zones and event metadata",
+      "availability": "curated_pinned_source_snapshot_not_full_clone",
+      "copied_files": [
+        {
+          "path": "frigate/const.py",
+          "blob_sha": "6ef8919be20ed963f5e0d46578fca5e64f94f522",
+          "size_chars": 5046
+        },
+        {
+          "path": "LICENSE",
+          "blob_sha": "924cb4148cda90ee9d7f7953dcbd9fea31a05874",
+          "size_chars": 1085
+        },
+        {
+          "path": "README.md",
+          "blob_sha": "1fb158b19161962d49473aa6659356e684434121",
+          "size_chars": 3673
+        }
+      ],
+      "upstream_url": "https://github.com/blakeblackshear/frigate/tree/1a8644fed5f842c4d9c1b53129bab787c9db2180",
+      "runtime_installed": false,
+      "executed": false,
+      "models_downloaded": false,
+      "full_clone_command": "git clone --filter=blob:none https://github.com/blakeblackshear/frigate.git; git -C frigate checkout --detach 1a8644fed5f842c4d9c1b53129bab787c9db2180"
+    },
+    {
+      "repository": "AlexxIT/go2rtc",
+      "source_commit": "c245815e75e2a5fd60b4290f12bfc04e55a984d3",
+      "licence_observed": "MIT",
+      "purpose": "Camera feed transport and streaming",
+      "availability": "curated_pinned_source_snapshot_not_full_clone",
+      "copied_files": [
+        {
+          "path": "LICENSE",
+          "blob_sha": "beb8fca089b8d99cb85586015cdaf68959114cf8",
+          "size_chars": 1068
+        },
+        {
+          "path": "README.md",
+          "blob_sha": "529cac90209a8e7e294f7b6ffb3a0ba03d26b26f",
+          "size_chars": 37505
+        }
+      ],
+      "upstream_url": "https://github.com/AlexxIT/go2rtc/tree/c245815e75e2a5fd60b4290f12bfc04e55a984d3",
+      "runtime_installed": false,
+      "executed": false,
+      "models_downloaded": false,
+      "full_clone_command": "git clone --filter=blob:none https://github.com/AlexxIT/go2rtc.git; git -C go2rtc checkout --detach c245815e75e2a5fd60b4290f12bfc04e55a984d3"
+    }
+  ]
+}
