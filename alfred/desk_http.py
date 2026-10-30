@@ -429,6 +429,10 @@ class Handler(BaseHTTPRequestHandler):
                     result = memory.forget(bearer,url.path.split('/')[4],body)
                 elif mutation and re.fullmatch(r'/desk/memory/entities/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget',url.path):
                     result = memory.forget_entity(bearer,url.path.split('/')[4],body)
+                elif not mutation and url.path == '/desk/memory/bin':
+                    result = memory.bin(bearer)
+                elif mutation and re.fullmatch(r'/desk/memory/bin/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/undo',url.path):
+                    result = memory.undo(bearer,url.path.split('/')[4],body)
                 elif not mutation and url.path == '/desk/memory/receipts':
                     from .lifecycle import receipts
                     result = receipts(store,bearer)
@@ -451,14 +455,15 @@ class Handler(BaseHTTPRequestHandler):
                 else:
                     raise Fault('not_found', 404)
             elif mutation and re.fullmatch(r'/desk/sources/[A-Za-z0-9][A-Za-z0-9_.-]{0,79}/forget', url.path):
-                # Removes the source from ALFRED, never the person's own files.
-                exact(body, {'confirm', 'purge_history'} if isinstance(body, dict) and 'purge_history' in body else {'confirm'})
+                # Removes the source from ALFRED, never the person's own files. Ordinary unless `absolute` is set.
+                if not isinstance(body, dict) or 'confirm' not in body or set(body) - {'confirm', 'purge_history', 'absolute'}:
+                    raise Fault('invalid_fields')
                 if body['confirm'] != url.path.split('/')[3]:
                     raise Fault('confirmation_mismatch')
                 from .lifecycle import forget_source
                 jobs = self.server.jobs
                 result = forget_source(store, bearer, url.path.split('/')[3], cache=jobs.cache if jobs is not None else None,
-                                       purge_history=body.get('purge_history', False))
+                                       purge_history=body.get('purge_history', False), absolute=body.get('absolute', False))
             elif not mutation and url.path.startswith('/desk/deletion-report/') and not url.query:
                 # What the workspace still holds about a subject, and where (MEM-010). Owner only; reads only.
                 from .deletion import route as deletion_route

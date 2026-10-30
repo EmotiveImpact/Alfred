@@ -2,6 +2,14 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 30 October 2026: forgetting in two layers, branch `claude/project-thread-9npowk`
+
+The owner's rule of 22 October replaces "no resurrection after restore" (M05, MEM-010). Built tests first on the encryption branch (PR #26). Synthetic data only; nothing deployed or merged.
+
+- **Ordinary forget, the default.** A forgotten statement or record waits in a bin for 30 days and can be undone from the console's new Bin tab or `POST /desk/memory/bin/{id}/undo`. A restore from an older backup brings ordinary forgets back and lists them; `desk restore` prints the list.
+- **Absolute forget, a separate choice.** "Forget for good" in the console, or `absolute` with the identifier typed back as `confirm`. It skips the bin, removes any copy already there and holds through every restore, like revocations and capture retention. Journal entries from before the layers count as absolute.
+- **Honest accounting.** Receipts carry the layer and, for an ordinary forget, when undo ends; the deletion report counts bin copies. [Receipt](docs/evidence/two-layer-delete/RECEIPT.md).
+
 ## 18 October 2026: the disk encryption check and the checks in CI, branches `claude/project-thread-att046-disk-check` and `-ci-checks`
 
 Merged with the owner's word on 18 October. Synthetic data only; nothing deployed.

@@ -48,7 +48,7 @@ Workstreams A to D and the first slice of E1 and E3 are now on the integration b
 | M02 | Person/device identity and finer source/capability grants. | Rotation/revocation, no accidental person merge, pre-retrieval and mid-request access denial. |
 | M03 | Connect reviewed memory to conversation/context. | Only accepted/current/relevant authorised statements; sources and review basis retained; disputes and namesakes require clarification. |
 | M04 | Explicit capture and approved inbox write-back. | Editable proposal, exact destination/diff approval, concurrency conflict, idempotent retry and result read-back. |
-| M05 | Correction, deletion, private storage and restore lifecycle. | Dependency invalidation, export/deletion receipts, backup policy and no resurrection after restore. |
+| M05 | Correction, deletion, private storage and restore lifecycle. | Dependency invalidation, export/deletion receipts, backup policy, and forgetting in two layers (owner's rule, 22 October 2026): an ordinary forget can be undone from a 30-day bin and comes back with a restore, which lists what came back; an absolute forget and every revocation hold through any restore. |
 | M06 | Measured lexical retrieval baseline and deterministic fixtures. | FTS5 versus existing ranking, evidence recall, irrelevant context, bounded latency and no access leakage. |
 | M07 | One optional temporal/semantic memory adapter. | Graphiti first candidate, Cognee alternative; provenance, permission, invalidation and deployment costs compared. No automatic installation. |
 | M08 | Structured attachment/document ingestion. | Supported PDF/office parser output has page/block provenance, exact location checks and deletion lineage. |

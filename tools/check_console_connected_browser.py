@@ -18,6 +18,7 @@ from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.desk_http import DeskHTTPServer
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.policy import IdentityPolicy
+from alfred import lifecycle
 from playwright.sync_api import sync_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -141,6 +142,31 @@ with tempfile.TemporaryDirectory() as temp:
             expect(inspector).to_contain_text('Forgotten · value removed', timeout=15000)
             check('forgetting removes the value from the open inspector', 'in pre-production' not in inspector.inner_text())
             check('forgetting is recorded with a receipt', memory.view(keys['owner'])['claims'][0]['state'] == 'forgotten')
+            # Two layers (owner's rule of 22 October 2026): the ordinary forget waits in the bin and can be undone there.
+            receipt = lifecycle.receipts(store, keys['owner'])['receipts'][0]
+            check('an ordinary forget keeps a copy in the bin for 30 days', (receipt['layer'], receipt['undo_until'] - receipt['at']) == ('ordinary', 30 * 86400))
+            page.get_by_label('Command or search').fill('memory'); page.get_by_label('Command or search').press('Enter')
+            memory_dialog = page.get_by_role('dialog')
+            memory_dialog.get_by_role('tab', name='Bin').click()
+            binned = memory_dialog.get_by_role('list', name='Forgotten and can be undone')
+            expect(binned).to_contain_text('in pre-production', timeout=15000)
+            check('the bin lists the forgotten statement with the days left to undo it', '30 days left to undo' in binned.inner_text())
+            page.screenshot(path=str(out / 'connected-bin.png'))
+            binned.get_by_role('button', name=re.compile('^Undo forgetting')).click()
+            expect(page.get_by_role('status').filter(has_text='Put back')).to_be_visible(timeout=15000)
+            expect(memory_dialog).to_contain_text('The bin is empty.', timeout=15000)
+            check('undo puts the statement back', memory.view(keys['owner'])['claims'][0]['state'] == 'accepted')
+            page.keyboard.press('Escape')
+            expect(statement).to_contain_text('Accepted and current', timeout=15000)
+            check('the open inspector shows the value again after undo', 'in pre-production' in statement.inner_text())
+            # Forgetting for good is a separate, deliberate choice: no bin, and no restore brings it back.
+            statement.get_by_role('button', name='Forget this statement').click()
+            inspector.get_by_label('Forget for good: skip the bin, and no backup restore brings it back.').check()
+            inspector.get_by_role('button', name='Forget for good').click()
+            expect(page.get_by_role('status').filter(has_text='Forgotten for good')).to_be_visible(timeout=15000)
+            expect(inspector).to_contain_text('Forgotten · value removed', timeout=15000)
+            last = [e for e in lifecycle.entries(lifecycle.journal_path(store)) if e['kind'] == 'claim_forgotten'][-1]
+            check('forgetting for good is journalled as absolute and leaves the bin empty', last['layer'] == 'absolute' and memory.bin(keys['owner'])['items'] == [])
             page.get_by_label('Close record inspector').click()
             # Stage B: the selected project is context for the next question.
             command = page.get_by_label('Command or search')
@@ -636,6 +662,8 @@ with tempfile.TemporaryDirectory() as temp:
                 check('removing a source clears its records, leaving the other source, with a receipt')
                 check("the person's own files are untouched", (home2 / 'vault' / 'projects' / 'Sample Film.md').is_file())
                 check('the removal is journalled for restore', '"source_forgotten"' in (home2 / 'desk.sqlite.lifecycle.jsonl').read_text())
+                check('an unticked removal is ordinary, so a restore from an older backup brings the source back',
+                      [e['layer'] for e in lifecycle.entries(home2 / 'desk.sqlite.lifecycle.jsonl') if e['kind'] == 'source_forgotten'] == ['ordinary'])
                 removal.close()
             finally:
                 sup2.stop()

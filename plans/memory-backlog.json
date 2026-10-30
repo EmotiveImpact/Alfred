@@ -221,13 +221,15 @@
       "acceptance": [
         "Deletion/revocation removes or blocks all current dependent projections with a receipt",
         "Temporary unavailability is distinguished from deletion",
-        "Restored backups reapply tombstones/grants; residual retention and key custody are explicit"
+        "Restored backups reapply revocations, grants and absolute forgets; an ordinary forget comes back with the backup and is listed (owner's rule, 22 October 2026); residual retention and key custody are explicit"
       ],
       "evidence": [
         "tests/test_memory_lifecycle.py",
         "docs/evidence/memory-m05/RECEIPT.md",
         "tests/test_keys.py",
-        "docs/evidence/encryption/RECEIPT.md"
+        "docs/evidence/encryption/RECEIPT.md",
+        "tests/test_two_layer_delete.py",
+        "docs/evidence/two-layer-delete/RECEIPT.md"
       ]
     },
     {

@@ -280,7 +280,8 @@ class ConversationDraftTests(unittest.TestCase):
     def test_restore_replays_the_withdrawal(self):
         self.expire_conversation()
         manifest = lifecycle.backup(self.store, self.owner, self.root / 'backups')
-        lifecycle.forget_source(self.store, self.owner, 'source')
+        # An absolute removal holds through a restore; an ordinary one would come back with its drafts.
+        lifecycle.forget_source(self.store, self.owner, 'source', absolute=True)
         lifecycle.restore(self.root / 'backups' / manifest['file'], self.root / 'desk.sqlite')
         restored = KnowledgeStore(self.root / 'desk.sqlite', clock=lambda: self.clock[0])
         found = drafts.search(restored, self.owner)['drafts']

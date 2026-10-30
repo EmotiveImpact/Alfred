@@ -138,8 +138,9 @@ class LifecycleTests(unittest.TestCase):
         revoke_all(self.store, self.owner); self.narrowed = True
         narrowing = len(lifecycle.entries(lifecycle.journal_path(self.store)))
         manifest = lifecycle.backup(self.store, self.owner, self.root / 'backups')
-        self.memory.forget(self.owner, self.status, {'version': self.claim(self.status)['version']})
-        self.memory.forget_entity(self.owner, 'mina', {})
+        # Absolute forgets hold through a restore; ordinary ones come back (tests/test_two_layer_delete.py).
+        self.memory.forget(self.owner, self.status, {'version': self.claim(self.status)['version'], 'absolute': True, 'confirm': self.status})
+        self.memory.forget_entity(self.owner, 'mina', {'absolute': True, 'confirm': 'mina'})
         self.grant('source'); self.grant('source', revoke=True)
         self.store.revoke('reader')
         result = lifecycle.restore(self.root / 'backups' / manifest['file'], self.db)
@@ -240,7 +241,7 @@ class SourceForgetTests(LifecycleTests):
 
     def test_restore_replays_source_removal(self):
         manifest = lifecycle.backup(self.store, self.owner, self.root / 'backups')
-        lifecycle.forget_source(self.store, self.owner, 'source')
+        lifecycle.forget_source(self.store, self.owner, 'source', absolute=True)
         lifecycle.restore(self.root / 'backups' / manifest['file'], self.db)
         restored = KnowledgeStore(self.db, clock=lambda: self.clock[0])
         self.assertEqual(restored.knowledge(self.owner)['nodes'], [])

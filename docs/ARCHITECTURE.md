@@ -50,7 +50,7 @@ Start with the existing modular local service, SQLite and a measured FTS5 lexica
 
 Personal, company and operational/client scopes require explicit identity, grants, key custody, retention and egress policy. Credential IDs are not a mature paired-person/device system. Database labels or graph group IDs do not enforce all isolation requirements. Separate hostile workloads at a real process/filesystem/network boundary.
 
-The application is not yet encrypted at application level and is not approved for sensitive operational data. Vault sync is independent of the live SQLite ledger. Backups must have separate retention and restore procedures that reapply current revocations/deletion tombstones.
+The application is not yet encrypted at application level and is not approved for sensitive operational data. Vault sync is independent of the live SQLite ledger. Backups must have separate retention and restore procedures that reapply current revocations and absolute forgets; an ordinary forget comes back with a restore and is listed (the owner's rule of 22 October 2026).
 
 ## Candidate components, not installed dependencies
 

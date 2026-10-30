@@ -1,5 +1,10 @@
 # M05 receipt: unavailable versus deleted, forgetting, backup and restore
 
+> **Since 30 October 2026** the owner's rule of 22 October replaces "restore without
+> resurrection" for ordinary forgets: they come back with a restore and are listed, while
+> absolute forgets and revocations still hold. See the
+> [two-layer delete receipt](../two-layer-delete/RECEIPT.md). This receipt is unchanged below.
+
 2 October 2026, branch `claude/alfred-development-qpgxhg`. Status: **in progress**. Three
 of M05's acceptance points have synthetic evidence; application encryption and key custody
 (SYS-002) do not, because they need an owner decision.

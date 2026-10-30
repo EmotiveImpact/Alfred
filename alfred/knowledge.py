@@ -1025,6 +1025,8 @@ class KnowledgeSupervisor(Supervisor):
                     from .reviewed_memory import ReviewedMemory
                     if getattr(self, 'memory', None) is None: self.memory = ReviewedMemory(self.store)
                     self.memory.apply_retention(self.owner)
+                    # Ordinary forgets leave the bin once their 30 days pass.
+                    self.memory.empty_bin(self.owner)
                 except Fault as exc:
                     self.error = exc.code
             if getattr(self, 'capture', None) is not None and not self.store.paused(self.scope):

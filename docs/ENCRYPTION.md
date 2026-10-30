@@ -165,6 +165,24 @@ still holds the keys, so the erasure is complete once those copies are deleted, 
 Time Machine's copies of the data folder. For that reason you may exclude `desk-keyring.json`
 from Time Machine (`tmutil addexclusion`) and rely on the recovery kit copy instead.
 
+## Forgetting and restoring
+
+Forgetting one statement, record or source has two layers (the owner's rule of 22 October
+2026; `alfred/lifecycle.py` and `alfred/memory_bin.py`):
+
+- **Ordinary**, the everyday forget. It leaves everyday ALFRED and a copy waits in the bin for
+  30 days, where you can undo it. Restoring an older backup brings it back like everything
+  else in that backup, and `restore` lists what came back. A whole source has no bin: your
+  files are untouched, so adding the folder again reads them again.
+- **Absolute**, a separate choice: "Forget for good" in the console, or `"absolute": true`
+  with the identifier typed back as `"confirm"`. It skips the bin, removes any copy already
+  there, and every restore removes it again. Older backups still hold a copy until they are
+  replaced; step 2 will seal that copy with the area's key.
+
+Retention you chose when capturing a statement, and every revocation, hold like an absolute
+forget. Destroying an area is the absolute layer for a whole area: its key goes, so nothing
+sealed with it can be read again, in any backup.
+
 ## Full-disk encryption check
 
 `python3 -m alfred.keys disk` and the `doctor` report whether the disk under the data folder is

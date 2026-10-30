@@ -145,6 +145,7 @@ class Workspace(unittest.TestCase):
             'statements': (c('SELECT count(*) FROM memory_claims WHERE id=?', claim),
                            c('SELECT count(*) FROM memory_claims WHERE id=? AND (value IS NOT NULL OR object_id IS NOT NULL)', claim)),
             'captures': (c('SELECT count(*) FROM memory_capture WHERE claim_id=?', claim), 0),
+            'bin_copies': (c('SELECT count(*) FROM memory_bin WHERE snapshot LIKE ?', f'%"{claim}"%'),) * 2,
             'answers': (c('SELECT count(*) FROM conversation_turns WHERE id=?', turn),
                         c('SELECT count(*) FROM conversation_turns WHERE id=? AND result IS NOT NULL', turn)),
             'voice_playbacks': (c('SELECT count(*) FROM voice_playbacks WHERE turn_id=?', turn), 0),
@@ -168,6 +169,7 @@ class Workspace(unittest.TestCase):
             'statements': (c('SELECT count(*) FROM memory_claims WHERE note_id=?', note),
                            c('SELECT count(*) FROM memory_claims WHERE note_id=? AND (value IS NOT NULL OR object_id IS NOT NULL)', note)),
             'source_index': (index, index),
+            'bin_copies': (c('SELECT count(*) FROM memory_bin WHERE snapshot LIKE ?', f'%"{note}"%'),) * 2,
             'tombstones': (c('SELECT count(*) FROM memory_tombstones WHERE source=?', source), 0),
             'evidence_events': (c('SELECT count(*) FROM events WHERE source=?', source) + c('SELECT count(*) FROM desk_documents WHERE source=?', source)
                                 + c('SELECT count(*) FROM desk_links WHERE seq IN (SELECT seq FROM events WHERE source=?)', source),
@@ -234,7 +236,9 @@ class ForgetReceiptTests(Workspace):
         self.assertGreater(after['history_rows'][0], 0)
         self.assertEqual([e['directory'] for e in receipt['accounting']['exports_on_disk']['exports']], [str(self.export_dir)])
         self.assertTrue((self.export_dir / 'manifest.json').is_file())
-        self.assertEqual(receipt['still_holding_value'], {'drafts': 1, 'exports_on_disk': 1, 'backups': 1})
+        # An ordinary forget keeps a copy in the bin for undo, and the receipt counts it.
+        self.assertEqual(receipt['still_holding_value'], {'bin_copies': 1, 'drafts': 1, 'exports_on_disk': 1, 'backups': 1})
+        self.assertEqual((after['bin_copies'], receipt['layer']), ((1, 1), 'ordinary'))
         self.assertNotIn('awaiting review', json.dumps(receipt) + json.dumps(report))
         self.assertEqual(receipt, lifecycle.receipts(self.store, self.owner)['receipts'][0])
 
@@ -266,7 +270,8 @@ class ForgetReceiptTests(Workspace):
     def test_purge_is_explicit_journalled_and_replayed(self):
         with self.assertRaises(Fault):
             self.memory.forget(self.owner, self.status, {'version': self.version(self.status), 'purge_history': 'yes'})
-        receipt = self.memory.forget(self.owner, self.status, {'version': self.version(self.status), 'purge_history': True})
+        receipt = self.memory.forget(self.owner, self.status, {'version': self.version(self.status), 'purge_history': True,
+                                                               'absolute': True, 'confirm': self.status})
         self.assertEqual(receipt['history'], 'purged')
         self.assertGreater(receipt['history_rows_purged'], 0)
         self.assertEqual(receipt['accounting']['history_rows']['after']['count'], 0)
@@ -293,9 +298,10 @@ class ForgetReceiptTests(Workspace):
 
 class RestoreAccountingTests(Workspace):
     def test_restore_reports_what_the_journal_removed_again(self):
-        self.memory.forget(self.owner, self.status, {'version': self.version(self.status)})
-        self.memory.forget_entity(self.owner, 'mina', {})
-        lifecycle.forget_source(self.store, self.owner, 'source', cache=self.cache)
+        # Absolute forgets are applied again on restore; ordinary ones come back (tests/test_two_layer_delete.py).
+        self.memory.forget(self.owner, self.status, {'version': self.version(self.status), 'absolute': True, 'confirm': self.status})
+        self.memory.forget_entity(self.owner, 'mina', {'absolute': True, 'confirm': 'mina'})
+        lifecycle.forget_source(self.store, self.owner, 'source', cache=self.cache, absolute=True)
         self.store.revoke('reader')
         result = lifecycle.restore(self.root / 'backups' / self.backup['file'], self.db, cache=self.cache)
         again = result['removed_again']
@@ -324,7 +330,7 @@ class RestoreAccountingTests(Workspace):
         self.assertEqual(ReviewedMemory(restored).forget(self.owner, self.status, {'version': 1})['origin'], 'replayed_on_restore')
 
     def test_restore_of_a_backup_taken_after_the_forget_removes_nothing_again(self):
-        self.memory.forget(self.owner, self.status, {'version': self.version(self.status)})
+        self.memory.forget(self.owner, self.status, {'version': self.version(self.status), 'absolute': True, 'confirm': self.status})
         later = lifecycle.backup(self.store, self.owner, self.root / 'backups')
         result = lifecycle.restore(self.root / 'backups' / later['file'], self.db)
         self.assertEqual((result['removed_again']['entries'], result['removed_again']['totals']), ([], {}))

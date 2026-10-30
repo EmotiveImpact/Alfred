@@ -2,7 +2,14 @@
 
 **Who builds, 17 October 2026:** the owner moved all of Astra's (OpenAI Codex) work to Claude, so Claude builds everything. The claim files in `coordination/claims/` still decide ownership between threads (the encryption thread holds its own claim); read [coordination/README.md](coordination/README.md) and run `python3 tools/check_claims.py` before starting.
 
-**Latest checkpoint, 17 October 2026:** encryption phase 1 step 1 (key custody) on branch
+**Latest checkpoint, 30 October 2026:** forgetting has two layers on branch
+`claude/project-thread-9npowk` (PR #26), by the owner's rule of 22 October. An ordinary forget
+waits in a 30-day bin (`alfred/memory_bin.py`) and comes back with a restore, which lists it;
+an absolute forget and every revocation hold through any restore. Read the 30 October entry in
+[CHANGELOG.md](CHANGELOG.md) and [the receipt](docs/evidence/two-layer-delete/RECEIPT.md).
+When encryption step 2 lands, `memory_bin` joins the sealed tables.
+
+**Checkpoint, 17 October 2026:** encryption phase 1 step 1 (key custody) on branch
 `claude/project-thread-9npowk`: `alfred/keys.py`, a keyring with a master key and a key per
 area, unlocked by the macOS keychain, a passphrase, a server secret file or the recovery key.
 Read [docs/ENCRYPTION.md](docs/ENCRYPTION.md). Records are not sealed yet; step 2 does that.

@@ -13,7 +13,7 @@ import hashlib
 import json
 import secrets
 from .local import Fault, exact, ident, text, timestamp, fingerprint
-from . import memory_history
+from . import memory_bin, memory_history
 from .policy import ledger, migrate_ledgers, person_credentials
 
 KINDS = ('person', 'organisation', 'project', 'asset', 'decision', 'commitment', 'event')
@@ -50,6 +50,23 @@ CREATE TABLE IF NOT EXISTS memory_capture(
  retention_until INTEGER, captured_from TEXT NOT NULL, created INTEGER NOT NULL);
 '''
 MEMORY_TYPES = ('semantic', 'episodic', 'preference', 'commitment', 'procedural')
+FORGET_OPTIONS = {'purge_history', 'absolute', 'confirm'}
+WITHDRAWN = 'Saved answers and drafts the forget withdrew stay withdrawn; ask again for a fresh answer.'
+
+
+def forget_options(body, required, identity):
+    """A forget body: the required keys plus any of purge_history, absolute and confirm.
+
+    An ordinary forget is the default. An absolute forget is deliberate: the identifier
+    must be typed back as `confirm`."""
+    if type(body) is not dict or not required<=set(body) or set(body)-required-FORGET_OPTIONS:
+        raise Fault('invalid_fields')
+    purge,absolute=body.get('purge_history',False),body.get('absolute',False)
+    if type(purge) is not bool or type(absolute) is not bool or ('confirm' in body and not absolute):
+        raise Fault('invalid_fields')
+    if absolute and body.get('confirm')!=identity:
+        raise Fault('confirmation_mismatch')
+    return purge,'absolute' if absolute else 'ordinary'
 
 
 def overlap(a, b):
@@ -203,13 +220,17 @@ class ReviewedMemory:
                 'state':claim['state'],'needs_review':True,'authority_granted':False}
 
     def apply_retention(self, bearer):
-        """Forget captured statements whose user-chosen retention has ended, with receipts."""
+        """Forget captured statements whose user-chosen retention has ended, with receipts.
+
+        The owner chose the end at capture, so it is absolute: no bin, and no restore
+        brings the statement back. A copy already in the bin goes too."""
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'})
-            due=[(r['id'],r['version']) for r in db.execute('''SELECT c.id,c.version FROM memory_claims c JOIN memory_capture m ON m.claim_id=c.id
-                 WHERE c.scope=? AND c.actor=? AND c.state!='forgotten' AND m.retention_until IS NOT NULL AND m.retention_until<=?''',
-                 (p['scope'],ledger(db,p),self.store.now()))]
-        return [self.forget(bearer,identity,{'version':version}) for identity,version in due]
+            held=memory_bin.held_claims(db,p['scope'])
+            due=[(r['id'],r['version']) for r in db.execute('''SELECT c.id,c.version,c.state FROM memory_claims c JOIN memory_capture m ON m.claim_id=c.id
+                 WHERE c.scope=? AND c.actor=? AND m.retention_until IS NOT NULL AND m.retention_until<=?''',
+                 (p['scope'],ledger(db,p),self.store.now())) if r['state']!='forgotten' or r['id'] in held]
+        return [self._forget(bearer,identity,version,'absolute',False,reason='retention_ended') for identity,version in due]
 
     def propose(self, bearer, body, capture=None):
         exact(body, {'request_id','subject_id','predicate','object_id','value','valid_from','valid_until','evidence'})
@@ -313,49 +334,124 @@ class ReviewedMemory:
         return self.view(bearer)
 
     def forget(self, bearer, identity, body):
-        """Forget one reviewed statement everywhere current retrieval could use it."""
+        """Forget one reviewed statement everywhere current retrieval could use it.
+
+        Ordinary by default: a copy waits in the bin and a restore brings it back. With
+        `absolute` and the identifier typed back, no restore brings it back."""
         # Value-free history rows are kept unless the owner explicitly asks to purge them (decision 0.3).
-        exact(body, {'version', 'purge_history'} if 'purge_history' in (body if type(body) is dict else {}) else {'version'})
-        if type(body['version']) is not int or body['version'] < 1 or type(body.get('purge_history', False)) is not bool:
+        purge,layer=forget_options(body,{'version'},identity)
+        if type(body['version']) is not int or body['version'] < 1:
             raise Fault('invalid_memory_review')
+        return self._forget(bearer,identity,body['version'],layer,purge)
+
+    def _forget(self, bearer, identity, version, layer, purge, reason=None):
         from . import lifecycle
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'})
             c=self._claim(db,p,identity)
             if c['state']=='forgotten':
-                return self._receipt(db,p,'claim_forgotten',identity)
-            if c['version']!=body['version']:raise Fault('memory_review_changed',409)
+                # Asking again returns the receipt, unless an ordinary forget is now made absolute.
+                held=self._latest(db,p,'claim_forgotten',identity)
+                if layer=='ordinary' or (held is not None and held.get('layer','absolute')=='absolute'):
+                    if held is None:raise Fault('memory_claim_not_found',404)
+                    return held
+            elif c['version']!=version:raise Fault('memory_review_changed',409)
             # Intent is journalled before the database changes, so a restore replays it.
-            entry={'kind':'claim_forgotten','scope':p['scope'],'actor':ledger(db,p),'by':p['id'],'subject':identity,'at':self.store.now()}
-            if body.get('purge_history'):entry['purge_history']=True
+            entry={'kind':'claim_forgotten','scope':p['scope'],'actor':ledger(db,p),'by':p['id'],'subject':identity,'at':self.store.now(),'layer':layer}
+            if purge:entry['purge_history']=True
+            if reason:entry['reason']=reason
+            keep=memory_bin.snapshot(db,p['scope'],[ledger(db,p)],'claim_forgotten',identity) if layer=='ordinary' else None
             lifecycle.append(self.store,entry)
-            return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':['reviewed value','reviewed relationship']},lifecycle.REMAINS)
+            removed=['reviewed value','reviewed relationship'] if c['state']!='forgotten' else ['copies in the bin']
+            return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':removed,'layer':layer,**({'reason':reason} if reason else {})},
+                                              lifecycle.remains(layer),keep=keep)
 
     def forget_entity(self, bearer, identity, body):
-        """Forget an entity's name and every statement that mentions it."""
-        exact(body, {'purge_history'} if 'purge_history' in (body if type(body) is dict else {}) else set())
-        if type(body.get('purge_history', False)) is not bool:
-            raise Fault('invalid_fields')
+        """Forget an entity's name and every statement that mentions it, in either layer."""
+        purge,layer=forget_options(body,set(),identity)
         from . import lifecycle
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'})
             if not db.execute('SELECT 1 FROM memory_entities WHERE id=? AND scope=? AND actor=?',(identity,p['scope'],ledger(db,p))).fetchone():
-                if db.execute('SELECT 1 FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=?',(p['scope'],ledger(db,p),'entity_forgotten',identity)).fetchone():
-                    return self._receipt(db,p,'entity_forgotten',identity)
-                raise Fault('memory_entity_not_found',404)
+                held=self._latest(db,p,'entity_forgotten',identity)
+                if held is None:raise Fault('memory_entity_not_found',404)
+                if layer=='ordinary' or held.get('layer','absolute')=='absolute':return held
             claims=db.execute('SELECT count(*) FROM memory_claims WHERE scope=? AND actor=? AND (subject_id=? OR object_id=?) AND state!=?',
                               (p['scope'],ledger(db,p),identity,identity,'forgotten')).fetchone()[0]
-            entry={'kind':'entity_forgotten','scope':p['scope'],'actor':ledger(db,p),'by':p['id'],'subject':identity,'at':self.store.now()}
-            if body.get('purge_history'):entry['purge_history']=True
+            entry={'kind':'entity_forgotten','scope':p['scope'],'actor':ledger(db,p),'by':p['id'],'subject':identity,'at':self.store.now(),'layer':layer}
+            if purge:entry['purge_history']=True
+            keep=memory_bin.snapshot(db,p['scope'],[ledger(db,p)],'entity_forgotten',identity) if layer=='ordinary' else None
             lifecycle.append(self.store,entry)
-            return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':['entity name',f'{claims} reviewed statement(s)']},lifecycle.REMAINS)
+            return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':['entity name',f'{claims} reviewed statement(s)'],'layer':layer},
+                                              lifecycle.remains(layer),keep=keep)
+
+    def bin(self, bearer):
+        """The owner's bin: ordinary forgets that can still be undone, newest first."""
+        with self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            return {'items':memory_bin.items(db,p['scope'],ledger(db,p),self.store.now()),'days':memory_bin.DAYS}
+
+    def undo(self, bearer, identity, body):
+        """Put back what an ordinary forget cleared, while its copy is in the bin.
+
+        A statement comes back in the state it had, with its value; a record comes back
+        with its name and the statements forgotten with it. Answers and drafts the forget
+        withdrew stay withdrawn."""
+        exact(body,set());ident(identity)
+        from . import lifecycle
+        with self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            person,now=ledger(db,p),self.store.now()
+            item=memory_bin.take(db,p['scope'],person,identity,now)
+            snap=item['snapshot']
+            if item['kind']=='entity':
+                e=snap['entity']
+                if db.execute('SELECT 1 FROM memory_entities WHERE id=?',(e['id'],)).fetchone():
+                    raise Fault('memory_entity_id_unavailable',409)
+                if db.execute('SELECT count(*) FROM memory_entities WHERE actor=?',(person,)).fetchone()[0]>=MAX_ENTITIES:
+                    raise Fault('memory_entity_capacity',409)
+                db.execute('INSERT INTO memory_entities VALUES (?,?,?,?,?,?)',(e['id'],p['scope'],person,e['kind'],e['name'],e['created']))
+            present={r[0] for r in db.execute('SELECT id FROM memory_entities WHERE scope=? AND actor=?',(p['scope'],person))}
+            restored,gone,waiting=0,0,[]
+            for c in snap['claims']:
+                if c['subject_id'] not in present or (c['object_id'] and c['object_id'] not in present):
+                    # A statement cannot come back without the records it names.
+                    if item['kind']=='statement':raise Fault('undo_record_first',409)
+                    waiting.append(c);continue
+                if db.execute("UPDATE memory_claims SET state=?,value=?,object_id=?,version=version+1 WHERE id=? AND scope=? AND actor=? AND state='forgotten'",
+                              (c['state'],c['value'],c['object_id'],c['id'],p['scope'],person)).rowcount:
+                    restored+=1
+                    memory_history.record(db,p['scope'],person,c['id'],c['state'],now,p['id'],detail='undone_from_bin')
+                else:gone+=1
+            memory_bin.keep(db,p['scope'],item,waiting)
+            row=db.execute('SELECT receipt FROM lifecycle_receipts WHERE id=?',(item['receipt'],)).fetchone()
+            receipt=json.loads(row['receipt']) if row else {}
+            if row:
+                db.execute('UPDATE lifecycle_receipts SET receipt=? WHERE id=?',(json.dumps(receipt|{'undone_at':now}),item['receipt']))
+            self.store.log(db,p['scope'],p['id'],'lifecycle.forget_undone',item['subject'])
+            # Last, so a failed write leaves the forget in place; a restore then knows it was undone.
+            lifecycle.append(self.store,{'kind':'forget_undone','undoes':memory_bin.FORGET[item['kind']],'scope':p['scope'],'actor':person,
+                                         'by':p['id'],'subject':item['subject'],'at':now})
+        left=[WITHDRAWN]+(['Review history rows purged with the forget stay purged.'] if receipt.get('history')=='purged' else [])
+        if gone:left.append(f'{gone} statement(s) were back already or no longer exist.')
+        if waiting:left.append(f'{len(waiting)} statement(s) name a record that is still forgotten. They stay in the bin: undo that record, then them.')
+        return {'kind':item['kind'],'subject':item['subject'],'statements_restored':restored,'statements_not_restored':gone+len(waiting),
+                'not_restored':left}
+
+    def empty_bin(self, bearer):
+        """Remove copies whose 30 days have passed. Returns how many went."""
+        with self.store.transaction() as db:
+            p=self.store.authenticate(db,bearer,{'owner'})
+            gone=memory_bin.expire(db,p['scope'],self.store.now())
+            for subject in gone:
+                self.store.log(db,p['scope'],p['id'],'lifecycle.bin_emptied',subject)
+        return len(gone)
 
     @staticmethod
-    def _receipt(db,p,kind,subject):
-        row=db.execute('SELECT receipt FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=? ORDER BY at DESC LIMIT 1',
+    def _latest(db,p,kind,subject):
+        row=db.execute('SELECT receipt FROM lifecycle_receipts WHERE scope=? AND actor=? AND kind=? AND subject=? ORDER BY at DESC,rowid DESC LIMIT 1',
                        (p['scope'],ledger(db,p),kind,subject)).fetchone()
-        if not row:raise Fault('memory_claim_not_found',404)
-        return json.loads(row['receipt'])
+        return json.loads(row['receipt']) if row else None
 
     @classmethod
     def _claims(cls, db, p, now):

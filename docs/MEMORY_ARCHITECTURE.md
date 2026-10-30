@@ -114,7 +114,7 @@ Filesystem and SQLite are not one transaction. Journal intent and use staged wri
 
 Distinguish source deletion, source unavailability, access revocation, memory withdrawal and historical supersession. Temporary network/source loss means unavailable/stale, not automatically deleted. A deletion or revocation tombstone invalidates eligible dependent projections; the system returns a receipt listing current copies removed/blocked and residual retention.
 
-Propagate through snippets, accepted statement projections, embeddings, generated summaries, cached answers, episode condensations and queued work. An old backup must not resurrect a deleted memory into current retrieval: reapply tombstones and current grants before reopening the restored index. Backups and immutable metadata have explicitly different retention; no blanket secure-erasure promise.
+Propagate through snippets, accepted statement projections, embeddings, generated summaries, cached answers, episode condensations and queued work. Forgetting has two layers (the owner's rule of 22 October 2026). An ordinary forget waits in a 30-day bin where it can be undone, and a restore from an older backup brings it back like everything else the backup holds, then lists what came back. An absolute forget is a separate, deliberate action: an old backup must not resurrect it into current retrieval, so a restore reapplies it, with revocations and current grants, before reopening the restored index. Backups and immutable metadata have explicitly different retention; no blanket secure-erasure promise.
 
 Do not default to retaining raw audio or full screen recordings. Working context, explicit user preferences, task commitments and client data have different retention rules. Credentials and secrets belong in a secret store, not Markdown, graph nodes or model context. A user's export should not copy another workspace's material.
 
@@ -126,4 +126,4 @@ The console can visualise current sources, reviewed relationships and uncertaint
 
 ## Exit criteria
 
-A synthetic end-to-end demonstration must remember an explicit statement, retrieve it in a follow-up with original support, revise it without erasing provenance, reject conflicting/unauthorised variants, forget it across current projections, and recover after restart without resurrection or duplicate writes. Inspect actual outputs. No new memory engine, real vault connection, model experiment or background deployment is delivered by this document.
+A synthetic end-to-end demonstration must remember an explicit statement, retrieve it in a follow-up with original support, revise it without erasing provenance, reject conflicting/unauthorised variants, forget it across current projections, and recover after restart without resurrection of an absolute forget or duplicate writes. Inspect actual outputs. No new memory engine, real vault connection, model experiment or background deployment is delivered by this document.

@@ -180,7 +180,8 @@ class RecordedTimeTests(TemporalBase):
     def test_restore_replays_a_forget_into_history_without_its_value(self):
         made = self.propose('s1', 'status', 2, value='planning'); self.at(2000); self.review(made, 'accept')
         manifest = lifecycle.backup(self.store, self.owner, self.root / 'backups')
-        self.at(3000); self.memory.forget(self.owner, made, {'version': self.claim(made)['version']})
+        # Only an absolute forget is replayed; an ordinary one comes back with the backup.
+        self.at(3000); self.memory.forget(self.owner, made, {'version': self.claim(made)['version'], 'absolute': True, 'confirm': made})
         lifecycle.restore(self.root / 'backups' / manifest['file'], self.db, now=3500)
         restored = KnowledgeStore(self.db, clock=lambda: self.clock[0])
         history = MemoryHistory(ReviewedMemory(restored))
@@ -197,7 +198,7 @@ class RecordedTimeTests(TemporalBase):
         con = sqlite3.connect(old); con.executescript('DROP TABLE memory_claim_history; DROP TABLE memory_history_meta;'); con.close()
         meta = old.with_suffix('.json'); value = json.loads(meta.read_text())
         value['sha256'] = hashlib.sha256(old.read_bytes()).hexdigest(); meta.write_text(json.dumps(value))
-        self.at(3000); self.memory.forget(self.owner, made, {'version': self.claim(made)['version']})
+        self.at(3000); self.memory.forget(self.owner, made, {'version': self.claim(made)['version'], 'absolute': True, 'confirm': made})
         lifecycle.restore(old, self.db, now=3500)
         self.at(4000)
         restored = KnowledgeStore(self.db, clock=lambda: self.clock[0])
