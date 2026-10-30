@@ -146,8 +146,11 @@ The offline half (protocol, relay, gate, reply, settings table, runner line) is
 
 ## What this does not do yet
 
-- **No real model has been called.** The Anthropic provider (the key held on ALFRED's side,
-  in the Mac keychain or the server's secret store) comes with the first real job.
+- **No real model has been called.** `alfred/anthropic_provider.py` is the Claude provider the
+  relay will use: one fixed host over TLS, no redirects, and the key read from a key source at
+  each call and dropped after it, never stored, logged or passed to the box. It is tested
+  offline only. Its two key sources, the Mac keychain and a server's secret file or systemd
+  credential, will use the readers in `alfred/keys.py` once encryption step 1 is merged.
 - **Not wired into the host.** `desk serve` does not build a Hermes brain yet.
 - **Every area is local only.** A cloud Hermes is refused for every area until the owner
   names the areas that may use cloud AI.
