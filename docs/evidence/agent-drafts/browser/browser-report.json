@@ -1,0 +1,35 @@
+{
+  "passed": 21,
+  "checks": [
+    "the host ingested three agent drafts through its own cycle",
+    "the drafts command opens the agent drafts panel",
+    "the header counts waiting and stopped drafts",
+    "a draft in the owner's own words says so and can be approved",
+    "a draft using a note names the note and can still be approved",
+    "a stopped draft gives the reason, the address and the note it came from",
+    "a stopped draft offers no Approve button",
+    "a stopped draft offers read in full, the note, an address you confirm and dismiss",
+    "read in full shows the exact text",
+    "see the note it came from opens that note in the record inspector",
+    "a typed value that is not one address is refused by the server",
+    "the typed address replaced the planted one in the action, which waits for approval",
+    "confirming an address approved nothing",
+    "approve asks for consent to the exact text first",
+    "approval goes to the server with the exact fingerprint",
+    "dismiss hides the draft and cancels its waiting approval",
+    "nothing was sent: only local drafts exist",
+    "no horizontal scroll at phone width",
+    "a reader sees no drafts",
+    "no requests leave the loopback origin",
+    "no uncaught page errors"
+  ],
+  "browser_console": [
+    "error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "error: Failed to load resource: the server responded with a status of 400 (Bad Request)"
+  ],
+  "page_errors": [],
+  "inputs": "synthetic demo vault plus two invented notes; invented addresses only",
+  "brain": "H1 SyntheticBrain (deterministic, no model), citing its excerpt",
+  "model_inference": false,
+  "console_dist": "console/dist built from this commit"
+}

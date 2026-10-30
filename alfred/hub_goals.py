@@ -1369,6 +1369,7 @@ def apply_stop(db, entry):
 
 MANDATE = r'(mandate-[0-9a-f]{24})'
 JOB = r'(job-[0-9a-f]{24})'
+DRAFT = r'(bp-[0-9a-f]{24})'
 ROUTES = (
     (re.compile(r'/desk/hub/mandates'), 'create'),
     (re.compile(rf'/desk/hub/mandates/{MANDATE}'), 'update'),
@@ -1381,6 +1382,8 @@ ROUTES = (
     (re.compile(r'/desk/hub/attention/([A-Za-z0-9][A-Za-z0-9_.-]{0,79})/acknowledge'), 'acknowledge'),
     (re.compile(rf'/desk/hub/results/{JOB}/verify'), 'verify_result'),
     (re.compile(rf'/desk/hub/results/{JOB}/acknowledge'), 'acknowledge_result'),
+    (re.compile(rf'/desk/hub/drafts/{DRAFT}/confirm'), 'confirm_draft'),
+    (re.compile(rf'/desk/hub/drafts/{DRAFT}/dismiss'), 'dismiss_draft'),
 )
 
 
@@ -1395,6 +1398,9 @@ def route(server, path, mutation, bearer, body):
             return hub.view(bearer)
         if path == '/desk/hub/results':
             return hub.results(bearer)
+        if path == '/desk/hub/drafts':
+            # The agent drafts list (docs/AGENT_DRAFTS.md), kept by the brain hub itself.
+            return hub.brains.drafts(bearer)
         match = re.fullmatch(rf'/desk/hub/results/{JOB}', path)
         if match:
             return hub.result(bearer, match[1])
@@ -1423,5 +1429,9 @@ def route(server, path, mutation, bearer, body):
             return hub.verify_result(bearer, match[1], body)
         if name == 'acknowledge_result':
             return hub.acknowledge_result(bearer, match[1], body)
+        if name == 'confirm_draft':
+            return hub.brains.confirm_places(bearer, match[1], body)
+        if name == 'dismiss_draft':
+            return hub.brains.dismiss_draft(bearer, match[1], body)
         return hub.acknowledge(bearer, match[1], body)
     raise Fault('not_found', 404)

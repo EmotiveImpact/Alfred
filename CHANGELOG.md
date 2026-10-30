@@ -4,11 +4,18 @@ All notable changes to ALFRED, newest first. Dates are the day the work was comm
 
 ## 30 October 2026: Hermes in a sealed box, branch `claude/project-thread-ujui2p`
 
-Master plan phase 2, first part; agent hub step H5. The owner chose Hermes as the first worker brain, run in a sealed Docker box. Synthetic data and a scripted stand-in model only; no real model was called and nothing is wired into the host. Waiting for the owner's word to merge.
+Master plan phase 2, first part; agent hub step H5. The owner chose Hermes as the first worker brain, run in a sealed Docker box. Synthetic data and a scripted stand-in model only; no real model was called and nothing is wired into the host. Merged with the owner's word on 30 October.
 
 - **The sealed box.** `boxes/hermes/` pins Hermes at commit `8fe53200` (the one reviewed in the source library), its hashed wheel list and the base image digest; `tools/build_hermes_box.py` builds only if every pin holds. One box per task: no network, read-only, not root, home and task folder in memory, no Docker log, removed when the task ends. [Guide](docs/HERMES_BOX.md).
 - **Hermes behind the plug.** `alfred/hermes_box.py`: the box proves its build, its settings (as Hermes itself reads them), its tool gate and its lack of network before anything private is sent. Hermes holds no key; ALFRED makes each model call, refuses provider-side tools, caps each call to the budget and charges the provider's usage. Every tool call is asked of ALFRED first; only `file.read` inside `/work` can be granted. A brain can now report why it stopped (`BrainFailure`), instead of a bare `brain_error`.
 - **The six fence tests.** `tools/hermes_fence.py` runs them against the real box with real Hermes inside: memory and skill writes, every turn through ALFRED, the skills folder, nothing fetched at start, nothing left on disk, and no private area on a cloud model unless allowed; plus a planted instruction ending as a refused proposal. All hold. A new CI job rebuilds the box and reruns them. [Receipt](docs/evidence/hermes-box/RECEIPT.md).
+
+## 30 October 2026: the agent drafts panel, branch `claude/project-thread-att046-agent-drafts`
+
+Merged with the owner's word on 30 October. Synthetic data only; nothing deployed and nothing sends.
+
+- **Agent drafts panel (C10, #48).** The console lists every draft a brain wrote, each saying where it came from: the owner's own words, wording from a named note, or stopped because an address came from a note. A stopped draft names the address, the note and when, and has no Approve; the owner can type the address themselves (the same one confirms it, a different one replaces it), after which it waits for exact approval like any other. Approving saves a local draft only. [Guide](docs/AGENT_DRAFTS.md), [receipt](docs/evidence/agent-drafts/RECEIPT.md).
+- Found on the way and logged as C11, not yet fixed: `BrainHub.submit` binds a job to its mandate in a second transaction, so a worker can refuse a job it claims in between.
 
 ## 20 October 2026: the provenance gate, branch `claude/project-thread-att046-provenance-gate`
 

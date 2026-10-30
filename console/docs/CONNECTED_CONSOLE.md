@@ -209,6 +209,20 @@ plainly that routines need the connected product and runs nothing. Rules, routes
 `tests/test_routines_procedures.py`, `console/tests/routines.test.ts` and
 `tools/check_routines_browser.py`.
 
+## Agent drafts (C10)
+
+The Agent drafts dialog (command `drafts` or `agent drafts`, or Open agent drafts in Console
+controls) reads `GET /desk/hub/drafts` and re-reads it after each confirmed projection refresh
+and after every change made there. Each card says where the draft came from (your own words,
+wording from a named note, or stopped because an address came from a note), with Read in full,
+See the note it came from, Approve when the server allows it, Dismiss, and for a stopped draft
+Try again with an address I confirm: one box per held address, checked by the server, after
+which the draft still waits for approval of its exact text. Approving uses the existing action
+approval route with the exact fingerprint and saves a local draft only. Readers are told the
+drafts belong to the owner. Rules and routes: [docs/AGENT_DRAFTS.md](../../docs/AGENT_DRAFTS.md).
+Acceptance: `tests/test_agent_drafts.py`, `console/tests/agent-drafts.test.ts` and
+`tools/check_agent_drafts_browser.py`.
+
 ## Not provided by this increment
 
 Priorities, recommendations and milestone progress now come from executive records
