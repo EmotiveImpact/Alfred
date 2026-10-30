@@ -80,7 +80,6 @@ with tempfile.TemporaryDirectory() as temp:
     stop_worker = threading.Event()
     worker = threading.Thread(target=JobWorker(jobs, hub.backend(), owner, 'brain-host', poll_seconds=.05, heartbeat_seconds=.1).run,
                               args=(stop_worker,), kwargs={'idle_seconds': .1}, daemon=True)
-    worker.start()
     goal = ExecutiveRecords(store).create(owner, {'request_id': 'g1', 'kind': 'goal', 'title': 'Close the quarter', 'detail': '',
                                                   'project': None, 'due': None, 'rank': None, 'support': None})
     hub.set_budget(owner, 'overall', None, {'version': 0, 'budget': {'daily': NONE, 'total': {**NONE, 'tasks': 20},
@@ -100,12 +99,22 @@ with tempfile.TemporaryDirectory() as temp:
     task('own', 'draft: Thank you all for getting the review ready on time.')
     task('noted', 'draft: Reminder: the review is due on Friday.', 'Quarterly plan')
     task('planted', 'Summarise the invoice note.', 'Invoice update')
+    # The worker starts only once every task is bound to its mandate. A worker that claims a
+    # job between BrainHub.submit creating it and binding it refuses it at dispatch with
+    # mandate_required (a race in the hub itself, recorded as backlog C11), which this check
+    # is not about.
+    worker.start()
     server = DeskHTTPServer(store, sup, port=0, console_dist=DIST, jobs=jobs, goals=hub)
     sup.start()
     deadline = time.time() + 30
     while len(hub.brains.drafts(owner)['drafts']) < 3 and time.time() < deadline:
         time.sleep(.2)
     drafts = hub.brains.drafts(owner)['drafts']
+    if len(drafts) != 3:
+        with store.connection() as db:
+            accounted = [tuple(r) for r in db.execute('SELECT job_id,accounted,result FROM hub_tasks')]
+        print(json.dumps({'drafts': len(drafts), 'jobs': [(j['id'], j['state'], j.get('reason')) for j in jobs.jobs(owner)],
+                          'accounted': accounted}, default=str), file=sys.stderr)
     check('the host ingested three agent drafts through its own cycle', len(drafts) == 3)
     noted_action = next(d for d in drafts if d['verdict'] == 'uses_untrusted_text')['action']['id']
     thread = threading.Thread(target=server.serve_forever, kwargs={'poll_interval': .01}, daemon=True); thread.start()
