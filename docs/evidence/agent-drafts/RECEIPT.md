@@ -1,7 +1,7 @@
 # Receipt: the agent drafts panel
 
-Tested at the commit that adds this receipt's review section, on branch `claude/project-thread-att046-agent-drafts`, from `main`
-at `1d3398137`.
+Tested commit: `712ed4a1d` on branch `claude/project-thread-att046-agent-drafts`, from `main`
+at `1d3398137`. The commit after it changes only this line.
 
 ## What was built
 
