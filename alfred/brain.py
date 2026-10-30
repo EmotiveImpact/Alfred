@@ -1246,9 +1246,12 @@ class BrainHub:
     def _draft_view(self, bearer, db, row, readable, packets) -> dict:
         if row['job_id'] not in packets:
             job = db.execute('SELECT parameters FROM jobs WHERE id=?', (row['job_id'],)).fetchone()
-            packets[row['job_id']] = json.loads(job['parameters'])['packet']['context']
+            packet = json.loads(job['parameters'])['packet']
+            packets[row['job_id']] = (packet['context'],
+                                      sources_current(db, row['scope'], row['actor'], packet, self.store.now()))
+        context, current = packets[row['job_id']]
         excerpts = {}
-        for item in packets[row['job_id']]:
+        for item in context:
             try:
                 note = self.store.knowledge_note(bearer, item['note_id']) if readable else None
             except Fault:
@@ -1283,7 +1286,7 @@ class BrainHub:
                               'places': [{**place, 'held': place['held'] if readable else None,
                                           'confirmed': place['confirmed'] if readable else None}
                                          for place in confirmation['places']]} if confirmation else None,
-                'can': {'approve': state == 'waiting', 'confirm': held and readable and row['dismissed'] is None,
+                'can': {'approve': state == 'waiting', 'confirm': held and readable and current and row['dismissed'] is None,
                         'dismiss': state != 'approved'}}
 
     def drafts(self, bearer) -> dict:
@@ -1300,15 +1303,21 @@ class BrainHub:
                               (p['scope'], p['id'])).fetchall()
         readable = {sha: self._readable(bearer, sha) for sha in {r['envelope_sha256'] for r in rows}}
         listed, packets = [], {}
+        counts = {'waiting': 0, 'stopped': 0, 'suggested': 0, 'other': 0,
+                  'dismissed': sum(r['dismissed'] is not None for r in rows)}
         with self.store.transaction() as db:
             self.store.authenticate(db, bearer, {'owner'})
             for row in rows:
-                if row['dismissed'] is None and len(listed) < MAX_DRAFTS_VIEW:
+                if row['dismissed'] is not None:
+                    continue
+                if len(listed) < MAX_DRAFTS_VIEW:
                     listed.append(self._draft_view(bearer, db, row, readable[row['envelope_sha256']], packets))
-        counts = {'waiting': 0, 'stopped': 0, 'suggested': 0, 'other': 0,
-                  'dismissed': sum(r['dismissed'] is not None for r in rows)}
-        for item in listed:
-            counts[item['state'] if item['state'] in counts else 'other'] += 1
+                    state = listed[-1]['state']
+                else:  # Counted, not shown: every draft still open is in the totals.
+                    action = (db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (row['scope'], row['action_id'])).fetchone()
+                              if row['action_id'] else None)
+                    state = self._draft_state(db, row, action)
+                counts[state if state in counts else 'other'] += 1
         return {**base, 'available': True, 'reason': None, 'drafts': listed, 'counts': counts}
 
     def _draft(self, bearer, proposal_id) -> dict:
@@ -1377,6 +1386,10 @@ class BrainHub:
             return {'draft': self._draft(bearer, proposal_id), 'authority_granted': False}
         if not self._readable(bearer, envelope):
             raise Fault('sources_changed', 409)
+        with self.store.transaction() as db:
+            # The same test approval makes, so a confirmed draft is never one that cannot be approved.
+            if not sources_current(db, row['scope'], row['actor'], packet, self.store.now()):
+                raise Fault('sources_changed', 409)
         owner = dict(packet, instruction=packet['instruction'] + '\n' + '\n'.join(value for _, value, _ in typed))
         relabel = provenance.label(owner, {'parameters': parameters, 'cites': json.loads(row['cites'])})
         if relabel['verdict'] == provenance.STEERED:
@@ -1457,14 +1470,20 @@ def action_current(store, db, row):
     from .verification import holds_effects
     if holds_effects(db, row['scope'], row['actor'], link['job_id'], packet):
         return False
+    return sources_current(db, row['scope'], row['actor'], packet, store.now())
+
+
+def sources_current(db, scope, actor, packet, now) -> bool:
+    """Every excerpt in the packet is still the same revision of a ready note the person
+    may read. Checked at approval and dispatch, and before a held draft is confirmed."""
     from .policy import permitted
-    principal, now = {'scope': row['scope'], 'id': row['actor']}, store.now()
+    principal = {'scope': scope, 'id': actor}
     for item in packet['context']:
         note = db.execute('''SELECT n.source,n.revision,n.sha256 FROM knowledge_notes n
             JOIN credentials c ON c.id=n.source AND c.scope=n.scope
             JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source
             WHERE n.scope=? AND n.id=? AND n.status='ready' AND c.revoked=0 AND c.expires>?
-            AND s.status IN ('ready','attention')''', (row['scope'], item['note_id'], now)).fetchone()
+            AND s.status IN ('ready','attention')''', (scope, item['note_id'], now)).fetchone()
         if (not note or (note['revision'], note['sha256']) != (item['revision'], item['sha256'])
                 or not permitted(db, principal, note['source'], now, 'read')):
             return False

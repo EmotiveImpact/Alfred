@@ -49,7 +49,8 @@ The server checks every part of this:
 - the confirmation is bound to the fingerprint of the draft the owner saw (`proposal_changed`);
 - only a draft refused with `steered_by_untrusted_text` can be confirmed (`not_held`), and
   not once dismissed (`proposal_dismissed`);
-- every note the draft came from must still be readable (`sources_changed`);
+- every note the draft came from must still be readable and unchanged since the draft was
+  written (`sources_changed`);
 - an address disguised with invisible characters can be confirmed as it is, but not swapped,
   because ALFRED cannot find it in the text as written (`address_hidden_in_text`);
 - after the change ALFRED labels the draft again, counting the typed addresses as the owner's
@@ -86,7 +87,7 @@ cookie and, for every POST, the CSRF token), and answered by the brain hub the h
 
 | Route | What it does |
 | --- | --- |
-| `GET /desk/hub/drafts` | `BrainHub.drafts`: up to 100 drafts, newest first, with counts |
+| `GET /desk/hub/drafts` | `BrainHub.drafts`: up to 100 drafts, newest first, with counts covering every open draft |
 | `POST /desk/hub/drafts/{id}/confirm` | `BrainHub.confirm_places`, body `{"fingerprint": "<the draft's>", "places": ["<one per held address>"]}` |
 | `POST /desk/hub/drafts/{id}/dismiss` | `BrainHub.dismiss_draft`, body `{}` |
 | `POST /desk/actions/{action}/approve` | The existing approval route, with the action's exact fingerprint |

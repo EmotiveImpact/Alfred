@@ -1,6 +1,6 @@
 # Receipt: the agent drafts panel
 
-Tested commit: `76648217e` on branch `claude/project-thread-att046-agent-drafts`, from `main`
+Tested at the commit that adds this receipt's review section, on branch `claude/project-thread-att046-agent-drafts`, from `main`
 at `1d3398137`.
 
 ## What was built
@@ -29,8 +29,8 @@ the only effect anywhere is the existing local draft after exact approval.
 
 | Check | Result |
 | --- | --- |
-| `python3 -m unittest discover -s tests -p test_agent_drafts.py` | 32 tests, OK |
-| `python3 -m unittest discover -s tests` | 1,806 tests, OK |
+| `python3 -m unittest discover -s tests -p test_agent_drafts.py` | 34 tests, OK |
+| `python3 -m unittest discover -s tests` | 1,808 tests, OK |
 | `cd console && npm run build` | typecheck and build OK |
 | `cd console && npx vitest run` | 183 tests in 19 files, OK (9 new) |
 | `tools/check_agent_drafts_browser.py` | 21 checks passed, no page errors |
@@ -55,6 +55,17 @@ is in the hub itself and predates this change; it is logged as C11 with the fix 
 job's own transaction). The check now starts its worker after every task is bound, and prints
 the job states and accounting rows if ingestion ever stalls. After that change it passed 10
 of 10 runs beside two full test suites running at once.
+
+## Review fixes
+
+Two findings from the automated review, each shown by a failing test before the fix:
+
+- A draft whose notes had changed could still be confirmed, and the action it became could
+  then never be approved. `can.confirm` and `confirm_places` now run the same source check as
+  approval (`brain.sources_current`, shared with `action_current`), so the panel withholds Try
+  again and the server answers `sources_changed`.
+- The counts in the header covered only the 100 drafts listed. Every open draft is now
+  counted; only the list stops at 100.
 
 ## What the browser check drives
 
