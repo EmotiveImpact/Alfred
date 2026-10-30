@@ -187,7 +187,8 @@ the one the audit holds.
 | Browser checks (list below) | `playwright.sync_api` | Drive headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only. |
 | Preview checks (list below) | `playwright.sync_api` | Open a built static preview from a `file://` path in headless Chromium through Playwright, with no server; run by CI and the owner only. |
 
-Browser checks: `tools/check_capture_browser.py`, `tools/check_console_connected_browser.py`,
+Browser checks: `tools/check_agent_drafts_browser.py`, `tools/check_capture_browser.py`,
+`tools/check_console_connected_browser.py`,
 `tools/check_conversation_browser.py`, `tools/check_desk_browser.py`,
 `tools/check_executive_browser.py`, `tools/check_grounded_browser.py`,
 `tools/check_hub_goals_browser.py`, `tools/check_hub_integrate_browser.py`,
