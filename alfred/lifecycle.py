@@ -1,9 +1,18 @@
-"""Forgetting, consistent backups and restore without resurrection (M05).
+"""Forgetting, consistent backups and restore (M05), in two layers.
 
 A forget or revocation is written first to an append-only journal beside the
-database, then applied to the database. A restore copies a verified backup into
-place only after replaying that whole journal into it, so a backup taken before a
-forget or revocation cannot bring the forgotten value or the revoked access back.
+database, then applied to the database. Forgets come in two layers (the owner's rule
+of 22 October 2026):
+
+  ordinary  the everyday forget. A copy waits in the bin for 30 days so it can be
+            undone (alfred/memory_bin.py), and a restore from an older backup brings
+            it back like everything else the backup holds, then lists what came back.
+  absolute  a separate, deliberate forget with the identifier typed back. It skips the
+            bin, removes any copy already there, and a restore applies it again, so no
+            backup brings it back. Retention the owner chose at capture is absolute.
+
+Revocations always hold: a restore applies them again. Journal entries written before
+the two layers existed count as absolute, so nothing forgotten earlier comes back.
 
 Every forget receipt carries deletion accounting (alfred/deletion.py): each kind of
 dependent found before the forget and still held after it, from the same scan the
@@ -11,10 +20,10 @@ deletion report uses. Value-free review history rows are kept unless the owner a
 purge them; the choice is journalled, so a restore replays it. A restore reports, per
 journal entry, what the backup still held and the replay removed again.
 
-Not provided here: application-level encryption, key custody or secure erasure.
-Forgetting removes values from current records and projections; SQLite free pages,
-the WAL before a checkpoint, older backups and filesystem snapshots may still hold
-earlier bytes until they are vacuumed, rotated or deleted. Receipts say so.
+Not provided here: secure erasure. Forgetting removes values from current records and
+projections; SQLite free pages, the WAL before a checkpoint, older backups and
+filesystem snapshots may still hold earlier bytes until they are vacuumed, rotated or
+deleted. Receipts say so.
 """
 from __future__ import annotations
 import hashlib
@@ -25,10 +34,12 @@ import secrets
 import sqlite3
 import time
 from .local import Fault
+from . import memory_bin
 
 JOURNAL_SUFFIX = '.lifecycle.jsonl'
-KINDS = {'claim_forgotten', 'entity_forgotten', 'credential_revoked', 'grant_revoked', 'source_forgotten',
-         'hub_stopped'}
+FORGETS = {'claim_forgotten', 'entity_forgotten', 'source_forgotten'}
+KINDS = FORGETS | {'credential_revoked', 'grant_revoked', 'hub_stopped', 'forget_undone'}
+LAYERS = ('ordinary', 'absolute')
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS lifecycle_receipts(
  id TEXT PRIMARY KEY, scope TEXT NOT NULL, actor TEXT NOT NULL, kind TEXT NOT NULL,
@@ -37,11 +48,35 @@ CREATE TABLE IF NOT EXISTS lifecycle_backups(
  id TEXT PRIMARY KEY, created INTEGER NOT NULL, file TEXT NOT NULL, sha256 TEXT NOT NULL,
  journal_entries INTEGER NOT NULL);
 '''
-REMAINS = ['Audit entries that name the record identifier and time, without its value.',
-           'Lineage metadata: note identifier, line range and source hash, without the reviewed value.',
-           'Backups taken before this time, until they are rotated; a restore replays this forget.',
-           'Completed local drafts, which are not undone by forgetting.',
-           'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
+BIN = f'A copy in the bin for {memory_bin.DAYS} days, so you can undo this; after that the bin empties.'
+BACKUPS = {'ordinary': 'Backups taken before this time, until they are rotated. A restore from one brings this back, '
+                       'and ALFRED lists what came back.',
+           'absolute': 'Backups taken before this time, until they are rotated. Each still holds a copy, and a restore '
+                       'removes it again.'}
+
+
+def remains(layer):
+    """What a statement or record forget receipt says is left, by layer."""
+    return ([BIN] if layer == 'ordinary' else []) + [
+        'Audit entries that name the record identifier and time, without its value.',
+        'Lineage metadata: note identifier, line range and source hash, without the reviewed value.',
+        BACKUPS[layer],
+        'Completed local drafts, which are not undone by forgetting.',
+        'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
+
+
+def layer(entry) -> str:
+    """The layer of one journal entry. Revocations, and forgets journalled before the two
+    layers existed, hold through a restore."""
+    return entry.get('layer', 'absolute') if entry['kind'] in FORGETS else 'absolute'
+
+
+def _valid(entry) -> bool:
+    if not isinstance(entry, dict) or entry.get('kind') not in KINDS:
+        return False
+    if 'layer' in entry and (entry['kind'] not in FORGETS or entry['layer'] not in LAYERS):
+        return False
+    return entry['kind'] != 'forget_undone' or entry.get('undoes') in memory_bin.FORGET.values()
 
 
 def journal_path(store) -> Path:
@@ -49,12 +84,12 @@ def journal_path(store) -> Path:
 
 
 def initialise(db):
-    db.executescript(SCHEMA)
+    db.executescript(SCHEMA + memory_bin.SCHEMA)
 
 
 def append(store, entry: dict) -> None:
     """Durably record intent before the database changes. Fails closed."""
-    if entry.get('kind') not in KINDS:
+    if not _valid(entry):
         raise Fault('invalid_lifecycle_entry')
     path = journal_path(store)
     line = (json.dumps(entry, sort_keys=True, separators=(',', ':')) + '\n').encode()
@@ -82,7 +117,7 @@ def entries(path: Path) -> list[dict]:
             if number == len(path.read_text().splitlines()):
                 break
             raise Fault('lifecycle_journal_corrupt') from None
-        if value.get('kind') not in KINDS:
+        if not _valid(value):
             raise Fault('lifecycle_journal_corrupt')
         result.append(value)
     return result
@@ -134,12 +169,16 @@ def withdraw_dependants(db, scope, actor, claim_ids, now):
 
 
 REMOVED = 'Removed when its source was forgotten.'
-SOURCE_REMAINS = ['Your own files. ALFRED never deletes or edits the files a source read; remove them yourself if you want them gone.',
-                  'Audit entries and job records that name identifiers, revisions and hashes, without content.',
-                  'Reviewed statements that relied on this source, invalidated with their values removed, until you forget them.',
-                  'Backups taken before this time, until they are rotated; a restore replays this removal.',
-                  'Completed local drafts, which are not undone.',
-                  'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
+
+
+def source_remains(layer):
+    """There is no bin for a whole source: your files are untouched, so adding the folder again reads them again."""
+    return ['Your own files. ALFRED never deletes or edits the files a source read; remove them yourself if you want them gone.',
+            'Audit entries and job records that name identifiers, revisions and hashes, without content.',
+            'Reviewed statements that relied on this source, invalidated with their values removed, until you forget them.',
+            BACKUPS[layer],
+            'Completed local drafts, which are not undone.',
+            'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
 
 
 def _cancel(db, scope, action_ids, counts):
@@ -153,16 +192,17 @@ def _cancel(db, scope, action_ids, counts):
             counts['completed_actions_not_undone'].append(action_id)
 
 
-def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purge_history=False):
+def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purge_history=False, absolute=False):
     """Remove one source's content and everything derived from it. Idempotent, so a
     restore can replay it. The person's own files are never read, edited or deleted.
 
     Value-free review history rows of the statements that cited the source are kept
-    unless `purge_history` is set (decision 0.3)."""
+    unless `purge_history` is set (decision 0.3). An absolute removal also empties bin
+    copies of statements that cited the source."""
     counts = {'notes_removed': 0, 'reviewed_statements_invalidated': 0, 'conversation_answers_withdrawn': 0,
               'pending_actions_cancelled': [], 'completed_actions_not_undone': [], 'job_results_deleted': [],
               'evidence_events_redacted': 0, 'connector_records_removed': 0, 'history_rows_purged': 0,
-              'drafts_withdrawn': []}
+              'drafts_withdrawn': [], 'bin_copies_removed': 0}
     # Revoked first, so nothing can index or report under this source again.
     db.execute("UPDATE credentials SET revoked=1 WHERE id=? AND scope=? AND role='source'", (source, scope))
     notes = set()
@@ -177,6 +217,11 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
                 db.execute('INSERT OR IGNORE INTO memory_tombstones VALUES (?,?,?,?,?,?)',
                            (scope, source, row['id'], 'sha256:' + hashlib.sha256(row['path'].encode()).hexdigest(), now, 'source_forgotten'))
         counts['notes_removed'] = len(current)
+        if _has(db, 'memory_tombstones'):
+            # Tombstones outlive an earlier ordinary removal, so an absolute one still finds its notes.
+            notes |= {r[0] for r in db.execute('SELECT note_id FROM memory_tombstones WHERE scope=? AND source=?', (scope, source))}
+        if absolute:
+            counts['bin_copies_removed'] = memory_bin.purge(db, scope, notes=notes)
         for table in ('knowledge_notes', 'knowledge_refs', 'knowledge_identity', 'knowledge_history',
                       'knowledge_anchors', 'knowledge_vaults', 'knowledge_sources'):
             if _has(db, table):
@@ -259,25 +304,29 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
     return counts
 
 
-def forget_source(store, bearer, source, *, cache=None, purge_history=False):
-    """An owner removes a whole source from ALFRED, journalled first, with a receipt."""
+def forget_source(store, bearer, source, *, cache=None, purge_history=False, absolute=False):
+    """An owner removes a whole source from ALFRED, journalled first, with a receipt.
+
+    Ordinary by default: a restore from an older backup brings the source back. An
+    absolute removal holds through every restore."""
     from .local import ident
     ident(source)
-    if type(purge_history) is not bool:
+    if type(purge_history) is not bool or type(absolute) is not bool:
         raise Fault('invalid_fields')
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner'})
         row = db.execute("SELECT revoked FROM credentials WHERE id=? AND scope=? AND role='source'", (source, p['scope'])).fetchone()
         if not row:
             raise Fault('source_not_available', 404)
-    entry = {'kind': 'source_forgotten', 'scope': p['scope'], 'subject': source, 'actor': p['id'], 'at': store.now()}
+    kept = 'absolute' if absolute else 'ordinary'
+    entry = {'kind': 'source_forgotten', 'scope': p['scope'], 'subject': source, 'actor': p['id'], 'at': store.now(), 'layer': kept}
     if purge_history:
         entry['purge_history'] = True
     append(store, entry)
     cache_dir = getattr(cache, 'root', None)
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner'})
-        full = forget_accounted(store, db, p, entry, {}, SOURCE_REMAINS, cache_dir=cache_dir)
+        full = forget_accounted(store, db, p, entry, {'layer': kept}, source_remains(kept), cache_dir=cache_dir)
     dropped = 0
     for sha256 in full['job_results_deleted']:
         # The job cache is an accelerator; its copies of removed results go too.
@@ -305,9 +354,12 @@ def _cached(cache_dir, digests):
 ACCOUNTED = {'claim_forgotten': 'statement', 'entity_forgotten': 'entity', 'source_forgotten': 'source'}
 
 
-def forget_accounted(store, db, p, entry, receipt, remains, *, cache_dir=None):
+def forget_accounted(store, db, p, entry, receipt, remains, *, cache_dir=None, keep=None):
     """Apply one journalled forget in the caller's transaction and record a receipt that counts
-    every dependent before and after, with the same scan the deletion report uses."""
+    every dependent before and after, with the same scan the deletion report uses.
+
+    `keep` is the bin copy of an ordinary forget, read before the forget cleared it; it is
+    put in the bin before the second scan, so the receipt counts it."""
     from .deletion import accounting, scan, traces
     kind = ACCOUNTED[entry['kind']]
     scope, subject, now = p['scope'], entry['subject'], store.now()
@@ -316,6 +368,8 @@ def forget_accounted(store, db, p, entry, receipt, remains, *, cache_dir=None):
     before = scan(db, scope, p['id'], kind, subject, trace=earlier, **places)
     effect = apply_entry(db, entry, now)
     full = record(store, db, p, entry['kind'], subject, {**receipt, **effect}, remains)
+    if keep is not None:
+        full['undo_until'] = memory_bin.put(db, scope, entry['actor'], entry['kind'], subject, full['id'], keep, now)
     # The receipt and its audit entry exist now, so the second scan counts them as the report will.
     after = scan(db, scope, p['id'], kind, subject, trace=before['trace'], **places)
     full |= accounting(before, after, purge=bool(entry.get('purge_history')))
@@ -329,9 +383,9 @@ def apply_entry(db, entry, now, origin='recorded'):
     History rows for a replay carry the time the journal recorded, never a value."""
     kind, scope = entry['kind'], entry['scope']
     at = entry.get('at', now) if origin == 'replayed' else now
-    purge = bool(entry.get('purge_history'))
+    purge, absolute = bool(entry.get('purge_history')), layer(entry) == 'absolute'
     if kind == 'source_forgotten':
-        return forget_source_db(db, scope, entry['subject'], now, origin=origin, at=at, purge_history=purge)
+        return forget_source_db(db, scope, entry['subject'], now, origin=origin, at=at, purge_history=purge, absolute=absolute)
     if kind == 'credential_revoked':
         changed = db.execute('UPDATE credentials SET revoked=1 WHERE id=? AND revoked=0', (entry['subject'],)).rowcount
         return {'credentials_revoked': changed}
@@ -375,11 +429,13 @@ def apply_entry(db, entry, now, origin='recorded'):
             purged += db.execute(f'DELETE FROM memory_claim_history WHERE scope=? AND {within} AND claim_id=?',
                                  (scope, *keys, identity)).rowcount
     effect = withdraw_dependants(db, scope, actor, ids, now)
+    # An absolute forget leaves nothing to undo: copies in the bin that hold it go too.
+    binned = memory_bin.purge(db, scope, entity=entry['subject'] if kind == 'entity_forgotten' else None, claims=ids) if absolute else 0
     return {'statements_forgotten': forgotten, **({'entities_removed': entities} if kind == 'entity_forgotten' else {}),
-            **effect, 'history_rows_purged': purged}
+            **effect, 'history_rows_purged': purged, 'bin_copies_removed': binned}
 
 
-def record(store, db, p, kind, subject, receipt, remains=REMAINS):
+def record(store, db, p, kind, subject, receipt, remains):
     from .policy import ledger
     rid = 'receipt-' + secrets.token_hex(12)
     full = {'id': rid, 'kind': kind, 'subject': subject, 'at': store.now(), **receipt,
@@ -434,9 +490,14 @@ def backup(store, bearer, directory) -> dict:
 def restore(backup_file, database, now=None, *, cache=None) -> dict:
     """Offline restore. The caller must have stopped ALFRED (the desk lock enforces this).
 
-    The result says what the journal removed again: per replayed entry, what the backup
-    still held and the replay removed, with totals. `cache` is the job cache, whose copies
-    of results deleted again are discarded."""
+    The backup comes back as it was, except that absolute forgets and revocations in the
+    journal are applied to it again. Ordinary forgets are not, so what they removed comes
+    back; the result lists each one the restored copy holds again (`came_back`), unless it
+    had already been undone.
+
+    The result also says what the journal removed again: per replayed entry, what the
+    backup still held and the replay removed, with totals. `cache` is the job cache, whose
+    copies of results deleted again are discarded."""
     backup_file, database = Path(backup_file), Path(database)
     manifest_path = backup_file.with_suffix('.json')
     if backup_file.is_symlink() or not backup_file.is_file() or not manifest_path.is_file():
@@ -453,11 +514,22 @@ def restore(backup_file, database, now=None, *, cache=None) -> dict:
     db.row_factory = sqlite3.Row
     moment = int(now if now is not None else time.time())
     cache_dir = getattr(cache, 'root', None)
-    removed_again, totals, deleted = [], {}, []
+    removed_again, totals, deleted, replayed, skipped = [], {}, [], 0, 0
+    # The last word on each subject: a later undo or absolute forget settles an ordinary one.
+    latest = {}
+    for entry in journal:
+        if entry['kind'] in FORGETS or entry['kind'] == 'forget_undone':
+            latest[(entry.get('undoes', entry['kind']), entry['scope'], entry['subject'])] = entry
     try:
         db.execute('BEGIN IMMEDIATE')
         withdrawn = {'conversation_answers_withdrawn': 0, 'pending_actions_cancelled': []}
         for entry in journal:
+            if entry['kind'] == 'forget_undone':
+                continue
+            if layer(entry) == 'ordinary':
+                skipped += 1
+                continue
+            replayed += 1
             effect, accounted = _replay(db, entry, moment, cache_dir, database)
             withdrawn['conversation_answers_withdrawn'] += effect.get('conversation_answers_withdrawn', 0)
             withdrawn['pending_actions_cancelled'] += effect.get('pending_actions_cancelled', [])
@@ -470,6 +542,7 @@ def restore(backup_file, database, now=None, *, cache=None) -> dict:
                 # What this backup still held that the journal had removed, and removed again now.
                 removed_again.append({'kind': entry['kind'], 'subject': entry.get('subject'), 'at': entry.get('at'),
                                       'removed': changed} | ({'still_held': accounted['still_held']} if accounted else {}))
+        came_back = _came_back(db, [e for e in latest.values() if e['kind'] in FORGETS and layer(e) == 'ordinary'])
         _register_backups(db, backup_file.parent)
         db.execute('COMMIT')
         integrity = db.execute('PRAGMA integrity_check').fetchone()[0]
@@ -490,11 +563,42 @@ def restore(backup_file, database, now=None, *, cache=None) -> dict:
             dropped += bool(cache is not None and cache.discard(sha256))
         except (Fault, OSError):
             pass
-    return {'restored_from': manifest['id'], 'journal_entries_replayed': len(journal),
+    return {'restored_from': manifest['id'], 'journal_entries_replayed': replayed,
+            'ordinary_entries_not_replayed': skipped, 'came_back': came_back,
             'entries_after_backup': max(0, len(journal) - manifest.get('journal_entries', 0)),
             **withdrawn, 'removed_again': {'entries': removed_again, 'totals': totals,
                                            'cached_results_removed': dropped},
             'integrity_check': integrity, 'encrypted': False}
+
+
+def _came_back(db, forgets):
+    """Ordinary forgets the restored copy holds again, named so the owner can recognise them."""
+    back = []
+    for entry in sorted(forgets, key=lambda e: (e.get('at', 0), e['kind'], e['subject'])):
+        label = _held(db, entry)
+        if label is not None:
+            back.append({'kind': entry['kind'], 'subject': entry['subject'], 'deleted_at': entry.get('at'), 'label': label})
+    return back
+
+
+def _held(db, entry):
+    """A short label if the restored copy holds the subject unforgotten, else None."""
+    scope, subject = entry['scope'], entry['subject']
+    if entry['kind'] == 'source_forgotten':
+        if not db.execute("SELECT 1 FROM credentials WHERE id=? AND scope=? AND role='source' AND revoked=0", (subject, scope)).fetchone():
+            return None
+        row = db.execute('SELECT label FROM knowledge_sources WHERE scope=? AND source=?', (scope, subject)).fetchone() \
+            if _has(db, 'knowledge_sources') else None
+        return row[0] if row else subject
+    if not _has(db, 'memory_claims'):
+        return None
+    def name(identity):
+        row = db.execute('SELECT name FROM memory_entities WHERE id=? AND scope=?', (identity, scope)).fetchone()
+        return row[0] if row else None
+    if entry['kind'] == 'entity_forgotten':
+        return name(subject)
+    row = db.execute("SELECT subject_id,predicate FROM memory_claims WHERE id=? AND scope=? AND state!='forgotten'", (subject, scope)).fetchone()
+    return f"{name(row['subject_id']) or row['subject_id']} {row['predicate'].replace('_', ' ')}" if row else None
 
 
 def _register_backups(db, directory):
@@ -518,7 +622,7 @@ def _register_backups(db, directory):
 REMOVAL_COUNTS = ('statements_forgotten', 'entities_removed', 'notes_removed', 'reviewed_statements_invalidated',
                   'conversation_answers_withdrawn', 'pending_actions_cancelled', 'job_results_deleted',
                   'evidence_events_redacted', 'connector_records_removed', 'history_rows_purged',
-                  'credentials_revoked', 'grants_removed', 'hub_targets_stopped')
+                  'credentials_revoked', 'grants_removed', 'hub_targets_stopped', 'bin_copies_removed')
 
 
 def _replay(db, entry, now, cache_dir, database):
@@ -539,8 +643,9 @@ def _replay(db, entry, now, cache_dir, database):
             (scope, actor, entry['kind'], subject)).fetchone():
         rid = 'receipt-' + secrets.token_hex(12)
         at = int(entry.get('at', now))
-        full = {'id': rid, 'kind': entry['kind'], 'subject': subject, 'at': at, 'origin': 'replayed_on_restore',
-                **effect, **accounted, 'remains': SOURCE_REMAINS if kind == 'source' else REMAINS, 'secure_erasure': False}
+        full = {'id': rid, 'kind': entry['kind'], 'subject': subject, 'at': at, 'origin': 'replayed_on_restore', 'layer': 'absolute',
+                **effect, **accounted, 'remains': source_remains('absolute') if kind == 'source' else remains('absolute'),
+                'secure_erasure': False}
         db.execute('INSERT INTO lifecycle_receipts VALUES (?,?,?,?,?,?,?)',
                    (rid, scope, actor, entry['kind'], subject, at, json.dumps(full)))
     return effect, accounted

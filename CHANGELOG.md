@@ -2,6 +2,14 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 30 October 2026: forgetting in two layers, branch `claude/project-thread-9npowk`
+
+The owner's rule of 22 October replaces "no resurrection after restore" (M05, MEM-010). Built tests first on the encryption branch (PR #26). Synthetic data only; nothing deployed or merged.
+
+- **Ordinary forget, the default.** A forgotten statement or record waits in a bin for 30 days and can be undone from the console's new Bin tab or `POST /desk/memory/bin/{id}/undo`. A restore from an older backup brings ordinary forgets back and lists them; `desk restore` prints the list.
+- **Absolute forget, a separate choice.** "Forget for good" in the console, or `absolute` with the identifier typed back as `confirm`. It skips the bin, removes any copy already there and holds through every restore, like revocations and capture retention. Journal entries from before the layers count as absolute.
+- **Honest accounting.** Receipts carry the layer and, for an ordinary forget, when undo ends; the deletion report counts bin copies. [Receipt](docs/evidence/two-layer-delete/RECEIPT.md).
+
 ## 30 October 2026: Hermes in a sealed box, branch `claude/project-thread-ujui2p`
 
 Master plan phase 2, first part; agent hub step H5. The owner chose Hermes as the first worker brain, run in a sealed Docker box. Synthetic data and a scripted stand-in model only; no real model was called and nothing is wired into the host. Merged with the owner's word on 30 October.
@@ -50,6 +58,17 @@ Eleven pull requests from [coordination/BACKLOG.md](coordination/BACKLOG.md), pl
 ## 17 October 2026 (night): the host builds the goal hub when asked, branch `claude/project-thread-att046-hub-host`
 
 - **`desk serve --hub synthetic` (backlog C2).** `alfred/hub_host.py` builds the brain hub and goal hub over the host's own job coordinator, registers only the deterministic synthetic test brain, allows no cloud scope and no tool, and enrols one `local-brain` worker that takes brain tasks only. The host's supervisor loop accounts results and runs heartbeats, so `/desk/hub`, mandates, budgets and verification work end to end on the real desk with test data. Off by default: without the switch no hub tables or brain worker are created and `/desk/hub` still answers `hub_not_configured`. No real brain is offered, because which brain comes first is the owner's choice. [Receipt](docs/evidence/hub-host/RECEIPT.md).
+
+## 17 October 2026 (evening): encryption keys and unlocking, phase 1 step 1, branch `claude/project-thread-9npowk`
+
+Key custody for plan item 1.1 (SYS-002, M05), on the owner's choice of both a Mac and a server. Nothing ALFRED stores is sealed yet; that is step 2. No model ran and nothing under `third_party/` was installed, run or imported.
+
+- **Keyring (`alfred/keys.py`).** One master key and one key per area (personal, company, each client), kept in `desk-keyring.json` beside the database and never inside it. The master key is locked separately for each unlock method: the macOS login keychain, a passphrase (scrypt), a server secret file (systemd credentials, Docker or Kubernetes secrets, a Vault agent) and a recovery key shown once. Methods are pluggable through `keys.register`. Values are sealed with AES-256-GCM, each under its own key derived from the area key and a random salt, and bound to keyring, area, key version and row context. The file carries an integrity seal, refuses swapped keys or a hidden destruction, and changes are locked and checked against concurrent writers.
+- **Areas and erasure.** `area-add`, `areas`, `area-rotate` and `area-destroy`. An area's name ("Acme Ltd") is sealed in the keyring and its id is neutral by default (`client-3f9a2b1c`), because the id is written beside every sealed value. Destroying an area deletes its keys, so everything sealed with them stops opening, even with the recovery key. A test shows the stated limit: a keyring copy made before the destruction still opens it until deleted.
+- **Recovery kit.** `backup` writes a keyring copy that only the recovery key opens; `restore` puts it in place on a new machine, where a local unlock method is then added.
+- **Three tries.** A typed passphrase or recovery key gets three tries each time ALFRED asks, at start, in every command and in `restore`. Wrong tries lock nothing and erase nothing; piped input that runs out stops asking.
+- **Full-disk encryption check.** `python3 -m alfred.keys disk` and a new `doctor` check report the same answer as the check `desk serve` runs (#41), so ALFRED has one detector; the doctor also reads the keyring's layout without unlocking it. `placement` lists the keyring as a live file.
+- **First adopted runtime dependency.** `cryptography` 50.0.2 with `cffi` 2.1.1 and `pycparser` 3.0, pinned with every file hash in `requirements/encryption.txt`; CI installs it in a fresh virtual environment for the test suite. The adoption record is in [docs/ENCRYPTION.md](docs/ENCRYPTION.md); the owner signed it off on 30 October 2026. [Receipt](docs/evidence/encryption/RECEIPT.md).
 
 ## 17 October 2026 (evening): two agents, one repository, branch `claude/project-thread-r6ndba`
 

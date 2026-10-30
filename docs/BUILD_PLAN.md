@@ -10,7 +10,7 @@
 
 Own M02 and M05, coordinating with existing issue #2. Preserve local approval/outbox/result behaviour. Replace credential-as-person assumptions deliberately, with migration and explicit identity linking rather than silently combining histories. Implement source/capability grants, correction/deletion dependency accounting and approved storage/key/backup decisions.
 
-Acceptance: no cross-workspace access, revoked/rotated credentials fail appropriately, stale grants are rechecked, restoration cannot resurrect deleted current memory, and export excludes another scope. Keep application-level encryption status honest until implemented and tested.
+Acceptance: no cross-workspace access, revoked/rotated credentials fail appropriately, stale grants are rechecked, restoration cannot resurrect an absolute forget or a revocation (an ordinary forget comes back and is listed, by the owner's rule of 22 October 2026), and export excludes another scope. Keep application-level encryption status honest until implemented and tested.
 
 ## Track B: vault interoperability and context
 

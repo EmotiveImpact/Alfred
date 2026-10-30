@@ -42,6 +42,8 @@ CATEGORIES = {
     'statements': 'Reviewed statements (memory_claims). A value is held until the statement is forgotten or invalidated.',
     'entity_name': 'The entity record and its name (memory_entities).',
     'captures': 'Capture settings for those statements (memory_capture): memory type and retention, no value.',
+    'bin_copies': 'Copies an ordinary forget keeps in the bin for 30 days so it can be undone, with the value. '
+                  'An absolute forget removes them.',
     'source_index': 'Index rows built from the source: note text, paths, links, anchors, identities and the vault binding.',
     'tombstones': 'Tombstones that stop a removed note coming back: note identifier and a hash of its path.',
     'evidence_events': 'Desk events, documents and links from the source; text is replaced when the source is removed.',
@@ -59,7 +61,7 @@ CATEGORIES = {
     'lifecycle_receipts': 'Forget receipts for the subject: counts and identifiers.',
     'exports_on_disk': 'Portable exports ALFRED wrote that included the subject and are still on disk.',
     'backups': 'Backups on disk taken before the latest forget of the subject (or any backup, if never forgotten). '
-               'A restore replays the forget.',
+               'A restore brings an ordinary forget back and applies an absolute one again.',
 }
 VALUE_FREE = ('captures', 'tombstones', 'voice_playbacks', 'routine_nominations', 'executive_citations', 'jobs',
               'history_rows', 'audit_rows', 'lifecycle_receipts')
@@ -235,6 +237,10 @@ def scan(db, scope, actor, kind, subject, *, trace=None, cache_dir=None, databas
     captures = len(_rows(db, 'SELECT claim_id FROM memory_capture WHERE claim_id IN ({ids})', t['claims'])) \
         if t['claims'] and _has(db, 'memory_capture') else 0
     c['captures'] = _category(captures, 0, ['memory_capture'])
+    from .memory_bin import count as binned
+    held = binned(db, scope, entity=subject if kind == 'entity' else None, claims=t['claims'] if kind == 'statement' else (),
+                  notes=t['notes'] if kind == 'source' else ())
+    c['bin_copies'] = _category(held, held, ['memory_bin'])
     if kind == 'source':
         tables = {table: db.execute(f'SELECT count(*) FROM {table} WHERE scope=? AND source=?', (scope, subject)).fetchone()[0]
                   for table in INDEX_TABLES if _has(db, table)}

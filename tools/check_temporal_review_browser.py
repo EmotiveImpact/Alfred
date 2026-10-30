@@ -363,7 +363,7 @@ with tempfile.TemporaryDirectory() as temp:
                   not any(v in str(history_rows()) for v in ('in development', 'in production', 'on leave', 'first week', 'monochrome')))
             for width, height in ((1280, 800), (390, 844)):
                 page.set_viewport_size({'width': width, 'height': height}); page.wait_for_timeout(400)
-                for tab in ('Review queue', 'As of a date'):
+                for tab in ('Review queue', 'As of a date', 'Bin'):
                     dialog.get_by_role('tab', name=tab).click(); page.wait_for_timeout(200)
                     if tab == 'As of a date':
                         as_of(day(-5))

@@ -82,6 +82,7 @@ describe('recorded history wording',()=>{
     const migrated=historyLine(entry({time_known:false,origin:'migrated',detail:'state_found_at_migration'}));
     expect(migrated.when).toMatch(/^no later than .*exact time not known/);expect(migrated.notes).toContain('reconstructed from earlier records');
     expect(historyLine(entry({state:'forgotten',origin:'replayed'})).notes).toContain('replayed from the journal');
+    expect(historyLine(entry({state:'accepted',detail:'undone_from_bin'})).notes).toBe('put back from the bin');
     expect(historyLine(entry({state:'proposed',valid_period:{from:null,until:null}})).notes).toBe('No valid period set');
   });
   it('summarises an as-of report without inventing states',()=>{

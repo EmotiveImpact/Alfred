@@ -62,6 +62,12 @@
       "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
     },
     {
+      "file": "alfred/keys.py",
+      "kind": "password",
+      "sha256": "d04e2a79958dc8ae010db6ccf24a183974141c9f73dc064e53bbbb48a415fb39",
+      "reason": "The prompt label 'ALFRED passphrase: ' followed by the code that calls it; no value."
+    },
+    {
       "file": "alfred/scrub.py",
       "kind": "password",
       "sha256": "4afa34049fdfc2c3e0e779b903551b72f8dbb70bbb1e5a691622f400535ca7ec",
@@ -252,6 +258,12 @@
       "kind": "secret_assignment",
       "sha256": "f4b020d22a6fb48488f4fafbae950e3d4d339c855f844f982cd20dfa8ba5333c",
       "reason": "Synthetic note text named SECRET in a job test; it holds no credential."
+    },
+    {
+      "file": "tests/test_keys.py",
+      "kind": "password",
+      "sha256": "515db895af00cbfbec02ee4aa72b3fd3a386dd0cc64e2775c4f2278dfdda93fa",
+      "reason": "An unlock failure reason that names the passphrase method and the wrong_key error code, not a passphrase."
     },
     {
       "file": "tests/test_learning.py",

@@ -110,7 +110,7 @@ For an optional plugin, use the official Vault API's `process` pattern for local
 
 An always-on ALFRED node may later use a separately configured pull-only mirror. Read-only ALFRED processing should not alter that mirror. A future write queue must have one deliberate publication route rather than racing against mirror-remote resets. Headless Sync's E2EE option protects synchronisation; it does not encrypt the opened local vault, ALFRED's caches or information sent to a model.
 
-Track last complete scan, local revision, sync health and remote confirmation separately. A saved file is not proof that another device received it. A lost connection must not be called a deleted vault. Deleted source tombstones and current grants must be reconciled after reconnect/backup restore.
+Track last complete scan, local revision, sync health and remote confirmation separately. A saved file is not proof that another device received it. A lost connection must not be called a deleted vault. Absolute source removals and current grants must be reconciled after reconnect or backup restore; an ordinary source removal comes back with a restore and is listed.
 
 ## Privacy and distribution
 
