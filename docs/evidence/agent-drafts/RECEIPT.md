@@ -1,7 +1,7 @@
 # Receipt: the agent drafts panel
 
 Tested commit: `712ed4a1d` on branch `claude/project-thread-att046-agent-drafts`, from `main`
-at `1d3398137`. The commit after it changes only this line.
+at `1d3398137`. Later commits on the branch change only records (this receipt, the changelog, the handoff and the backlog), including the merge of `main` after #46.
 
 ## What was built
 

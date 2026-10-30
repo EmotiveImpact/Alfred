@@ -2,6 +2,13 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 30 October 2026: the agent drafts panel, branch `claude/project-thread-att046-agent-drafts`
+
+Merged with the owner's word on 30 October. Synthetic data only; nothing deployed and nothing sends.
+
+- **Agent drafts panel (C10, #48).** The console lists every draft a brain wrote, each saying where it came from: the owner's own words, wording from a named note, or stopped because an address came from a note. A stopped draft names the address, the note and when, and has no Approve; the owner can type the address themselves (the same one confirms it, a different one replaces it), after which it waits for exact approval like any other. Approving saves a local draft only. [Guide](docs/AGENT_DRAFTS.md), [receipt](docs/evidence/agent-drafts/RECEIPT.md).
+- Found on the way and logged as C11, not yet fixed: `BrainHub.submit` binds a job to its mandate in a second transaction, so a worker can refuse a job it claims in between.
+
 ## 20 October 2026: the provenance gate, branch `claude/project-thread-att046-provenance-gate`
 
 Merged with the owner's word on 20 October, after the owner chose blocking over warning. Synthetic data only; nothing deployed.
