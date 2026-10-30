@@ -55,6 +55,13 @@
       "reason": "Owner-run source library refresh: downloads pinned public repositories from api.github.com and codeload.github.com only; --verify, as CI runs it, is offline."
     },
     {
+      "module": "tools/check_agent_drafts_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
       "module": "tools/check_capture_browser.py",
       "imports": [
         "playwright.sync_api"

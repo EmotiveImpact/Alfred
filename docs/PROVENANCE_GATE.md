@@ -94,7 +94,9 @@ labels were made.
 
 `enforce` was chosen as the default because the only action a brain can propose today is a
 local draft, so a wrongly held proposal costs little: the owner can see it with its reason
-and ask again, naming the address themselves. The owner can choose `watch` instead.
+in the console's Agent drafts panel and type the address themselves to offer it for approval
+([AGENT_DRAFTS.md](AGENT_DRAFTS.md)), or ask again naming it. The owner can choose `watch`
+instead.
 
 ## What it does not do
 

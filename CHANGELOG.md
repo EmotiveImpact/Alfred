@@ -10,6 +10,13 @@ The owner's rule of 22 October replaces "no resurrection after restore" (M05, ME
 - **Absolute forget, a separate choice.** "Forget for good" in the console, or `absolute` with the identifier typed back as `confirm`. It skips the bin, removes any copy already there and holds through every restore, like revocations and capture retention. Journal entries from before the layers count as absolute.
 - **Honest accounting.** Receipts carry the layer and, for an ordinary forget, when undo ends; the deletion report counts bin copies. [Receipt](docs/evidence/two-layer-delete/RECEIPT.md).
 
+## 30 October 2026: the agent drafts panel, branch `claude/project-thread-att046-agent-drafts`
+
+Merged with the owner's word on 30 October. Synthetic data only; nothing deployed and nothing sends.
+
+- **Agent drafts panel (C10, #48).** The console lists every draft a brain wrote, each saying where it came from: the owner's own words, wording from a named note, or stopped because an address came from a note. A stopped draft names the address, the note and when, and has no Approve; the owner can type the address themselves (the same one confirms it, a different one replaces it), after which it waits for exact approval like any other. Approving saves a local draft only. [Guide](docs/AGENT_DRAFTS.md), [receipt](docs/evidence/agent-drafts/RECEIPT.md).
+- Found on the way and logged as C11, not yet fixed: `BrainHub.submit` binds a job to its mandate in a second transaction, so a worker can refuse a job it claims in between.
+
 ## 20 October 2026: the provenance gate, branch `claude/project-thread-att046-provenance-gate`
 
 Merged with the owner's word on 20 October, after the owner chose blocking over warning. Synthetic data only; nothing deployed.

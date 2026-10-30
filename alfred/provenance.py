@@ -71,6 +71,25 @@ def places(value: str) -> list:
     return found
 
 
+_RAW = re.compile(PLACE.pattern, re.VERBOSE | re.IGNORECASE)
+
+
+def replace(value: str, kind: str, held: str, new: str) -> tuple:
+    """``(text, count)``: ``value`` with each place of ``kind`` that normalises to ``held``
+    replaced by ``new``, as written, leaving the words and punctuation around it alone. A
+    place disguised with invisible characters is not found here, so it is never swapped."""
+    parts, last, count = [], 0, 0
+    for m in _RAW.finditer(value):
+        span = m.group(0)
+        if (m.lastgroup if m.lastgroup != 'end' else 'domain') != 'phone':
+            span = span.rstrip(TRAILING)
+        if places(span) != [(kind, held)]:
+            continue
+        parts += [value[last:m.start()], new]
+        last, count = m.start() + len(span), count + 1
+    return ''.join(parts) + value[last:], count
+
+
 def _words(value: str) -> list:
     return re.findall(r'\w+', normalise(value))
 
