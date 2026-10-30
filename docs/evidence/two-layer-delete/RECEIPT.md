@@ -24,9 +24,11 @@ Defaults chosen where the rule did not say:
 
 - Revocations (credentials, grants, stopped goals) always hold through a restore, as before.
 - Retention the owner set when capturing a statement ends absolutely: no bin, holds through a
-  restore, and a copy already in the bin goes too.
+  restore, and a copy already in the bin goes too. A statement forgotten ordinarily before its
+  retention ended is journalled again as absolute when it ends, even after its bin copy left.
 - A whole source has no bin (the owner's files are untouched, so adding the folder again reads
-  them again), but follows the two layers on restore.
+  them again), but follows the two layers on restore. Removing it absolutely after an ordinary
+  removal still empties bin copies of its statements, found through the source's tombstones.
 - Answers and drafts a forget withdrew stay withdrawn after an undo; the undo says so.
 - Journal entries written before the layers existed count as absolute, so nothing forgotten
   earlier comes back.
@@ -75,7 +77,7 @@ Run in a scratch worktree with the pinned `cryptography` 50.0.2 virtual environm
 
 | Command | Result |
 |---|---|
-| `python -m unittest discover -s tests -p test_two_layer_delete.py` | 21 tests pass (20 written first, all failing before the change; one added in review for a statement that names a record still forgotten, failing before its fix) |
+| `python -m unittest discover -s tests -p test_two_layer_delete.py` | 23 tests pass (20 written first, all failing before the change; three added in review, each failing before its fix: a statement that names a record still forgotten, retention ending after the bin emptied, and an absolute source removal after an ordinary one) |
 | `python -m unittest discover -s tests` | full suite, see the pull request for the count on the tested commit |
 | `npm run build`, `npm test` in `console/` | build passes; 19 files, 179 unit tests pass |
 | `npm run test:browser` in `console/` | 29 browser tests pass |

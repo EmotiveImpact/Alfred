@@ -92,7 +92,8 @@ variables pass to every program ALFRED starts (a local model, a worker). Support
   (`--secret-file PATH`).
 
 The file must be a regular file of at least 32 bytes that only its owner (or root) can read;
-ALFRED refuses anything looser. A systemd example:
+ALFRED refuses anything looser. A text secret, like the one `server-secret` writes, has spaces
+and line endings at its edges ignored; a binary secret is used exactly as it is. A systemd example:
 
 ```sh
 python3 -m alfred.keys server-secret --output /root/alfred-unlock          # a fresh 48-byte secret, mode 600

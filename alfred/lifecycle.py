@@ -217,6 +217,9 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
                 db.execute('INSERT OR IGNORE INTO memory_tombstones VALUES (?,?,?,?,?,?)',
                            (scope, source, row['id'], 'sha256:' + hashlib.sha256(row['path'].encode()).hexdigest(), now, 'source_forgotten'))
         counts['notes_removed'] = len(current)
+        if _has(db, 'memory_tombstones'):
+            # Tombstones outlive an earlier ordinary removal, so an absolute one still finds its notes.
+            notes |= {r[0] for r in db.execute('SELECT note_id FROM memory_tombstones WHERE scope=? AND source=?', (scope, source))}
         if absolute:
             counts['bin_copies_removed'] = memory_bin.purge(db, scope, notes=notes)
         for table in ('knowledge_notes', 'knowledge_refs', 'knowledge_identity', 'knowledge_history',

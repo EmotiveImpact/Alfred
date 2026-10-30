@@ -54,6 +54,7 @@ SCRYPT_LIMITS = {'n': 2 ** 18, 'r': 8, 'p': 2}
 SCRYPT_MAXMEM = 2 ** 29
 MIN_PASSPHRASE = 12
 MIN_SECRET_FILE, MAX_SECRET_FILE = 32, 4096
+TEXT_SECRET = frozenset(range(32, 127)) | frozenset(b'\t\n\r')
 # 23 random bytes (184 bits) and a 2-byte check: 40 Crockford base32 characters in 8 groups.
 RECOVERY_RANDOM, RECOVERY_CHECK, RECOVERY_LENGTH = 23, 2, 40
 CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
@@ -303,7 +304,10 @@ def read_secret_file(path) -> bytes:
             raw += chunk
     finally:
         os.close(fd)
-    raw = raw.strip()
+    if set(raw) <= TEXT_SECRET:
+        # A text secret (new_server_secret writes base64 and a newline) loses only its edges, so a
+        # copy with or without the final newline opens the same keyring. Binary is kept exactly.
+        raw = raw.strip()
     if len(raw) > MAX_SECRET_FILE:
         raise Fault('secret_file_too_long', 409)
     if len(raw) < MIN_SECRET_FILE:

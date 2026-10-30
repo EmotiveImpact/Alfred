@@ -426,6 +426,14 @@ class UnlockMethodTests(Base):
             keys.read_secret_file(fifo)
         self.assertEqual(caught.exception.code, 'secret_file_not_regular')
 
+    def test_a_binary_secret_is_kept_byte_for_byte_and_a_text_one_loses_only_its_edges(self):
+        raw = b' ' + bytes(range(128, 158)) + b'\n'
+        binary = self.root / 'binary'
+        binary.write_bytes(raw); os.chmod(binary, 0o600)
+        self.assertEqual(keys.read_secret_file(binary), raw)
+        text = secret_file(self.root, 'text', 0o600)
+        self.assertEqual(keys.read_secret_file(text), text.read_bytes().strip())
+
     def test_kubernetes_style_symlinked_secret_is_followed_to_a_private_file(self):
         data = self.root / '..data'; data.mkdir()
         target = secret_file(data, 'alfred', 0o400)

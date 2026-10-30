@@ -223,13 +223,18 @@ class ReviewedMemory:
         """Forget captured statements whose user-chosen retention has ended, with receipts.
 
         The owner chose the end at capture, so it is absolute: no bin, and no restore
-        brings the statement back. A copy already in the bin goes too."""
+        brings the statement back. A copy already in the bin goes too, and a statement
+        forgotten ordinarily is journalled again as absolute, even after its bin copy left."""
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner'})
             held=memory_bin.held_claims(db,p['scope'])
+            def settled(r):
+                if r['state']!='forgotten' or r['id'] in held:return False
+                latest=self._latest(db,p,'claim_forgotten',r['id'])
+                return latest is not None and latest.get('layer','absolute')=='absolute'
             due=[(r['id'],r['version']) for r in db.execute('''SELECT c.id,c.version,c.state FROM memory_claims c JOIN memory_capture m ON m.claim_id=c.id
                  WHERE c.scope=? AND c.actor=? AND m.retention_until IS NOT NULL AND m.retention_until<=?''',
-                 (p['scope'],ledger(db,p),self.store.now())) if r['state']!='forgotten' or r['id'] in held]
+                 (p['scope'],ledger(db,p),self.store.now())) if not settled(r)]
         return [self._forget(bearer,identity,version,'absolute',False,reason='retention_ended') for identity,version in due]
 
     def propose(self, bearer, body, capture=None):
@@ -362,7 +367,8 @@ class ReviewedMemory:
             if reason:entry['reason']=reason
             keep=memory_bin.snapshot(db,p['scope'],[ledger(db,p)],'claim_forgotten',identity) if layer=='ordinary' else None
             lifecycle.append(self.store,entry)
-            removed=['reviewed value','reviewed relationship'] if c['state']!='forgotten' else ['copies in the bin']
+            removed=(['reviewed value','reviewed relationship'] if c['state']!='forgotten'
+                     else ['copies in the bin'] if identity in memory_bin.held_claims(db,p['scope']) else [])
             return lifecycle.forget_accounted(self.store,db,p,entry,{'removed':removed,'layer':layer,**({'reason':reason} if reason else {})},
                                               lifecycle.remains(layer),keep=keep)
 

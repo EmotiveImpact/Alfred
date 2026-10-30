@@ -210,6 +210,22 @@ class OrdinaryDeleteTests(Base):
         lifecycle.restore(backup, self.db)
         self.assertEqual(self.claim(self.status, self.restored()[1])['state'], 'forgotten')
 
+    def test_a_retention_end_after_the_bin_emptied_still_holds_through_a_restore(self):
+        with self.store.connection() as db:
+            db.execute('INSERT INTO memory_capture VALUES (?,?,?,?,?)', (self.status, 'commitment', 1000 + 90 * DAY, 'note', 1000))
+        backup = self.backup()
+        self.forget(self.status)
+        self.clock[0] = 1000 + 31 * DAY
+        self.memory.empty_bin(self.owner)
+        self.assertEqual(self.memory.bin(self.owner)['items'], [])
+        self.clock[0] = 1000 + 90 * DAY
+        [receipt] = self.memory.apply_retention(self.owner)
+        self.assertEqual((receipt['layer'], receipt['reason'], receipt['removed']), ('absolute', 'retention_ended', []))
+        # Once the end is journalled as absolute, later cycles leave it alone.
+        self.assertEqual(self.memory.apply_retention(self.owner), [])
+        lifecycle.restore(backup, self.db)
+        self.assertEqual(self.claim(self.status, self.restored()[1])['state'], 'forgotten')
+
 
 class AbsoluteDeleteTests(Base):
     def test_an_absolute_delete_needs_the_id_typed_and_skips_the_bin(self):
@@ -316,6 +332,17 @@ class SourceTests(Base):
         self.assertEqual([(c['kind'], c['subject']) for c in result['came_back']], [('source_forgotten', 'source')])
         store, _ = self.restored()
         self.assertEqual(len(store.knowledge(self.owner)['nodes']), 1)
+
+    def test_removing_a_source_absolutely_after_ordinarily_empties_the_bin_of_its_statements(self):
+        self.forget(self.status)
+        lifecycle.forget_source(self.store, self.owner, 'source')
+        [item] = self.memory.bin(self.owner)['items']
+        receipt = lifecycle.forget_source(self.store, self.owner, 'source', absolute=True)
+        self.assertEqual(receipt['bin_copies_removed'], 1)
+        self.assertEqual(self.memory.bin(self.owner)['items'], [])
+        with self.assertRaises(Fault) as caught:
+            self.memory.undo(self.owner, item['id'], {})
+        self.assertEqual(caught.exception.code, 'not_in_bin')
 
     def test_removing_a_source_absolutely_holds_through_a_restore(self):
         backup = self.backup()
