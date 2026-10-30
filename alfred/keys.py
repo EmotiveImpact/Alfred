@@ -38,6 +38,7 @@ import sys
 import time
 import unicodedata
 
+from .disk_encryption import LUKS, check as disk_check
 from .local import Fault, ident
 
 FORMAT, VERSION = 'alfred-keyring', 1
@@ -963,70 +964,29 @@ def unlock(keyring: Keyring, *, prompt=None, environ=None, run=None, attempts=TR
 
 # Full-disk encryption ------------------------------------------------------
 
-def _command(arguments) -> str:
-    try:
-        run = subprocess.run(arguments, capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.SubprocessError):
-        raise Fault('command_unavailable', 503) from None
-    if run.returncode:
-        raise Fault('command_failed', 503)
-    return run.stdout
+def _sentence(text: str) -> str:
+    return text[:1].upper() + text[1:] + ('' if text.endswith('.') else '.')
 
 
-def _dm_crypt(sysfs: Path, device: tuple[int, int]) -> str | None:
-    """Walk from a block device down through what it sits on; the name of a dm-crypt layer, '' if none, None if unknown."""
-    start = sysfs / 'dev' / 'block' / f'{device[0]}:{device[1]}'
-    if not start.exists():
-        return None
-    seen, stack = set(), [start.resolve()]
-    while stack:
-        node = stack.pop()
-        if node in seen or len(seen) > 64:
-            continue
-        seen.add(node)
-        try:
-            if (node / 'dm' / 'uuid').read_text().startswith('CRYPT-'):
-                return (node / 'dm' / 'name').read_text().strip() if (node / 'dm' / 'name').exists() else node.name
-        except OSError:
-            pass
-        slaves = node / 'slaves'
-        if slaves.is_dir():
-            stack.extend(child.resolve() for child in slaves.iterdir())
-    return ''
+def disk_encryption(path, *, system=None, check=disk_check) -> dict:
+    """Whether full-disk encryption protects ``path``: on, off, not_detected or unknown, and why.
 
-
-def disk_encryption(path, *, system=None, run=None, sysfs='/sys', device=None) -> dict:
-    """Whether full-disk encryption protects ``path``: on, off, not_detected or unknown, and why."""
-    system = sys.platform if system is None else system
-    path = Path(path).expanduser().absolute()
-    if system == 'darwin':
-        try:
-            output = (run or _command)(['/usr/bin/fdesetup', 'status'])
-        except Fault:
-            return {'status': 'unknown', 'detail': 'fdesetup could not report whether FileVault is on.'}
-        if 'FileVault is On' in output:
-            return {'status': 'on', 'detail': 'FileVault is on.'}
-        if 'FileVault is Off' in output:
-            return {'status': 'off', 'detail': 'FileVault is off. Turn it on in System Settings, Privacy & Security.'}
-        return {'status': 'unknown', 'detail': 'fdesetup gave an answer ALFRED does not recognise.'}
-    if system.startswith('linux'):
-        if device is None:
-            probe = path
-            while not probe.exists() and probe != probe.parent:
-                probe = probe.parent
-            info = os.stat(probe)
-            device = (os.major(info.st_dev), os.minor(info.st_dev))
-        if device[0] == 0:
-            return {'status': 'unknown', 'detail': f'{path} is on a virtual or network file system (such as overlay, tmpfs, '
-                    'btrfs or NFS), so ALFRED cannot see whether the disk beneath it is encrypted.'}
-        found = _dm_crypt(Path(sysfs), device)
-        if found is None:
-            return {'status': 'unknown', 'detail': 'The block device could not be found under /sys.'}
-        if found:
-            return {'status': 'on', 'detail': f'{path} is on the dm-crypt (LUKS) device {found}.'}
-        return {'status': 'not_detected', 'detail': f'{path} is not on a dm-crypt (LUKS) device. A cloud provider may encrypt '
-                'the disk outside the server, which ALFRED cannot see; check the provider\'s settings.'}
-    return {'status': 'unknown', 'detail': f'ALFRED cannot check full-disk encryption on {system}.'}
+    ALFRED has one detector, ``alfred.disk_encryption.check``, the check ``desk serve`` runs at
+    start; this only words its answer for ``keys disk``, ``init``, ``status`` and the doctor. A
+    Linux disk with no LUKS layer is ``not_detected`` rather than off, because a cloud provider
+    may encrypt the disk outside the server, where no check can see.
+    """
+    result = check(Path(path).expanduser(), system=system)
+    if result.state == 'on':
+        method = f' ({result.method})' if result.method else ''
+        note = f' {_sentence(result.detail)}' if result.detail else ''
+        return {'status': 'on', 'detail': f'Full-disk encryption is on{method}.{note}'}
+    if result.state == 'off' and result.method == LUKS:
+        return {'status': 'not_detected', 'detail': f'{_sentence(result.detail)} A cloud provider may encrypt the disk '
+                "outside the server, which ALFRED cannot see; check the provider's settings."}
+    if result.state == 'off':
+        return {'status': 'off', 'detail': f'{_sentence(result.detail)} Turn it on in System Settings, Privacy & Security.'}
+    return {'status': 'unknown', 'detail': f'Not confirmed: {result.detail}.'}
 
 
 # Command line ----------------------------------------------------------------

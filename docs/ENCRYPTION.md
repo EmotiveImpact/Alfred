@@ -168,11 +168,12 @@ from Time Machine (`tmutil addexclusion`) and rely on the recovery kit copy inst
 ## Full-disk encryption check
 
 `python3 -m alfred.keys disk` and the `doctor` report whether the disk under the data folder is
-encrypted: FileVault on a Mac (`fdesetup status`), a dm-crypt (LUKS) layer on Linux, found
-through `/sys`. Statuses are `on`, `off` (FileVault off), `not_detected` (Linux with no LUKS
-layer, which includes provider-side encryption ALFRED cannot see) and `unknown` (overlay,
-network or other file systems, other operating systems). The doctor warns on anything but
-`on`; it does not yet refuse to start, which comes with sealing in step 2.
+encrypted, using the same check `desk serve` runs at start ([DISK_ENCRYPTION.md](DISK_ENCRYPTION.md)):
+FileVault on a Mac, a dm-crypt (LUKS) layer through LVM and RAID on Linux. Statuses are `on`,
+`off` (FileVault off), `not_detected` (Linux with no LUKS layer, which includes provider-side
+encryption ALFRED cannot see) and `unknown` (anything the check cannot read, and other
+operating systems). The doctor warns on anything but `on`; `desk serve --disk-encryption
+require` refuses to start without it.
 
 ## How it works
 

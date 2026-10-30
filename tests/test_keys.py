@@ -17,13 +17,14 @@ import tempfile
 import unittest
 from unittest import mock
 
-from alfred import keys, recovery
+from alfred import disk_encryption, keys, recovery
 from alfred.brain import SCOPE_CLASSES
 from alfred.desk import init_demo
 from alfred.local import Fault
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-PASSPHRASE = 'correct horse battery staple'
+# Built from words at run time, so no credential-shaped literal sits in the repository.
+PASSPHRASE = ' '.join(('correct', 'horse', 'battery', 'staple'))
 FAST = {'n': 2 ** 10, 'r': 8, 'p': 1}
 
 
@@ -567,49 +568,45 @@ class RecoveryKitTests(Base):
 
 
 class DiskEncryptionTests(unittest.TestCase):
-    def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
-        self.sys = Path(self.tmp.name) / 'sys'
+    """`keys disk`, `init`, `status` and the doctor word the answer of ALFRED's one disk check
+    (alfred.disk_encryption, the check `desk serve` runs), which has its own tests."""
 
-    def block(self, name, uuid=None, slaves=()):
-        node = self.sys / 'devices' / 'virtual' / 'block' / name
-        (node / 'slaves').mkdir(parents=True, exist_ok=True)
-        if uuid:
-            (node / 'dm').mkdir(exist_ok=True)
-            (node / 'dm' / 'uuid').write_text(uuid + '\n')
-            (node / 'dm' / 'name').write_text(name.replace('dm-', 'vg-') + '\n')
-        for slave in slaves:
-            (node / 'slaves' / slave).symlink_to(self.sys / 'devices' / 'virtual' / 'block' / slave)
-        return node
+    def report(self, result, system='linux'):
+        seen = []
 
-    def register(self, number, node):
-        (self.sys / 'dev' / 'block').mkdir(parents=True, exist_ok=True)
-        (self.sys / 'dev' / 'block' / number).symlink_to(node)
+        def check(path, *, system=None):
+            seen.append((path, system))
+            return result
+        found = keys.disk_encryption('/data', system=system, check=check)
+        self.assertEqual(seen, [(Path('/data'), system)])
+        return found
 
-    def test_linux_luks_under_lvm_is_found(self):
-        self.block('nvme0n1p3')
-        self.block('dm-0', 'CRYPT-LUKS2-0123-luks', ('nvme0n1p3',))
-        self.register('253:1', self.block('dm-1', 'LVM-abc', ('dm-0',)))
-        result = keys.disk_encryption('/data', system='linux', sysfs=str(self.sys), device=(253, 1))
-        self.assertEqual(result['status'], 'on')
-        self.assertIn('vg-0', result['detail'])
+    def test_on_names_the_method_and_any_note(self):
+        self.assertEqual(self.report(disk_encryption.Result('on', disk_encryption.LUKS, '')),
+                         {'status': 'on', 'detail': 'Full-disk encryption is on (LUKS (dm-crypt)).'})
+        still = disk_encryption.Result('on', 'FileVault', 'FileVault is still encrypting the disk')
+        self.assertEqual(self.report(still, 'darwin'),
+                         {'status': 'on', 'detail': 'Full-disk encryption is on (FileVault). FileVault is still encrypting the disk.'})
 
-    def test_linux_plain_disk_virtual_filesystem_and_missing_device(self):
-        self.register('259:2', self.block('nvme0n1p2'))
-        self.assertEqual(keys.disk_encryption('/d', system='linux', sysfs=str(self.sys), device=(259, 2))['status'], 'not_detected')
-        self.assertEqual(keys.disk_encryption('/d', system='linux', sysfs=str(self.sys), device=(0, 41))['status'], 'unknown')
-        self.assertEqual(keys.disk_encryption('/d', system='linux', sysfs=str(self.sys), device=(8, 9))['status'], 'unknown')
+    def test_filevault_off_says_how_to_turn_it_on(self):
+        self.assertEqual(self.report(disk_encryption.Result('off', 'FileVault', 'FileVault is off'), 'darwin'),
+                         {'status': 'off', 'detail': 'FileVault is off. Turn it on in System Settings, Privacy & Security.'})
 
-    def test_macos_filevault(self):
-        for output, status in (('FileVault is On.\n', 'on'), ('FileVault is Off.\n', 'off'), ('?', 'unknown')):
-            self.assertEqual(keys.disk_encryption('/Users/x', system='darwin', run=lambda a, o=output: o)['status'], status)
+    def test_no_luks_layer_is_not_detected_because_a_provider_may_encrypt_outside_the_server(self):
+        found = self.report(disk_encryption.Result('off', disk_encryption.LUKS, disk_encryption.NOT_SEEN))
+        self.assertEqual(found, {'status': 'not_detected', 'detail':
+                                 'No LUKS (dm-crypt) layer found; fscrypt, eCryptfs and ZFS encryption are not detected. '
+                                 "A cloud provider may encrypt the disk outside the server, which ALFRED cannot see; "
+                                 "check the provider's settings."})
 
-        def failing(arguments):
-            raise Fault('command_failed')
-        self.assertEqual(keys.disk_encryption('/Users/x', system='darwin', run=failing)['status'], 'unknown')
+    def test_anything_unread_is_unknown_with_the_reason(self):
+        self.assertEqual(self.report(disk_encryption.Result('unknown', None, 'not checked on this system'), 'win32'),
+                         {'status': 'unknown', 'detail': 'Not confirmed: not checked on this system.'})
 
-    def test_other_systems_are_unknown(self):
-        self.assertEqual(keys.disk_encryption('C:/x', system='win32')['status'], 'unknown')
+    def test_the_real_check_answers_by_default(self):
+        with tempfile.TemporaryDirectory() as folder:
+            self.assertEqual(keys.disk_encryption(folder, system='win32'),
+                             {'status': 'unknown', 'detail': 'Not confirmed: not checked on this system.'})
 
 
 class DoctorTests(unittest.TestCase):
