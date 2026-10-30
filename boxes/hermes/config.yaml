@@ -1,0 +1,39 @@
+# ALFRED's settings for the sealed Hermes box (docs/HERMES_BOX.md).
+#
+# The runner copies this file into the box's throwaway Hermes home before Hermes starts,
+# then reads the settings back through Hermes's own loader and reports them to ALFRED.
+# ALFRED sends no task until every value below is the one Hermes actually reads
+# (alfred/hermes_box.py, OVERRIDES). Each one closes a default listed in docs/AGENT_HUB.md.
+auth:
+  adopt_external_logins: false        # never borrow Claude Code or Codex logins
+approvals:
+  mode: manual                        # no second model decides; ALFRED's gate does
+  cron_mode: deny
+  single_query_mode: deny
+  unattended_mode: deny
+memory:
+  memory_enabled: false               # ALFRED is the only memory
+  user_profile_enabled: false
+  write_approval: true                # anything that slips through is staged, never saved
+  provider: ""
+skills:
+  write_approval: true
+auxiliary:
+  background_review:
+    enabled: false                    # no background fork that writes memories or skills
+curator:
+  enabled: false                      # ALFRED curates
+security:
+  allow_lazy_installs: false          # never install packages on demand
+  approval:
+    transport: builtin
+    transport_fallback: deny
+updates:
+  check: false                        # ALFRED's daily watch replaces update checks
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false
+plugins:
+  enabled: [alfred_gate]              # ALFRED's tool gate, and nothing else
+  auto_update_check_hours: 0

@@ -495,6 +495,15 @@ class BrainPolicy:
 
 # Budget meter ----------------------------------------------------------------
 
+class BrainFailure(Exception):
+    """A brain's own account of why it could not finish, as a job reason code. Lets a
+    brain that runs elsewhere (alfred.hermes_box) say why, instead of 'brain_error'."""
+
+    def __init__(self, reason):
+        super().__init__(reason)
+        self.reason = reason if isinstance(reason, str) and REASON.fullmatch(reason) else 'brain_error'
+
+
 class BudgetExceeded(Exception):
     def __init__(self, dimension):
         super().__init__(dimension)
@@ -646,6 +655,8 @@ class BrainBackend(WorkerBackend):
             reason = 'over_budget_' + exc.dimension
         except Stopped as exc:
             reason = 'cancelled' if str(exc) == 'cancelled' else 'brain_error'
+        except BrainFailure as exc:
+            reason = exc.reason
         except Fault:
             reason = 'brain_output_invalid'
         except Exception:  # A brain failing is a result to record, not a host crash.

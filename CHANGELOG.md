@@ -2,6 +2,14 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 30 October 2026: Hermes in a sealed box, branch `claude/project-thread-ujui2p`
+
+Master plan phase 2, first part; agent hub step H5. The owner chose Hermes as the first worker brain, run in a sealed Docker box. Synthetic data and a scripted stand-in model only; no real model was called and nothing is wired into the host. Waiting for the owner's word to merge.
+
+- **The sealed box.** `boxes/hermes/` pins Hermes at commit `8fe53200` (the one reviewed in the source library), its hashed wheel list and the base image digest; `tools/build_hermes_box.py` builds only if every pin holds. One box per task: no network, read-only, not root, home and task folder in memory, no Docker log, removed when the task ends. [Guide](docs/HERMES_BOX.md).
+- **Hermes behind the plug.** `alfred/hermes_box.py`: the box proves its build, its settings (as Hermes itself reads them), its tool gate and its lack of network before anything private is sent. Hermes holds no key; ALFRED makes each model call, refuses provider-side tools, caps each call to the budget and charges the provider's usage. Every tool call is asked of ALFRED first; only `file.read` inside `/work` can be granted. A brain can now report why it stopped (`BrainFailure`), instead of a bare `brain_error`.
+- **The six fence tests.** `tools/hermes_fence.py` runs them against the real box with real Hermes inside: memory and skill writes, every turn through ALFRED, the skills folder, nothing fetched at start, nothing left on disk, and no private area on a cloud model unless allowed; plus a planted instruction ending as a refused proposal. All hold. A new CI job rebuilds the box and reruns them. [Receipt](docs/evidence/hermes-box/RECEIPT.md).
+
 ## 18 October 2026: the disk encryption check and the checks in CI, branches `claude/project-thread-att046-disk-check` and `-ci-checks`
 
 Merged with the owner's word on 18 October. Synthetic data only; nothing deployed.
