@@ -12,11 +12,11 @@ counts every token. Every tool Hermes wants to use is asked of ALFRED first, and
 ALFRED's yes. Six fence tests prove all of this against the real box, with real Hermes inside
 and a scripted stand-in for the model, so no cloud model and no real data are involved.
 
-The host can now build Hermes onto the goal hub with the Claude provider (below), but
-`desk serve` does not offer it yet, and no real model has been called. Both wait for the Claude
-key to be readable from the Mac keychain or a server's secret store, which reuses the readers
-encryption step 1 adds. On 30 October 2026 the owner chose which areas may use cloud AI:
-personal notes only, to start. Company and client tasks stay local.
+`desk serve --hub hermes` puts Hermes on the goal hub with the Claude provider (below), reading
+the Claude key from the Mac keychain or a server's secret store. No real model has been called
+yet: the first run is on the owner's Mac. On 30 October 2026 the owner chose which areas may use
+cloud AI, personal notes only to start, and the model, Claude Opus 5.5. Company and client tasks
+stay local.
 
 ## What is in the box
 
@@ -106,15 +106,43 @@ it has a default:
 | Setting | What it is |
 |---|---|
 | `record` | What `tools/build_hermes_box.py --record` wrote. At start, its pin hash, this checkout's `pin.json` and the local image's pin label must all agree (`load_box`), or nothing is built |
-| `model` | The Claude model, by its exact name |
+| `model` | The Claude model, by its exact name. The owner's choice is `claude-opus-5-5` |
 | `price` | Pence per 1,000 tokens, charged on input and output alike. Set it from the model's output price, rounded up, so ALFRED's money count never runs below the bill |
-| `key_source` | Where the Claude key is read from at each call |
+| `key_source` | Where the Claude key is read from at each call: the macOS login keychain, or a file only its owner can read (a server's secret store, or a systemd credential), with encryption step 1's readers. Never ALFRED's keyring file |
 | `cloud_areas` | The areas whose notes may go to Claude. The owner's choice is `personal` |
 
 Hermes is registered beside the synthetic test brain. The policy allows the cloud for the named
 areas only, so a mandate that names Hermes for a company or client goal is refused when it is
 made, and a task is refused again before a box starts. The policy allows no tool yet: a task's
 excerpts are in its prompt, so one model call answers it.
+
+`desk serve` takes the same settings, and checks the image before it takes its lock:
+
+    python3 -m alfred.desk serve --hub hermes --hermes-record <box-record.json> \
+        --hermes-model <model> --hermes-price <pence> --cloud-area personal --claude-key keychain
+
+`--claude-key file --claude-key-file <absolute path>` or `--claude-key credential
+--claude-key-credential <name>` read it from a server's secret store instead.
+`python3 -m alfred.desk claude-key-check --claude-key keychain` says whether the key can be read,
+from where and how long it is. It never shows the key and calls nothing.
+
+## The first run on a Mac
+
+1. Docker Desktop (or another Docker engine for Mac) running. Docker Desktop is free for personal
+   use and small businesses; its terms say who must pay.
+2. Build the box once, which fetches Hermes at its pinned commit:
+   `python3 tools/build_hermes_box.py --record ~/.local/share/alfred/hermes-box.json`.
+3. Run the fences on the Mac before any note goes in:
+   `python3 tools/hermes_fence.py --record ~/.local/share/alfred/hermes-box.json`.
+4. Put the Claude key in the login keychain with Apple's own tool, which asks for it without
+   showing it: `security add-generic-password -a default -s alfred.provider.anthropic -w`.
+   Then `python3 -m alfred.desk claude-key-check --claude-key keychain`.
+5. Start the desk with the line above, with `--hermes-model claude-opus-5-5 --hermes-price 2`.
+   The price is the model's output price per million tokens from Anthropic's pricing page
+   ($20 for Claude Opus 5.5), in pence per 1,000 tokens, rounded up; recheck it when prices change.
+6. In the console's goals panel: an overall budget, a mandate for a personal goal that names
+   `hermes`, and a first task. The first runs use the synthetic demo workspace; real notes wait
+   for encryption step 2.
 
 ## ALFRED's settings for Hermes
 
@@ -167,12 +195,9 @@ The offline half (protocol, relay, gate, reply, settings table, runner line) is
 ## What this does not do yet
 
 - **No real model has been called.** `alfred/anthropic_provider.py` is the Claude provider the
-  relay uses: one fixed host over TLS, no redirects, and the key read from a key source at
-  each call and dropped after it, never stored, logged or passed to the box. It is tested
-  offline only. Its two key sources, the Mac keychain and a server's secret file or systemd
-  credential, will use the readers in `alfred/keys.py` once encryption step 1 is merged.
-- **Not offered by `desk serve` yet.** The host wiring exists and is tested in process; the
-  `--hub hermes` switch comes with the key sources.
+  relay uses: one fixed host over TLS, no redirects, and the key read from its source at each
+  call and dropped after it, never stored, logged or passed to the box. It is tested offline
+  only, against stand-ins for the connection, the keychain and the secret store.
 - **Thinking across a run of calls.** Hermes treats ALFRED's forwarder as an outside endpoint,
   not Anthropic's own, so it drops Claude's thinking from earlier turns when it sends the
   conversation back. Today's tasks are one call, so nothing is lost. Before tools are granted
