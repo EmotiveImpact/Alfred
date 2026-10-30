@@ -599,11 +599,12 @@ def _held(db, entry):
     """A short label if the restored copy holds the subject unforgotten, else None."""
     scope, subject = entry['scope'], entry['subject']
     if entry['kind'] == 'source_forgotten':
+        from . import sealing
         if not db.execute("SELECT 1 FROM credentials WHERE id=? AND scope=? AND role='source' AND revoked=0", (subject, scope)).fetchone():
             return None
-        row = db.execute('SELECT label FROM knowledge_sources WHERE scope=? AND source=?', (scope, subject)).fetchone() \
+        row = db.execute('SELECT scope,source,label FROM knowledge_sources WHERE scope=? AND source=?', (scope, subject)).fetchone() \
             if _has(db, 'knowledge_sources') else None
-        return row[0] if row else subject
+        return sealing.open_row(sealing.of(db), 'knowledge_sources', row)['label'] if row else subject
     if not _has(db, 'memory_claims'):
         return None
     def name(identity):
