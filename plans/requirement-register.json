@@ -647,13 +647,16 @@
     "docs/evidence/hub-verify/RECEIPT.md",
     "docs/evidence/hub-integrate/RECEIPT.md",
     "tests/test_hub_integrate.py",
-    "tools/check_hub_integrate_browser.py"
+    "tools/check_hub_integrate_browser.py",
+    "tests/test_hermes_box.py",
+    "tools/hermes_fence.py",
+    "docs/evidence/hermes-box/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Bounded packets and an optional tool-free local model adapter. No dependable reasoning runtime selected. Console questions use the existing queue. Agent hub brain plug (docs/AGENT_HUB.md, H1, 16 October): packet and result contracts, brain policy, budget meter and a synthetic brain; no real model. Hub steps H2 to H4 (16 October): mandates over executive goals with budgets, automatic pause, heartbeats and operator controls; a deterministic daily learning loop with a review inbox, a one-action daily list and an owner trusted-kinds rule limited to writing style; owner-declared acceptance checks that gate brain-proposed drafts. Synthetic brain only; the host does not construct a goal hub until a real brain exists (H5). Wired together the same day: mandate acceptance checks travel in every authorised packet, routing notes come from verified outcomes and goal setbacks, and verification is available over HTTP and in the console."
+   "notes": "Bounded packets and an optional tool-free local model adapter. No dependable reasoning runtime selected. Console questions use the existing queue. Agent hub brain plug (docs/AGENT_HUB.md, H1, 16 October): packet and result contracts, brain policy, budget meter and a synthetic brain; no real model. Hub steps H2 to H4 (16 October): mandates over executive goals with budgets, automatic pause, heartbeats and operator controls; a deterministic daily learning loop with a review inbox, a one-action daily list and an owner trusted-kinds rule limited to writing style; owner-declared acceptance checks that gate brain-proposed drafts. Synthetic brain only; the host does not construct a goal hub until a real brain exists (H5). Wired together the same day: mandate acceptance checks travel in every authorised packet, routing notes come from verified outcomes and goal setbacks, and verification is available over HTTP and in the console. H5 (30 October): the owner chose Hermes as the first worker brain, run in a sealed Docker box (docs/HERMES_BOX.md): pinned build, no network, memory-only home removed after each task, the key held by ALFRED and every model call metered, every tool call asked of ALFRED first. The six fence tests hold against the real box with a scripted stand-in model. Not wired into the host; no real model has been called; every area is local only until the owner names the cloud areas."
   },
   {
    "id": "INT-002",

@@ -68,6 +68,28 @@ jobs:
           name: alfred-unified-core
           path: /tmp/alfred-unified-core
           retention-days: 7
+  hermes-box:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build the sealed Hermes box from its pins and run the six fence tests against it
+        run: |
+          set -euo pipefail
+          # Synthetic data and a scripted stand-in model only: no key, no cloud model (docs/HERMES_BOX.md).
+          mkdir -p /tmp/alfred-hermes-box
+          git rev-parse HEAD > /tmp/alfred-hermes-box/TESTED_COMMIT.txt
+          docker version --format '{{.Server.Version}}' > /tmp/alfred-hermes-box/docker.txt
+          python3 tools/build_hermes_box.py --record /tmp/alfred-hermes-box/record.json 2>&1 | tee /tmp/alfred-hermes-box/build.txt
+          python3 tools/hermes_fence.py --record /tmp/alfred-hermes-box/record.json --receipt /tmp/alfred-hermes-box/fences.json 2>&1 | tee /tmp/alfred-hermes-box/fences.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: alfred-hermes-box
+          path: /tmp/alfred-hermes-box
+          retention-days: 7
   backend-browser:
     runs-on: ubuntu-latest
     timeout-minutes: 15
