@@ -77,6 +77,10 @@ METERED = ('steps', 'tokens', 'money_pence')
 # Capabilities a brain may propose at autonomy 2. Each still needs exact approval.
 PROPOSABLE = ('message.draft',)
 ACTION_TTL = 3600
+# The agent drafts list (docs/AGENT_DRAFTS.md): drafts shown at once, the longest address
+# the owner may type, and how each action state reads in it.
+MAX_DRAFTS_VIEW, MAX_TYPED_PLACE = 100, 320
+DRAFT_STATES = {'queued': 'approved', 'executing': 'approved', 'verified': 'saved', 'cancelled': 'cancelled'}
 MAX_ANSWER, MAX_QUOTE, MAX_CITATIONS = 4000, 400, 16
 MAX_ARTEFACTS, MAX_ARTEFACT_CONTENT = 8, 64000
 MAX_ACTIONS, MAX_SUGGESTIONS, MAX_LOG = 8, 8, 1000
@@ -106,7 +110,7 @@ CREATE TABLE IF NOT EXISTS brain_proposals(
  id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES brain_tasks(job_id), scope TEXT NOT NULL,
  actor TEXT NOT NULL, position INTEGER NOT NULL, capability TEXT NOT NULL, parameters TEXT,
  fingerprint TEXT NOT NULL, reason TEXT NOT NULL, cites TEXT NOT NULL, disposition TEXT NOT NULL,
- refusal TEXT, action_id TEXT, created INTEGER NOT NULL, provenance TEXT,
+ refusal TEXT, action_id TEXT, created INTEGER NOT NULL, provenance TEXT, confirmation TEXT, dismissed INTEGER,
  CHECK(disposition IN ('dropped_observe','draft_only','pending_approval','refused')));
 CREATE TABLE IF NOT EXISTS brain_suggestions(
  id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES brain_tasks(job_id), scope TEXT NOT NULL,
@@ -853,9 +857,11 @@ class BrainHub:
             if 'scrubbed' not in {r[1] for r in db.execute('PRAGMA table_info(brain_tasks)')}:
                 # Additive: tasks submitted before packets were scrubbed (C4) record nothing here.
                 db.executescript('BEGIN IMMEDIATE;\nALTER TABLE brain_tasks ADD COLUMN scrubbed TEXT;\nCOMMIT;')
-            if 'provenance' not in {r[1] for r in db.execute('PRAGMA table_info(brain_proposals)')}:
-                # Additive: proposals recorded before the provenance gate carry no label.
-                db.executescript('BEGIN IMMEDIATE;\nALTER TABLE brain_proposals ADD COLUMN provenance TEXT;\nCOMMIT;')
+            # Additive: proposals recorded before the provenance gate carry no label, and those
+            # recorded before the agent drafts list were never confirmed or dismissed.
+            for column, kind in (('provenance', 'TEXT'), ('confirmation', 'TEXT'), ('dismissed', 'INTEGER')):
+                if column not in {r[1] for r in db.execute('PRAGMA table_info(brain_proposals)')}:
+                    db.executescript(f'BEGIN IMMEDIATE;\nALTER TABLE brain_proposals ADD COLUMN {column} {kind};\nCOMMIT;')
 
     # Packet ------------------------------------------------------------
 
@@ -1204,6 +1210,225 @@ class BrainHub:
                 self.store.log(db, p['scope'], p['id'], 'brain.suggestion_dismissed', suggestion_id)
             return {'id': suggestion_id, 'state': 'dismissed'}
 
+    # Agent drafts (docs/AGENT_DRAFTS.md) ---------------------------------------
+
+    def _readable(self, bearer, envelope_sha) -> bool:
+        """Whether the person may still read every source the result was made from."""
+        if not envelope_sha:
+            return False
+        try:
+            self.jobs.artefact(bearer, envelope_sha)
+            return True
+        except Fault:
+            return False
+
+    @staticmethod
+    def _own_proposal(db, p, proposal_id):
+        row = db.execute('SELECT * FROM brain_proposals WHERE id=? AND scope=? AND actor=?',
+                         (proposal_id, p['scope'], p['id'])).fetchone()
+        if not row:
+            raise Fault('not_found', 404)
+        return row
+
+    def _draft_state(self, db, row, action) -> str:
+        if row['disposition'] == 'refused':
+            return 'stopped'
+        if row['disposition'] == 'draft_only':
+            return 'suggested'
+        if action is None:
+            return 'missing'
+        if action['state'] == 'proposed':
+            if action['expires'] <= self.store.now():
+                return 'expired'
+            return 'waiting' if self.store.evidence_valid(db, action) else 'changed'
+        return DRAFT_STATES.get(action['state'], action['state'])
+
+    def _draft_view(self, bearer, db, row, readable, packets) -> dict:
+        if row['job_id'] not in packets:
+            job = db.execute('SELECT parameters FROM jobs WHERE id=?', (row['job_id'],)).fetchone()
+            packets[row['job_id']] = json.loads(job['parameters'])['packet']['context']
+        excerpts = {}
+        for item in packets[row['job_id']]:
+            try:
+                note = self.store.knowledge_note(bearer, item['note_id']) if readable else None
+            except Fault:
+                note = None
+            excerpts[item['id']] = ({'note': note['id'], 'title': note['title'], 'available': True} if note
+                                    else {'note': None, 'title': None, 'available': False})
+        action = (db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (row['scope'], row['action_id'])).fetchone()
+                  if row['action_id'] else None)
+        state = self._draft_state(db, row, action)
+        label = json.loads(row['provenance']) if row['provenance'] else None
+        confirmation = json.loads(row['confirmation']) if row['confirmation'] else None
+        brain_parameters = json.loads(row['parameters'])
+        parameters = confirmation['parameters'] if confirmation else brain_parameters
+
+        def shown(value):
+            if not readable:
+                return None
+            text = value.get('text') if row['capability'] in PROPOSABLE else None
+            return text if isinstance(text, str) else _compact(value)
+        held = row['disposition'] == 'refused' and row['refusal'] == provenance.STEERED
+        return {'id': row['id'], 'job': row['job_id'], 'position': row['position'], 'created': row['created'],
+                'capability': row['capability'], 'state': state, 'disposition': row['disposition'],
+                'refusal': row['refusal'], 'fingerprint': row['fingerprint'],
+                'reason': row['reason'] if readable else None, 'text': shown(parameters),
+                'original_text': shown(brain_parameters) if confirmation and parameters != brain_parameters else None,
+                'sources_readable': readable, 'verdict': label['verdict'] if label else None,
+                'places': [{**place, 'value': place['value'] if readable else None} for place in label['places']] if label else [],
+                'cited': label['cited'] if label else [], 'copied': label['copied'] if label else [], 'excerpts': excerpts,
+                'action': {'id': action['id'], 'state': action['state'], 'fingerprint': action['fingerprint'],
+                           'expires_at': action['expires'], 'current': state == 'waiting'} if action else None,
+                'confirmed': {'at': confirmation['at'], 'verdict': confirmation['label']['verdict'],
+                              'places': [{**place, 'held': place['held'] if readable else None,
+                                          'confirmed': place['confirmed'] if readable else None}
+                                         for place in confirmation['places']]} if confirmation else None,
+                'can': {'approve': state == 'waiting', 'confirm': held and readable and row['dismissed'] is None,
+                        'dismiss': state != 'approved'}}
+
+    def drafts(self, bearer) -> dict:
+        """Every draft a brain proposed to the caller under autonomy 1 or 2, newest first, with
+        where its contents came from and what the owner may do with it. Text, reasons and
+        places are withheld once the result's sources can no longer be read. Owner-only."""
+        base = {'mode': self.provenance_mode, 'basis': provenance.BASIS, 'authority_granted': False, 'sends_anything': False}
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner', 'reader'})
+            if p['role'] != 'owner':
+                return {**base, 'available': False, 'reason': 'owner_only', 'drafts': [], 'counts': {}}
+            rows = db.execute("""SELECT d.*,r.envelope_sha256 FROM brain_proposals d JOIN brain_results r ON r.job_id=d.job_id
+                WHERE d.scope=? AND d.actor=? AND d.disposition!='dropped_observe' ORDER BY d.created DESC,d.rowid DESC""",
+                              (p['scope'], p['id'])).fetchall()
+        readable = {sha: self._readable(bearer, sha) for sha in {r['envelope_sha256'] for r in rows}}
+        listed, packets = [], {}
+        with self.store.transaction() as db:
+            self.store.authenticate(db, bearer, {'owner'})
+            for row in rows:
+                if row['dismissed'] is None and len(listed) < MAX_DRAFTS_VIEW:
+                    listed.append(self._draft_view(bearer, db, row, readable[row['envelope_sha256']], packets))
+        counts = {'waiting': 0, 'stopped': 0, 'suggested': 0, 'other': 0,
+                  'dismissed': sum(r['dismissed'] is not None for r in rows)}
+        for item in listed:
+            counts[item['state'] if item['state'] in counts else 'other'] += 1
+        return {**base, 'available': True, 'reason': None, 'drafts': listed, 'counts': counts}
+
+    def _draft(self, bearer, proposal_id) -> dict:
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner'})
+            row = self._own_proposal(db, p, proposal_id)
+            envelope = db.execute('SELECT envelope_sha256 FROM brain_results WHERE job_id=?', (row['job_id'],)).fetchone()[0]
+        readable = self._readable(bearer, envelope)
+        with self.store.transaction() as db:
+            self.store.authenticate(db, bearer, {'owner'})
+            return self._draft_view(bearer, db, self._own_proposal(db, p, proposal_id), readable, {})
+
+    @staticmethod
+    def _typed_places(held, typed) -> list:
+        """Each value the owner typed, checked to be exactly one place of the held kind."""
+        if len(typed) != len(held):
+            raise Fault('invalid_places')
+        confirmed = []
+        for place, value in zip(held, typed):
+            if type(value) is not str or len(value) > MAX_TYPED_PLACE:
+                raise Fault('invalid_places')
+            value = value.strip()
+            found = provenance.places(value)
+            if len(found) != 1 or found[0][0] != place['kind']:
+                raise Fault('invalid_places')
+            whole = (re.fullmatch(r'[\d ()+-]+', value) if place['kind'] == 'phone'
+                     else provenance.normalise(value) == found[0][1])
+            if not whole:
+                raise Fault('invalid_places')
+            confirmed.append((place, value, found[0][1]))
+        return confirmed
+
+    def confirm_places(self, bearer, proposal_id, body) -> dict:
+        """The owner types each address a held draft got from a note. The same address
+        confirms it; a different one replaces it in the draft as written. The draft then
+        becomes an action that waits for approval of its exact text, like any other, and
+        the brain's own proposal is kept as it was. Approves nothing; sends nothing."""
+        ident(proposal_id)
+        if type(body) is not dict or set(body) != {'fingerprint', 'places'} or type(body['places']) is not list:
+            raise Fault('invalid_fields')
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner'})
+            row = self._own_proposal(db, p, proposal_id)
+            if row['dismissed'] is not None:
+                raise Fault('proposal_dismissed', 409)
+            seen = body['fingerprint']
+            if not isinstance(seen, str) or not SHA256.fullmatch(seen) or not secrets.compare_digest(seen, row['fingerprint']):
+                raise Fault('proposal_changed', 409)
+            confirmation = json.loads(row['confirmation']) if row['confirmation'] else None
+            held = row['disposition'] == 'refused' and row['refusal'] == provenance.STEERED
+            if confirmation is None and (not held or row['capability'] not in PROPOSABLE):
+                raise Fault('not_held', 409)
+            envelope = db.execute('SELECT envelope_sha256 FROM brain_results WHERE job_id=?', (row['job_id'],)).fetchone()[0]
+            packet = json.loads(db.execute('SELECT parameters FROM jobs WHERE id=?', (row['job_id'],)).fetchone()[0])['packet']
+            label = json.loads(row['provenance'])
+        typed = self._typed_places([place for place in label['places'] if place['source'] != 'owner'], body['places'])
+        parameters = json.loads(row['parameters'])
+        for place, value, key in typed:
+            if key != place['value']:
+                parameters, count = _swap(parameters, place['kind'], place['value'], value)
+                if not count:
+                    raise Fault('address_hidden_in_text', 409)
+        if confirmation is not None:
+            if confirmation['parameters'] != parameters:
+                raise Fault('not_held', 409)
+            return {'draft': self._draft(bearer, proposal_id), 'authority_granted': False}
+        if not self._readable(bearer, envelope):
+            raise Fault('sources_changed', 409)
+        owner = dict(packet, instruction=packet['instruction'] + '\n' + '\n'.join(value for _, value, _ in typed))
+        relabel = provenance.label(owner, {'parameters': parameters, 'cites': json.loads(row['cites'])})
+        if relabel['verdict'] == provenance.STEERED:
+            raise Fault('address_not_confirmed', 409)
+        digest = hashlib.sha256(_compact({'capability': row['capability'], 'parameters': parameters}).encode()).hexdigest()
+        action_id = 'act-bc-' + hashlib.sha256(f'{proposal_id}|{digest}'.encode()).hexdigest()[:24]
+        self.store.propose(bearer, {'id': action_id, 'capability': row['capability'], 'parameters': parameters,
+                                    'expires_at': self.store.now() + ACTION_TTL})
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner'})
+            current = self._own_proposal(db, p, proposal_id)
+            if current['action_id'] != action_id:
+                if current['disposition'] != 'refused' or current['dismissed'] is not None:
+                    conflict = 'proposal_dismissed' if current['dismissed'] is not None else 'not_held'
+                else:
+                    conflict = None
+                    record = {'at': self.store.now(), 'refusal': current['refusal'], 'parameters': parameters,
+                              'places': [{'kind': place['kind'], 'held': place['value'], 'confirmed': key,
+                                          'replaced': key != place['value']} for place, _, key in typed],
+                              'label': relabel, 'basis': 'owner_typed_each_place'}
+                    db.execute("""UPDATE brain_proposals SET disposition='pending_approval',refusal=NULL,action_id=?,confirmation=?
+                        WHERE id=?""", (action_id, _compact(record), proposal_id))
+                    self.store.log(db, p['scope'], p['id'], 'brain.proposal_places_confirmed', proposal_id)
+        if current['action_id'] != action_id and conflict:
+            self.store.cancel(bearer, action_id)  # Never leave an action no draft offers.
+            raise Fault(conflict, 409)
+        return {'draft': self._draft(bearer, proposal_id), 'authority_granted': False}
+
+    def dismiss_draft(self, bearer, proposal_id, body) -> dict:
+        """Hide a draft from the list. Its record stays; an action still waiting for approval
+        is cancelled with it. One already approved and not yet saved cannot be dismissed."""
+        ident(proposal_id)
+        if body != {}:
+            raise Fault('invalid_fields')
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner'})
+            row = self._own_proposal(db, p, proposal_id)
+            if row['dismissed'] is not None:
+                return {'id': proposal_id, 'dismissed': True}
+            action = (db.execute('SELECT state FROM actions WHERE scope=? AND id=?', (p['scope'], row['action_id'])).fetchone()
+                      if row['action_id'] else None)
+            if action and action['state'] in ('queued', 'executing'):
+                raise Fault('draft_in_progress', 409)
+        if action and action['state'] == 'proposed':
+            self.store.cancel(bearer, row['action_id'])
+        with self.store.transaction() as db:
+            p = self.store.authenticate(db, bearer, {'owner'})
+            if db.execute('UPDATE brain_proposals SET dismissed=? WHERE id=? AND dismissed IS NULL',
+                          (self.store.now(), proposal_id)).rowcount:
+                self.store.log(db, p['scope'], p['id'], 'brain.draft_dismissed', proposal_id)
+        return {'id': proposal_id, 'dismissed': True}
+
 
 def action_current(store, db, row):
     """Approval and dispatch condition for an action a brain proposed at autonomy 2.
@@ -1244,6 +1469,19 @@ def action_current(store, db, row):
                 or not permitted(db, principal, note['source'], now, 'read')):
             return False
     return True
+
+
+def _swap(value, kind, held, new):
+    """``(value, count)``: parameters with one place replaced in every string, as written."""
+    if isinstance(value, str):
+        return provenance.replace(value, kind, held, new)
+    if isinstance(value, dict):
+        pairs = {k: _swap(v, kind, held, new) for k, v in value.items()}
+        return {k: v for k, (v, _) in pairs.items()}, sum(n for _, n in pairs.values())
+    if isinstance(value, list):
+        pairs = [_swap(v, kind, held, new) for v in value]
+        return [v for v, _ in pairs], sum(n for _, n in pairs)
+    return value, 0
 
 
 def new_task_id(prefix='brain-task') -> str:
