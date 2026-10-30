@@ -239,10 +239,80 @@ choosing it over SQLCipher (below).
 | Evidence | `tests/test_keys.py`; CI installs the pinned file and runs the whole suite with it |
 | Alternative considered | SQLCipher: encrypts the whole database file with one key. Per-area erasure would need one database per area, and it needs a special SQLite build on the Mac |
 
+## Step 2: sealing what ALFRED stores (being built)
+
+Step 2 seals the private text in ALFRED's database with the area keys, in five parts. Only the
+last one lets you switch a workspace to sealed, so no workspace you use is ever half sealed:
+
+1. The sealing layer and the notes ALFRED reads from your vault (this part).
+2. Reviewed memory, its forgetting bin, and capture.
+3. Conversations, executive records, drafts and actions.
+4. Learning, the agent brain, goals, jobs and their cached files.
+5. Switching on: a `seal` command that converts a workspace, refusing to start without the
+   key, sealed backups and exports, compaction after forgetting, re-sealing after key
+   rotation, and a final scan of the database, its log and its backups for private text.
+
+**What part 1 seals.** For every note ALFRED indexes: its folder path, title, text, tags,
+aliases, headings and link targets; the vault's label and settings and the errors a scan
+reports (which name paths); the path history and sync conflict paths; and the note's stable
+id from its front matter. For an import through a connector: its label, its receipts and the
+ids of the items it brought in. The SHA-256 fingerprints kept beside them become keyed
+fingerprints (HMAC-SHA256 under a key derived from the area's first key), so someone holding
+the file cannot check a guess at what a note says, and destroying the area makes them
+meaningless too. Front-matter and item ids are keyed the same way, so they still match
+exactly. In a sealed workspace every `sha256` value ALFRED keeps or returns for a note, and
+the short references in the audit log, are this keyed form.
+
+**Rescanning.** A value whose text has not changed keeps the sealed form already stored, so
+rescanning an unchanged vault seals nothing and writes no new ciphertext; an edited note
+seals only its changed text and its new history entry. Each value is sealed under its own
+key derived from the area key, so even a very large number of rescans stays far inside what
+the cipher allows for one key.
+
+**What stays visible** without the key: how many notes and links there are, when each was
+indexed, its revision and status, its kind (note, project, person and so on), its random id,
+which area it belongs to, and roughly how long each piece of text is.
+
+**How a sealed workspace behaves.** The database records which keyring sealed it. ALFRED
+refuses to open it without that keyring (`workspace_locked`) or with another one
+(`wrong_keyring`), and refuses to treat a plain workspace already in use as sealed
+(`workspace_not_sealed`); converting one is the `seal` command's job in part 5. A database
+that holds sealed values but has lost its sealing record is refused whichever way it is opened
+(`sealing_record_damaged`), so plain text can never be written beside sealed text. Restoring
+from a backup makes the same checks. Search checks a reader's grants before opening anything
+and never writes the open text back. A bounded cache (64 MiB) keeps opened text while ALFRED
+runs; a destroyed area stops opening at once, cached or not, and forgetting a source empties
+the cache.
+
+**For developers.** [`alfred/sealing.py`](../alfred/sealing.py) lists every table that holds
+private text in `TABLES`, with the columns naming a row, the sealed columns and the
+fingerprint columns. Code reading such a table passes each row through `store.opened(...)`;
+code writing one seals with `store.sealed(...)`; code keeping a hash of private text passes
+the plain SHA-256 through `store.sealer.fingerprint(...)`. Sealed values differ every time,
+so a sealed column is compared and sorted in Python, never in SQL. In a plain workspace all
+of these return what they were given. `python tests/sealed_suite.py` runs every application
+test with each workspace sealed by a synthetic keyring, child processes included; CI runs it
+on every change, and [`tests/test_sealing.py`](../tests/test_sealing.py) checks that a sealed
+workspace's database, write-ahead log and shared memory hold none of its notes' words, paths
+or plain fingerprints.
+
 ## Honest limits
 
-- **Nothing is sealed yet.** This step makes and manages the keys. Records, indexes, exports
-  and backups are sealed in step 2.
+- **Nothing is sealed yet in a workspace you use.** Step 1 makes and manages the keys. Step 2
+  seals records, indexes, exports and backups; until its last part, a workspace cannot be
+  switched to sealed, and the tables later parts cover (reviewed memory and its forgetting bin, conversations,
+  executive records, drafts and actions, learning, goals and jobs) still keep plain text and
+  plain fingerprints.
+- **Sync conflict rows** are bound to their vault rather than to one conflict, so someone able
+  to write to the database could swap two conflict paths of the same vault. They still cannot
+  read them.
+- **Older text can be put back.** A sealed value is bound to its table, column and row but not
+  to the note's revision, so someone able to write to the database could put back a note's
+  text from an earlier copy of it. They still cannot read it, and the next scan of the vault
+  replaces it.
+- **Moving a note to another area** will change its keyed fingerprints and keyed ids, which
+  are made per area. Part 5, which brings folder and source rules for areas, has to carry a
+  note's identity across such a move.
 - **Untested on a real Mac and server.** The keychain is tested through a stand-in for Apple's
   `security` tool and FileVault through a stand-in for `fdesetup`. They should be run once on
   your Mac before real data goes in.

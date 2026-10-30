@@ -132,11 +132,32 @@ class LocalCore:
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nPRAGMA user_version=2; COMMIT;')
             from .policy import initialise
             initialise(db)
+        self._attach_sealer()
         self.path.chmod(0o600)
+
+    def _attach_sealer(self):
+        """Find this database's sealer and check that it matches (encryption step 2)."""
+        from . import sealing
+        self.sealer = sealing.for_path(self.path)
+        with self.transaction() as db:
+            sealing.check(db, self.sealer, self.clock)
+
+    def opened(self, table, row):
+        """A row of a table in ``sealing.TABLES`` with its sealed columns opened; None stays None."""
+        from .sealing import open_row
+        return open_row(self.sealer, table, row)
+
+    def sealed(self, table, area, row, stored=None):
+        """A row with its sealed columns sealed under ``area``, ready to write. ``stored`` is
+        the row as the database holds it now: unchanged columns keep their sealed value."""
+        from .sealing import seal_row
+        return seal_row(self.sealer, table, area, row, stored)
 
     @contextmanager
     def connection(self):
-        db = sqlite3.connect(self.path, timeout=5, isolation_level=None)
+        from .sealing import Connection, PLAIN
+        db = sqlite3.connect(self.path, timeout=5, isolation_level=None, factory=Connection)
+        db.sealer = getattr(self, 'sealer', PLAIN)
         db.row_factory = sqlite3.Row
         db.execute('PRAGMA foreign_keys=ON')
         db.execute('PRAGMA synchronous=FULL')

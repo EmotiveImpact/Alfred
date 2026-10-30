@@ -166,10 +166,10 @@ def projection(server, bearer):
         bodies = {}
         if expected:
             marks = ','.join('?' * len(expected))
-            for row in db.execute(f"SELECT id,body,revision,sha256 FROM knowledge_notes WHERE scope=? AND status='ready' AND id IN ({marks})",
+            for row in db.execute(f"SELECT scope,source,id,body,revision,sha256 FROM knowledge_notes WHERE scope=? AND status='ready' AND id IN ({marks})",
                                   (scope, *expected)):
                 if (row['revision'], row['sha256']) == expected[row['id']]:
-                    bodies[row['id']] = row['body']
+                    bodies[row['id']] = store.opened('knowledge_notes', row)['body']
         if len(bodies) != len(expected):
             raise Fault('projection_data_changed', 409)
         approvals = []

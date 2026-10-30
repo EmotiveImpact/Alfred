@@ -25,6 +25,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from grant_helpers import grant_all, revoke_all
+import stored_helpers as stored
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 PLAN = '# Plan\nAlpha bravo charlie.\n\nDelta echo.\n'
@@ -159,7 +160,7 @@ class SubmissionTests(Base):
         bound = job['inputs'][0]
         self.assertEqual((bound['type'], bound['id'], bound['source'], bound['revision']),
                          ('note', self.notes['Plan'], 'source', 1))
-        self.assertEqual(bound['source_sha256'], hashlib.sha256(PLAN.encode()).hexdigest())
+        self.assertEqual(bound['source_sha256'], stored.digest(self.store, PLAN))
         self.fault('input_revision_changed', self.jobs.submit, self.owner,
                    self.request(key='k2', inputs=[{'note': self.notes['Plan'], 'revision': 7}]))
 

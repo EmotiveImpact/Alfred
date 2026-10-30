@@ -9,11 +9,10 @@ not duplicated. Invalidated statement values are cleared on reconciliation.
 Every review transition is also appended to a value-free history (memory_history).
 """
 from __future__ import annotations
-import hashlib
 import json
 import secrets
 from .local import Fault, exact, ident, text, timestamp, fingerprint
-from . import memory_bin, memory_history
+from . import memory_bin, memory_history, sealing
 from .policy import ledger, migrate_ledgers, person_credentials
 
 KINDS = ('person', 'organisation', 'project', 'asset', 'decision', 'commitment', 'event')
@@ -118,12 +117,14 @@ class ReviewedMemory:
         first, last = ref['start_line'], ref['end_line']
         if type(first) is not int or type(last) is not int or not 1 <= first <= last or last-first >= 8:
             raise Fault('invalid_memory_source_range')
-        n = db.execute('''SELECT n.* FROM knowledge_notes n
+        raw = db.execute('''SELECT n.* FROM knowledge_notes n
           JOIN knowledge_sources s ON n.scope=s.scope AND n.source=s.source
           JOIN credentials c ON c.scope=n.scope AND c.id=n.source
           WHERE n.scope=? AND n.id=? AND n.status='ready' AND s.status IN ('ready','attention')
           AND c.role='source' AND c.revoked=0 AND c.expires>?''',
           (scope, ref['note_id'], now)).fetchone()
+        sealer = sealing.of(db)
+        n = sealing.open_row(sealer, 'knowledge_notes', raw)
         from .policy import permitted
         if not n or (principal is not None and not permitted(db,principal,n['source'],now)) or n['sha256'] != ref['sha256'] or n['revision'] != ref['revision']:
             raise Fault('memory_source_changed', 409)
@@ -135,7 +136,7 @@ class ReviewedMemory:
             raise Fault('memory_source_excerpt_capacity')
         return {'note_id':n['id'], 'path':n['path'], 'title':n['title'], 'sha256':n['sha256'],
                 'revision':n['revision'], 'start_line':first, 'end_line':last, 'quote':quote,
-                'quote_hash':hashlib.sha256(quote.encode()).hexdigest()}
+                'quote_hash':sealer.fingerprint(sealing.area_of(raw['body']), sealing.text_digest(quote))}
 
     @staticmethod
     def _ref(c):
@@ -154,8 +155,10 @@ class ReviewedMemory:
         use, so losing access withholds a review instead of destroying it, and restoring
         access restores it while the supporting revision is unchanged.
         """
-        n = db.execute('SELECT status,sha256,revision,body FROM knowledge_notes WHERE scope=? AND id=?',
-                       (scope, c['note_id'])).fetchone()
+        raw = db.execute('SELECT scope,source,id,status,sha256,revision,body FROM knowledge_notes WHERE scope=? AND id=?',
+                         (scope, c['note_id'])).fetchone()
+        sealer = sealing.of(db)
+        n = sealing.open_row(sealer, 'knowledge_notes', raw)
         if not n or n['status'] == 'missing':
             return 'changed'
         if n['status'] != 'ready':
@@ -166,7 +169,8 @@ class ReviewedMemory:
         if c['last_line'] > len(lines):
             return 'changed'
         quote = '\n'.join(lines[c['first_line']-1:c['last_line']])
-        return 'changed' if hashlib.sha256(quote.encode()).hexdigest() != c['quote_hash'] else 'current'
+        digest = sealer.fingerprint(sealing.area_of(raw['body']), sealing.text_digest(quote))
+        return 'changed' if digest != c['quote_hash'] else 'current'
 
     def _reconcile(self, db, p):
         for row in db.execute("SELECT * FROM memory_claims WHERE scope=? AND actor=? AND state!='invalidated' AND (value IS NOT NULL OR object_id IS NOT NULL)",

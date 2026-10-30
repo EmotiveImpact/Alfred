@@ -17,7 +17,7 @@ from urllib.parse import unquote, urlsplit
 from .local import Fault, canonical
 from .desk_store import DeskStore
 from .desk_runtime import Supervisor
-from . import sync_conflicts
+from . import sealing, sync_conflicts
 
 KINDS = ('map', 'project', 'person', 'decision', 'procedure', 'note')
 MAX_NOTES, MAX_BYTES, MAX_TOTAL, MAX_LINKS = 256, 65536, 4194304, 8192
@@ -309,6 +309,14 @@ def note_structure(path, body):
                            for r, text in zip(parsed['refs'], parsed['link_text'])]}
 
 
+def nocase(value):
+    """Sort key matching SQLite's NOCASE collation, which folds only ASCII letters."""
+    return value.translate(NOCASE)
+
+
+NOCASE = str.maketrans('ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')
+
+
 def note_id(source, path):
     """Legacy ID retained only when migrating an already indexed path."""
     return hashlib.sha256((source + '\0' + path).encode()).hexdigest()[:24]
@@ -415,8 +423,9 @@ class KnowledgeStore(DeskStore):
         """Persist selection outside the vault; a restart cannot adopt a replacement root."""
         with self.transaction() as db:
             p = self.authenticate(db, bearer, {'source'}); key = (p['scope'], p['id'])
-            old = db.execute('SELECT * FROM knowledge_vaults WHERE scope=? AND source=?', key).fetchone()
+            old = self.opened('knowledge_vaults', db.execute('SELECT * FROM knowledge_vaults WHERE scope=? AND source=?', key).fetchone())
             config = json.dumps(configuration, sort_keys=True)
+            area = self.source_area(db, *key)
             if old:
                 if old['configuration'] != config: raise Fault('vault_selection_changed')
                 if root_identity and old['device'] is not None and root_identity != (old['device'], old['inode']):
@@ -426,11 +435,29 @@ class KnowledgeStore(DeskStore):
                     db.execute('UPDATE knowledge_vaults SET device=?,inode=? WHERE scope=? AND source=?', (*root_identity,*key))
             else:
                 vault_id = secrets.token_hex(12)
+                row = self.sealed('knowledge_vaults', area, {'scope':key[0],'source':key[1],'configuration':config})
                 db.execute('INSERT INTO knowledge_vaults VALUES (?,?,?,?,?,?,?)',
-                           (*key,vault_id,*(root_identity or (None,None)),config,0))
-            db.execute("INSERT OR IGNORE INTO knowledge_sources VALUES (?,?,?,?,?,?,?)",
-                       (*key,label,self.now(),'unavailable','[]',''))
+                           (*key,vault_id,*(root_identity or (None,None)),row['configuration'],0))
+            if not db.execute('SELECT 1 FROM knowledge_sources WHERE scope=? AND source=?', key).fetchone():
+                row = self.sealed('knowledge_sources', area, {'scope':key[0],'source':key[1],'label':label,'errors':'[]'})
+                db.execute('INSERT INTO knowledge_sources VALUES (?,?,?,?,?,?,?)',
+                           (*key,row['label'],self.now(),'unavailable',row['errors'],''))
             return vault_id
+
+    def source_area(self, db, scope, source):
+        """The area a source's own records (label, settings, errors) are sealed under. Until
+        source rules arrive (step 2, part 5), every source is in the workspace's default area."""
+        return sealing.default_area(db)
+
+    def note_area(self, db, scope, source, path):
+        """The area a note is sealed and fingerprinted under. Every caller asks here, so folder
+        rules (step 2, part 5) change one place. Until then a note is in its source's area."""
+        return self.source_area(db, scope, source)
+
+    def note_fingerprint(self, db, scope, source, path, digest):
+        """A plain SHA-256 of a note's text (or of its path) in the form the index keeps:
+        keyed for the note's area in a sealed workspace."""
+        return self.sealer.fingerprint(self.note_area(db, scope, source, path), digest)
 
     @staticmethod
     def vault_write(capability):
@@ -531,26 +558,37 @@ class KnowledgeStore(DeskStore):
                 external_ids.add(external)
         conflicts = sync_conflicts.checked(conflicts, paths, {n['path'].casefold(): n['sha256'] for n in notes})
         notes = sorted(notes, key=lambda n:n['path'])
-        snapshot = hashlib.sha256(json.dumps([(n['path'],n['sha256']) for n in notes], sort_keys=True).encode()).hexdigest()
         with self.transaction() as db:
             p = self.authenticate(db, bearer, {'source'}); scope, source = p['scope'], p['id']
+            # In a sealed workspace the stored digests are keyed (sealing.py); key the scanner's
+            # once, so every comparison below is between values of the same form.
+            area = self.source_area(db, scope, source)
+            areas = {n['path']: self.note_area(db, scope, source, n['path']) for n in notes}
+            notes = [n | {'sha256': self.sealer.fingerprint(areas[n['path']], n['sha256']),
+                          'external_id': self.external_key(areas[n['path']], n.get('external_id'))} for n in notes]
+            snapshot = self.sealer.fingerprint(area, hashlib.sha256(json.dumps([(n['path'],n['sha256']) for n in notes], sort_keys=True).encode()).hexdigest())
             selection = db.execute('SELECT vault_id FROM knowledge_vaults WHERE scope=? AND source=?', (scope,source)).fetchone()
             if selection and vault_id != selection['vault_id']: raise Fault('vault_selection_required')
-            old_source = db.execute('SELECT * FROM knowledge_sources WHERE scope=? AND source=?', (scope,source)).fetchone()
+            # Raw rows are kept beside the opened ones: a value whose text has not changed is
+            # written back as it was, so an unchanged rescan seals nothing new.
+            old_raw = db.execute('SELECT * FROM knowledge_sources WHERE scope=? AND source=?', (scope,source)).fetchone()
+            old_raw = dict(old_raw) if old_raw else None
+            old_source = self.opened('knowledge_sources', old_raw)
             if rebuild:
                 # MEM-012: drop only the projections, in this same transaction. The durable catalogue
                 # (history, identities, vault binding) then restores every identity and revision below.
                 for table in ('knowledge_notes','knowledge_refs','knowledge_anchors'):
                     db.execute(f'DELETE FROM {table} WHERE scope=? AND source=?', (scope,source))
-            prior = [dict(r) for r in db.execute('SELECT n.*,i.external_id,i.device,i.inode FROM knowledge_notes n LEFT JOIN knowledge_identity i USING(scope,source,id) WHERE n.scope=? AND n.source=?', (scope,source))]
+            stored = {r['id']: dict(r) for r in db.execute('SELECT n.*,i.external_id,i.device,i.inode FROM knowledge_notes n LEFT JOIN knowledge_identity i USING(scope,source,id) WHERE n.scope=? AND n.source=?', (scope,source))}
+            prior = [self.opened('knowledge_notes', r) for r in stored.values()]
             # Rebuild removed projections from the durable catalogue, not filenames.
             present = {r['id'] for r in prior}
             for h in db.execute('SELECT h.*,i.external_id,i.device,i.inode FROM knowledge_history h LEFT JOIN knowledge_identity i USING(scope,source,id) WHERE h.scope=? AND h.source=? AND h.revision=(SELECT max(x.revision) FROM knowledge_history x WHERE x.scope=h.scope AND x.source=h.source AND x.id=h.id)', (scope,source)):
-                if h['id'] not in present: prior.append(dict(h) | {'indexed':h['recorded']})
+                if h['id'] not in present: prior.append(self.opened('knowledge_history', h) | {'indexed':h['recorded']})
             # Seed the migration journal without altering old evidence IDs or revisions.
             for row in prior:
-                db.execute('INSERT OR IGNORE INTO knowledge_history VALUES (?,?,?,?,?,?,?,?)',
-                           (scope,source,row['id'],row['revision'],row['path'],row['sha256'],row['status'],row['indexed']))
+                if not db.execute('SELECT 1 FROM knowledge_history WHERE scope=? AND source=? AND id=? AND revision=?', (scope,source,row['id'],row['revision'])).fetchone():
+                    self._history(db, scope, source, row['id'], row['revision'], row['path'], row['sha256'], row['status'], row['indexed'])
             assigned, used = [], set()
             current_files = {tuple(n['file_identity']):n['path'] for n in notes if n.get('file_identity')}
             for n in notes:
@@ -591,6 +629,10 @@ class KnowledgeStore(DeskStore):
                                    or (old_source and old_source['status']=='unavailable'))
                 revision = row['revision'] + int(bool(changed)) if row else 1
                 assigned.append((n,identity,revision))
+            stored_anchors = {r['id']: dict(r) for r in db.execute('SELECT * FROM knowledge_anchors WHERE scope=? AND source=?', (scope,source))}
+            stored_refs = {}
+            for r in db.execute('SELECT * FROM knowledge_refs WHERE scope=? AND source=?', (scope,source)):
+                stored_refs.setdefault((r['origin'],r['line'],r['syntax'],r['relation']), []).append(dict(r))
             db.execute('DELETE FROM knowledge_refs WHERE scope=? AND source=?', (scope,source))
             db.execute('DELETE FROM knowledge_anchors WHERE scope=? AND source=?', (scope,source))
             for row in prior:
@@ -598,23 +640,30 @@ class KnowledgeStore(DeskStore):
                 failed = any(e.get('path')==row['path'] or row['path'].startswith(e.get('path','')+'/') for e in errors if e.get('path'))
                 state = 'unavailable' if failed else 'missing'
                 revision = row['revision'] + int(row['status']!=state)
-                db.execute("UPDATE knowledge_notes SET status=?,revision=?,body='',tags='[]',aliases='[]' WHERE scope=? AND source=? AND id=?",
-                           (state,revision,scope,source,row['id']))
-                db.execute('INSERT OR IGNORE INTO knowledge_history VALUES (?,?,?,?,?,?,?,?)',
-                           (scope,source,row['id'],revision,row['path'],row['sha256'],state,self.now()))
+                empty = self.sealed('knowledge_notes', self.note_area(db,scope,source,row['path']),
+                                    {'scope':scope,'source':source,'id':row['id'],'body':'','tags':'[]','aliases':'[]'}, stored.get(row['id']))
+                db.execute("UPDATE knowledge_notes SET status=?,revision=?,body=?,tags=?,aliases=? WHERE scope=? AND source=? AND id=?",
+                           (state,revision,empty['body'],empty['tags'],empty['aliases'],scope,source,row['id']))
+                if not db.execute('SELECT 1 FROM knowledge_history WHERE scope=? AND source=? AND id=? AND revision=?', (scope,source,row['id'],revision)).fetchone():
+                    self._history(db, scope, source, row['id'], revision, row['path'], row['sha256'], state, self.now())
             for n,identity,revision in assigned:
+                note = self.sealed('knowledge_notes', areas[n['path']], {'scope':scope,'source':source,'id':identity,'path':n['path'],'title':n['title'],
+                                   'tags':json.dumps(n['tags']),'aliases':json.dumps(n['aliases']),'body':n['body']}, stored.get(identity))
                 db.execute('INSERT INTO knowledge_notes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(scope,source,id) DO UPDATE SET path=excluded.path,title=excluded.title,kind=excluded.kind,tags=excluded.tags,aliases=excluded.aliases,body=excluded.body,sha256=excluded.sha256,revision=excluded.revision,modified=excluded.modified,indexed=excluded.indexed,status=excluded.status',
-                           (scope,source,identity,n['path'],n['title'],n['kind'],json.dumps(n['tags']),json.dumps(n['aliases']),n['body'],n['sha256'],revision,n['modified'],self.now(),'ready'))
+                           (scope,source,identity,note['path'],note['title'],n['kind'],note['tags'],note['aliases'],note['body'],n['sha256'],revision,n['modified'],self.now(),'ready'))
                 db.execute('INSERT INTO knowledge_identity VALUES (?,?,?,?,?,?) ON CONFLICT(scope,source,id) DO UPDATE SET external_id=excluded.external_id,device=excluded.device,inode=excluded.inode',
                            (scope,source,identity,n.get('external_id'),*n.get('file_identity',(None,None))))
-                db.execute('INSERT OR IGNORE INTO knowledge_history VALUES (?,?,?,?,?,?,?,?)',
-                           (scope,source,identity,revision,n['path'],n['sha256'],'ready',self.now()))
-                db.execute('INSERT INTO knowledge_anchors VALUES (?,?,?,?)', (scope,source,identity,json.dumps(n.get('anchors',[]))))
-                db.executemany('INSERT INTO knowledge_refs VALUES (?,?,?,?,?,?,?)', [(scope,source,identity,r['target'],r['line'],r['syntax'],r['relation']) for r in n['refs']])
+                if not db.execute('SELECT 1 FROM knowledge_history WHERE scope=? AND source=? AND id=? AND revision=?', (scope,source,identity,revision)).fetchone():
+                    self._history(db, scope, source, identity, revision, n['path'], n['sha256'], 'ready', self.now())
+                anchors = self.sealed('knowledge_anchors', areas[n['path']], {'scope':scope,'source':source,'id':identity,'anchors':json.dumps(n.get('anchors',[]))},
+                                      stored_anchors.get(identity))
+                db.execute('INSERT INTO knowledge_anchors VALUES (?,?,?,?)', (scope,source,identity,anchors['anchors']))
+                db.executemany('INSERT INTO knowledge_refs VALUES (?,?,?,?,?,?,?)', [(scope,source,identity,self._ref_target(areas[n['path']],scope,source,identity,r,stored_refs),r['line'],r['syntax'],r['relation']) for r in n['refs']])
             # Conflict copies are recorded with their originals' IDs, never indexed as notes (MEM-014).
             sync_conflicts.record(self,db,scope,source,conflicts,{n['path']:identity for n,identity,_ in assigned})
+            row = self.sealed('knowledge_sources', area, {'scope':scope,'source':source,'label':label,'errors':json.dumps(errors[:32])}, old_raw)
             db.execute('INSERT INTO knowledge_sources VALUES (?,?,?,?,?,?,?) ON CONFLICT(scope,source) DO UPDATE SET label=excluded.label,checked=excluded.checked,status=excluded.status,errors=excluded.errors,snapshot=excluded.snapshot',
-                       (scope,source,label,self.now(),'attention' if errors else 'ready',json.dumps(errors[:32]),snapshot))
+                       (scope,source,row['label'],self.now(),'attention' if errors else 'ready',row['errors'],snapshot))
             if db.execute('SELECT count(*) FROM knowledge_notes WHERE scope=?', (scope,)).fetchone()[0] > 10000 or db.execute('SELECT count(*) FROM knowledge_history WHERE scope=?', (scope,)).fetchone()[0] > 10000:
                 raise Fault('knowledge_history_capacity')
             if selection:
@@ -622,13 +671,61 @@ class KnowledgeStore(DeskStore):
             if not old_source or old_source['snapshot'] != snapshot:
                 self.log(db,scope,source,'knowledge.indexed',snapshot[:16])
 
+    def _ref_target(self, area, scope, source, origin, ref, stored_refs):
+        """A link target as stored: the sealed value already kept for the same link if its
+        text is unchanged, otherwise newly sealed."""
+        row = {'scope':scope,'source':source,'origin':origin,'line':ref['line'],'syntax':ref['syntax'],'relation':ref['relation'],'target':ref['target']}
+        if self.sealer.sealed:
+            for kept in stored_refs.get((origin,ref['line'],ref['syntax'],ref['relation']), ()):
+                if sealing.area_of(kept['target']) == area and self.opened('knowledge_refs', kept)['target'] == ref['target']:
+                    return kept['target']
+        return self.sealed('knowledge_refs', area, row)['target']
+
+    def _history(self, db, scope, source, identity, revision, path, digest, status, recorded):
+        row = self.sealed('knowledge_history', self.note_area(db, scope, source, path),
+                          {'scope':scope,'source':source,'id':identity,'revision':revision,'path':path})
+        db.execute('INSERT INTO knowledge_history VALUES (?,?,?,?,?,?,?,?)',
+                   (scope,source,identity,revision,row['path'],digest,status,recorded))
+
+    def file_digest(self, scope, source, path, data: bytes, db=None) -> str:
+        """A vault file's digest in the form the index keeps: keyed in a sealed workspace."""
+        plain = hashlib.sha256(data).hexdigest()
+        if not self.sealer.sealed:
+            return plain
+        if db is None:
+            with self.connection() as db:
+                return self.note_fingerprint(db, scope, source, path, plain)
+        return self.note_fingerprint(db, scope, source, path, plain)
+
+    def note_at(self, db, scope, source, path):
+        """The ready note indexed at ``path``, opened, or None. Paths are sealed, so they are
+        compared here rather than in SQL."""
+        if not self.sealer.sealed:
+            return self.opened('knowledge_notes', db.execute(
+                "SELECT * FROM knowledge_notes WHERE scope=? AND source=? AND path=? AND status='ready'", (scope, source, path)).fetchone())
+        for row in db.execute("SELECT * FROM knowledge_notes WHERE scope=? AND source=? AND status='ready'", (scope, source)):
+            note = self.opened('knowledge_notes', row)
+            if note['path'] == path:
+                return note
+        return None
+
+    def external_key(self, area, external):
+        """A note's stable id from its frontmatter, keyed in a sealed workspace like a digest."""
+        if external is None or not self.sealer.sealed:
+            return external
+        return self.sealer.fingerprint(area, sealing.text_digest(external))
+
     def knowledge_unavailable(self, bearer, code):
         with self.transaction() as db:
             # A revoked source cannot refresh its index. Readers also recheck its grant.
             p = self.authenticate(db, bearer, {'source'})
-            db.execute('INSERT OR IGNORE INTO knowledge_sources VALUES (?,?,?,?,?,?,?)', (p['scope'],p['id'],'Selected Markdown vault',self.now(),'unavailable','[]',''))
+            kept = db.execute('SELECT * FROM knowledge_sources WHERE scope=? AND source=?', (p['scope'],p['id'])).fetchone()
+            row = self.sealed('knowledge_sources', self.source_area(db, p['scope'], p['id']), {'scope':p['scope'],'source':p['id'],
+                              'label':'Selected Markdown vault','errors':json.dumps([{'code':code}])}, dict(kept) if kept else None)
+            if not kept:
+                db.execute('INSERT INTO knowledge_sources VALUES (?,?,?,?,?,?,?)', (p['scope'],p['id'],row['label'],self.now(),'unavailable',row['errors'],''))
             db.execute('UPDATE knowledge_sources SET status=\'unavailable\',errors=?,checked=? WHERE scope=? AND source=?',
-                       (json.dumps([{'code':code}]),self.now(),p['scope'],p['id']))
+                       (row['errors'],self.now(),p['scope'],p['id']))
 
     def knowledge(self, bearer, query='', kind='', *, purpose='read'):
         safe_text(query, 160)
@@ -636,19 +733,22 @@ class KnowledgeStore(DeskStore):
         with self.transaction() as db:
             p = self.authenticate(db,bearer,{'owner','reader'}); scope = p['scope']
             from .policy import permitted
-            sources = [dict(r) for r in db.execute('SELECT s.* FROM knowledge_sources s JOIN credentials c ON c.id=s.source AND c.scope=s.scope WHERE s.scope=? AND c.revoked=0 AND c.expires>?', (scope,self.now()))]
-            sources = [s for s in sources if permitted(db,p,s['source'],self.now(),purpose)]
+            # Grants are checked before anything is opened, so nothing is opened that the reader may not see.
+            sources = [self.opened('knowledge_sources', r) for r in db.execute('SELECT s.* FROM knowledge_sources s JOIN credentials c ON c.id=s.source AND c.scope=s.scope WHERE s.scope=? AND c.revoked=0 AND c.expires>?', (scope,self.now()))
+                       if permitted(db,p,r['source'],self.now(),purpose)]
             permitted = {s['source'] for s in sources if s['status'] in {'ready','attention'}}
-            notes = [dict(r) for r in db.execute('SELECT * FROM knowledge_notes WHERE scope=? AND status=\'ready\' ORDER BY path COLLATE NOCASE,id', (scope,)) if r['source'] in permitted]
+            notes = sorted((self.opened('knowledge_notes', r) for r in db.execute('SELECT * FROM knowledge_notes WHERE scope=? AND status=\'ready\'', (scope,)) if r['source'] in permitted),
+                           key=lambda n: (nocase(n['path']), n['id']))
             if len(notes)>MAX_NOTES:
                 raise Fault('knowledge_view_capacity',409)
-            anchors = {(r['source'],r['id']):json.loads(r['anchors']) for r in db.execute('SELECT * FROM knowledge_anchors WHERE scope=?', (scope,)) if r['source'] in permitted}
+            anchors = {(r['source'],r['id']):json.loads(self.opened('knowledge_anchors', r)['anchors']) for r in db.execute('SELECT * FROM knowledge_anchors WHERE scope=?', (scope,)) if r['source'] in permitted}
             selections = {r['source']:dict(r) for r in db.execute('SELECT source,vault_id,confirmed FROM knowledge_vaults WHERE scope=?', (scope,))}
             vaults = {source:r['vault_id'] for source,r in selections.items()}
             for n in notes:
                 n['anchors'] = anchors.get((n['source'],n['id']),[])
                 n['tags'], n['aliases'] = json.loads(n['tags']), json.loads(n['aliases'])
-            refs = [dict(r) for r in db.execute('SELECT * FROM knowledge_refs WHERE scope=? ORDER BY source,origin,line,target', (scope,)) if r['source'] in permitted]
+            refs = sorted((self.opened('knowledge_refs', r) for r in db.execute('SELECT * FROM knowledge_refs WHERE scope=?', (scope,)) if r['source'] in permitted),
+                          key=lambda r: (r['source'], r['origin'], r['line'], r['target']))
             if len(refs)>MAX_LINKS:
                 raise Fault('knowledge_link_view_capacity',409)
             links, issues = [], []
@@ -665,7 +765,8 @@ class KnowledgeStore(DeskStore):
                                   'target_revision':destination['revision'],'anchor':anchor})
                 elif state not in {'external','attachment_not_indexed'}:
                     issues.append({'note':r['origin'],'path':original['path'],'line':r['line'],'target':r['target'],'status':state})
-            conflicts = sync_conflicts.view([dict(r) for r in db.execute('SELECT * FROM knowledge_conflicts WHERE scope=? ORDER BY source,path', (scope,)) if r['source'] in permitted], by_id)
+            conflicts = sync_conflicts.view(sorted((self.opened('knowledge_conflicts', r) for r in db.execute('SELECT * FROM knowledge_conflicts WHERE scope=?', (scope,)) if r['source'] in permitted),
+                                                   key=lambda r: (r['source'], r['path'])), by_id)
             terms = query.casefold().split()
             selected = [n for n in notes if (not kind or n['kind']==kind) and all(t in (n['title']+' '+n['path']+' '+n['body']+' '+' '.join(n['tags']+n['aliases'])).casefold() for t in terms)]
             def public(n):
@@ -697,7 +798,7 @@ class KnowledgeStore(DeskStore):
         if not re.fullmatch(r'[0-9a-f]{24}',identity): raise Fault('invalid_note_id')
         with self.connection() as db:
             p=self.authenticate(db,bearer,{'owner','reader'})
-            row=db.execute('SELECT n.* FROM knowledge_notes n JOIN credentials c ON c.id=n.source AND c.scope=n.scope JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source WHERE n.scope=? AND n.id=? AND n.status=\'ready\' AND c.revoked=0 AND c.expires>? AND s.status IN (\'ready\',\'attention\')', (p['scope'],identity,self.now())).fetchone()
+            row=self.opened('knowledge_notes', db.execute('SELECT n.* FROM knowledge_notes n JOIN credentials c ON c.id=n.source AND c.scope=n.scope JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source WHERE n.scope=? AND n.id=? AND n.status=\'ready\' AND c.revoked=0 AND c.expires>? AND s.status IN (\'ready\',\'attention\')', (p['scope'],identity,self.now())).fetchone())
             from .policy import permitted
             if not row or not permitted(db,p,row['source'],self.now(),purpose): raise Fault('note_not_available',404)
             return {k:row[k] for k in ('id','path','title','kind','body','sha256','revision','modified','indexed')} | {'basis':'authored_note_not_verified_fact','structure':note_structure(row['path'],row['body'])}
@@ -733,6 +834,10 @@ class MarkdownVault:
             self.health.update(status='unavailable',errors=[{'code':code}])
         if hasattr(store,'vault_writers') and self.vault_id:
             store.vault_writers[self.principal['id']]=self
+
+    def digest(self,path,data):
+        """A file's digest as the index keeps it, so approved digests compare like with like."""
+        return self.store.file_digest(self.principal['scope'],self.principal['id'],path,data)
 
     def _inbox_directory(self,create):
         from .inbox import FOLDER
@@ -773,7 +878,8 @@ class MarkdownVault:
         try:
             existing=self._read_regular(fd,filename)
             if existing is not None:
-                return 'exists_same' if hashlib.sha256(existing).hexdigest()==digest else 'destination_exists'
+                from .inbox import FOLDER
+                return 'exists_same' if self.digest('/'.join((*FOLDER,filename)),existing)==digest else 'destination_exists'
             temporary='.alfred-'+secrets.token_hex(8)+'.tmp'
             out=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o600,dir_fd=fd)
             try:
@@ -853,11 +959,11 @@ class MarkdownVault:
         try:
             data,info=self._read_note_at(fd,name)
             if data is None: return 'note_unavailable'
-            digest=hashlib.sha256(data).hexdigest()
+            digest=self.digest(path,data)
             if digest==result_sha256: return 'exists_same'
             if digest!=base_sha256: return 'note_changed_since_proposal'
             result=data[:offset]+inserted+data[offset:]
-            if not 0<=offset<=len(data) or hashlib.sha256(result).hexdigest()!=result_sha256: return 'write_failed'
+            if not 0<=offset<=len(data) or self.digest(path,result)!=result_sha256: return 'write_failed'
             temporary='.alfred-'+secrets.token_hex(8)+'.tmp'
             out=os.open(temporary,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,stat.S_IMODE(info.st_mode),dir_fd=fd)
             try:

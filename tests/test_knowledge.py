@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from urllib.parse import urlsplit
+from alfred import sealing
 from alfred.knowledge import KnowledgeStore, MarkdownVault, parse_note, resolve_target
 from alfred.knowledge_context import build_packet
 from alfred.knowledge_http import knowledge_get
@@ -87,11 +88,12 @@ class KnowledgeTests(unittest.TestCase):
     def test_unchanged_revision_stable(self):self.seeded();self.scan();self.assertTrue(all(n['revision']==1 for n in self.data()['nodes']))
     def test_deletion_removes_search_body(self):
         self.seeded();p=self.vault/'Project.md';p.unlink();self.scan();self.assertEqual(self.data('monochrome')['results'],[])
-        with self.store.connection() as db:self.assertEqual(db.execute('SELECT body FROM knowledge_notes WHERE path=\'Project.md\'').fetchone()[0],'')
+        with self.store.connection() as db:rows=[sealing.open_row(self.store.sealer,'knowledge_notes',r) for r in db.execute('SELECT scope,source,id,path,body FROM knowledge_notes')]
+        self.assertEqual([r['body'] for r in rows if r['path']=='Project.md'],[''])
     def test_deletion_flags_reference(self):self.seeded();(self.vault/'Project.md').unlink();self.scan();self.assertEqual(self.data()['issues'][0]['status'],'missing')
     def test_rename_old_link_does_not_guess(self):self.seeded();(self.vault/'Project.md').rename(self.vault/'Moved.md');self.scan();self.assertEqual(self.data()['issues'][0]['target'],'Project')
     def test_source_hash_matches_disk(self):
-        self.seeded();data=self.data();n=next(n for n in data['nodes'] if n['path']=='Area.md');link=next(l for l in data['links'] if l['source']==n['id']);self.assertEqual(link['source_sha256'],hashlib.sha256((self.vault/'Area.md').read_bytes()).hexdigest())
+        self.seeded();data=self.data();n=next(n for n in data['nodes'] if n['path']=='Area.md');link=next(l for l in data['links'] if l['source']==n['id']);self.assertEqual(link['source_sha256'],self.store.sealer.fingerprint(sealing.DEFAULT_AREA,hashlib.sha256((self.vault/'Area.md').read_bytes()).hexdigest()))
     def test_map_two_hops(self):self.seeded();self.assertEqual(self.data()['map_health']['outside_two_hops'],[])
     def test_orphan_reported(self):self.seeded();self.write('orphan.md','# Orphan');self.scan();self.assertEqual(len(self.data()['map_health']['outside_two_hops']),1)
     def test_missing_map_reported(self):self.write('a.md','# A');self.scan();self.assertEqual(self.data()['map_health']['missing_map_sources'],['source'])

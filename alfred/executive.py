@@ -204,8 +204,8 @@ class ExecutiveRecords:
                     if row:
                         found = {'ref': ref, 'name': row['name'], 'kind': row['kind'], 'origin': 'reviewed_entity'}
                 elif kind == 'note':
-                    row = db.execute('''SELECT n.* FROM knowledge_notes n JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source
-                        WHERE n.scope=? AND n.id=? AND n.status='ready' AND s.status IN ('ready','attention')''', (p['scope'], key)).fetchone()
+                    row = self.store.opened('knowledge_notes', db.execute('''SELECT n.* FROM knowledge_notes n JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source
+                        WHERE n.scope=? AND n.id=? AND n.status='ready' AND s.status IN ('ready','attention')''', (p['scope'], key)).fetchone())
                     if row and permitted(db, p, row['source'], now):
                         found = {'ref': ref, 'name': row['title'], 'kind': row['kind'], 'origin': 'authored_note', 'note': dict(row)}
                 cache[ref] = found

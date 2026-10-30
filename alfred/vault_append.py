@@ -17,7 +17,6 @@ Nothing is sent anywhere.
 """
 from __future__ import annotations
 import difflib
-import hashlib
 import json
 import re
 from .local import Fault, canonical, exact, fingerprint, ident
@@ -120,8 +119,8 @@ def current(store, db, row):
     selected = _vault(db, row['scope'], params['source'])
     if not selected or selected['vault_id'] != params['vault_id']:
         return False
-    note = db.execute("SELECT path,sha256 FROM knowledge_notes WHERE scope=? AND source=? AND id=? AND status='ready'",
-                      (row['scope'], params['source'], params['note_id'])).fetchone()
+    note = store.opened('knowledge_notes', db.execute("SELECT scope,source,id,path,sha256 FROM knowledge_notes WHERE scope=? AND source=? AND id=? AND status='ready'",
+                      (row['scope'], params['source'], params['note_id'])).fetchone())
     if not note or note['path'] != params['path']:
         return False
     # Before dispatch the indexed note must still be the approved base. Once the
@@ -160,8 +159,8 @@ def propose(store, bearer, body):
         selected = _vault(db, p['scope'], body['source'])
         if not selected:
             raise Fault('vault_not_selected', 409)
-        note = db.execute("SELECT path,sha256,revision FROM knowledge_notes WHERE scope=? AND source=? AND id=? AND status='ready'",
-                          (p['scope'], body['source'], body['note_id'])).fetchone()
+        note = store.opened('knowledge_notes', db.execute("SELECT scope,source,id,path,sha256,revision FROM knowledge_notes WHERE scope=? AND source=? AND id=? AND status='ready'",
+                          (p['scope'], body['source'], body['note_id'])).fetchone())
         if not note:
             raise Fault('note_not_available', 404)
         if note['sha256'] != body['base_sha256']:
@@ -173,13 +172,13 @@ def propose(store, bearer, body):
     raw = writer.read_note(path)
     if raw is None:
         raise Fault('note_not_available', 404)
-    if hashlib.sha256(raw).hexdigest() != body['base_sha256']:
+    if writer.digest(path, raw) != body['base_sha256']:
         # The file on disk has moved on from what was indexed and shown.
         raise Fault('note_changed_since_read', 409)
     offset, inserted, result, diff = plan(path, raw, heading, body['text'])
     params = {'source': body['source'], 'vault_id': selected['vault_id'], 'path': path, 'base_revision': revision,
               **request, 'offset': offset, 'inserted': inserted.decode('utf-8'),
-              'inserted_sha256': hashlib.sha256(inserted).hexdigest(), 'result_sha256': hashlib.sha256(result).hexdigest(),
+              'inserted_sha256': writer.digest(path, inserted), 'result_sha256': writer.digest(path, result),
               'diff': diff, 'precondition': 'file_bytes_equal_base_sha256'}
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner'})
@@ -216,7 +215,7 @@ def verify(store, row):
     if writer is None:
         return None
     data = writer.read_note(params['path'])
-    if data is None or hashlib.sha256(data).hexdigest() != params['result_sha256']:
+    if data is None or writer.digest(params['path'], data) != params['result_sha256']:
         return None
     return {'type': 'vault_append_readback', 'path': params['path'], 'heading': params['heading'],
             'sha256': params['result_sha256'], 'base_sha256': params['base_sha256'], 'offset': params['offset'],

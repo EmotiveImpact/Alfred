@@ -207,15 +207,20 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
     db.execute("UPDATE credentials SET revoked=1 WHERE id=? AND scope=? AND role='source'", (source, scope))
     notes = set()
     if _has(db, 'knowledge_notes'):
-        current = db.execute('SELECT id,path FROM knowledge_notes WHERE scope=? AND source=?', (scope, source)).fetchall()
+        from . import sealing
+        sealer = sealing.of(db)
+        # Each note keeps the area its stored path was sealed under, for its tombstone below.
+        current = [sealing.open_row(sealer, 'knowledge_notes', r) | {'area': sealing.area_of(r['path']) or sealing.default_area(db)}
+                   for r in db.execute('SELECT scope,source,id,path FROM knowledge_notes WHERE scope=? AND source=?', (scope, source))]
         notes = {r['id'] for r in current}
         if _has(db, 'knowledge_history'):
             notes |= {r[0] for r in db.execute('SELECT DISTINCT id FROM knowledge_history WHERE scope=? AND source=?', (scope, source))}
         if _has(db, 'memory_tombstones'):
             for row in current:
-                # The tombstone keeps a hash of the path, not the name.
+                # The tombstone keeps a hash of the path, not the name; keyed in a sealed workspace.
+                digest = sealer.fingerprint(row['area'], hashlib.sha256(row['path'].encode()).hexdigest())
                 db.execute('INSERT OR IGNORE INTO memory_tombstones VALUES (?,?,?,?,?,?)',
-                           (scope, source, row['id'], 'sha256:' + hashlib.sha256(row['path'].encode()).hexdigest(), now, 'source_forgotten'))
+                           (scope, source, row['id'], 'sha256:' + digest, now, 'source_forgotten'))
         counts['notes_removed'] = len(current)
         if _has(db, 'memory_tombstones'):
             # Tombstones outlive an earlier ordinary removal, so an absolute one still finds its notes.
@@ -226,6 +231,8 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
                       'knowledge_anchors', 'knowledge_vaults', 'knowledge_sources'):
             if _has(db, table):
                 db.execute(f'DELETE FROM {table} WHERE scope=? AND source=?', (scope, source))
+        # Opened text of the forgotten notes leaves memory too, not only the database.
+        sealer.clear_cache()
     for table in ('knowledge_conflicts', 'connector_instances', 'connector_item_revisions', 'connector_receipts'):
         # Conflict copies name paths; connector rows name labels, files and items of this source.
         if _has(db, table):
@@ -510,7 +517,11 @@ def restore(backup_file, database, now=None, *, cache=None) -> dict:
     staging.unlink(missing_ok=True)
     staging.write_bytes(backup_file.read_bytes())
     staging.chmod(0o600)
-    db = sqlite3.connect(staging, isolation_level=None)
+    from . import sealing
+    # The restored copy is opened with the workspace's own sealer, so replayed forgets
+    # read and write it as the live database would.
+    db = sqlite3.connect(staging, isolation_level=None, factory=sealing.Connection)
+    db.sealer = sealing.for_path(database)
     db.row_factory = sqlite3.Row
     moment = int(now if now is not None else time.time())
     cache_dir = getattr(cache, 'root', None)
@@ -522,6 +533,9 @@ def restore(backup_file, database, now=None, *, cache=None) -> dict:
             latest[(entry.get('undoes', entry['kind']), entry['scope'], entry['subject'])] = entry
     try:
         db.execute('BEGIN IMMEDIATE')
+        # A sealed backup needs this workspace's keyring, and a plain one is not put back
+        # into a sealed workspace, as for any store opening a database.
+        sealing.check(db, db.sealer, lambda: moment)
         withdrawn = {'conversation_answers_withdrawn': 0, 'pending_actions_cancelled': []}
         for entry in journal:
             if entry['kind'] == 'forget_undone':
