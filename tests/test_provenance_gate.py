@@ -14,6 +14,7 @@ import unittest
 from alfred import provenance
 from alfred.brain import BrainHub, BrainRegistry, SyntheticBrain
 from alfred.local import Fault
+import stored_helpers as stored
 from test_brain_plug import Base
 
 AT = '@'
@@ -275,8 +276,8 @@ class GateTests(Base):
             db.execute('ALTER TABLE brain_proposals DROP COLUMN provenance')
         hub = self.new_hub()
         self.assertEqual(hub.ingest(self.owner, job_id)['proposals'], {'refused': 1})
-        stored = self.rows('SELECT provenance FROM brain_proposals')[0]['provenance']
-        self.assertEqual(json.loads(stored)['verdict'], 'steered_by_untrusted_text')
+        kept = stored.rows(self.store, 'brain_proposals', 'SELECT id,provenance FROM brain_proposals')[0]['provenance']
+        self.assertEqual(json.loads(kept)['verdict'], 'steered_by_untrusted_text')
         self.new_hub()  # Reopening is a no-op.
 
 

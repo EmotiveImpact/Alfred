@@ -135,6 +135,16 @@ class Workspace(unittest.TestCase):
         """Copies in the bin that name the identifier, read opened so a sealed workspace counts the same."""
         return sum(f'"{identity}"' in r['snapshot'] for r in stored.rows(store or self.store, 'memory_bin', 'SELECT id,snapshot FROM memory_bin'))
 
+    def unredacted(self, source, store=None):
+        """The source's desk observations still holding their summary or title, read opened so a
+        sealed workspace counts the same."""
+        store = store or self.store
+        bodies = stored.rows(store, 'events', 'SELECT seq,body FROM events WHERE source=?', (source,))
+        titles = stored.rows(store, 'desk_documents', 'SELECT scope,source,document_id,title FROM desk_documents WHERE source=?', (source,))
+        titles += stored.rows(store, 'desk_links', 'SELECT seq,title FROM desk_links WHERE seq IN (SELECT seq FROM events WHERE source=?)', (source,))
+        return (sum(json.loads(r['body'])['summary'] != lifecycle.REMOVED for r in bodies)
+                + sum(r['title'] != lifecycle.REMOVED for r in titles))
+
     def exports_holding(self, claims):
         held = 0
         for directory in self.root.glob('export-*'):
@@ -178,10 +188,7 @@ class Workspace(unittest.TestCase):
             'tombstones': (c('SELECT count(*) FROM memory_tombstones WHERE source=?', source), 0),
             'evidence_events': (c('SELECT count(*) FROM events WHERE source=?', source) + c('SELECT count(*) FROM desk_documents WHERE source=?', source)
                                 + c('SELECT count(*) FROM desk_links WHERE seq IN (SELECT seq FROM events WHERE source=?)', source),
-                                c("SELECT count(*) FROM events WHERE source=? AND json_extract(body,'$.summary')!=?", source, lifecycle.REMOVED)
-                                + c('SELECT count(*) FROM desk_documents WHERE source=? AND title!=?', source, lifecycle.REMOVED)
-                                + c('SELECT count(*) FROM desk_links WHERE title!=? AND seq IN (SELECT seq FROM events WHERE source=?)',
-                                    lifecycle.REMOVED, source)),
+                                self.unredacted(source, store)),
             'answers': (c('SELECT count(*) FROM conversation_turns WHERE id=?', self.turn['id']),
                         c('SELECT count(*) FROM conversation_turns WHERE id=? AND result IS NOT NULL', self.turn['id'])),
             'drafts': (c(f"SELECT count(*) FROM actions WHERE id IN ({','.join('?' * 3)})", *self.drafts),

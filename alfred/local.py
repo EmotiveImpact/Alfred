@@ -102,6 +102,33 @@ def draft_digest(db, body: str) -> str:
     return of(db).fingerprint(action_area(db), hashlib.sha256(body.encode()).hexdigest())
 
 
+# What the desk observes, in a sealed workspace (encryption step 2, part 4) -------
+#
+# An event's body (its summary and the rest of what a source reported) is sealed whole and
+# its fingerprint is keyed. Its subject is an identifier a source chose, used to order a
+# subject's events, so it is kept keyed: it still matches exactly but says nothing.
+
+def event_area(db) -> str:
+    """The area the desk's observations are sealed under. A source reports them to ALFRED
+    rather than ALFRED reading them from one note, so they are in the workspace's default area."""
+    from .sealing import DEFAULT_AREA, default_area, of
+    return default_area(db) if of(db).sealed else DEFAULT_AREA
+
+
+def event_key(db, identifier: str) -> str:
+    """An identifier a source chose (an event's subject, a desk document's id) as it is
+    stored: keyed when sealed, unchanged when plain."""
+    from .sealing import of, text_digest
+    sealer = of(db)
+    return sealer.fingerprint(event_area(db), text_digest(identifier)) if sealer.sealed else identifier
+
+
+def open_event(db, row):
+    """An event row as a dict with its body opened; None stays None."""
+    from .sealing import of, open_row
+    return open_row(of(db), 'events', row)
+
+
 def parse_json(raw: bytes) -> dict:
     if len(raw) > 16384:
         raise Fault('payload_too_large', 413)
@@ -294,6 +321,7 @@ class LocalCore:
             sim = db.execute('SELECT simulation FROM workspaces WHERE id=?', (scope,)).fetchone()[0]
             if value['basis'] == 'simulated' and not sim:
                 raise Fault('simulation_not_live', 403)
+            digest, subject = self.sealer.fingerprint(event_area(db), digest), event_key(db, value['subject'])
             previous = db.execute('SELECT * FROM events WHERE scope=? AND source=? AND event_id=?',
                                   (scope,source,value['id'])).fetchone()
             if previous:
@@ -303,7 +331,7 @@ class LocalCore:
             if db.execute('SELECT count(*) FROM events WHERE scope=?', (scope,)).fetchone()[0] >= 10000:
                 raise Fault('event_capacity', 409)
             latest = db.execute('SELECT max(observed) FROM events WHERE scope=? AND source=? AND subject=? AND kind=? AND basis=? AND reason!=?',
-                                (scope,source,value['subject'],value['kind'],value['basis'],'expired')).fetchone()[0]
+                                (scope,source,subject,value['kind'],value['basis'],'expired')).fetchone()[0]
             if now >= end:
                 route, reason = 'suppress', 'expired'
             elif latest is not None and start < latest:
@@ -316,8 +344,12 @@ class LocalCore:
                 route, reason = 'display', 'explicit_change_rule'
             else:
                 route, reason = 'queue', 'next_briefing'
-            db.execute('INSERT INTO events(scope,source,event_id,subject,kind,basis,observed,expires,received,body,fingerprint,route,reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                       (scope,source,value['id'],value['subject'],value['kind'],value['basis'],start,end,now,canonical(value),digest,route,reason))
+            # A sealed body is bound to its event's sequence number, known once the row exists.
+            sealed = self.sealer.sealed
+            seq = db.execute('INSERT INTO events(scope,source,event_id,subject,kind,basis,observed,expires,received,body,fingerprint,route,reason) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                             (scope,source,value['id'],subject,value['kind'],value['basis'],start,end,now,'' if sealed else canonical(value),digest,route,reason)).lastrowid
+            if sealed:
+                db.execute('UPDATE events SET body=? WHERE seq=?', (self.sealed('events', event_area(db), {'seq':seq,'body':canonical(value)})['body'], seq))
             self.log(db, scope, source, 'event.'+route, value['id'])
             return {'id':value['id'], 'route':route, 'reason':reason, 'synthetic_workspace':bool(sim)}
 
@@ -489,7 +521,7 @@ class LocalCore:
             sim=db.execute('SELECT simulation FROM workspaces WHERE id=?',(scope,)).fetchone()[0]
             events=[]
             for row in db.execute('SELECT * FROM events WHERE scope=? ORDER BY seq DESC LIMIT 100',(scope,)):
-                events.append({**json.loads(row['body']),'source':row['source'],'received_at':row['received'],
+                events.append({**json.loads(self.opened('events',row)['body']),'source':row['source'],'received_at':row['received'],
                                'route':row['route'],'reason':row['reason'],'stale':row['expires']<=self.now()})
             actions=[self.action_view(r) for r in db.execute('SELECT * FROM actions WHERE scope=? ORDER BY created DESC,id LIMIT 100',(scope,))]
             audit=[dict(r) for r in db.execute('SELECT seq,actor,kind,subject,at FROM audit WHERE scope=? ORDER BY seq DESC LIMIT 100',(scope,))]

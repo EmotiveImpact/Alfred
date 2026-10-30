@@ -62,8 +62,17 @@ import re
 import secrets
 import stat
 
+from . import sealing
 from .local import Fault, exact, ident, open_action, text
 from .policy import ledger, person_credentials
+
+
+def learning_area(db) -> str:
+    """The area learnings are sealed under (encryption step 2, part 4). A learning is drawn
+    from the owner's own records across areas, so it is in the workspace's default area. Its
+    statement, detail and evidence are sealed; a harvested learning's key and signature hold
+    the SHA-256 of a worker's text, so they are keyed."""
+    return sealing.default_area(db) if sealing.of(db).sealed else sealing.DEFAULT_AREA
 
 VERSION = 1
 DAY = 86400
@@ -457,7 +466,7 @@ def _hub_evidence(db, scope, creds, since, now, ev):
                       (scope, *creds, *HUB_EVENTS, since, now, MAX_SCAN)).fetchall()[::-1]
     for row in rows:
         try:
-            detail = json.loads(row['detail'])
+            detail = json.loads(sealing.open_row(sealing.of(db), 'hub_journal', row)['detail'])
         except ValueError:
             detail = {}
         detail = detail if isinstance(detail, dict) else {}
@@ -846,13 +855,15 @@ class Learning:
     def _insert(self, db, p, person, candidate, run_id, supersedes, now):
         identity = 'lp-' + secrets.token_hex(12)
         evidence = [e for e, _ in candidate['evidence']][-MAX_EVIDENCE_IDS:]
+        kept = self.store.sealed('learning_proposals', learning_area(db), {
+            'id': identity, 'statement': candidate['statement'], 'detail': _dump(candidate['detail']), 'evidence': _dump(evidence)})
         db.execute('INSERT INTO learning_proposals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                    (identity, p['scope'], person, candidate['kind'], candidate['category'], candidate['key'], candidate['rule'],
-                    candidate['signature'], candidate['statement'], _dump(candidate['detail']), _dump(evidence),
+                    candidate['signature'], kept['statement'], kept['detail'], kept['evidence'],
                     len(candidate['evidence']), candidate['threshold'], candidate['origin'], run_id, supersedes,
                     'suggested', 1, now, None, None, None, None))
         self.store.log(db, p['scope'], p['id'], 'learning.proposed', identity)
-        return dict(db.execute('SELECT * FROM learning_proposals WHERE id=?', (identity,)).fetchone())
+        return self.store.opened('learning_proposals', db.execute('SELECT * FROM learning_proposals WHERE id=?', (identity,)).fetchone())
 
     def _offer(self, db, p, candidates, run_id, now, budget, rule=None):
         """Propose what may be proposed, within the budget and capacity. Returns (offered, skipped)."""
@@ -1018,7 +1029,7 @@ class Learning:
         if not row:
             # Unknown and someone else's look alike.
             raise Fault('learning_not_found', 404)
-        return dict(row)
+        return self.store.opened('learning_proposals', row)
 
     def _accept(self, db, p, row, decision, rule=None):
         person, now = ledger(db, p), self.store.now()
@@ -1034,9 +1045,11 @@ class Learning:
         version = (db.execute('SELECT max(version) FROM learning_records WHERE scope=? AND actor=? AND key=?',
                               (p['scope'], person, row['key'])).fetchone()[0] or 0) + 1
         record = 'lrn-' + secrets.token_hex(12)
+        kept = self.store.sealed('learning_records', learning_area(db), {
+            'id': record, 'statement': row['statement'], 'detail': row['detail'], 'evidence': row['evidence']})
         db.execute('INSERT INTO learning_records VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                    (record, p['scope'], person, row['kind'], row['category'], row['key'], version, row['signature'],
-                    row['statement'], row['detail'], row['evidence'], row['origin'], row['id'], row['supersedes'], 'current',
+                    kept['statement'], kept['detail'], kept['evidence'], row['origin'], row['id'], row['supersedes'], 'current',
                     now, p['id'], rule['id'] if rule else None, rule['version'] if rule else None, now))
         if prior:
             db.execute("UPDATE learning_records SET state='superseded',changed=? WHERE id=?", (now, prior['id']))
@@ -1082,7 +1095,7 @@ class Learning:
                          (identity, p['scope'], ledger(db, p))).fetchone()
         if not row:
             raise Fault('learning_record_not_found', 404)
-        return dict(row)
+        return self.store.opened('learning_records', row)
 
     def retire(self, bearer, identity, body):
         """The owner takes an accepted learning out of use. Kept, labelled, never sent again."""
@@ -1197,7 +1210,7 @@ class Learning:
 
     def _digest(self, db, p, start, offset, now):
         person = ledger(db, p)
-        rows = [dict(r) for r in db.execute('''SELECT * FROM learning_proposals WHERE scope=? AND actor=? AND created>=? AND created<?
+        rows = [self.store.opened('learning_proposals', r) for r in db.execute('''SELECT * FROM learning_proposals WHERE scope=? AND actor=? AND created>=? AND created<?
             ORDER BY created,id''', (p['scope'], person, start, start + DAY))]
         items = [self._proposal_view(r, db=db, p=p) for r in rows]
         days = [{'day': _day_text(_day_start(r['created'], offset), offset), 'proposed': r['n']} for r in db.execute(
@@ -1265,7 +1278,7 @@ class Learning:
         if row['status'] != 'accepted':
             # A refused or stopped result is not a source of anything, harvested or otherwise.
             raise Fault('harvest_result_not_accepted', 409)
-        return dict(row)
+        return self.store.opened('brain_results', row)
 
     @staticmethod
     def _harvest_text(content, sha256):
@@ -1300,7 +1313,9 @@ class Learning:
                           'basis': 'worker_text_needs_review_never_run'}
                 if counts:
                     detail['scrubbed'] = dict(sorted(counts.items()))
-                candidates.append(_candidate(item['kind'], item['category'], origin, 'harvest:' + item['sha256'], item['sha256'],
+                # Keyed, so a learning's key cannot be used to check a guess at the worker's text.
+                keyed = self.store.sealer.fingerprint(learning_area(db), item['sha256'])
+                candidates.append(_candidate(item['kind'], item['category'], origin, 'harvest:' + keyed, keyed,
                                              content, detail, evidence, threshold=1, origin=origin))
             offered, skipped = self._offer(db, p, candidates, None, self.store.now(), None)
             return {'proposed': offered, 'not_proposed': skipped, 'auto_accepted': 0, 'executed': False,
@@ -1382,7 +1397,7 @@ class Learning:
             for row in db.execute(f'''SELECT * FROM learning_records WHERE scope=? AND actor=? AND state='current'
                     AND kind IN ({_marks(kinds) if kinds else "''"}) ORDER BY kind,accepted DESC,id''',
                                   (p['scope'], ledger(db, p), *kinds)):
-                statement = self._packet_statement(dict(row))
+                statement = self._packet_statement(self.store.opened('learning_records', row))
                 if statement is None or len(chosen) >= limit or total + len(statement) > characters:
                     continue
                 chosen.append(row['id'])
@@ -1401,13 +1416,15 @@ class Learning:
                       'origin': r['origin'], 'supersedes': r['supersedes'], 'accepted': r['accepted'],
                       'review_state': 'accepted', 'executable': False, 'grants_authority': False,
                       'basis': 'owner_accepted_procedure_draft_not_instruction'}
-                     for r in db.execute('''SELECT * FROM learning_records WHERE scope=? AND actor=? AND kind='procedure'
-                        ORDER BY key,version DESC LIMIT 64''', (p['scope'], person))]
+                     for r in map(lambda row: self.store.opened('learning_records', row), db.execute(
+                         '''SELECT * FROM learning_records WHERE scope=? AND actor=? AND kind='procedure'
+                        ORDER BY key,version DESC LIMIT 64''', (p['scope'], person)))]
             items += [{'id': r['id'], 'key': r['key'], 'version': None, 'state': 'draft_awaiting_review', 'statement': r['statement'],
                        'origin': r['origin'], 'supersedes': r['supersedes'], 'accepted': None, 'review_state': 'suggested',
                        'executable': False, 'grants_authority': False, 'basis': 'learning_suggestion_needs_review_not_instruction'}
-                      for r in db.execute('''SELECT * FROM learning_proposals WHERE scope=? AND actor=? AND kind='procedure'
-                        AND state='suggested' ORDER BY created DESC,id LIMIT 64''', (p['scope'], person))]
+                      for r in map(lambda row: self.store.opened('learning_proposals', row), db.execute(
+                          '''SELECT * FROM learning_proposals WHERE scope=? AND actor=? AND kind='procedure'
+                        AND state='suggested' ORDER BY created DESC,id LIMIT 64''', (p['scope'], person)))]
             return items
 
     @staticmethod
@@ -1446,11 +1463,11 @@ class Learning:
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
             person, now = ledger(db, p), self.store.now()
-            proposals = [self._proposal_view(dict(r), db=db, p=p) for r in db.execute(
+            proposals = [self._proposal_view(self.store.opened('learning_proposals', r), db=db, p=p) for r in db.execute(
                 '''SELECT * FROM learning_proposals WHERE scope=? AND actor=? AND (state='suggested' OR id IN (SELECT id FROM
                    learning_proposals WHERE scope=? AND actor=? AND state!='suggested' ORDER BY decided DESC,id LIMIT 20))
                    ORDER BY state!='suggested',created DESC,id''', (p['scope'], person, p['scope'], person))]
-            records = [self._record_view(dict(r)) for r in db.execute(
+            records = [self._record_view(self.store.opened('learning_records', r)) for r in db.execute(
                 '''SELECT * FROM learning_records WHERE scope=? AND actor=? AND (state='current' OR id IN (SELECT id FROM
                    learning_records WHERE scope=? AND actor=? AND state!='current' ORDER BY changed DESC,id LIMIT 20))
                    ORDER BY state!='current',kind,accepted DESC,id''', (p['scope'], person, p['scope'], person))]
@@ -1488,7 +1505,7 @@ def packet_statements(store, bearer, identities):
         for identity in identities:
             row = db.execute('SELECT * FROM learning_records WHERE id=? AND scope=? AND actor=?',
                              (identity, p['scope'], ledger(db, p))).fetchone() if is_record_id(identity) else None
-            statement = Learning._packet_statement(dict(row)) if row else None
+            statement = Learning._packet_statement(store.opened('learning_records', row)) if row else None
             if statement is None:
                 raise Fault('learned_not_usable', 409)
             found[identity] = {'version': row['version'], 'statement': statement}

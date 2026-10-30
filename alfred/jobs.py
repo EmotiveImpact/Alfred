@@ -57,7 +57,7 @@ import tempfile
 import threading
 import time
 
-from . import job_kinds
+from . import job_kinds, sealing
 from .local import Fault, canonical, fingerprint, ident, text
 from .policy import permitted
 
@@ -121,6 +121,28 @@ CREATE TABLE IF NOT EXISTS artefacts(
  created INTEGER NOT NULL, lineage TEXT NOT NULL, body BLOB NOT NULL,
  PRIMARY KEY(scope,sha256));
 '''
+
+
+# Jobs in a sealed workspace (encryption step 2, part 4) --------------------------
+#
+# A job's parameters, a result's bytes and its cached copy, and a worker's label are
+# sealed; a job's fingerprint and a result's address (the SHA-256 of its bytes) are keyed,
+# so neither lets someone holding the file check a guess at what a job asked or returned.
+# Callers only ever echo an address ALFRED gave them. A worker still states and is checked
+# against the plain SHA-256 of the bytes it returns, which never reaches the database.
+
+def job_area(db) -> str:
+    """The area jobs, their results and workers are sealed under. A job can be bound to notes
+    of several areas, so its records are in the workspace's default area."""
+    return sealing.default_area(db) if sealing.of(db).sealed else sealing.DEFAULT_AREA
+
+
+def artefact_body(db, row) -> bytes:
+    """A stored result's bytes. A sealed body holds them as Base64 text."""
+    sealer = sealing.of(db)
+    if not sealer.sealed:
+        return bytes(row['body'])
+    return base64.b64decode(sealing.open_row(sealer, 'artefacts', row)['body'])
 
 
 def _digest(token: str) -> str:
@@ -217,7 +239,7 @@ class JobCoordinator:
             result = dict(artefact) | {'basis': 'worker_claim_bytes_match_sha256_content_not_verified'} if artefact else None
         last = db.execute('SELECT coalesce(max(sequence),0) FROM job_events WHERE job_id=?', (row['id'],)).fetchone()[0]
         return {'id': row['id'], 'scope': row['scope'], 'actor': row['actor'], 'kind': row['kind'],
-                'parameters': json.loads(row['parameters']), 'inputs': json.loads(row['inputs']),
+                'parameters': json.loads(self.store.opened('jobs', row)['parameters']), 'inputs': json.loads(row['inputs']),
                 'idempotency_key': row['idempotency_key'], 'fingerprint': row['fingerprint'],
                 'side_effect_free': bool(row['side_effect_free']), 'state': row['state'],
                 'reason': row['reason'], 'attempt': row['attempt'], 'max_attempts': row['max_attempts'],
@@ -228,8 +250,8 @@ class JobCoordinator:
                 'last_sequence': last, 'finished': row['state'] in FINISHED,
                 'needs_reconciliation': row['state'] == 'effect_unknown'}
 
-    @staticmethod
-    def _worker_view(row) -> dict:
+    def _worker_view(self, row) -> dict:
+        row = self.store.opened('workers', row)
         return {'id': row['id'], 'scope': row['scope'], 'label': row['label'],
                 'capabilities': json.loads(row['capabilities']), 'enrolled_by': row['enrolled_by'],
                 'enrolled_at': row['enrolled_at'], 'revoked': bool(row['revoked'])}
@@ -354,13 +376,14 @@ class JobCoordinator:
                     return None, 'inputs_changed'
                 data = note['body'].encode('utf-8')
             else:
-                artefact = db.execute('SELECT lineage,body FROM artefacts WHERE scope=? AND sha256=?',
+                artefact = db.execute('SELECT scope,sha256,lineage,body FROM artefacts WHERE scope=? AND sha256=?',
                                       (row['scope'], item['sha256'])).fetchone()
                 if (not artefact or not self._sources_permitted(db, principal, json.loads(artefact['lineage'])['sources'], capability)
                         or not self._lineage_live(db, row['scope'], json.loads(artefact['lineage']))):
                     return None, 'inputs_denied'
-                data = bytes(artefact['body'])
-                if hashlib.sha256(data).hexdigest() != item['sha256']:
+                data = artefact_body(db, artefact)
+                # The worker is given the plain SHA-256 of the bytes; the record keeps it keyed.
+                if self.store.sealer.fingerprint(job_area(db), hashlib.sha256(data).hexdigest()) != item['sha256']:
                     return None, 'input_artefact_corrupt'
             delivered.append({'name': f'input-{index}', 'sha256': hashlib.sha256(data).hexdigest(),
                               'size': len(data), 'data': data})
@@ -406,6 +429,8 @@ class JobCoordinator:
                               'side_effect_free': side_effect_free, 'max_attempts': max_attempts})
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
+            area = job_area(db)
+            digest = self.store.sealer.fingerprint(area, digest)
             prior = db.execute('SELECT * FROM jobs WHERE scope=? AND actor=? AND idempotency_key=?',
                                (p['scope'], p['id'], key)).fetchone()
             if prior:
@@ -418,7 +443,9 @@ class JobCoordinator:
             job_id, now = 'job-' + secrets.token_hex(12), self.store.now()
             db.execute('''INSERT INTO jobs(id,scope,actor,kind,parameters,inputs,idempotency_key,fingerprint,
                 side_effect_free,state,max_attempts,created,updated) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                       (job_id, p['scope'], p['id'], kind, canonical(parameters), json.dumps(bound, sort_keys=True),
+                       (job_id, p['scope'], p['id'], kind,
+                        self.store.sealed('jobs', area, {'id': job_id, 'parameters': canonical(parameters)})['parameters'],
+                        json.dumps(bound, sort_keys=True),
                         key, digest, int(side_effect_free), 'queued', max_attempts, now, now))
             self._event(db, job_id, 'submitted', {'by': p['id'], 'kind': kind, 'inputs': len(bound),
                                                   'side_effect_free': side_effect_free})
@@ -507,26 +534,58 @@ class JobCoordinator:
                 raise Fault('artefact_not_available', 404)
             meta = {'sha256': row['sha256'], 'size': row['size'], 'media_type': row['media_type'],
                     'job_id': row['job_id'], 'created_at': row['created'], 'lineage': json.loads(row['lineage'])}
-            body = bytes(row['body'])
+            stored, area = dict(row), job_area(db)
         data, served = None, 'database'
         if self.cache is not None:
             try:
-                data = self.cache.get(sha256)
+                data = self._cached(stored, area)
             except Fault:
                 data = None  # The cache removed a corrupt local copy; fall back to the record.
             served = 'cache' if data is not None else served
         if data is None:
-            if hashlib.sha256(body).hexdigest() != sha256:
+            data = self._opened(stored, area)
+            if data is None:
                 raise Fault('artefact_corrupt', 500)
-            data = body
-            self._mirror(data)
+            self._mirror(sha256, self._copy(stored['body']))
         return meta | {'data': data, 'served_from': served}
 
-    def _mirror(self, data):
+    def _opened(self, row, area):
+        """A stored result's bytes if they still match its address, else None. A copy whose seal
+        does not open is treated like corrupt bytes; a destroyed area still refuses."""
+        sealer = self.store.sealer
+        try:
+            data = bytes(row['body']) if not sealer.sealed else base64.b64decode(
+                self.store.opened('artefacts', row)['body'], validate=True)
+        except Fault as exc:
+            if exc.code not in ('not_sealed', 'seal_does_not_match', 'sealed_for_another_area'):
+                raise
+            return None
+        except ValueError:
+            return None
+        return data if sealer.fingerprint(area, hashlib.sha256(data).hexdigest()) == row['sha256'] else None
+
+    def _copy(self, body) -> bytes:
+        """What the cache keeps of a stored body: the bytes themselves in a plain workspace, the
+        sealed record in a sealed one, so a cached copy on disk is sealed too."""
+        return body.encode('ascii') if self.store.sealer.sealed else bytes(body)
+
+    def _cached(self, row, area):
+        if not self.store.sealer.sealed:
+            return self.cache.get(row['sha256'])
+
+        def opened(copy):
+            try:
+                return self._opened(row | {'body': copy.decode('ascii')}, area)
+            except UnicodeError:
+                return None
+        copy = self.cache.get(row['sha256'], check=lambda copy: opened(copy) is not None)
+        return None if copy is None else opened(copy)
+
+    def _mirror(self, address, copy):
         if self.cache is None:
             return
         try:
-            self.cache.put(data)
+            self.cache.put(copy, address=address)
         except (Fault, OSError):
             pass  # The cache is an accelerator; the database copy remains the record.
 
@@ -544,6 +603,7 @@ class JobCoordinator:
                 raise Fault('worker_exists', 409)
             if db.execute('SELECT count(*) FROM workers WHERE scope=?', (p['scope'],)).fetchone()[0] >= MAX_WORKERS:
                 raise Fault('worker_capacity', 409)
+            label = self.store.sealed('workers', job_area(db), {'scope': p['scope'], 'id': worker_id, 'label': label})['label']
             db.execute('INSERT INTO workers VALUES (?,?,?,?,?,?,0)',
                        (p['scope'], worker_id, label, json.dumps(sorted(capabilities)), p['id'], self.store.now()))
             self.store.log(db, p['scope'], p['id'], 'job.worker_enrolled', worker_id)
@@ -668,7 +728,7 @@ class JobCoordinator:
                            (attempt, worker['id'], _digest(token), now + ttl, row['id']))
                 self._event(db, row['id'], 'leased', {'worker': worker['id'], 'attempt': attempt, 'lease_until': now + ttl})
                 return {'job': row['id'], 'lease': token, 'lease_until': now + ttl, 'attempt': attempt,
-                        'kind': row['kind'], 'parameters': json.loads(row['parameters']),
+                        'kind': row['kind'], 'parameters': json.loads(self.store.opened('jobs', row)['parameters']),
                         'side_effect_free': bool(row['side_effect_free']), 'inputs': inputs}
             return None
 
@@ -705,10 +765,13 @@ class JobCoordinator:
         actual, rejected = hashlib.sha256(data).hexdigest(), False
         with self.store.transaction() as db:
             _, worker, row = self._leased(db, bearer, worker_id, job_id, lease)
+            area = job_area(db)
+            address = self.store.sealer.fingerprint(area, actual)  # The result's address as stored.
             if not secrets.compare_digest(actual, sha256):
                 # Record the rejected claim durably, then refuse it after commit.
-                self._event(db, row['id'], 'result_rejected', {'worker': worker['id'], 'claimed_sha256': sha256,
-                                                               'actual_sha256': actual, 'size': len(data),
+                self._event(db, row['id'], 'result_rejected', {'worker': worker['id'],
+                                                               'claimed_sha256': self.store.sealer.fingerprint(area, sha256),
+                                                               'actual_sha256': address, 'size': len(data),
                                                                'reason': 'artefact_hash_mismatch'})
                 rejected = True
             else:
@@ -718,7 +781,7 @@ class JobCoordinator:
                     except (UnicodeError, ValueError, RecursionError):
                         raise Fault('result_not_json') from None
                 lineage = self._lineage(row)
-                existing = db.execute('SELECT lineage FROM artefacts WHERE scope=? AND sha256=?', (row['scope'], actual)).fetchone()
+                existing = db.execute('SELECT lineage FROM artefacts WHERE scope=? AND sha256=?', (row['scope'], address)).fetchone()
                 if existing:
                     # Identical bytes from another job: reading needs every source of every producer (fail closed).
                     merged = json.loads(existing['lineage'])
@@ -726,24 +789,28 @@ class JobCoordinator:
                     notes = {(n['id'], n['revision']): n for n in merged.get('notes', []) + lineage['notes']}
                     merged['notes'] = [notes[k] for k in sorted(notes)]
                     merged['artefacts'] = sorted(set(merged.get('artefacts', [])) | set(lineage['artefacts']))
-                    db.execute('UPDATE artefacts SET lineage=? WHERE scope=? AND sha256=?', (json.dumps(merged, sort_keys=True), row['scope'], actual))
+                    db.execute('UPDATE artefacts SET lineage=? WHERE scope=? AND sha256=?', (json.dumps(merged, sort_keys=True), row['scope'], address))
+                    copy = self._copy(db.execute('SELECT body FROM artefacts WHERE scope=? AND sha256=?', (row['scope'], address)).fetchone()[0])
                 else:
                     count, total = db.execute('SELECT count(*),coalesce(sum(size),0) FROM artefacts WHERE scope=?', (row['scope'],)).fetchone()
                     if count >= MAX_JOBS or total + len(data) > MAX_SCOPE_ARTEFACT_BYTES:
                         raise Fault('artefact_capacity', 409)
+                    body = sqlite3.Binary(data) if not self.store.sealer.sealed else self.store.sealed(
+                        'artefacts', area, {'scope': row['scope'], 'sha256': address, 'body': base64.b64encode(data).decode('ascii')})['body']
                     db.execute('INSERT INTO artefacts VALUES (?,?,?,?,?,?,?,?)',
-                               (row['scope'], actual, len(data), media_type, row['id'], self.store.now(),
-                                json.dumps(lineage, sort_keys=True), sqlite3.Binary(data)))
+                               (row['scope'], address, len(data), media_type, row['id'], self.store.now(),
+                                json.dumps(lineage, sort_keys=True), body))
+                    copy = self._copy(body)
                 self._settle(db, row, 'succeeded', None)
-                db.execute('UPDATE jobs SET result_artefact=? WHERE id=?', (actual, row['id']))
+                db.execute('UPDATE jobs SET result_artefact=? WHERE id=?', (address, row['id']))
                 if row['cancel_requested']:
                     self._event(db, row['id'], 'completed_after_cancel_request', {'worker': worker['id']})
-                self._event(db, row['id'], 'succeeded', {'worker': worker['id'], 'sha256': actual, 'size': len(data),
+                self._event(db, row['id'], 'succeeded', {'worker': worker['id'], 'sha256': address, 'size': len(data),
                                                          'media_type': media_type, 'verified': 'sha256_of_bytes_only'})
                 view = self._view(db, self._job(db, row['scope'], row['id']))
         if rejected:
             raise Fault('artefact_hash_mismatch', 409)
-        self._mirror(data)
+        self._mirror(address, copy)
         return view
 
     def fail(self, bearer, worker_id, job_id, lease, reason, *, retryable=False) -> dict:
@@ -1176,13 +1243,16 @@ class BoundedCache:
                 return plan
         raise Fault('cache_full_of_pinned_entries', 507)
 
-    def put(self, data, *, pin=False) -> str:
-        """Store bytes, evicting LRU unpinned entries first. Returns the SHA-256."""
+    def put(self, data, *, pin=False, address=None) -> str:
+        """Store bytes, evicting LRU unpinned entries first. Returns the SHA-256.
+
+        ``address`` names a copy that is not stored under its own SHA-256: a sealed copy of a
+        result, named by the result's keyed address. Reading it back needs ``get``'s ``check``."""
         if type(data) is not bytes or type(pin) is not bool:
             raise Fault('invalid_cache_item')
         if len(data) > self.limit:
             raise Fault('cache_item_too_large', 413)
-        sha256 = hashlib.sha256(data).hexdigest()
+        sha256 = hashlib.sha256(data).hexdigest() if address is None else self._check(address)
         path = self._path(sha256)
         with self._transaction() as db:
             if pin:
@@ -1217,8 +1287,10 @@ class BoundedCache:
             db.execute('INSERT INTO entries VALUES (?,?,?)', (sha256, len(data), self._tick(db)))
         return sha256
 
-    def get(self, sha256) -> bytes | None:
-        """Verified bytes, or None if absent. A corrupt entry is removed and raises."""
+    def get(self, sha256, *, check=None) -> bytes | None:
+        """Verified bytes, or None if absent. A corrupt entry is removed and raises.
+
+        ``check(data)`` verifies a copy stored under an address that is not its SHA-256."""
         self._check(sha256)
         corrupt = False
         with self._transaction() as db:
@@ -1232,7 +1304,7 @@ class BoundedCache:
             except OSError:
                 self._drop(db, sha256)
                 return None
-            if len(data) != row['size'] or hashlib.sha256(data).hexdigest() != sha256:
+            if len(data) != row['size'] or not (check(data) if check is not None else hashlib.sha256(data).hexdigest() == sha256):
                 self._drop(db, sha256)
                 db.execute('UPDATE cache_meta SET corrupt_removed=corrupt_removed+1')
                 corrupt = True

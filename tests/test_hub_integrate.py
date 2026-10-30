@@ -30,6 +30,7 @@ from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from alfred.routines import Routines
+import stored_helpers as stored
 from grant_helpers import grant_all, revoke_all
 
 DAY, HOUR = 86400, 3600
@@ -124,7 +125,8 @@ class Base(unittest.TestCase):
             return [dict(r) for r in db.execute(sql, args)]
 
     def journal(self, event=None):
-        return [r for r in self.rows('SELECT * FROM hub_journal ORDER BY seq') if event is None or r['event'] == event]
+        return [r for r in stored.rows(self.store, 'hub_journal', 'SELECT * FROM hub_journal ORDER BY seq')
+                if event is None or r['event'] == event]
 
     def selection(self):
         return [{'note': self.note['id'], 'start_line': 2, 'end_line': 3}]

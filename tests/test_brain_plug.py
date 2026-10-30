@@ -294,7 +294,7 @@ class DispatchTests(Base):
         kinds = [e['kind'] for e in self.jobs.events(self.owner, job_id)['events']]
         self.assertEqual(kinds, ['submitted', 'leased', 'started', 'succeeded'])
         artefact = self.jobs.artefact(self.owner, job['result']['sha256'])
-        self.assertEqual(hashlib.sha256(artefact['data']).hexdigest(), job['result']['sha256'])
+        self.assertEqual(stored.digest(self.store, artefact['data']), job['result']['sha256'])
         self.assertEqual(job['inputs'][0]['id'], self.notes['Plan'])
         result = self.hub.ingest(self.owner, job_id)
         self.assertEqual(result['status'], 'accepted', result)

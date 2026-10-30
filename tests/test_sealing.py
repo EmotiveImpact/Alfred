@@ -11,7 +11,7 @@ import sqlite3
 import tempfile
 import unittest
 
-from alfred import connectors, drafts, keys, lifecycle, sealing
+from alfred import brain, connectors, drafts, hub_goals, jobs, keys, learning, lifecycle, sealing, verification
 from alfred.capture_policies import CapturePolicies
 from alfred.conversation import ConversationService
 from alfred.executive import ExecutiveRecords
@@ -164,6 +164,9 @@ class SealerTests(unittest.TestCase):
             with store.transaction() as db:
                 drafts.ensure(db)
             with closing(sqlite3.connect(Path(directory) / 'db.sqlite')) as db:
+                # The work tables (jobs, the brain, verification, goals, learning) as each module
+                # creates them.
+                db.executescript(jobs.SCHEMA + brain.SCHEMA + verification.SCHEMA + hub_goals.SCHEMA + learning.SCHEMA)
                 for table, (names, sealed, fingerprints) in sealing.TABLES.items():
                     info = list(db.execute(f'PRAGMA table_info({table})'))
                     columns = {row[1] for row in info}

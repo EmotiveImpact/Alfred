@@ -285,7 +285,7 @@ class ResultTests(Base):
         self.assertEqual((view['state'], view['result']), ('running', None))
         rejected = self.jobs.events(self.owner, job['id'])['events'][-1]
         self.assertEqual((rejected['kind'], rejected['detail']['actual_sha256']),
-                         ('result_rejected', hashlib.sha256(data).hexdigest()))
+                         ('result_rejected', stored.digest(self.store, data)))
         done = self.jobs.complete(self.owner, 'local-1', grant['job'], grant['lease'],
                                   sha256=hashlib.sha256(data).hexdigest(), data=data)
         self.assertEqual(done['state'], 'succeeded')
@@ -311,7 +311,10 @@ class ResultTests(Base):
                               inputs=[{'artefact': first['result']['sha256']}])
         self.assertEqual(second['state'], 'succeeded')
         output = json.loads(self.jobs.artefact(self.owner, second['result']['sha256'])['data'])
-        self.assertEqual(output['inputs'][0]['sha256'], first['result']['sha256'])
+        # The job read the first result's bytes; ALFRED names that result by their stored digest.
+        data = self.jobs.artefact(self.owner, first['result']['sha256'])['data']
+        self.assertEqual(output['inputs'][0]['sha256'], hashlib.sha256(data).hexdigest())
+        self.assertEqual(first['result']['sha256'], stored.digest(self.store, data))
         lineage = self.jobs.artefact(self.owner, second['result']['sha256'])['lineage']
         self.assertEqual(lineage['sources'], ['source'])
 
@@ -667,7 +670,7 @@ class CoordinatorCacheTests(Base):
         self.assertEqual(self.jobs.artefact(self.owner, sha)['served_from'], 'cache')
         (self.root / 'cache' / 'objects' / sha[:2] / sha).write_bytes(b'tampered')
         served = self.jobs.artefact(self.owner, sha)
-        self.assertEqual((served['served_from'], hashlib.sha256(served['data']).hexdigest()), ('database', sha))
+        self.assertEqual((served['served_from'], stored.digest(self.store, served['data'])), ('database', sha))
         self.assertEqual(cache.usage()['corrupt_removed'], 1)
         self.assertEqual(self.jobs.artefact(self.owner, sha)['served_from'], 'cache')
 

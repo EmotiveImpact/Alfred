@@ -87,6 +87,14 @@ from . import verification
 from .local import Fault, canonical, exact, ident, timestamp
 from .routines import CLOCK, EVERY_HOURS, day_start, next_slot
 
+
+def goal_area(db) -> str:
+    """The area the hub's records are sealed under (encryption step 2, part 4): a goal is an
+    executive record, kept in the workspace's default area. A mandate's success test,
+    schedule and acceptance checks, and the hub journal's detail, are sealed; a mandate's
+    request hash is keyed. Budgets, limits, states and reasons are ALFRED's numbers and codes."""
+    return sealing.default_area(db) if sealing.of(db).sealed else sealing.DEFAULT_AREA
+
 DAY = 86400
 WORK = re.compile(r'[a-z][a-z0-9_-]{0,31}')
 BRAIN_ID = re.compile(r'[a-z0-9][a-z0-9_.-]{0,63}')
@@ -371,14 +379,21 @@ class GoalHub:
         return p
 
     def _journal(self, db, p, target, event, version, detail):
-        db.execute('INSERT INTO hub_journal(scope,actor,target,event,version,detail,at) VALUES (?,?,?,?,?,?,?)',
-                   (p['scope'], p['id'], target, event, version, canonical(detail), self.store.now()))
+        # A sealed detail is bound to its entry's number. The journal is append-only, so in a
+        # sealed workspace the number is taken before the row is written.
+        seq = None
+        if self.store.sealer.sealed:
+            seq = max(db.execute("SELECT coalesce(max(seq),0) FROM sqlite_sequence WHERE name='hub_journal'").fetchone()[0],
+                      db.execute('SELECT coalesce(max(seq),0) FROM hub_journal').fetchone()[0]) + 1
+        detail = self.store.sealed('hub_journal', goal_area(db), {'seq': seq, 'detail': canonical(detail)})['detail']
+        db.execute('INSERT INTO hub_journal(seq,scope,actor,target,event,version,detail,at) VALUES (?,?,?,?,?,?,?,?)',
+                   (seq, p['scope'], p['id'], target, event, version, detail, self.store.now()))
         self.store.log(db, p['scope'], p['id'], 'hub.' + event, target)
 
     def _mandate(self, db, p, mandate_id, version=None):
         ident(mandate_id)
-        row = db.execute('SELECT * FROM hub_mandates WHERE id=? AND scope=? AND actor=?',
-                         (mandate_id, p['scope'], p['id'])).fetchone()
+        row = self.store.opened('hub_mandates', db.execute('SELECT * FROM hub_mandates WHERE id=? AND scope=? AND actor=?',
+                                                           (mandate_id, p['scope'], p['id'])).fetchone())
         if not row:
             raise Fault('mandate_not_found', 404)
         if version is not None:
@@ -471,6 +486,7 @@ class GoalHub:
         digest = hashlib.sha256(canonical(body).encode()).hexdigest()
         with self.lock, self.store.transaction() as db:
             p = self._hosted(db, bearer)
+            digest = self.store.sealer.fingerprint(goal_area(db), digest)
             old = db.execute('SELECT id,request_hash FROM hub_mandates WHERE scope=? AND actor=? AND request_id=?',
                              (p['scope'], p['id'], body['request_id'])).fetchone()
             if old:
@@ -496,15 +512,18 @@ class GoalHub:
             if body['assigned_brain'] not in settings['brains']:
                 raise Fault('assigned_brain_not_allowed', 403)
             schedule, checks = settings['schedule'], settings[OPTIONAL]
+            kept = self.store.sealed('hub_mandates', goal_area(db), {
+                'id': mandate_id, 'success_test': settings['success_test'], 'schedule': canonical(schedule) if schedule else None,
+                'acceptance': canonical(checks) if checks else None})
             db.execute('''INSERT INTO hub_mandates(id,scope,actor,request_id,request_hash,goal,scope_class,deadline,success_test,
                 autonomy,brains,assigned_brain,tools,budget,schedule,next_due,missed_total,state,state_reason,version,created,updated,
                 acceptance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                        (mandate_id, p['scope'], p['id'], body['request_id'], digest, goal['id'], body['scope_class'],
-                        settings['deadline'], settings['success_test'], canonical(settings['autonomy']),
+                        settings['deadline'], kept['success_test'], canonical(settings['autonomy']),
                         canonical(settings['brains']), body['assigned_brain'], canonical(settings['tools']),
-                        canonical(settings['budget']), canonical(schedule) if schedule else None,
+                        canonical(settings['budget']), kept['schedule'],
                         next_slot(_clock(schedule), now) if schedule else 0, 0, 'active', None, 1, now, now,
-                        canonical(checks) if checks else None))
+                        kept['acceptance']))
             self._journal(db, p, 'goal:' + mandate_id, 'mandate.created', 1,
                           {'goal': goal['id'], 'scope_class': body['scope_class'], 'assigned_brain': body['assigned_brain'],
                            **settings})
@@ -532,12 +551,15 @@ class GoalHub:
                 if 'schedule' in body:
                     next_due = next_slot(_clock(schedule), now) if schedule else 0
                 checks = settings[OPTIONAL]
+                kept = self.store.sealed('hub_mandates', goal_area(db), {
+                    'id': row['id'], 'success_test': settings['success_test'], 'schedule': canonical(schedule) if schedule else None,
+                    'acceptance': canonical(checks) if checks else None},
+                    dict(db.execute('SELECT * FROM hub_mandates WHERE id=?', (row['id'],)).fetchone()))
                 db.execute('''UPDATE hub_mandates SET deadline=?,success_test=?,autonomy=?,brains=?,tools=?,budget=?,schedule=?,
                     acceptance=?,next_due=?,version=version+1,updated=? WHERE id=?''',
-                           (settings['deadline'], settings['success_test'], canonical(settings['autonomy']),
+                           (settings['deadline'], kept['success_test'], canonical(settings['autonomy']),
                             canonical(settings['brains']), canonical(settings['tools']), canonical(settings['budget']),
-                            canonical(schedule) if schedule else None, canonical(checks) if checks else None,
-                            next_due, now, row['id']))
+                            kept['schedule'], kept['acceptance'], next_due, now, row['id']))
                 self._journal(db, p, 'goal:' + row['id'], 'mandate.updated', row['version'] + 1, changed)
             # A lowered limit can stop the goal at once.
             self._enforce(mandate=row['id'])
@@ -616,8 +638,8 @@ class GoalHub:
         refusal = None
         with self.store.transaction() as db:
             p = self._hosted(db, bearer)
-            row = db.execute('SELECT * FROM hub_mandates WHERE id=? AND scope=? AND actor=?',
-                             (binding['mandate'], p['scope'], p['id'])).fetchone()
+            row = self.store.opened('hub_mandates', db.execute('SELECT * FROM hub_mandates WHERE id=? AND scope=? AND actor=?',
+                                                               (binding['mandate'], p['scope'], p['id'])).fetchone())
             if not row:
                 raise Fault('mandate_required', 403)
             try:
@@ -697,7 +719,7 @@ class GoalHub:
             try:
                 if task['brain'] != spec.id or packet['goal']['ref'] != task['mandate']:
                     raise Fault('mandate_mismatch', 403)
-                row = db.execute('SELECT * FROM hub_mandates WHERE id=?', (task['mandate'],)).fetchone()
+                row = self.store.opened('hub_mandates', db.execute('SELECT * FROM hub_mandates WHERE id=?', (task['mandate'],)).fetchone())
                 self._admissible(db, row, spec.id, self.store.now())
                 if db.execute('SELECT 1 FROM hub_meter WHERE job_id=?', (job_id,)).fetchone():
                     raise Fault('already_dispatched', 409)
@@ -1105,7 +1127,7 @@ class GoalHub:
         """One heartbeat for the latest due slot. Slots missed meanwhile are counted, never run."""
         slot = f'due:{due}'
         with self.store.transaction() as db:
-            row = db.execute('SELECT * FROM hub_mandates WHERE id=?', (mandate_id,)).fetchone()
+            row = self.store.opened('hub_mandates', db.execute('SELECT * FROM hub_mandates WHERE id=?', (mandate_id,)).fetchone())
             if row['next_due'] != due or not row['schedule']:
                 return
             now = self.store.now()
@@ -1218,8 +1240,8 @@ class GoalHub:
             if p['role'] != 'owner' or p['scope'] != self.scope or p['id'] != self.host_id:
                 return {**base, 'available': False, 'reason': 'owner_only' if p['role'] != 'owner' else 'not_hosted',
                         'goals': [], 'unlinked_goals': [], 'brains': [], 'overall': None, 'attention': [], 'journal': []}
-            rows = db.execute('''SELECT * FROM hub_mandates WHERE scope=? AND actor=?
-                ORDER BY state='stopped',created DESC,id''', (p['scope'], p['id'])).fetchall()
+            rows = [self.store.opened('hub_mandates', r) for r in db.execute('''SELECT * FROM hub_mandates WHERE scope=? AND actor=?
+                ORDER BY state='stopped',created DESC,id''', (p['scope'], p['id']))]
             goals = [self._mandate_view(db, p, r, now) for r in rows]
             linked = {r['goal'] for r in rows if r['state'] != 'stopped'}
             unlinked = [self.store.opened('executive_records', r) for r in db.execute(
@@ -1264,11 +1286,11 @@ class GoalHub:
         """The latest run's position, hash, outcome and per-check statuses. No reasons."""
         if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='verification_results'").fetchone():
             return None
-        row = db.execute('''SELECT r.position,r.outcome,r.report,r.report_sha256,r.initiated FROM verification_results v
+        row = db.execute('''SELECT r.id,r.position,r.outcome,r.report,r.report_sha256,r.initiated FROM verification_results v
             JOIN verification_runs r ON r.id=v.last_run WHERE v.job_id=?''', (job_id,)).fetchone()
         if not row:
             return None
-        report = json.loads(row['report'])
+        report = json.loads(sealing.open_row(sealing.of(db), 'verification_runs', row)['report'])
         return {'position': row['position'], 'outcome': row['outcome'], 'sha256': row['report_sha256'],
                 'initiated': row['initiated'] or 'owner', 'counts': report['counts'],
                 'checks': [{'id': c['id'], 'kind': c['kind'], 'status': c['status']} for c in report['checks']]}

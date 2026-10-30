@@ -9,7 +9,8 @@ import json
 import secrets
 from pathlib import Path
 import time
-from .local import LocalCore, Fault, SCHEMA, action_fingerprint, canonical, exact, ident, open_action, seal_action, text, timestamp
+from .local import (LocalCore, Fault, SCHEMA, action_fingerprint, canonical, event_area, event_key, exact, ident, open_action,
+                    seal_action, text, timestamp)
 
 DESK_SCHEMA = '''
 CREATE TABLE IF NOT EXISTS desk_meta(version INTEGER NOT NULL);
@@ -85,9 +86,14 @@ class DeskStore(LocalCore):
         p = self.principal(source_bearer, {'source'})
         scope, source = p['scope'], p['id']
         with self.connection() as db:
-            prior = db.execute('SELECT * FROM desk_documents WHERE scope=? AND source=? AND document_id=?', (scope, source, data['document_id'])).fetchone()
-            other = db.execute('SELECT document_id FROM desk_documents WHERE scope=? AND source=? AND filename=?', (scope, source, filename)).fetchone()
-        if other and other[0] != data['document_id']:
+            # The document's id, its file's SHA-256 and its event's id as they are stored: keyed
+            # when sealed, so none of them lets someone holding the file check a guess.
+            key, area = event_key(db, data['document_id']), event_area(db)
+            digest = self.sealer.fingerprint(area, raw_sha)
+            prior = self.opened('desk_documents', db.execute('SELECT * FROM desk_documents WHERE scope=? AND source=? AND document_id=?',
+                                                             (scope, source, key)).fetchone())
+            other = self._at(db, scope, source, filename)
+        if other and other != key:
             raise Fault('document_identity_changed', 409)
         if prior:
             if prior['filename'] != filename:
@@ -95,11 +101,11 @@ class DeskStore(LocalCore):
             if data['revision'] < prior['revision']:
                 raise Fault('revision_rollback', 409)
             if data['revision'] == prior['revision']:
-                if raw_sha != prior['sha256']:
+                if digest != prior['sha256']:
                     raise Fault('revision_content_conflict', 409)
                 self.document_status(scope, source, filename, 'ready')
                 return {'state': 'unchanged', 'event_id': prior['event_id']}
-        event_id = 'doc-' + hashlib.sha256(f"{data['document_id']}:{data['revision']}".encode()).hexdigest()
+        event_id = 'doc-' + hashlib.sha256(f"{key}:{data['revision']}".encode()).hexdigest()
         result = self.ingest(source_bearer, {
             'id': event_id, 'subject': data['document_id'], 'kind': 'briefing.changed',
             'basis': 'reported', 'observed_at': data['observed_at'],
@@ -113,20 +119,38 @@ class DeskStore(LocalCore):
             if stored['reason'] in {'out_of_order', 'needs_reconciliation'}:
                 raise Fault('revision_time_needs_review', 409)
             seq = stored['seq']
-            db.execute('INSERT OR IGNORE INTO desk_links VALUES (?,?,?,?,?)', (seq, filename, data['title'], data['revision'], raw_sha))
+            link = self.sealed('desk_links', area, {'seq': seq, 'filename': filename, 'title': data['title']})
+            db.execute('INSERT OR IGNORE INTO desk_links VALUES (?,?,?,?,?)', (seq, link['filename'], link['title'], data['revision'], digest))
+            # An unchanged file name or title keeps its stored sealed value.
+            kept = self.sealed('desk_documents', area, {'scope': scope, 'source': source, 'document_id': key, 'filename': filename,
+                                                        'title': data['title']}, prior and dict(db.execute(
+                'SELECT * FROM desk_documents WHERE scope=? AND source=? AND document_id=?', (scope, source, key)).fetchone()))
             db.execute('INSERT INTO desk_documents VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(scope,source,document_id) DO UPDATE SET title=excluded.title,revision=excluded.revision,sha256=excluded.sha256,event_id=excluded.event_id,status=excluded.status,checked=excluded.checked',
-                       (scope, source, data['document_id'], filename, data['title'], data['revision'], raw_sha, event_id, 'ready', self.now()))
+                       (scope, source, key, kept['filename'], kept['title'], data['revision'], digest, event_id, 'ready', self.now()))
         return {'state': 'imported', 'event_id': event_id}
+
+    def _at(self, db, scope, source, filename):
+        """The stored id of a source's document at this file name, or None. A sealed file name
+        differs every time it is sealed, so it is compared opened."""
+        if not self.sealer.sealed:
+            row = db.execute('SELECT document_id FROM desk_documents WHERE scope=? AND source=? AND filename=?', (scope, source, filename)).fetchone()
+            return row[0] if row else None
+        for row in db.execute('SELECT scope,source,document_id,filename FROM desk_documents WHERE scope=? AND source=?', (scope, source)):
+            if self.opened('desk_documents', row)['filename'] == filename:
+                return row['document_id']
+        return None
 
     def document_status(self, scope, source, filename, status):
         if status not in {'ready', 'missing', 'error'}:
             raise Fault('invalid_document_status')
         with self.transaction() as db:
-            db.execute('UPDATE desk_documents SET status=?,checked=? WHERE scope=? AND source=? AND filename=?', (status, self.now(), scope, source, filename))
+            db.execute('UPDATE desk_documents SET status=?,checked=? WHERE scope=? AND source=? AND document_id=?',
+                       (status, self.now(), scope, source, self._at(db, scope, source, filename)))
 
     def missing_documents(self, scope, source, seen):
         with self.connection() as db:
-            names = [r[0] for r in db.execute('SELECT filename FROM desk_documents WHERE scope=? AND source=?', (scope, source))]
+            names = [self.opened('desk_documents', r)['filename'] for r in db.execute(
+                'SELECT scope,source,document_id,filename FROM desk_documents WHERE scope=? AND source=?', (scope, source))]
         for filename in names:
             if filename not in seen:
                 self.document_status(scope, source, filename, 'missing')
@@ -141,6 +165,7 @@ class DeskStore(LocalCore):
         row = db.execute('SELECT e.*,l.filename,l.title,l.revision,l.sha256 FROM events e LEFT JOIN desk_links l ON l.seq=e.seq WHERE e.scope=? AND e.seq=?', (scope, seq)).fetchone()
         if not row:
             raise Fault('not_found', 404)
+        row = self.opened('desk_links', self.opened('events', row))
         doc = db.execute('SELECT event_id,status FROM desk_documents WHERE scope=? AND source=? AND document_id=?', (scope, row['source'], row['subject'])).fetchone()
         source = db.execute('SELECT revoked,expires FROM credentials WHERE id=?', (row['source'],)).fetchone()
         active = bool(doc and doc['event_id'] == row['event_id'] and doc['status'] == 'ready' and source and not source['revoked'] and source['expires'] > self.now())
@@ -151,12 +176,23 @@ class DeskStore(LocalCore):
             status = 'needs_review'
         return row, status
 
+    def _document_view(self, db, row):
+        """A listed document. A sealed workspace keeps its id keyed, so the id the source gave is
+        read back from the document's event."""
+        row = self.opened('desk_documents', row)
+        identity = row['document_id']
+        if self.sealer.sealed:
+            event = db.execute('SELECT seq,body FROM events WHERE scope=? AND source=? AND event_id=?',
+                               (row['scope'], row['source'], row['event_id'])).fetchone()
+            identity = json.loads(self.opened('events', event)['body'])['subject'] if event else None
+        return {'document_id': identity, **{k: row[k] for k in ('filename', 'title', 'revision', 'status', 'checked', 'source')}}
+
     def evidence_view(self, db, scope, seq, actor):
         row, status = self._evidence(db, scope, seq)
         return {**json.loads(row['body']), 'seq': row['seq'], 'source': row['source'],
                 'received_at': row['received'], 'route': row['route'], 'reason': row['reason'],
                 'fingerprint': row['fingerprint'], 'status': status,
-                'filename': row['filename'], 'title': row['title'] or row['subject'],
+                'filename': row['filename'], 'title': row['title'] or json.loads(row['body'])['subject'],
                 'revision': row['revision'], 'source_sha256': row['sha256'],
                 'acknowledged': bool(db.execute('SELECT 1 FROM desk_ack WHERE scope=? AND actor=? AND event_seq=?', (scope, actor, seq)).fetchone())}
 
@@ -256,7 +292,10 @@ class DeskStore(LocalCore):
                 link = db.execute('SELECT event_seq FROM desk_action_evidence WHERE scope=? AND action_id=?', (scope, r['id'])).fetchone()
                 actions.append({**self.action_view(r), 'created_at': r['created'], 'event_seq': link[0] if link else None,
                                 'evidence_current': self.evidence_valid(db, r), 'mine': r['actor'] == p['id']})
-            documents = [dict(r) for r in db.execute('SELECT document_id,filename,title,revision,status,checked,source FROM desk_documents WHERE scope=? ORDER BY title', (scope,))]
+            documents = [self._document_view(db, r) for r in db.execute(
+                'SELECT scope,document_id,filename,title,revision,status,checked,source,event_id FROM desk_documents WHERE scope=? ORDER BY title', (scope,))]
+            if self.sealer.sealed:
+                documents.sort(key=lambda d: d['title'])  # Sealed titles cannot be ordered in SQL.
             paused = db.execute('SELECT paused FROM desk_settings WHERE scope=?', (scope,)).fetchone()
             return {'version': '0.3.0-dev', 'scope': scope, 'role': p['role'], 'actor': p['id'],
                     'synthetic_workspace': bool(db.execute('SELECT simulation FROM workspaces WHERE id=?', (scope,)).fetchone()[0]),

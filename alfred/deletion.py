@@ -251,16 +251,19 @@ def scan(db, scope, actor, kind, subject, *, trace=None, cache_dir=None, databas
         c['tombstones'] = _category(stones, 0, ['memory_tombstones'])
         count = holding = 0
         by_table = {}
+        sealer = sealing.of(db)
         if _has(db, 'events'):
-            bodies = [(_json(r['body']) or {}) for r in db.execute('SELECT body FROM events WHERE scope=? AND source=?', (scope, subject))]
+            bodies = [(_json(sealing.open_row(sealer, 'events', r)['body']) or {})
+                      for r in db.execute('SELECT seq,body FROM events WHERE scope=? AND source=?', (scope, subject))]
             by_table['events'] = len(bodies)
             count += len(bodies); holding += sum(not isinstance(b, dict) or b.get('summary') != REMOVED for b in bodies)
         if _has(db, 'desk_documents'):
-            titles = [r[0] for r in db.execute('SELECT title FROM desk_documents WHERE scope=? AND source=?', (scope, subject))]
+            titles = [sealing.open_row(sealer, 'desk_documents', r)['title']
+                      for r in db.execute('SELECT scope,source,document_id,title FROM desk_documents WHERE scope=? AND source=?', (scope, subject))]
             by_table['desk_documents'] = len(titles)
             count += len(titles); holding += sum(title != REMOVED for title in titles)
         if t['events'] and _has(db, 'desk_links'):
-            titles = [r[0] for r in _rows(db, 'SELECT title FROM desk_links WHERE seq IN ({ids})', t['events'])]
+            titles = [sealing.open_row(sealer, 'desk_links', r)['title'] for r in _rows(db, 'SELECT seq,title FROM desk_links WHERE seq IN ({ids})', t['events'])]
             by_table['desk_links'] = len(titles)
             count += len(titles); holding += sum(title != REMOVED for title in titles)
         c['evidence_events'] = _category(count, holding, by_table, by_table=by_table)

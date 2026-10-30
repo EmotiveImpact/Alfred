@@ -278,26 +278,34 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
         from .drafts import bound_to_notes
         bound |= bound_to_notes(db, scope, notes)
     if _has(db, 'events'):
+        # What the desk observed is sealed in the default area (local.event_area); the
+        # redacted body and titles are sealed again, so the file never shows which were removed.
+        from .local import event_area
+        area = event_area(db)
         seqs = [r[0] for r in db.execute('SELECT seq FROM events WHERE scope=? AND source=?', (scope, source))]
         for seq in seqs:
-            row = db.execute('SELECT body FROM events WHERE seq=?', (seq,)).fetchone()
+            row = sealing.open_row(sealer, 'events', db.execute('SELECT seq,body FROM events WHERE seq=?', (seq,)).fetchone())
             try:
                 value = json.loads(row['body'])
             except ValueError:
                 value = {}
             if not isinstance(value, dict) or value.get('summary') != REMOVED:
                 value = (value if isinstance(value, dict) else {}) | {'summary': REMOVED}
-                db.execute('UPDATE events SET body=? WHERE seq=?', (json.dumps(value, sort_keys=True, separators=(',', ':')), seq))
+                body = sealing.seal_row(sealer, 'events', area, {'seq': seq, 'body': json.dumps(value, sort_keys=True, separators=(',', ':'))})['body']
+                db.execute('UPDATE events SET body=? WHERE seq=?', (body, seq))
                 counts['evidence_events_redacted'] += 1
         if seqs and _has(db, 'desk_action_evidence'):
             removed = set(seqs)
             bound |= {r[0] for r in db.execute('SELECT action_id,event_seq FROM desk_action_evidence WHERE scope=?', (scope,))
                       if r[1] in removed}
         if _has(db, 'desk_documents'):
-            db.execute('UPDATE desk_documents SET title=? WHERE scope=? AND source=?', (REMOVED, scope, source))
+            for row in db.execute('SELECT scope,source,document_id FROM desk_documents WHERE scope=? AND source=?', (scope, source)).fetchall():
+                title = sealing.seal_row(sealer, 'desk_documents', area, dict(row) | {'title': REMOVED})['title']
+                db.execute('UPDATE desk_documents SET title=? WHERE scope=? AND source=? AND document_id=?', (title, *row))
         if _has(db, 'desk_links'):
             for seq in seqs:
-                db.execute('UPDATE desk_links SET title=? WHERE seq=?', (REMOVED, seq))
+                title = sealing.seal_row(sealer, 'desk_links', area, {'seq': seq, 'title': REMOVED})['title']
+                db.execute('UPDATE desk_links SET title=? WHERE seq=?', (title, seq))
     if _has(db, 'actions'):
         for row in db.execute("SELECT scope,id,parameters FROM actions WHERE scope=? AND capability IN ('vault.inbox_note','vault.append_section')", (scope,)).fetchall():
             if json.loads(sealing.open_row(sealer, 'actions', row)['parameters']).get('source') == source:
