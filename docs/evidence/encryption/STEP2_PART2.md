@@ -1,7 +1,7 @@
 # Encryption step 2, part 2 receipt: reviewed memory, its bin and capture
 
 Built 30 October 2026 on part 1 (PR #50, including its fix 717d813c6), which has not merged yet;
-part 2 goes up only after it does. Tested revision: TESTED_REVISION (the commit carrying this
+part 2 goes up only after it does. Tested revision: 2a0c706af (the commit carrying this
 receipt changes only this file). Synthetic keys and invented memory only. Nothing under
 `third_party/` was read, imported or executed, and no model ran.
 
@@ -68,7 +68,7 @@ unlocking at start.
   tables, apart from the inode numbers of the scenario's own temporary vault folder.
 - Whole suite, plain (`python -m unittest discover -s tests`): 1,951 tests, all passing.
 - Whole suite, sealed (`python tests/sealed_suite.py`): 1,951 tests, all passing, with
-  53,324 values sealed in the process.
+  53,317 values sealed in the process.
 - `tools/check_public_hygiene.py`, `tools/check_claims.py --base origin/main --branch
   claude/project-thread-9npowk`, `tools/check_requirement_register.py`,
   `tools/check_memory_plan.py`, `tools/check_adoptions.py` and `tools/egress_audit.py`: all
