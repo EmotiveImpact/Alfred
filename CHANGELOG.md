@@ -10,6 +10,12 @@ Master plan phase 2, first part; agent hub step H5. The owner chose Hermes as th
 - **Hermes behind the plug.** `alfred/hermes_box.py`: the box proves its build, its settings (as Hermes itself reads them), its tool gate and its lack of network before anything private is sent. Hermes holds no key; ALFRED makes each model call, refuses provider-side tools, caps each call to the budget and charges the provider's usage. Every tool call is asked of ALFRED first; only `file.read` inside `/work` can be granted. A brain can now report why it stopped (`BrainFailure`), instead of a bare `brain_error`.
 - **The six fence tests.** `tools/hermes_fence.py` runs them against the real box with real Hermes inside: memory and skill writes, every turn through ALFRED, the skills folder, nothing fetched at start, nothing left on disk, and no private area on a cloud model unless allowed; plus a planted instruction ending as a refused proposal. All hold. A new CI job rebuilds the box and reruns them. [Receipt](docs/evidence/hermes-box/RECEIPT.md).
 
+## 20 October 2026: the provenance gate, branch `claude/project-thread-att046-provenance-gate`
+
+Merged with the owner's word on 20 October, after the owner chose blocking over warning. Synthetic data only; nothing deployed.
+
+- **Provenance gate (C9, #44; master plan phase 2, the CaMeL idea).** Every brain proposal is labelled with where its contents came from. An email address, web address, domain, handle or phone number that appears only in a note, or nowhere, and not in the owner's own words, makes the proposal `steered_by_untrusted_text`; under the default `enforce` mode it is kept with its reason but never becomes an action to approve. `watch` only labels it. No screen shows brain proposals yet. [Guide](docs/PROVENANCE_GATE.md), [receipt](docs/evidence/provenance-gate/RECEIPT.md).
+
 ## 18 October 2026: the disk encryption check and the checks in CI, branches `claude/project-thread-att046-disk-check` and `-ci-checks`
 
 Merged with the owner's word on 18 October. Synthetic data only; nothing deployed.
