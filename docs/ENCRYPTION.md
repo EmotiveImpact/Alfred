@@ -244,8 +244,8 @@ choosing it over SQLCipher (below).
 Step 2 seals the private text in ALFRED's database with the area keys, in five parts. Only the
 last one lets you switch a workspace to sealed, so no workspace you use is ever half sealed:
 
-1. The sealing layer and the notes ALFRED reads from your vault (this part).
-2. Reviewed memory, its forgetting bin, and capture.
+1. The sealing layer and the notes ALFRED reads from your vault (built).
+2. Reviewed memory, its forgetting bin, and capture (built).
 3. Conversations, executive records, drafts and actions.
 4. Learning, the agent brain, goals, jobs and their cached files.
 5. Switching on: a `seal` command that converts a workspace, refusing to start without the
@@ -262,6 +262,33 @@ the file cannot check a guess at what a note says, and destroying the area makes
 meaningless too. Front-matter and item ids are keyed the same way, so they still match
 exactly. In a sealed workspace every `sha256` value ALFRED keeps or returns for a note, and
 the short references in the audit log, are this keyed form.
+
+**What part 2 seals.** In reviewed memory: each record's name (a person, project and so on),
+each statement's text, and where a captured statement came from. Every copy in the forgetting
+bin, sealed whole, since a copy holds the names and text the forget cleared. Each capture
+policy's name and rule, which hold the line prefix or keyword it looks for and the folder it
+reads. Three hashes become keyed fingerprints: the hash ALFRED keeps of each statement request
+(it covers the statement's text), the note and quote fingerprints a statement keeps (already
+keyed in part 1, since they copy the note's), and the hash of each line a capture policy
+matched, which is how a rescan knows a line was already offered. The short request and
+deferral ids capture derives from that line hash are made from the keyed form. The review
+history stays value-free, as before, and a forgotten source's tombstones already keep only a
+keyed hash of its path.
+
+**Which area.** A statement, its capture record and its bin copy are in the area of the note
+that supports it: `statement_area` in
+[`alfred/reviewed_memory.py`](../alfred/reviewed_memory.py) reads the area the note's own text
+was sealed under, so part 5's folder rules reach statements through their notes. A statement
+whose note is no longer indexed is in the default area. A record's name and the capture
+policies are in the workspace's default area (`entity_area`, `policy_area`), and so is a
+record's copy in the bin, together with the statements forgotten with it. Until part 5 every
+note is in the default area, so today all of reviewed memory is in one area.
+
+**What stays visible in reviewed memory** without the key: how many records and statements
+there are, each record's kind and id, each statement's shape (which records it links, its
+predicate, valid period, review state, version, times and reviewer credential), the note and
+line numbers it cites, each capture's memory type and retention, each policy's settings
+(enabled, context label, daily budget), and each bin copy's kind, subject id and dates.
 
 **Rescanning.** A value whose text has not changed keeps the sealed form already stored, so
 rescanning an unchanged vault seals nothing and writes no new ciphertext; an edited note
@@ -294,22 +321,39 @@ of these return what they were given. `python tests/sealed_suite.py` runs every 
 test with each workspace sealed by a synthetic keyring, child processes included; CI runs it
 on every change, and [`tests/test_sealing.py`](../tests/test_sealing.py) checks that a sealed
 workspace's database, write-ahead log and shared memory hold none of its notes' words, paths
-or plain fingerprints.
+or plain fingerprints; [`tests/test_sealing_memory.py`](../tests/test_sealing_memory.py) does
+the same for reviewed memory, the bin and capture, in two areas.
 
 ## Honest limits
 
 - **Nothing is sealed yet in a workspace you use.** Step 1 makes and manages the keys. Step 2
   seals records, indexes, exports and backups; until its last part, a workspace cannot be
-  switched to sealed, and the tables later parts cover (reviewed memory and its forgetting bin, conversations,
-  executive records, drafts and actions, learning, goals and jobs) still keep plain text and
-  plain fingerprints.
+  switched to sealed, and the tables later parts cover (conversations, executive records,
+  drafts and actions, learning, goals and jobs) still keep plain text and plain fingerprints.
+  An answer or draft that cites a reviewed statement keeps a copy of its text in the
+  conversation record until part 3.
+- **A record's name is in the default area.** You name a record yourself rather than drawing
+  it from one note, so destroying a client area does not erase a record's name, even when
+  every statement about it came from that client's notes.
+- **A record's copy in the bin can span areas.** Forgetting a record puts one copy in the bin,
+  holding the record and the statements forgotten with it, sealed in the record's area. If
+  those statements came from another area's notes, destroying that area does not reach their
+  text in the copy until it leaves the bin (30 days at most), and undoing the forget fails
+  while their area is gone. Nothing crosses areas today, since every note is in the default
+  area; folder rules (part 5) make it possible. Both of these points belong to the open
+  choice about answers drawing on several areas, and change once you make it.
+- **Identifiers stay readable.** Statement and bin ids are random, and the console makes
+  random record ids; a program that chose meaningful record or capture policy ids through the
+  API would leave those ids readable.
 - **Sync conflict rows** are bound to their vault rather than to one conflict, so someone able
   to write to the database could swap two conflict paths of the same vault. They still cannot
   read them.
 - **Older text can be put back.** A sealed value is bound to its table, column and row but not
   to the note's revision, so someone able to write to the database could put back a note's
   text from an earlier copy of it. They still cannot read it, and the next scan of the vault
-  replaces it.
+  replaces it. The same holds for a statement's text, a record's name and a bin copy, which
+  could be put back from an earlier copy of the same row; a statement whose note has changed
+  since is invalidated at the next look, as always.
 - **Moving a note to another area** will change its keyed fingerprints and keyed ids, which
   are made per area. Part 5, which brings folder and source rules for areas, has to carry a
   note's identity across such a move.

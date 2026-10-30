@@ -597,9 +597,9 @@ def _came_back(db, forgets):
 
 def _held(db, entry):
     """A short label if the restored copy holds the subject unforgotten, else None."""
+    from . import sealing
     scope, subject = entry['scope'], entry['subject']
     if entry['kind'] == 'source_forgotten':
-        from . import sealing
         if not db.execute("SELECT 1 FROM credentials WHERE id=? AND scope=? AND role='source' AND revoked=0", (subject, scope)).fetchone():
             return None
         row = db.execute('SELECT scope,source,label FROM knowledge_sources WHERE scope=? AND source=?', (scope, subject)).fetchone() \
@@ -608,8 +608,8 @@ def _held(db, entry):
     if not _has(db, 'memory_claims'):
         return None
     def name(identity):
-        row = db.execute('SELECT name FROM memory_entities WHERE id=? AND scope=?', (identity, scope)).fetchone()
-        return row[0] if row else None
+        row = db.execute('SELECT id,name FROM memory_entities WHERE id=? AND scope=?', (identity, scope)).fetchone()
+        return sealing.open_row(sealing.of(db), 'memory_entities', row)['name'] if row else None
     if entry['kind'] == 'entity_forgotten':
         return name(subject)
     row = db.execute("SELECT subject_id,predicate FROM memory_claims WHERE id=? AND scope=? AND state!='forgotten'", (subject, scope)).fetchone()

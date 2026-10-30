@@ -61,7 +61,7 @@ def collect(store, bearer):
         q = store.authenticate(db, bearer, {'owner', 'reader'})
         if q['id'] != p['id'] or grant_revision(db, q, store.now()) != before:
             raise Fault('export_authority_changed', 409)
-        captures = {r['claim_id']: dict(r) for r in db.execute(
+        captures = {r['claim_id']: store.opened('memory_capture', r) for r in db.execute(
             'SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',
             (p['scope'], ledger(db, p)))}
         history = _history(db, p)

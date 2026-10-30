@@ -683,7 +683,7 @@ class Routines:
 
     def _resolver(self, db, p, now):
         """What a citation points at, as this caller may read it now. Nothing else is revealed."""
-        from .reviewed_memory import ReviewedMemory
+        from .reviewed_memory import ReviewedMemory, entities_of
         records = {r['id']: dict(r) for r in db.execute('SELECT id,kind,title,status,version,due,responsible FROM executive_records WHERE scope=? AND actor=?',
                                                         (p['scope'], p['id']))}
         cache = {}
@@ -691,8 +691,7 @@ class Routines:
         def claims():
             if 'claims' not in cache:
                 cache['claims'] = {c['id']: c for c in ReviewedMemory._claims(db, p, now)}
-                cache['entities'] = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?',
-                                                                         (p['scope'], ledger(db, p)))}
+                cache['entities'] = entities_of(db, p['scope'], ledger(db, p))
             return cache['claims'], cache['entities']
 
         def resolve(kind, identity, version):
@@ -812,15 +811,15 @@ class Routines:
 
     def procedures(self, bearer):
         """Read-only registry of procedural memory. Listed to be read; nothing here is ever run."""
-        from .reviewed_memory import ReviewedMemory
+        from .reviewed_memory import ReviewedMemory, entities_of
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner', 'reader'})
             now = self.store.now()
             # The same reconciliation the reviewed-memory view runs: edited support invalidates.
             self.memory._reconcile(db, p)
-            procedural = {r['claim_id']: dict(r) for r in db.execute('''SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id
+            procedural = {r['claim_id']: dict(r) for r in db.execute('''SELECT m.claim_id,m.memory_type,m.retention_until,m.created FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id
                 WHERE c.scope=? AND c.actor=? AND m.memory_type='procedural' ''', (p['scope'], ledger(db, p)))}
-            entities = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], ledger(db, p)))}
+            entities = entities_of(db, p['scope'], ledger(db, p))
             items = []
             for c in ReviewedMemory._claims(db, p, now):
                 if c['id'] not in procedural or c['state'] == 'forgotten':

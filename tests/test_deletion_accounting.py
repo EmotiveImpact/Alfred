@@ -31,6 +31,7 @@ from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor
 from alfred.local import Fault
 from alfred.reviewed_memory import ReviewedMemory
 from alfred.routines import Routines
+import stored_helpers as stored
 from alfred.voice import VoiceLog
 from grant_helpers import grant_all, person_of
 
@@ -130,6 +131,10 @@ class Workspace(unittest.TestCase):
         with (store or self.store).connection() as db:
             return db.execute(sql, args).fetchone()[0]
 
+    def binned(self, identity, store=None):
+        """Copies in the bin that name the identifier, read opened so a sealed workspace counts the same."""
+        return sum(f'"{identity}"' in r['snapshot'] for r in stored.rows(store or self.store, 'memory_bin', 'SELECT id,snapshot FROM memory_bin'))
+
     def exports_holding(self, claims):
         held = 0
         for directory in self.root.glob('export-*'):
@@ -145,7 +150,7 @@ class Workspace(unittest.TestCase):
             'statements': (c('SELECT count(*) FROM memory_claims WHERE id=?', claim),
                            c('SELECT count(*) FROM memory_claims WHERE id=? AND (value IS NOT NULL OR object_id IS NOT NULL)', claim)),
             'captures': (c('SELECT count(*) FROM memory_capture WHERE claim_id=?', claim), 0),
-            'bin_copies': (c('SELECT count(*) FROM memory_bin WHERE snapshot LIKE ?', f'%"{claim}"%'),) * 2,
+            'bin_copies': (self.binned(claim, store),) * 2,
             'answers': (c('SELECT count(*) FROM conversation_turns WHERE id=?', turn),
                         c('SELECT count(*) FROM conversation_turns WHERE id=? AND result IS NOT NULL', turn)),
             'voice_playbacks': (c('SELECT count(*) FROM voice_playbacks WHERE turn_id=?', turn), 0),
@@ -169,7 +174,7 @@ class Workspace(unittest.TestCase):
             'statements': (c('SELECT count(*) FROM memory_claims WHERE note_id=?', note),
                            c('SELECT count(*) FROM memory_claims WHERE note_id=? AND (value IS NOT NULL OR object_id IS NOT NULL)', note)),
             'source_index': (index, index),
-            'bin_copies': (c('SELECT count(*) FROM memory_bin WHERE snapshot LIKE ?', f'%"{note}"%'),) * 2,
+            'bin_copies': (self.binned(note, store),) * 2,
             'tombstones': (c('SELECT count(*) FROM memory_tombstones WHERE source=?', source), 0),
             'evidence_events': (c('SELECT count(*) FROM events WHERE source=?', source) + c('SELECT count(*) FROM desk_documents WHERE source=?', source)
                                 + c('SELECT count(*) FROM desk_links WHERE seq IN (SELECT seq FROM events WHERE source=?)', source),

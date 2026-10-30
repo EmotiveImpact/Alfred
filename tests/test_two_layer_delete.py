@@ -257,6 +257,7 @@ class AbsoluteDeleteTests(Base):
 class RestoreTests(Base):
     def test_a_restore_brings_ordinary_deletes_back_and_lists_them(self):
         backup = self.backup()
+        names = {r['id']: r['name'] for r in stored.rows(self.store, 'memory_entities', 'SELECT id,name FROM memory_entities')}
         self.clock[0] += DAY
         self.forget(self.status)
         self.memory.forget_entity(self.owner, 'mina', {})
@@ -264,6 +265,9 @@ class RestoreTests(Base):
         came = {(c['kind'], c['subject']): c for c in result['came_back']}
         self.assertEqual(set(came), {('claim_forgotten', self.status), ('entity_forgotten', 'mina')})
         self.assertEqual(came[('claim_forgotten', self.status)]['deleted_at'], 1000 + DAY)
+        # Records and statements are named as the owner knows them, opened in a sealed workspace.
+        self.assertEqual(came[('entity_forgotten', 'mina')]['label'], names['mina'])
+        self.assertEqual(came[('claim_forgotten', self.status)]['label'], names['atlas'] + ' status')
         self.assertEqual(came[('entity_forgotten', 'mina')]['label'], 'Mina')
         self.assertEqual(came[('claim_forgotten', self.status)]['label'], 'Atlas status')
         self.assertEqual(result['ordinary_entries_not_replayed'], 2)

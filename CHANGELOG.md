@@ -2,6 +2,17 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 30 October 2026: sealing reviewed memory, its bin and capture, encryption step 2 part 2, branch `claude/project-thread-9npowk`
+
+The second of step 2's five parts (SYS-002, M05), built on part 1 and waiting for it to merge; it goes up only after that, and the owner's word comes first. A workspace can still be sealed only in tests. Synthetic keys and invented memory only; no model ran and nothing under `third_party/` was installed, run or imported.
+
+- **Reviewed memory sealed.** Record names, statement text and where a captured statement came from. The hash kept of each statement request covers its text, so it is keyed; a statement's note and quote fingerprints were keyed in part 1. Conflict checks compare opened text, never sealed values.
+- **The forgetting bin sealed.** Each copy is sealed whole, so the names and text an ordinary forget cleared are no longer readable in the bin. Undo seals them back in their own areas.
+- **Capture sealed.** A policy's name and rule (its prefix or keyword and the folder it reads) are sealed, and each matched line is kept only as a keyed fingerprint, so a rescan still offers a line once. Saving an unchanged policy seals nothing new.
+- **One place for each area.** `statement_area` puts a statement, its capture and its bin copy in the area of the note that supports it; records and policies are in the default area. A record's bin copy, and a record named by statements from several areas, are listed in `docs/ENCRYPTION.md` as limits that belong to the owner's open choice about answers drawing on several areas.
+- **Every reader updated.** Reviewed memory, the bin, capture, restore (which now names restored records and statements opened), export, routines and executive briefs open what they read.
+- **Proof.** `tests/test_sealing_memory.py` (9 tests, each failing before the change): views, the bin, capture and export still open; the database, logs and lifecycle journal hold none of the invented words or plain fingerprints of requests, captured lines or the ids derived from them; reading seals nothing; a value or bin copy moved to another row does not open; destroying the area erases memory, the bin and capture; statements follow their note's area. A plain scenario run on part 1 and on part 2 stores the same rows.
+
 ## 30 October 2026: sealing stored notes, encryption step 2 part 1, branch `claude/project-thread-9npowk`
 
 The first of step 2's five parts (SYS-002, M05), built on step 1 (PR #26, merged 30 October). Not merged; the owner's word comes first. A workspace can be sealed only in tests until part 5 adds the `seal` command and unlocking at start, so no workspace in use is half sealed. Synthetic keys and invented notes only; no model ran and nothing under `third_party/` was installed, run or imported.

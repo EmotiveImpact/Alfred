@@ -26,12 +26,14 @@ paths:
   - alfred/vault_append.py
   - alfred/reviewed_memory.py
   - alfred/capture_policies.py
+  - alfred/memory_bin.py
   - tools/evaluate_retrieval.py
   - requirements/
   - tests/test_keys*.py
   - tests/test_encryption*.py
   - tests/test_recovery.py
   - tests/test_sealing.py
+  - tests/test_sealing_memory.py
   - tests/sealed_suite.py
   - tests/stored_helpers.py
   - docs/ENCRYPTION.md
@@ -45,8 +47,8 @@ unlocking) is PR #26, merged 30 October 2026; step 2 seals the stored records. T
 are listed because sealing reaches them. Astra stays out of them.
 
 Step 2 part 1 (the sealing layer and vault notes) adds the sealing module, its test harness
-and the modules that read or write note rows; part 2 (reviewed memory and capture) works in
-the same ones. Conversations, executive records, drafts, jobs and the console API had small
-reader changes in part 1 and are claimed only when parts 3 and 4 start. Any new code that
-reads a table listed in `alfred/sealing.py` must open its rows (`store.opened`); the
-`sealed-suite` CI job fails if it does not.
+and the modules that read or write note rows; part 2 (reviewed memory, its bin and capture)
+works in the same ones and in the bin. Conversations, executive records, routines, drafts,
+jobs and the console API had small reader changes in parts 1 and 2 and are claimed only when
+parts 3 and 4 start. Any new code that reads a table listed in `alfred/sealing.py` must open
+its rows (`store.opened`); the `sealed-suite` CI job fails if it does not.
