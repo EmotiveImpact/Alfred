@@ -10,8 +10,8 @@ Requirements: SYS-002 (private storage, secrets, exports, backups and restore), 
 M05. Owner decision, 17 October 2026: support both a Mac and a server, the keychain on the
 Mac and a passphrase or the server's own secret store on a server, all behind one offline
 recovery key, with a key per area as in `research/2026-10-17/alfred-memory-optimum.md`. The
-encryption library (integration plan choice 3) is on the owner's decision card; this step is
-built against the recommended `cryptography` and does not merge without that sign-off.
+encryption library (integration plan choice 3): the owner chose `cryptography` over SQLCipher
+on 30 October 2026.
 
 ## What was built
 

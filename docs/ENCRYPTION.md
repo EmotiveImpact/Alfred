@@ -224,7 +224,8 @@ require` refuses to start without it.
 ## Adoption record: `cryptography`
 
 Python's standard library has no AES, so sealing needs one outside library. This is ALFRED's
-first adopted runtime dependency, and the owner's sign-off on it is pending.
+first adopted runtime dependency. The owner signed off on adopting it on 30 October 2026,
+choosing it over SQLCipher (below).
 
 | | |
 | --- | --- |

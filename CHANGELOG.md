@@ -68,7 +68,7 @@ Key custody for plan item 1.1 (SYS-002, M05), on the owner's choice of both a Ma
 - **Recovery kit.** `backup` writes a keyring copy that only the recovery key opens; `restore` puts it in place on a new machine, where a local unlock method is then added.
 - **Three tries.** A typed passphrase or recovery key gets three tries each time ALFRED asks, at start, in every command and in `restore`. Wrong tries lock nothing and erase nothing; piped input that runs out stops asking.
 - **Full-disk encryption check.** `python3 -m alfred.keys disk` and a new `doctor` check report the same answer as the check `desk serve` runs (#41), so ALFRED has one detector; the doctor also reads the keyring's layout without unlocking it. `placement` lists the keyring as a live file.
-- **First adopted runtime dependency.** `cryptography` 50.0.2 with `cffi` 2.1.1 and `pycparser` 3.0, pinned with every file hash in `requirements/encryption.txt`; CI installs it in a fresh virtual environment for the test suite. The adoption record is in [docs/ENCRYPTION.md](docs/ENCRYPTION.md); the owner's sign-off is pending. [Receipt](docs/evidence/encryption/RECEIPT.md).
+- **First adopted runtime dependency.** `cryptography` 50.0.2 with `cffi` 2.1.1 and `pycparser` 3.0, pinned with every file hash in `requirements/encryption.txt`; CI installs it in a fresh virtual environment for the test suite. The adoption record is in [docs/ENCRYPTION.md](docs/ENCRYPTION.md); the owner signed it off on 30 October 2026. [Receipt](docs/evidence/encryption/RECEIPT.md).
 
 ## 17 October 2026 (evening): two agents, one repository, branch `claude/project-thread-r6ndba`
 
