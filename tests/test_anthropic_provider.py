@@ -193,6 +193,11 @@ class KeySourceTests(unittest.TestCase):
                          f'Claude key found in file {path}: {len(KEY)} characters, in the expected shape.')
         self.assertEqual(describe(SecretFileKey(self.secret('short', 'x' * 40 + ' and spaces'))),
                          f'Something is stored in file {self.root / "short"}, but it is not in the shape of a Claude key.')
+        binary = self.root / 'binary'
+        binary.write_bytes(bytes(range(128, 176)))  # A server secret, not a Claude key.
+        binary.chmod(0o600)
+        self.assertEqual(describe(SecretFileKey(binary)),
+                         f'Something is stored in file {binary}, but it is not in the shape of a Claude key.')
         self.assertEqual(describe(SecretFileKey(self.root / 'missing')),
                          f'No Claude key could be read from file {self.root / "missing"} (unlock_unavailable).')
         self.assertEqual(describe(Source(fail=True)), 'No Claude key could be read from the key source (OSError).')

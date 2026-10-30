@@ -90,7 +90,8 @@ class SecretFileKey(KeySource):
         return Path(directory) / self.credential
 
     def read(self):
-        return read_secret_file(self._file()).decode('ascii')
+        # A file that is not text is still read, so the shape check names it for what it is.
+        return read_secret_file(self._file()).decode('ascii', 'replace')
 
     def where(self):
         return f'systemd credential {self.credential}' if self.credential else f'file {self.path}'
