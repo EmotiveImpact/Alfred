@@ -1,0 +1,6 @@
+name: alfred_gate
+version: "1"
+description: "ALFRED's tool gate: every tool call Hermes makes is sent to ALFRED, and runs only on ALFRED's explicit yes."
+author: "ALFRED"
+provides_hooks:
+  - pre_tool_call
