@@ -10,7 +10,7 @@ from .knowledge import KnowledgeStore as DeskStore
 from .knowledge import KnowledgeSupervisor as Supervisor
 from .desk_http import DeskHTTPServer
 from .disk_encryption import MODES as DISK_MODES, at_start as disk_encryption_at_start
-from .hub_host import CHOICES as HUB_CHOICES, start_goal_hub
+from .hub_host import SERVE_CHOICES as HUB_CHOICES, start_goal_hub
 from .local import Fault
 from .knowledge_demo import seed_vault
 from .local_model import LocalOllama

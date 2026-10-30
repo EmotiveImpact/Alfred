@@ -12,10 +12,11 @@ counts every token. Every tool Hermes wants to use is asked of ALFRED first, and
 ALFRED's yes. Six fence tests prove all of this against the real box, with real Hermes inside
 and a scripted stand-in for the model, so no cloud model and no real data are involved.
 
-Nothing here is wired into `desk serve` yet, and no real model has been called. Both come with
-the first real job (phase 2b), which also needs the owner's answer on which areas may use cloud
-AI. Until then every area is treated as local only, and a cloud Hermes is refused for all of
-them.
+The host can now build Hermes onto the goal hub with the Claude provider (below), but
+`desk serve` does not offer it yet, and no real model has been called. Both wait for the Claude
+key to be readable from the Mac keychain or a server's secret store, which reuses the readers
+encryption step 1 adds. On 30 October 2026 the owner chose which areas may use cloud AI:
+personal notes only, to start. Company and client tasks stay local.
 
 ## What is in the box
 
@@ -77,7 +78,8 @@ mismatch refuses the task with its reason (`hermes_box_...`):
 
 **The relay.** Hermes holds a placeholder key. Its model address is a forwarder inside the box,
 and each request becomes a frame to ALFRED. `Relay` passes on only `POST /v1/messages` with the
-configured model and ordinary fields. It refuses tools the provider would run on its own
+configured model and ordinary fields, and no beta header: the two Hermes asks for are part of
+the standard API on current Claude models. It refuses tools the provider would run on its own
 servers (web search and the like), because they would reach the internet from outside the box.
 Before each call it caps the reply so that a generous estimate still fits the budget; after it,
 it charges the provider's own usage report, or the whole estimate when none came back. Hermes's
@@ -95,6 +97,24 @@ become `message.draft` proposals and `remember` items become memory suggestions.
 key refuses the result. `BrainHub.ingest` then checks it like any other brain's result:
 citations against the excerpts that were sent, proposals through the provenance gate and the
 autonomy level.
+
+## On the host
+
+`alfred/hub_host.py` builds the goal hub with Hermes when given a `HermesSetup`, and nothing in
+it has a default:
+
+| Setting | What it is |
+|---|---|
+| `record` | What `tools/build_hermes_box.py --record` wrote. At start, its pin hash, this checkout's `pin.json` and the local image's pin label must all agree (`load_box`), or nothing is built |
+| `model` | The Claude model, by its exact name |
+| `price` | Pence per 1,000 tokens, charged on input and output alike. Set it from the model's output price, rounded up, so ALFRED's money count never runs below the bill |
+| `key_source` | Where the Claude key is read from at each call |
+| `cloud_areas` | The areas whose notes may go to Claude. The owner's choice is `personal` |
+
+Hermes is registered beside the synthetic test brain. The policy allows the cloud for the named
+areas only, so a mandate that names Hermes for a company or client goal is refused when it is
+made, and a task is refused again before a box starts. The policy allows no tool yet: a task's
+excerpts are in its prompt, so one model call answers it.
 
 ## ALFRED's settings for Hermes
 
@@ -147,13 +167,22 @@ The offline half (protocol, relay, gate, reply, settings table, runner line) is
 ## What this does not do yet
 
 - **No real model has been called.** `alfred/anthropic_provider.py` is the Claude provider the
-  relay will use: one fixed host over TLS, no redirects, and the key read from a key source at
+  relay uses: one fixed host over TLS, no redirects, and the key read from a key source at
   each call and dropped after it, never stored, logged or passed to the box. It is tested
   offline only. Its two key sources, the Mac keychain and a server's secret file or systemd
   credential, will use the readers in `alfred/keys.py` once encryption step 1 is merged.
-- **Not wired into the host.** `desk serve` does not build a Hermes brain yet.
-- **Every area is local only.** A cloud Hermes is refused for every area until the owner
-  names the areas that may use cloud AI.
+- **Not offered by `desk serve` yet.** The host wiring exists and is tested in process; the
+  `--hub hermes` switch comes with the key sources.
+- **Thinking across a run of calls.** Hermes treats ALFRED's forwarder as an outside endpoint,
+  not Anthropic's own, so it drops Claude's thinking from earlier turns when it sends the
+  conversation back. Today's tasks are one call, so nothing is lost. Before tools are granted
+  (several calls per task), the box should present the forwarder as Anthropic's address, so
+  Hermes keeps the latest turn's thinking as it does against Anthropic directly; that needs its
+  own fence run.
+- **Effort.** ALFRED leaves Hermes's reasoning setting unset, so Hermes sends no thinking
+  setting and the model uses its default effort. Switching reasoning off would make Hermes ask
+  current Claude models for something they refuse, and an effort setting needs the relay to
+  pass `output_config`, which it refuses today.
 - **Hermes's own memory is switched off, not redirected.** The owner's earlier direction
   (16 October) was to plug Hermes's memory into ALFRED through Hermes's `MemoryProvider`
   interface. That comes later, as its own change; switching it off first is the safe start.
