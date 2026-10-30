@@ -1,0 +1,389 @@
+{
+  "about": "Reviewed exceptions for tools/check_public_hygiene.py: one entry per exact match in one file. docs/PUBLIC_HYGIENE.md says how to add one.",
+  "entries": [
+    {
+      "file": ".github/workflows/conversation-v07.yml",
+      "kind": "email",
+      "sha256": "9664cdb0f10cc814f953996574f091edfe993b2c22bcafb2b46eb14496b714a4",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/desk-v03.yml",
+      "kind": "email",
+      "sha256": "9664cdb0f10cc814f953996574f091edfe993b2c22bcafb2b46eb14496b714a4",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/extend-research.yml",
+      "kind": "email",
+      "sha256": "737279e752c1e92f24160a505243a1a2352b6e7cb1c8d4e4d225b8f42206cca5",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/finish-unified-build.yml",
+      "kind": "email",
+      "sha256": "6dec0bfe34d05e7f83bebce4a4a2b798c0fe246ebd3621fe16b47004bc9a28ef",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/grounded-v05.yml",
+      "kind": "email",
+      "sha256": "9664cdb0f10cc814f953996574f091edfe993b2c22bcafb2b46eb14496b714a4",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/import-research.yml",
+      "kind": "email",
+      "sha256": "737279e752c1e92f24160a505243a1a2352b6e7cb1c8d4e4d225b8f42206cca5",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/knowledge-v04.yml",
+      "kind": "email",
+      "sha256": "9664cdb0f10cc814f953996574f091edfe993b2c22bcafb2b46eb14496b714a4",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/personal-os-v06.yml",
+      "kind": "email",
+      "sha256": "9664cdb0f10cc814f953996574f091edfe993b2c22bcafb2b46eb14496b714a4",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/reviewed-memory-v08.yml",
+      "kind": "email",
+      "sha256": "9664cdb0f10cc814f953996574f091edfe993b2c22bcafb2b46eb14496b714a4",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": ".github/workflows/source-library.yml",
+      "kind": "email",
+      "sha256": "4061f892daa034734bc6885490eece9287559269b3fa90be51b3a6fa1123a5cf",
+      "reason": "Commit identity of an automated workflow on GitHub's no-reply domain; it is not a person's address."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "password",
+      "sha256": "4afa34049fdfc2c3e0e779b903551b72f8dbb70bbb1e5a691622f400535ca7ec",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "password",
+      "sha256": "f2e2877fbb190fb6be11e97709910b87dffed239a383b026b3f976e2cf9c6290",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "045dde7ae8b7b221406bf0c54f8f90e0b792cb49958abb6a47cdfd2122356fa8",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "2ddc96639d79f923c6152d60a3b40dfcab9d5a049e472da22831b47f2322a620",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "32764f61681e8df4ed8f03dca760eab993a11d36efd6b1b713fbae1694553f3d",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "8cb00b09dee646408981e3c6cb9500620400ae7b261d0f9409c90b5399362a2f",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "bd11ec7d09116bbe8da4f3e3df75c9d1e052c7721acc61729a49c175c76944b4",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "alfred/scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "f95d15cf0e0b2c3704697b7390bd265440d1790244c8ac287982baf90ba99a51",
+      "reason": "The scrubber's own fixed description of a kind in its REASONS table, not a credential."
+    },
+    {
+      "file": "docs/evidence/brain-plug/RECEIPT.md",
+      "kind": "email",
+      "sha256": "83ef384495054ac83dedb18bd8b570b9c0e234d73eae85e1837b8bcbe7466907",
+      "reason": "Invented attacker address on the reserved .invalid domain in the prompt-injection test and its receipt."
+    },
+    {
+      "file": "tests/test_brain_plug.py",
+      "kind": "email",
+      "sha256": "83ef384495054ac83dedb18bd8b570b9c0e234d73eae85e1837b8bcbe7466907",
+      "reason": "Invented attacker address on the reserved .invalid domain in the prompt-injection test and its receipt."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "156b80df9fbf2847b5b5f5eb78278f064e9bcb7290971373034c8374d7447fe1",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "22353260bd8010df5b82186544dcccb86ced0010d7d4e199e2dd582b4c3f0ad7",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "2f0af60ea91fe0473eeb6b7d80f4460ca3674ae0c60a04f409bd03c5016914b2",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "34a37e1d02414182929949bcb2d183fcc218dedfdf76012d0862bbac3aefdb0a",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "4283bc2ea3bd74e28c37707fbecb42a106893248ded34cfd93de15512e2964f3",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "562b23229c385803090e3a1e8ec8e846ed154fbf0a9027c8065e43f19ea02264",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "59e2b7cc389f1c1bd1d78d7404495ae4330491833ae7381e5f790196944e90be",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "c12c6545772a8d88ecb17515897ecfbbc9543c465e76c39c4e75b94a1998f68c",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "c6b6f6bfed1c25130993415fdf7286f98f859c12480fc307ee87a4bf7fc950cc",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connector_formats.py",
+      "kind": "email",
+      "sha256": "e16bfe08be114c7b3737aa01ce504ebcb5d13fc44897c38c6cac63ddc7151463",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "0a3737e36e77066baf9a3cf2af353cd64fd04ec2c1a6ff8d3c7a2a1d571266db",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "13b7213890876bbf7b445e8adfe766c542a45db09cf9e51744c450bed90f6f12",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "2f0af60ea91fe0473eeb6b7d80f4460ca3674ae0c60a04f409bd03c5016914b2",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "444506482fc5b26fac46d6dba7dab91630939b59d213ac63955f5e49154e9f11",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "c12c6545772a8d88ecb17515897ecfbbc9543c465e76c39c4e75b94a1998f68c",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "c8d1fbc4275abedc4b75ab34f86e3bcf31ad09657f1b832b186a07a74075c0e1",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "d5646e6ca1f01676b653e4888f54121133c8aa25bec3c6741e39ad48c14ad850",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_connectors.py",
+      "kind": "email",
+      "sha256": "e16bfe08be114c7b3737aa01ce504ebcb5d13fc44897c38c6cac63ddc7151463",
+      "reason": "Invented address on the reserved example.org domain in synthetic connector test data."
+    },
+    {
+      "file": "tests/test_desk.py",
+      "kind": "secret_assignment",
+      "sha256": "29edef13706e52aa5e1dfebf852a6a0c36600ed9780ab209c6c863359d8a2558",
+      "reason": "A test sentinel that must never appear in health output; it is not a credential."
+    },
+    {
+      "file": "tests/test_hub_goals.py",
+      "kind": "secret_assignment",
+      "sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "reason": "A deliberately wrong CSRF token that proves the request is refused."
+    },
+    {
+      "file": "tests/test_hub_integrate.py",
+      "kind": "secret_assignment",
+      "sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "reason": "A deliberately wrong CSRF token that proves the request is refused."
+    },
+    {
+      "file": "tests/test_jobs.py",
+      "kind": "secret_assignment",
+      "sha256": "f4b020d22a6fb48488f4fafbae950e3d4d339c855f844f982cd20dfa8ba5333c",
+      "reason": "Synthetic note text named SECRET in a job test; it holds no credential."
+    },
+    {
+      "file": "tests/test_learning.py",
+      "kind": "secret_assignment",
+      "sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "reason": "A deliberately wrong CSRF token that proves the request is refused."
+    },
+    {
+      "file": "tests/test_question_set.py",
+      "kind": "secret_assignment",
+      "sha256": "bc7cc02d9d1314b0274990fa93cd3c4d62e38dc306952d65113854dd702b0cea",
+      "reason": "A test variable named secret holding an invented question sentence, used to prove refusal messages never repeat question text; it is not a credential."
+    },
+    {
+      "file": "tests/test_routines.py",
+      "kind": "secret_assignment",
+      "sha256": "8810ad581e59f2bc3928b261707a71308f7e139eb04820366dc4d5c18d980225",
+      "reason": "A deliberately wrong CSRF token that proves the request is refused."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "email",
+      "sha256": "34657fd697457c69244beb91db2c5bc3ae65ac924fd3f7843b9816057ab9f988",
+      "reason": "Invented address on the reserved .invalid domain in prose the scrubber must leave alone."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "password",
+      "sha256": "1b047ecea6909e390a4cbc9424a746b366bd05eda743c7bc81bccb0eb4f37ec7",
+      "reason": "Labels with no values, used as hostile input in the scrubber's cost test."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "password",
+      "sha256": "1c8bfe8f801d79745c4631d09fff36c82aa37fc4cce4fc946683d7b336b63032",
+      "reason": "A deliberately weak invented password that the scrubber test expects to find."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "password",
+      "sha256": "227326d496eac9d69c4cbd08fd4e1b7be33d325ec480db8c9bf59fcebf48beeb",
+      "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "password",
+      "sha256": "d1e4dc12d7058ad0eff20082fc3580c5e8099be53966417c9afcfb7fccdc48e3",
+      "reason": "Test code that splices an invented value into a string; it is not a value itself."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "password",
+      "sha256": "db9a5a9b5a4cce07bf37a9a971eca3fcb9a404acf91b2afb1e3828dee0ff78b2",
+      "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "private_key",
+      "sha256": "56b79b17cd19729e8fbecab0ac1bcb20f0d9b9558ccfca7eae32d948980e438c",
+      "reason": "A PEM header with a short invented body, used as hostile input in the scrubber's cost test."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "1c8bfe8f801d79745c4631d09fff36c82aa37fc4cce4fc946683d7b336b63032",
+      "reason": "A deliberately weak invented password that the scrubber test expects to find."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "7fc5653d6c889586f2cf38045c3e28c519ce6dd518aed56afeacc158bb786471",
+      "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "db9a5a9b5a4cce07bf37a9a971eca3fcb9a404acf91b2afb1e3828dee0ff78b2",
+      "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "eb1f43659d77350f93e5dab02ddac4c7ebe0167538bb63754ac5706b0ec93050",
+      "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "secret_assignment",
+      "sha256": "ff5f120eae09808956ccb334d81c0ab414e5cc5a8c6405698ed738292821946e",
+      "reason": "Test code that splices an invented value into a string; it is not a value itself."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "url_password",
+      "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
+    },
+    {
+      "file": "tests/test_scrub.py",
+      "kind": "url_password",
+      "sha256": "7d5fd77d5891fecd72e469859c61e1080dc94f8072bc8d564d301334d92a44f6",
+      "reason": "A format placeholder in a scrubber test template; the invented value is built at run time."
+    },
+    {
+      "file": "tests/test_scrub_wiring.py",
+      "kind": "password",
+      "sha256": "d712d28b06e0c0c8024da92d3545c0f79e3e55b8f1d7c319c3697290e9a591dd",
+      "reason": "An invented password assembled from pieces at run time and written into a test note, so the test can prove brain packets leave with it blanked; it is not a credential."
+    },
+    {
+      "file": "tools/check_console_connected_browser.py",
+      "kind": "email",
+      "sha256": "ad7b548ee9f882abcd5178773bd5027eb402338551c3df42be92c9be47ff6996",
+      "reason": "Invented calendar event id on the reserved example.org domain in a synthetic calendar fixture."
+    },
+    {
+      "file": "tools/test_claims.py",
+      "kind": "email",
+      "sha256": "acf397c6db848ee18ac6bc3280ebe574c33200af1fd9292aab94ed4634ad1c4e",
+      "reason": "Invented commit identity on the reserved .invalid domain for a throwaway test repository."
+    },
+    {
+      "file": "tools/test_research_shelf.py",
+      "kind": "email",
+      "sha256": "acf397c6db848ee18ac6bc3280ebe574c33200af1fd9292aab94ed4634ad1c4e",
+      "reason": "Invented commit identity on the reserved .invalid domain for a throwaway test repository."
+    },
+    {
+      "file": "tools/test_source_library.py",
+      "kind": "private_key",
+      "sha256": "3021d90eb9437b2d8f30e8363695c4418b5e5f1870801b5c317e9398ee0f572d",
+      "reason": "A bare PEM header with no key, used to prove the source library excludes key material."
+    }
+  ]
+}

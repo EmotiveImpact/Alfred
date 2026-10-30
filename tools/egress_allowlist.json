@@ -1,0 +1,243 @@
+{
+  "schema": 1,
+  "about": "Every ALFRED file allowed to import a watched network module, with what it imports and why. Read docs/EGRESS_AUDIT.md before adding an entry; tools/egress_audit.py checks this list.",
+  "entries": [
+    {
+      "module": "alfred/desk_http.py",
+      "imports": [
+        "http.server",
+        "urllib.parse"
+      ],
+      "reason": "Loopback desk server: binds 127.0.0.1 only and checks Host and Origin; urllib.parse only splits request paths and query strings."
+    },
+    {
+      "module": "alfred/grounded.py",
+      "imports": [
+        "urllib.parse"
+      ],
+      "reason": "Parser only: quote() escapes text for a local link; no connection is opened."
+    },
+    {
+      "module": "alfred/httpd.py",
+      "imports": [
+        "http.server"
+      ],
+      "reason": "Original local server: binds 127.0.0.1 only and rejects any other Host header."
+    },
+    {
+      "module": "alfred/knowledge.py",
+      "imports": [
+        "urllib.parse"
+      ],
+      "reason": "Parser only: unquote() and urlsplit() read Markdown link targets inside the vault; no connection is opened."
+    },
+    {
+      "module": "alfred/knowledge_http.py",
+      "imports": [
+        "urllib.parse"
+      ],
+      "reason": "Parser only: parse_qs() reads query strings already received by the loopback desk server; no connection is opened."
+    },
+    {
+      "module": "alfred/local_model.py",
+      "imports": [
+        "http.client"
+      ],
+      "reason": "Opt-in local model adapter, off by default: connects only to 127.0.0.1 on a configured port for a local Ollama; no cloud endpoint, redirect or credential."
+    },
+    {
+      "module": "tools/build_source_library.py",
+      "imports": [
+        "urllib.error",
+        "urllib.parse",
+        "urllib.request"
+      ],
+      "reason": "Owner-run source library refresh: downloads pinned public repositories from api.github.com and codeload.github.com only; --verify, as CI runs it, is offline."
+    },
+    {
+      "module": "tools/check_capture_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_console_connected_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_conversation_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_conversation_preview.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Preview check: opens a built static preview from a file:// path in headless Chromium through Playwright, with no server; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_desk_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_executive_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_grounded_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_grounded_preview.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Preview check: opens a built static preview from a file:// path in headless Chromium through Playwright, with no server; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_hub_goals_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_hub_integrate_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_knowledge_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_learning_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_memory_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_memory_context_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_memory_plan.py",
+      "imports": [
+        "urllib.parse"
+      ],
+      "reason": "Parser only: urlsplit() and unquote() resolve Markdown links in the plan; no connection is opened."
+    },
+    {
+      "module": "tools/check_memory_preview.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Preview check: opens a built static preview from a file:// path in headless Chromium through Playwright, with no server; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_os_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_os_preview.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Preview check: opens a built static preview from a file:// path in headless Chromium through Playwright, with no server; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_recovery_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_routines_browser.py",
+      "imports": [
+        "http.server",
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: serves the built console from a 127.0.0.1 static server beside the loopback desk server and drives headless Chromium through Playwright; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_sync_conflict_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_temporal_review_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/check_voice_browser.py",
+      "imports": [
+        "playwright.sync_api"
+      ],
+      "reason": "Browser check: drives headless Chromium through Playwright against the loopback desk server on 127.0.0.1; run by CI and the owner only."
+    },
+    {
+      "module": "tools/evaluate_conversation_model.py",
+      "imports": [
+        "http.client"
+      ],
+      "reason": "Model experiment: talks to the loopback desk server on 127.0.0.1, which reaches a local Ollama; run only by the model evaluation workflow or the owner."
+    },
+    {
+      "module": "tools/import_selected.py",
+      "imports": [
+        "urllib.error",
+        "urllib.parse",
+        "urllib.request"
+      ],
+      "reason": "Owner-run source import: downloads pinned files from api.github.com and raw.githubusercontent.com only; run by the owner or the import-research workflow."
+    },
+    {
+      "module": "tools/import_sources.py",
+      "imports": [
+        "urllib.request"
+      ],
+      "reason": "Owner-run source import: downloads pinned archives from codeload.github.com only and refuses a redirect elsewhere; --verify, as CI runs it, is offline."
+    }
+  ]
+}

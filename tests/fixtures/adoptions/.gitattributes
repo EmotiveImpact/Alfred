@@ -1,0 +1,2 @@
+# Synthetic fixtures are compared byte for byte (Git blob hashes), so keep them exactly as written.
+* -text

@@ -26,11 +26,17 @@ Models propose, independent policy decides:
   through the existing exact-approval path (``LocalCore.propose``), which still needs
   the owner's ``approve`` with the exact fingerprint. Levels 3 and 4 are refused until
   the private-pilot gates exist.
+* Each proposal is labelled with where its contents came from (``alfred.provenance``,
+  docs/PROVENANCE_GATE.md). By default one steered by an address or link found only in a
+  note, never in the owner's own words, is refused before it can become an action.
 * Memory suggestions go to a review inbox as suggestions. Nothing here accepts them.
 
 What a brain never receives: credentials, database or vault paths, workspace
 identifiers, other scopes' content, full note bodies beyond the granted excerpts, or a
-way to schedule itself.
+way to schedule itself. Every free-text field of a packet (goal, instruction, excerpt
+titles and text, learned statements) is scrubbed by ``alfred.scrub`` when the packet is
+built, before it is hashed, stored or sent; only the kinds and counts of what was blanked
+are recorded, on the task (docs/SECRET_SCRUBBING.md).
 """
 from __future__ import annotations
 import abc
@@ -47,6 +53,8 @@ import time
 from .jobs import BackendResult, JobCoordinator, MAX_ARTEFACT_BYTES, REASON, WorkerBackend
 from . import job_kinds
 from .local import Fault, ident, text
+from . import provenance
+from .scrub import find_secrets, scrub
 
 PACKET_VERSION = 1
 BUNDLE_VERSION = 1
@@ -89,7 +97,7 @@ INSERT INTO brain_meta SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM brain_meta);
 CREATE TABLE IF NOT EXISTS brain_tasks(
  job_id TEXT PRIMARY KEY REFERENCES jobs(id), scope TEXT NOT NULL, actor TEXT NOT NULL,
  task_id TEXT NOT NULL, brain TEXT NOT NULL, scope_class TEXT NOT NULL, autonomy INTEGER NOT NULL,
- packet_sha256 TEXT NOT NULL, created INTEGER NOT NULL, UNIQUE(scope,actor,task_id));
+ packet_sha256 TEXT NOT NULL, created INTEGER NOT NULL, scrubbed TEXT, UNIQUE(scope,actor,task_id));
 CREATE TABLE IF NOT EXISTS brain_results(
  job_id TEXT PRIMARY KEY REFERENCES brain_tasks(job_id), scope TEXT NOT NULL, actor TEXT NOT NULL,
  status TEXT NOT NULL, reason TEXT, envelope_sha256 TEXT, outcome TEXT NOT NULL, created INTEGER NOT NULL,
@@ -98,7 +106,7 @@ CREATE TABLE IF NOT EXISTS brain_proposals(
  id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES brain_tasks(job_id), scope TEXT NOT NULL,
  actor TEXT NOT NULL, position INTEGER NOT NULL, capability TEXT NOT NULL, parameters TEXT,
  fingerprint TEXT NOT NULL, reason TEXT NOT NULL, cites TEXT NOT NULL, disposition TEXT NOT NULL,
- refusal TEXT, action_id TEXT, created INTEGER NOT NULL,
+ refusal TEXT, action_id TEXT, created INTEGER NOT NULL, provenance TEXT,
  CHECK(disposition IN ('dropped_observe','draft_only','pending_approval','refused')));
 CREATE TABLE IF NOT EXISTS brain_suggestions(
  id TEXT PRIMARY KEY, job_id TEXT NOT NULL REFERENCES brain_tasks(job_id), scope TEXT NOT NULL,
@@ -144,6 +152,16 @@ def _body(value, limit, code):
     return value
 
 
+def _clean(value, counts):
+    """``value`` scrubbed, adding the kinds blanked to ``counts``. Never keeps a value."""
+    if not isinstance(value, str):
+        return value
+    cleaned, findings = scrub(value)
+    for finding in findings:
+        counts[finding.kind] = counts.get(finding.kind, 0) + 1
+    return cleaned
+
+
 def _strings(value):
     if isinstance(value, str):
         yield value
@@ -179,9 +197,11 @@ def validate_budget(budget):
 def validate_packet(packet):
     """Return the packet unchanged if it satisfies contract version 1, else raise a Fault.
 
-    The shape has no field for a credential, path, workspace or person, and the check
-    below also refuses any string anywhere in the packet that has the shape of an ALFRED
-    bearer token. Autonomy 3 and 4 are valid values here but refused by ``BrainPolicy``.
+    The shape has no field for a credential, path, workspace or person, and the checks
+    below also refuse any string anywhere in the packet that has the shape of an ALFRED
+    bearer token or that ``alfred.scrub`` finds a secret in (``BrainHub`` scrubs first, so
+    only a packet built elsewhere can fail that). Autonomy 3 and 4 are valid values here
+    but refused by ``BrainPolicy``.
     """
     if type(packet) is not dict or not PACKET_KEYS <= set(packet) <= PACKET_KEYS | OPTIONAL_PACKET_KEYS:
         raise Fault('invalid_packet_fields')
@@ -241,6 +261,8 @@ def validate_packet(packet):
         validate_acceptance(packet['acceptance'], packet)
     if any(CREDENTIAL_SHAPE.search(s) for s in _strings(packet)):
         raise Fault('credential_shaped_value_in_packet')
+    if any(find_secrets(s) for s in _strings(packet)):
+        raise Fault('secret_shaped_value_in_packet')
     if len(_compact(packet).encode('ascii')) > MAX_PACKET_BYTES:
         raise Fault('packet_too_large', 413)
     return packet
@@ -542,9 +564,9 @@ class BrainBackend(WorkerBackend):
     Holds no job authority; ``JobCoordinator`` keeps leases, cancellation, input policy
     and hash checks. Before a brain starts, the backend revalidates the packet, asks
     ``BrainPolicy`` again (a brain may have been unplugged or the policy tightened since
-    submission), and checks every excerpt against the note bytes the coordinator
-    delivered for the bound revision. The brain then receives a copy of the packet only,
-    never the delivered note bytes.
+    submission), and checks every excerpt against the scrubbed slice of the note bytes
+    the coordinator delivered for the bound revision. The brain then receives a copy of
+    the packet only, never the delivered note bytes.
 
     Honest scope: an in-process thread cannot be killed. At the wall-clock limit the
     backend reports the job over budget at once and discards anything the thread
@@ -576,7 +598,8 @@ class BrainBackend(WorkerBackend):
                 raise Fault('packet_inputs_mismatch') from None
         for item in packet['context']:
             lines = bodies[item['note_id']]
-            if item['end_line'] > len(lines) or '\n'.join(lines[item['start_line'] - 1:item['end_line']]) != item['text']:
+            # The packet carries the scrubbed slice, so the slice is scrubbed the same way here.
+            if item['end_line'] > len(lines) or scrub('\n'.join(lines[item['start_line'] - 1:item['end_line']]))[0] != item['text']:
                 raise Fault('excerpt_not_in_bound_revision')
 
     def submit(self, handle, kind, parameters, inputs) -> None:
@@ -808,8 +831,13 @@ class BrainHub:
     """
 
     def __init__(self, store, jobs: JobCoordinator, registry: BrainRegistry, policy: BrainPolicy, *,
-                 workspace_scopes=None, gate=None):
+                 workspace_scopes=None, gate=None, provenance_mode=provenance.DEFAULT_MODE):
         self.store, self.jobs, self.registry, self.policy = store, jobs, registry, policy
+        # Master plan phase 2 (alfred/provenance.py): 'enforce' refuses, before it becomes a
+        # pending action, any proposal steered by text from a note; 'watch' only labels it.
+        if type(provenance_mode) is not str or provenance_mode not in provenance.MODES:
+            raise Fault('invalid_provenance_mode')
+        self.provenance_mode = provenance_mode
         # H2 (alfred.hub_goals.GoalHub attaches itself here): with a gate, every task must
         # serve a current mandate and fit its budgets, or it is refused before a job exists.
         self.gate = gate
@@ -822,10 +850,16 @@ class BrainHub:
             if versions != [1]:
                 raise Fault('unsupported_brain_version')
             db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
+            if 'scrubbed' not in {r[1] for r in db.execute('PRAGMA table_info(brain_tasks)')}:
+                # Additive: tasks submitted before packets were scrubbed (C4) record nothing here.
+                db.executescript('BEGIN IMMEDIATE;\nALTER TABLE brain_tasks ADD COLUMN scrubbed TEXT;\nCOMMIT;')
+            if 'provenance' not in {r[1] for r in db.execute('PRAGMA table_info(brain_proposals)')}:
+                # Additive: proposals recorded before the provenance gate carry no label.
+                db.executescript('BEGIN IMMEDIATE;\nALTER TABLE brain_proposals ADD COLUMN provenance TEXT;\nCOMMIT;')
 
     # Packet ------------------------------------------------------------
 
-    def _excerpts(self, bearer, selections):
+    def _excerpts(self, bearer, selections, counts):
         if type(selections) is not list or len(selections) > MAX_EXCERPTS:
             raise Fault('invalid_context')
         context, total = [], 0
@@ -844,7 +878,7 @@ class BrainHub:
             lines = note['body'].splitlines()
             if last > len(lines):
                 raise Fault('invalid_context')
-            body = '\n'.join(lines[first - 1:last])
+            body = _clean('\n'.join(lines[first - 1:last]), counts)
             if not body.strip():
                 raise Fault('empty_excerpt')
             if len(body) > MAX_ONE_EXCERPT:
@@ -852,12 +886,13 @@ class BrainHub:
             total += len(body)
             if total > MAX_EXCERPT_CHARACTERS:
                 raise Fault('context_over_budget')
-            context.append({'id': f'E{index}', 'note_id': note['id'], 'title': note['title'],
+            # sha256 and revision name the bound note revision as stored, not the excerpt.
+            context.append({'id': f'E{index}', 'note_id': note['id'], 'title': _clean(note['title'], counts),
                             'revision': note['revision'], 'sha256': note['sha256'],
                             'start_line': first, 'end_line': last, 'text': body, 'basis': EXCERPT_BASIS})
         return context
 
-    def _learned(self, bearer, claim_ids):
+    def _learned(self, bearer, claim_ids, counts):
         if type(claim_ids) is not list or len(claim_ids) > MAX_LEARNED or len(set(map(str, claim_ids))) != len(claim_ids):
             raise Fault('invalid_learned')
         if not claim_ids:
@@ -885,6 +920,7 @@ class BrainHub:
                 other = entities[claim['object_id']]['name'] if claim['object_id'] else claim['value']
                 statement = f"{entities[claim['subject_id']]['name']} {claim['predicate'].replace('_', ' ')} {other}"
                 version = claim['version']
+            statement = _clean(statement, counts)
             total += len(statement)
             if total > MAX_LEARNED_CHARACTERS:
                 raise Fault('learned_over_budget')
@@ -893,7 +929,11 @@ class BrainHub:
         return learned
 
     def build_packet(self, bearer, request) -> dict:
-        """A validated packet from the caller's own permitted material. Sends nothing."""
+        """A validated, scrubbed packet from the caller's own permitted material. Sends nothing."""
+        return self._build(bearer, request)[0]
+
+    def _build(self, bearer, request):
+        """(packet, counts): the packet with its free text scrubbed, and the kinds blanked."""
         keys = {'task_id', 'goal', 'scope', 'instruction', 'context', 'learned', 'tools', 'budget', 'autonomy'}
         if type(request) is not dict or not keys | {'brain'} <= set(request) <= keys | {'brain', 'acceptance'}:
             raise Fault('invalid_fields')
@@ -902,15 +942,18 @@ class BrainHub:
         expected = self.workspace_scopes.get(principal['scope'])
         if expected is not None and request['scope'] != expected:
             raise Fault('scope_class_mismatch', 403)
-        packet = {'packet_version': PACKET_VERSION, 'task_id': request['task_id'], 'goal': request['goal'],
-                  'scope': request['scope'], 'instruction': request['instruction'],
-                  'context': self._excerpts(bearer, request['context']),
-                  'learned': self._learned(bearer, request['learned']),
+        counts, goal = {}, request['goal']
+        if type(goal) is dict and 'statement' in goal:
+            goal = dict(goal, statement=_clean(goal['statement'], counts))
+        packet = {'packet_version': PACKET_VERSION, 'task_id': request['task_id'], 'goal': goal,
+                  'scope': request['scope'], 'instruction': _clean(request['instruction'], counts),
+                  'context': self._excerpts(bearer, request['context'], counts),
+                  'learned': self._learned(bearer, request['learned'], counts),
                   'tools': request['tools'], 'budget': request['budget'], 'autonomy': request['autonomy']}
         if 'acceptance' in request:
             from .verification import declare
             packet['acceptance'] = declare(request['acceptance'])
-        return validate_packet(packet)
+        return validate_packet(packet), dict(sorted(counts.items()))
 
     def submit(self, bearer, request, *, binding=None) -> dict:
         """Build a packet, ask policy, and submit it as a ``brain_task`` job.
@@ -919,7 +962,7 @@ class BrainHub:
         is attached, refuses a task without one or outside it."""
         if type(request) is not dict or 'brain' not in request:
             raise Fault('invalid_fields')
-        packet = self.build_packet(bearer, request)
+        packet, scrubbed = self._build(bearer, request)
         brain = self.registry.get(request['brain'])
         self.policy.decide(brain.spec, packet)
         if self.gate is not None:
@@ -938,15 +981,19 @@ class BrainHub:
             p = self.store.authenticate(db, bearer, {'owner'})
             prior = db.execute('SELECT * FROM brain_tasks WHERE job_id=?', (job['id'],)).fetchone()
             if prior is None:
-                db.execute('INSERT INTO brain_tasks VALUES (?,?,?,?,?,?,?,?,?)',
+                db.execute('''INSERT INTO brain_tasks(job_id,scope,actor,task_id,brain,scope_class,autonomy,packet_sha256,
+                              created,scrubbed) VALUES (?,?,?,?,?,?,?,?,?,?)''',
                            (job['id'], p['scope'], p['id'], packet['task_id'], brain.spec.id, packet['scope'],
-                            packet['autonomy'], digest, self.store.now()))
+                            packet['autonomy'], digest, self.store.now(), _compact(scrubbed)))
                 self.store.log(db, p['scope'], p['id'], 'brain.task_submitted', job['id'])
+                if scrubbed:
+                    self.store.log(db, p['scope'], p['id'], 'brain.packet_scrubbed', job['id'])
                 if self.gate is not None:
                     self.gate.bind(db, p, job, brain.spec, packet, binding)
             elif prior['packet_sha256'] != digest:
                 raise Fault('idempotency_key_collision', 409)
-        return {'job': job, 'packet_sha256': digest, 'brain': brain.spec.id, 'autonomy': AUTONOMY[packet['autonomy']]}
+        return {'job': job, 'packet_sha256': digest, 'brain': brain.spec.id, 'autonomy': AUTONOMY[packet['autonomy']],
+                'scrubbed': scrubbed}
 
     # Ingestion ----------------------------------------------------------
 
@@ -981,9 +1028,14 @@ class BrainHub:
             artefact = self.jobs.artefact(bearer, job['result']['sha256'])
             envelope_sha = artefact['sha256']
             status, refusal, envelope = self._judge(task, job, artefact['data'])
-        pending = {}
+        # Observe keeps no parameters, so it keeps no labels either.
+        labelled = status == 'accepted' and task['autonomy'] > 0 and self.provenance_mode != 'off'
+        pending, labels = {}, {}
+        if labelled:
+            labels = {position: provenance.label(job['parameters']['packet'], action)
+                      for position, action in enumerate(envelope['bundle']['proposed_actions'])}
         if status == 'accepted' and task['autonomy'] == 2:
-            pending = self._pending(bearer, task, envelope['bundle']['proposed_actions'])
+            pending = self._pending(bearer, task, envelope['bundle']['proposed_actions'], labels)
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             task = self._task(db, p, job_id)
@@ -993,12 +1045,15 @@ class BrainHub:
             outcome = {'job_state': job['state'], 'over_budget': bool(refusal and refusal.startswith('over_budget_')),
                        'autonomy': AUTONOMY[task['autonomy']], 'proposals': {}, 'suggestions': 0, 'answer': None,
                        'artefacts': [], 'metered': envelope['metered'] if envelope else None,
-                       'basis': 'brain_claim_checked_for_citations_hashes_tools_budget_not_verified_true'}
+                       'basis': 'brain_claim_checked_for_citations_hashes_tools_budget_not_verified_true',
+                       'provenance': {'mode': self.provenance_mode,
+                                      'steered': sum(item['verdict'] == provenance.STEERED for item in labels.values())
+                                      if labelled else None}}
             if status == 'accepted':
                 bundle = envelope['bundle']
                 outcome['answer'] = bundle['answer']
                 outcome['artefacts'] = [{k: a[k] for k in ('name', 'media_type', 'sha256')} for a in bundle['artefacts']]
-                outcome['proposals'] = self._proposals(db, p, task, bundle['proposed_actions'], pending)
+                outcome['proposals'] = self._proposals(db, p, task, bundle['proposed_actions'], pending, labels)
                 outcome['suggestions'] = self._suggestions(db, p, task, bundle['memory_suggestions'])
             self._record(db, p, task, status, refusal, envelope_sha, outcome)
             return self._result_view(db, db.execute('SELECT * FROM brain_results WHERE job_id=?', (job_id,)).fetchone())
@@ -1036,15 +1091,19 @@ class BrainHub:
     def _proposal_id(task, position):
         return 'bp-' + hashlib.sha256(f"{task['job_id']}|{position}".encode()).hexdigest()[:24]
 
-    def _pending(self, bearer, task, actions) -> dict:
+    def _pending(self, bearer, task, actions, labels) -> dict:
         """Autonomy 2: each allowed proposal becomes an action through the existing
         ``LocalCore.propose``, bound to its exact parameters. It stays 'proposed': only
-        ``LocalCore.approve`` with that exact fingerprint queues it. Returns, per position,
-        (disposition, refusal, action_id)."""
+        ``LocalCore.approve`` with that exact fingerprint queues it. Under the 'enforce'
+        provenance mode a proposal steered by text from a note is refused first, so no
+        action exists to approve. Returns, per position, (disposition, refusal, action_id)."""
         decided = {}
         for position, action in enumerate(actions):
             if action['capability'] not in PROPOSABLE:
                 decided[position] = ('refused', 'capability_not_allowed_for_brains', None)
+                continue
+            if self.provenance_mode == 'enforce' and labels[position]['verdict'] == provenance.STEERED:
+                decided[position] = ('refused', provenance.STEERED, None)
                 continue
             action_id = 'act-' + self._proposal_id(task, position)
             with self.store.connection() as db:
@@ -1063,9 +1122,10 @@ class BrainHub:
                 decided[position] = ('refused', exc.code, None)
         return decided
 
-    def _proposals(self, db, p, task, actions, pending) -> dict:
+    def _proposals(self, db, p, task, actions, pending, labels) -> dict:
         counts = {}
         for position, action in enumerate(actions):
+            label = labels.get(position)
             pid = self._proposal_id(task, position)
             digest = hashlib.sha256(_compact({'capability': action['capability'],
                                               'parameters': action['parameters']}).encode()).hexdigest()
@@ -1076,9 +1136,13 @@ class BrainHub:
                 disposition = 'draft_only'
             else:
                 disposition, refusal, action_id = pending[position]
-            db.execute('INSERT INTO brain_proposals VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            db.execute('''INSERT INTO brain_proposals(id,job_id,scope,actor,position,capability,parameters,fingerprint,
+                          reason,cites,disposition,refusal,action_id,created,provenance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                        (pid, task['job_id'], p['scope'], p['id'], position, action['capability'], parameters, digest,
-                        action['reason'], _compact(action['cites']), disposition, refusal, action_id, self.store.now()))
+                        action['reason'], _compact(action['cites']), disposition, refusal, action_id, self.store.now(),
+                        _compact(label) if label else None))
+            if label and label['verdict'] == provenance.STEERED:
+                self.store.log(db, p['scope'], p['id'], 'brain.proposal_steered_by_untrusted_text', pid)
             counts[disposition] = counts.get(disposition, 0) + 1
         return counts
 
@@ -1114,7 +1178,7 @@ class BrainHub:
                      'parameters': json.loads(r['parameters']) if r['parameters'] else None,
                      'fingerprint': r['fingerprint'], 'reason': r['reason'], 'cites': json.loads(r['cites']),
                      'disposition': r['disposition'], 'refusal': r['refusal'], 'action_id': r['action_id'],
-                     'executed': False}
+                     'provenance': json.loads(r['provenance']) if r['provenance'] else None, 'executed': False}
                     for r in db.execute('SELECT * FROM brain_proposals WHERE scope=? AND actor=? ORDER BY created,job_id,position',
                                         (p['scope'], p['id']))]
 

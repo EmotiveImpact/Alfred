@@ -2,6 +2,34 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 18 October 2026: the disk encryption check and the checks in CI, branches `claude/project-thread-att046-disk-check` and `-ci-checks`
+
+Merged with the owner's word on 18 October. Synthetic data only; nothing deployed.
+
+- **Full-disk encryption check at start (C8, #41; master plan phase 1).** `desk serve` says once, for the data folder and the vault, whether full-disk encryption covers them: FileVault on macOS, a dm-crypt (LUKS) layer through LVM and RAID on Linux, and "not confirmed" for anything it cannot read. `--disk-encryption require` refuses to start, before the lock or the database, unless every folder is confirmed. It only reads; commands run without a shell, with no input and a five-second deadline. [Guide](docs/DISK_ENCRYPTION.md), [receipt](docs/evidence/disk-encryption/RECEIPT.md).
+- **The three repository checks run in CI (C5, #42).** The unified build's core job runs the egress audit, the adoption credit check and the public hygiene check on every pull request to `main` and every push to it.
+- **B-031.** Two older workflows cut the full test suite off at five minutes; both now have fifteen. See [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
+
+## 17 and 18 October 2026 (night): the background build backlog, branches `claude/project-thread-att046-<item>`
+
+Eleven pull requests from [coordination/BACKLOG.md](coordination/BACKLOG.md), plus C2 (#29) in its own entry below, each built tests first on its own branch and merged with ordinary merge commits after the owner's word on 18 October. Synthetic data only; no model ran and nothing under `third_party/` was installed, run or imported. Nothing is deployed.
+
+- **The backlog and the claim release (C1, #28).** One ordered list of the work that needs none of the owner's open decisions. Astra's two claims were released when the owner moved all of Astra's work to Claude.
+- **Ask page fix (C7, #30).** B-030: a question asked before the capability answer arrived left the "Local model" option disabled. See [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
+- **Checks run when a result arrives (A3, #33).** A goal task whose mandate declares acceptance checks is verified automatically, once, when its result is accounted; a restart, a second cycle or the owner verifying at the same moment never gives a second run. [Receipt](docs/evidence/hub-auto-verify/RECEIPT.md).
+- **Who started each run (C3, #40).** The console goals panel says whether a verification run was automatic or started by the owner. [Receipt](docs/evidence/run-initiator/RECEIPT.md).
+- **Secret scrubber (A2, #32).** `alfred/scrub.py` finds credentials in text and blanks them as `[redacted:<kind>]`. [Guide](docs/SECRET_SCRUBBING.md), [receipt](docs/evidence/secret-scrubbing/RECEIPT.md).
+- **Scrubbing wired in (C4, #36).** Brain packets are scrubbed before they leave, and harvested worker text before it is proposed; the task records how many of each kind were removed. Notes in the vault are not scrubbed on read yet, which waits on encryption step 2. [Receipt](docs/evidence/scrub-wiring/RECEIPT.md).
+- **Question set harness (A1, #38).** `tools/question_set.py` runs the owner's own question file against ALFRED's search and scores which notes come back, offline and without a model. [Guide](docs/QUESTION_SET.md), [receipt](docs/evidence/question-set/RECEIPT.md).
+- **Meaning search groundwork (A4, #37).** `alfred/semantic.py`: passages, an embedder interface, an in-memory index and blending with keyword results. Not wired into search, no embedding model chosen, nothing written to disk. [Guide](docs/MEANING_SEARCH.md), [receipt](docs/evidence/meaning-search/RECEIPT.md).
+- **Network egress audit (A5, #34).** `tools/egress_audit.py` fails when ALFRED code outside a reviewed list imports something able to use the network. [Guide](docs/EGRESS_AUDIT.md), [receipt](docs/evidence/egress-audit/RECEIPT.md).
+- **Adoption credit check (A6, #35).** `tools/check_adoptions.py` checks that any file borrowed from the shelf names its project, file, commit and licence, matching the pinned records. Nothing is borrowed yet. [Guide](docs/ADOPTION_CHECK.md), [receipt](docs/evidence/adoption-check/RECEIPT.md).
+- **Public hygiene check (A7, #39).** `tools/check_public_hygiene.py` fails when a tracked file holds a credential-shaped literal, a home-directory path or a personal email address, with each reviewed exception pinned by hash. [Guide](docs/PUBLIC_HYGIENE.md), [receipt](docs/evidence/public-hygiene/RECEIPT.md).
+
+## 17 October 2026 (night): the host builds the goal hub when asked, branch `claude/project-thread-att046-hub-host`
+
+- **`desk serve --hub synthetic` (backlog C2).** `alfred/hub_host.py` builds the brain hub and goal hub over the host's own job coordinator, registers only the deterministic synthetic test brain, allows no cloud scope and no tool, and enrols one `local-brain` worker that takes brain tasks only. The host's supervisor loop accounts results and runs heartbeats, so `/desk/hub`, mandates, budgets and verification work end to end on the real desk with test data. Off by default: without the switch no hub tables or brain worker are created and `/desk/hub` still answers `hub_not_configured`. No real brain is offered, because which brain comes first is the owner's choice. [Receipt](docs/evidence/hub-host/RECEIPT.md).
+
 ## 17 October 2026 (evening): encryption keys and unlocking, phase 1 step 1, branch `claude/project-thread-9npowk`
 
 Key custody for plan item 1.1 (SYS-002, M05), on the owner's choice of both a Mac and a server. Nothing ALFRED stores is sealed yet; that is step 2. No model ran and nothing under `third_party/` was installed, run or imported.
