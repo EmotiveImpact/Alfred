@@ -112,6 +112,25 @@ class InProcessTests(Fixture):
         self.assertIn('hub_mandates', tables(self.root / 'desk.sqlite'))
 
     def test_a_task_runs_to_an_accounted_result_without_anyone_driving_it(self):
+        self.run_synthetic_task()
+
+    def test_a_worker_cannot_lease_a_task_before_it_is_bound_to_its_mandate(self):
+        # Regression: the job used to commit before its brain task and mandate link, so the
+        # worker could lease it in between, find no mandate, and the task ended stopped.
+        seen, submit = [], self.jobs.submit
+
+        def slow_submit(bearer, request, **options):
+            job = submit(bearer, request, **options)
+            with closing(sqlite3.connect(self.root / 'desk.sqlite')) as db:
+                seen.append([db.execute(f'SELECT count(*) FROM {table} WHERE job_id=?', (job['id'],)).fetchone()[0]
+                             for table in ('brain_tasks', 'hub_tasks')])
+            time.sleep(0.3)  # The worker polls every 20 ms, so it leases here if it can.
+            return job
+        self.jobs.submit = slow_submit
+        self.run_synthetic_task()
+        self.assertEqual(seen, [[1, 1]])
+
+    def run_synthetic_task(self):
         hub, _ = self.start()
         goal = ExecutiveRecords(self.store).create(self.owner, {
             'request_id': 'goal-1', 'kind': 'goal', 'title': 'Finish the harbour survey', 'detail': '',
