@@ -1,7 +1,7 @@
 # Encryption step 2, part 1 receipt: the sealing layer and vault notes
 
 Built 17 October 2026 and brought onto `main` on 30 October 2026, after step 1 (PR #26, keys,
-unlocking and the two-layer delete) merged. Tested revision: TESTED_REVISION
+unlocking and the two-layer delete) merged. Tested revision: 021a1b061
 (the commit carrying this receipt changes only this file). Synthetic keys and invented notes
 only. Nothing under `third_party/` was read, imported or executed, and no model ran.
 
@@ -59,10 +59,11 @@ unlocking at start.
   `test_memory_m01`, `test_jobs`, `test_memory_capture_inbox`, `test_vault_append`,
   `test_scrub_wiring`.
 - Whole suite, plain, with the pinned library in a fresh virtual environment (Python 3.13.16):
-  PLAIN_RESULT.
-- Whole suite, sealed (`python tests/sealed_suite.py`): SEALED_RESULT.
+  1,942 tests, all passing (`cryptography` 50.0.2, `cffi` 2.1.1, `pycparser` 3.0).
+- Whole suite, sealed (`python tests/sealed_suite.py`): 1,942 tests, all passing,
+  with 51,932 values sealed in the process.
 - `tools/check_claims.py --base origin/main --branch claude/project-thread-9npowk`, plan and
-  requirement register checks: CHECKS_RESULT.
+  requirement register checks: all pass, as do the public hygiene, egress and adoption checks.
 
 ## Not covered yet
 
