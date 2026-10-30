@@ -9,7 +9,8 @@ import queue
 import secrets
 import threading
 import time
-from .local import Fault, exact, ident, text, fingerprint, canonical
+from . import sealing
+from .local import Fault, exact, ident, text, fingerprint, canonical, action_fingerprint, open_action, seal_action
 from .policy import ledger
 from .evidence_review import assess_interpretation
 from .grounded import (retrieve, question_terms, references, check_packet, packet_current_db,
@@ -36,6 +37,14 @@ TTL = 86400
 MAX_SESSIONS, MAX_TURNS = 24, 40
 
 
+def conversation_area(db):
+    """The area a conversation's title, questions, answers and drafts' source bindings are
+    sealed under (encryption step 2). A conversation is made in ALFRED, and an answer may cite
+    notes from several areas; until the owner chooses how such answers are sealed, it is in
+    the workspace's default area."""
+    return sealing.default_area(db) if sealing.of(db).sealed else sealing.DEFAULT_AREA
+
+
 def refs_current_db(db, scope, refs, now, principal=None):
     """Check source authority/revisions in the SAME transaction as action approval."""
     return bool(refs) and sources_current_db(db,scope,refs,now,principal)
@@ -44,8 +53,8 @@ def refs_current_db(db, scope, refs, now, principal=None):
 def knowledge_action_current(store, db, row):
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversation_action_sources'").fetchone():
         return False
-    link = db.execute('SELECT * FROM conversation_action_sources WHERE scope=? AND action_id=?',
-                      (row['scope'], row['id'])).fetchone()
+    link = store.opened('conversation_action_sources', db.execute('SELECT * FROM conversation_action_sources WHERE scope=? AND action_id=?',
+                                                                  (row['scope'], row['id'])).fetchone())
     if not link:
         return False
     active = db.execute('SELECT 1 FROM conversations WHERE id=? AND scope=? AND actor=? AND expires>?',
@@ -94,7 +103,7 @@ class ConversationService:
                          (sid,p['scope'],p['id'],self.store.now())).fetchone()
         if not row:
             raise Fault('conversation_not_found',404)
-        return p,row
+        return p,self.store.opened('conversations',row)
 
     def create(self, bearer, body):
         exact(body, {'title'}); text(body['title'], 100)
@@ -103,13 +112,14 @@ class ConversationService:
             if db.execute('SELECT count(*) FROM conversations WHERE scope=? AND actor=?',(p['scope'],p['id'])).fetchone()[0] >= MAX_SESSIONS:
                 raise Fault('conversation_capacity',409)
             sid = 'chat-' + secrets.token_hex(12); now=self.store.now()
-            db.execute('INSERT INTO conversations VALUES (?,?,?,?,?,?,?)',(sid,p['scope'],p['id'],body['title'],now,now,now+TTL))
+            title=self.store.sealed('conversations',conversation_area(db),{'id':sid,'title':body['title']})['title']
+            db.execute('INSERT INTO conversations VALUES (?,?,?,?,?,?,?)',(sid,p['scope'],p['id'],title,now,now,now+TTL))
         return self.view(bearer,sid)
 
     def listing(self,bearer):
         with self.store.transaction() as db:
             p=self.store.authenticate(db,bearer,{'owner','reader'});self.cleanup(db)
-            sessions=[dict(r) for r in db.execute('SELECT id,title,created,updated,expires FROM conversations WHERE scope=? AND actor=? ORDER BY updated DESC,id',(p['scope'],p['id']))]
+            sessions=[self.store.opened('conversations',r) for r in db.execute('SELECT id,title,created,updated,expires FROM conversations WHERE scope=? AND actor=? ORDER BY updated DESC,id',(p['scope'],p['id']))]
         return {'sessions':sessions,'retention_seconds':TTL,'model_configured':self.provider is not None,
                 'model':self.provider.model if self.provider else None,
                 'model_allowed':p['role']=='owner' and p['scope']==self.provider_scope,'tools_enabled':False}
@@ -129,12 +139,14 @@ class ConversationService:
         question_terms(body['question']);ident(body['request_id']);parse_focus(body.get('focus'))
         if body['mode'] not in {'sources','local_model'} or type(body['follow_up']) is not bool or type(body['after']) is not int or body['after']<0:
             raise Fault('invalid_conversation_request')
-        request_hash=fingerprint(body)
+        plain=fingerprint(body)
         with self.lock:
             if self.stop_event.is_set():raise Fault('conversation_worker_stopped',409)
             with self.store.transaction() as db:
                 p,row=self.own(db,bearer,sid)
                 if self.store.paused(p['scope']):raise Fault('conversation_processing_paused',409)
+                # The request's hash covers the question, so it is keyed in the conversation's area.
+                area=conversation_area(db);request_hash=self.store.sealer.fingerprint(area,plain)
                 previous=db.execute('SELECT id,request_hash,state FROM conversation_turns WHERE session=? AND request_id=?',(sid,body['request_id'])).fetchone()
                 if previous:
                     if previous['request_hash']!=request_hash:raise Fault('conversation_request_collision',409)
@@ -153,8 +165,9 @@ class ConversationService:
                     WHERE s.actor=? AND t.created>?''',(p['id'],self.store.now()-60)).fetchone()[0]>=6:
                     raise Fault('conversation_rate_limited',429)
                 tid='turn-'+secrets.token_hex(12)
+                question=self.store.sealed('conversation_turns',area,{'id':tid,'question':body['question'].strip()})['question']
                 db.execute('INSERT INTO conversation_turns(id,session,ordinal,request_id,request_hash,question,mode,follow_up,state,created,completed,result,focus) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                           (tid,sid,count+1,body['request_id'],request_hash,body['question'].strip(),body['mode'],int(body['follow_up']),
+                           (tid,sid,count+1,body['request_id'],request_hash,question,body['mode'],int(body['follow_up']),
                             'queued',self.store.now(),None,None,body.get('focus')))
                 db.execute('UPDATE conversations SET updated=? WHERE id=?',(self.store.now(),sid))
             self.jobs.put_nowait((bearer,sid,tid))
@@ -195,9 +208,9 @@ class ConversationService:
         try:
             with self.store.transaction() as db:
                 p,_=self.own(db,bearer,sid)
-                row=db.execute('SELECT * FROM conversation_turns WHERE id=?',(tid,)).fetchone()
+                row=self.store.opened('conversation_turns',db.execute('SELECT * FROM conversation_turns WHERE id=?',(tid,)).fetchone())
                 if not row or row['state']!='queued':return True
-                history=[dict(r) for r in db.execute('SELECT question,follow_up FROM conversation_turns WHERE session=? AND ordinal<? ORDER BY ordinal DESC LIMIT 3',(sid,row['ordinal']))]
+                history=[self.store.opened('conversation_turns',r) for r in db.execute('SELECT id,question,follow_up FROM conversation_turns WHERE session=? AND ordinal<? ORDER BY ordinal DESC LIMIT 3',(sid,row['ordinal']))]
                 db.execute("UPDATE conversation_turns SET state='running' WHERE id=?",(tid,))
                 current=dict(row)
             if self.store.paused(p['scope']):raise Fault('conversation_processing_paused')
@@ -252,7 +265,8 @@ class ConversationService:
                                              for c in packet['memory']]
                 for claim in stored['claims']:
                     for cite in claim['citations']:cite.pop('quote',None)
-                db.execute("UPDATE conversation_turns SET state='completed',completed=?,result=? WHERE id=? AND state='running'",(self.store.now(),json.dumps(stored),tid))
+                stored=self.store.sealed('conversation_turns',conversation_area(db),{'id':tid,'result':json.dumps(stored)})['result']
+                db.execute("UPDATE conversation_turns SET state='completed',completed=?,result=? WHERE id=? AND state='running'",(self.store.now(),stored,tid))
         except Exception as exc:
             state='source_changed' if isinstance(exc,Fault) and exc.code in {'sources_changed','sources_changed_during_question'} else 'focus_unavailable' if isinstance(exc,Fault) and exc.code=='focus_not_available' else 'failed'
             self.finish_error(tid,state)
@@ -262,7 +276,7 @@ class ConversationService:
     def view(self,bearer,sid):
         with self.store.transaction() as db:
             p,session=self.own(db,bearer,sid)
-            rows=[dict(r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result,focus FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
+            rows=[self.store.opened('conversation_turns',r) for r in db.execute('SELECT id,ordinal,question,mode,follow_up,state,created,completed,result,focus FROM conversation_turns WHERE session=? ORDER BY ordinal',(sid,))]
             for turn in rows:
                 # A visible reason, so an interrupted question is never mistaken for an unanswerable one.
                 if turn['state']=='interrupted':turn['reason']='host_stopped_before_answer'
@@ -299,7 +313,7 @@ class ConversationService:
         with self.store.transaction() as db:
             p,session=self.own(db,bearer,sid)
             if p['role']!='owner':raise Fault('forbidden',403)
-            row=db.execute('SELECT * FROM conversation_turns WHERE session=? AND id=?',(sid,body['turn_id'])).fetchone()
+            row=self.store.opened('conversation_turns',db.execute('SELECT * FROM conversation_turns WHERE session=? AND id=?',(sid,body['turn_id'])).fetchone())
             if not row or row['state']!='completed' or not row['result']:raise Fault('conversation_result_required',409)
             packet=json.loads(row['result'])['packet'];refs=references(packet);memory_refs=context_references(packet)
             if not refs or not packet_current_db(self.store,db,p,packet):raise Fault('evidence_not_current',409)
@@ -307,14 +321,17 @@ class ConversationService:
             existing=db.execute('SELECT * FROM actions WHERE scope=? AND id=?',(p['scope'],aid)).fetchone()
             if existing:
                 link=db.execute('SELECT * FROM conversation_action_sources WHERE scope=? AND action_id=?',(p['scope'],aid)).fetchone()
-                if not link or link['session']!=sid or link['turn_id']!=row['id'] or existing['actor']!=p['id'] or json.loads(existing['parameters'])!=params:
+                if not link or link['session']!=sid or link['turn_id']!=row['id'] or existing['actor']!=p['id'] or json.loads(open_action(db,existing)['parameters'])!=params:
                     raise Fault('action_id_collision',409)
                 return self.store.action_view(existing)
             if db.execute('SELECT count(*) FROM actions WHERE scope=?',(p['scope'],)).fetchone()[0]>=5000:raise Fault('action_capacity',409)
             expiry=min(self.store.now()+900,session['expires'])
             ambiguity=packet.get('memory_ambiguities',[])
             bound={'id':aid,'scope':p['scope'],'actor':p['id'],'capability':'message.draft','parameters':params,'expires_at':expiry,'sources':refs,'memory':memory_refs,'memory_ambiguities':ambiguity,'turn':row['id']}
-            db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)',(p['scope'],aid,p['id'],'message.draft',canonical(params),fingerprint(bound),expiry,'proposed',self.store.now(),None))
-            db.execute('INSERT INTO conversation_action_sources VALUES (?,?,?,?,?)',(p['scope'],aid,sid,row['id'],json.dumps({'sources':refs,'memory':memory_refs,'memory_ambiguities':ambiguity})))
+            db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)',(p['scope'],aid,p['id'],'message.draft',seal_action(db,p['scope'],aid,'parameters',canonical(params)),
+                                                                           action_fingerprint(db,bound),expiry,'proposed',self.store.now(),None))
+            binding=self.store.sealed('conversation_action_sources',conversation_area(db),{'scope':p['scope'],'action_id':aid,
+                                      'references_json':json.dumps({'sources':refs,'memory':memory_refs,'memory_ambiguities':ambiguity})})['references_json']
+            db.execute('INSERT INTO conversation_action_sources VALUES (?,?,?,?,?)',(p['scope'],aid,sid,row['id'],binding))
             self.store.log(db,p['scope'],p['id'],'action.proposed_from_conversation',aid)
             return self.store.action_view(db.execute('SELECT * FROM actions WHERE scope=? AND id=?',(p['scope'],aid)).fetchone())

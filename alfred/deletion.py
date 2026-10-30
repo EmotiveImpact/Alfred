@@ -28,6 +28,7 @@ import json
 import os
 from pathlib import Path
 import re
+from . import sealing
 from .local import Fault, ident
 
 KINDS = ('source', 'entity', 'statement')
@@ -184,7 +185,7 @@ def _linked(db, scope, actor, kind, subject, trace):
                  WHERE s.scope=? AND t.result IS NOT NULL''' + (f' AND s.actor IN ({_in(keys)})' if private else '')
         # Conversations are kept per device credential; the ledger actor may be the person.
         for row in db.execute(sql, (scope, *keys) if private else (scope,)):
-            packet = (_json(row['result']) or {}).get('packet') or {}
+            packet = (_json(sealing.open_row(sealing.of(db), 'conversation_turns', row)['result']) or {}).get('packet') or {}
             memory = [m for m in packet.get('memory') or [] if isinstance(m, dict)]
             cited = {m.get('claim_id') for m in memory}
             notes = {e.get('note_id') for e in packet.get('evidence') or [] if isinstance(e, dict)}
@@ -193,8 +194,8 @@ def _linked(db, scope, actor, kind, subject, trace):
             if cited & t['claims'] or (kind == 'source' and (notes & t['notes'] or focus in t['notes'])):
                 t['turns'].add(row['id'])
     if _has(db, 'conversation_action_sources'):
-        for link in db.execute('SELECT action_id,turn_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)):
-            binding = _json(link['references_json'])
+        for link in db.execute('SELECT scope,action_id,turn_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)):
+            binding = _json(sealing.open_row(sealing.of(db), 'conversation_action_sources', link)['references_json'])
             memory = binding.get('memory', []) if isinstance(binding, dict) else []
             refs = binding if isinstance(binding, list) else (binding or {}).get('sources', [])
             if (link['turn_id'] in t['turns'] or {m.get('claim_id') for m in memory if isinstance(m, dict)} & t['claims']
@@ -206,8 +207,8 @@ def _linked(db, scope, actor, kind, subject, trace):
     if t['events'] and _has(db, 'desk_action_evidence'):
         t['actions'] |= {r[0] for r in _rows(db, 'SELECT action_id FROM desk_action_evidence WHERE scope=? AND event_seq IN ({ids})', t['events'], scope)}
     if kind == 'source' and _has(db, 'actions'):
-        for row in db.execute("SELECT id,parameters FROM actions WHERE scope=? AND capability='vault.inbox_note'", (scope,)):
-            if (_json(row['parameters']) or {}).get('source') == subject:
+        for row in db.execute("SELECT scope,id,parameters FROM actions WHERE scope=? AND capability='vault.inbox_note'", (scope,)):
+            if (_json(sealing.open_row(sealing.of(db), 'actions', row)['parameters']) or {}).get('source') == subject:
                 t['actions'].add(row['id'])
     return t
 

@@ -133,17 +133,20 @@ def withdraw_dependants(db, scope, actor, claim_ids, now):
     # Conversations belong to a device credential; the ledger to its person. Cover both.
     from .policy import ledger_keys
     keys = ledger_keys(db, actor) if _has(db, 'identity_devices') else [actor]
+    from . import sealing
+    sealer = sealing.of(db)
     if _has(db, 'conversation_turns'):
         for row in db.execute(f'''SELECT t.id,t.result FROM conversation_turns t JOIN conversations s ON s.id=t.session
                                  WHERE s.scope=? AND s.actor IN ({','.join('?' * len(keys))}) AND t.result IS NOT NULL''',
                               (scope, *keys)).fetchall():
+            row = sealing.open_row(sealer, 'conversation_turns', row)
             bound = {m.get('claim_id') for m in json.loads(row['result'])['packet'].get('memory', [])}
             if bound & set(claim_ids):
                 db.execute("UPDATE conversation_turns SET state='memory_forgotten',result=NULL WHERE id=?", (row['id'],))
                 answers += 1
     if _has(db, 'conversation_action_sources'):
-        for link in db.execute('SELECT action_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)).fetchall():
-            binding = json.loads(link['references_json'])
+        for link in db.execute('SELECT scope,action_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)).fetchall():
+            binding = json.loads(sealing.open_row(sealer, 'conversation_action_sources', link)['references_json'])
             memory = binding.get('memory', []) if isinstance(binding, dict) else []
             if not {m.get('claim_id') for m in memory} & set(claim_ids):
                 continue
@@ -205,10 +208,10 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
               'drafts_withdrawn': [], 'bin_copies_removed': 0}
     # Revoked first, so nothing can index or report under this source again.
     db.execute("UPDATE credentials SET revoked=1 WHERE id=? AND scope=? AND role='source'", (source, scope))
+    from . import sealing
+    sealer = sealing.of(db)
     notes = set()
     if _has(db, 'knowledge_notes'):
-        from . import sealing
-        sealer = sealing.of(db)
         # Each note keeps the area its stored path was sealed under, for its tombstone below.
         current = [sealing.open_row(sealer, 'knowledge_notes', r) | {'area': sealing.area_of(r['path']) or sealing.default_area(db)}
                    for r in db.execute('SELECT scope,source,id,path FROM knowledge_notes WHERE scope=? AND source=?', (scope, source))]
@@ -256,7 +259,7 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
     if notes and _has(db, 'conversation_turns'):
         for row in db.execute('''SELECT t.id,t.result FROM conversation_turns t JOIN conversations s ON s.id=t.session
                                  WHERE s.scope=? AND t.result IS NOT NULL''', (scope,)).fetchall():
-            packet = json.loads(row['result']).get('packet', {})
+            packet = json.loads(sealing.open_row(sealer, 'conversation_turns', row)['result']).get('packet', {})
             cited = {e.get('note_id') for e in packet.get('evidence', [])}
             cited |= {(m.get('support') or {}).get('note_id') for m in packet.get('memory', [])}
             focus = (packet.get('focus') or {}).get('record_id') or ''
@@ -265,8 +268,8 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
                 counts['conversation_answers_withdrawn'] += 1
     bound = set()
     if notes and _has(db, 'conversation_action_sources'):
-        for link in db.execute('SELECT action_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)).fetchall():
-            binding = json.loads(link['references_json'])
+        for link in db.execute('SELECT scope,action_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)).fetchall():
+            binding = json.loads(sealing.open_row(sealer, 'conversation_action_sources', link)['references_json'])
             refs = binding if isinstance(binding, list) else binding.get('sources', [])
             if {r.get('note_id') for r in refs if isinstance(r, dict)} & notes:
                 bound.add(link['action_id'])
@@ -296,8 +299,8 @@ def forget_source_db(db, scope, source, now, *, origin='recorded', at=None, purg
             for seq in seqs:
                 db.execute('UPDATE desk_links SET title=? WHERE seq=?', (REMOVED, seq))
     if _has(db, 'actions'):
-        for row in db.execute("SELECT id,parameters FROM actions WHERE scope=? AND capability IN ('vault.inbox_note','vault.append_section')", (scope,)).fetchall():
-            if json.loads(row['parameters']).get('source') == source:
+        for row in db.execute("SELECT scope,id,parameters FROM actions WHERE scope=? AND capability IN ('vault.inbox_note','vault.append_section')", (scope,)).fetchall():
+            if json.loads(sealing.open_row(sealer, 'actions', row)['parameters']).get('source') == source:
                 bound.add(row['id'])
         _cancel(db, scope, bound, counts)
         # Archived or lapsed copies are not a way around forgetting: their text goes too.

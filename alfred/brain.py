@@ -1124,8 +1124,8 @@ class BrainHub:
                 continue
             action_id = 'act-' + self._proposal_id(task, position)
             with self.store.connection() as db:
-                existing = db.execute('SELECT parameters FROM actions WHERE scope=? AND id=?',
-                                      (task['scope'], action_id)).fetchone()
+                existing = self.store.opened('actions', db.execute('SELECT scope,id,parameters FROM actions WHERE scope=? AND id=?',
+                                                                   (task['scope'], action_id)).fetchone())
             if existing:  # An earlier, interrupted ingestion already proposed it.
                 same = json.loads(existing['parameters']) == action['parameters']
                 decided[position] = ('pending_approval', None, action_id) if same else ('refused', 'action_id_collision', None)

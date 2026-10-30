@@ -15,6 +15,7 @@ machine, so the console only uses voices the browser marks as local, and says so
 from __future__ import annotations
 import re
 import secrets
+from .conversation import conversation_area
 from .local import Fault, exact, ident
 
 SCHEMA = '''
@@ -66,8 +67,11 @@ class VoiceLog:
                 db.execute('DELETE FROM voice_playbacks WHERE id IN (SELECT id FROM voice_playbacks WHERE scope=? AND actor=? ORDER BY created,rowid LIMIT 100)',
                            (p['scope'], p['id']))
             identity = 'voice-' + secrets.token_hex(10)
+            # A plain hash of the spoken text would let anyone holding the file check a guess at
+            # the answer, so a sealed workspace keeps it keyed, in the answer's area.
+            digest = self.store.sealer.fingerprint(conversation_area(db), body['text_sha256'])
             db.execute('INSERT INTO voice_playbacks VALUES (?,?,?,?,?,?,?,NULL,NULL,NULL)',
-                       (identity, p['scope'], p['id'], body['turn_id'], body['text_sha256'], body['characters'], self.store.now()))
+                       (identity, p['scope'], p['id'], body['turn_id'], digest, body['characters'], self.store.now()))
             self.store.log(db, p['scope'], p['id'], 'voice.generated', identity)
             return _view(db.execute('SELECT * FROM voice_playbacks WHERE id=?', (identity,)).fetchone())
 

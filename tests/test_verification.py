@@ -19,7 +19,7 @@ from alfred import verification
 from alfred.brain import BrainBackend, BrainHub, BrainPolicy, BrainRegistry, BrainSpec, SyntheticBrain, validate_packet
 from alfred.jobs import JobCoordinator, JobWorker
 from alfred.knowledge import KnowledgeStore, MarkdownVault
-from alfred.local import Fault
+from alfred.local import Fault, action_area
 from alfred.policy import IdentityPolicy
 from alfred.verification import Verifier, declare, sentences, validate_acceptance
 from grant_helpers import grant_all
@@ -590,7 +590,10 @@ class EffectGateTests(Base):
         self.store.approve(self.owner, action['id'], action['fingerprint'])
         self.store.tick(self.owner)
         with self.store.transaction() as db:
-            db.execute("UPDATE drafts SET body='Thank the producers. P.S. something else.'")
+            # Changed the way ALFRED writes a draft in this workspace (sealed or plain), so only the text differs.
+            row = self.store.sealed('drafts', action_area(db), {**db.execute('SELECT scope,action_id FROM drafts').fetchone(),
+                                                                'body': 'Thank the producers. P.S. something else.'})
+            db.execute('UPDATE drafts SET body=?', (row['body'],))
         view = self.verifier.verify(self.owner, job_id)
         self.assertEqual((view['state'], view['verified'], self.codes(view, 'C1')), ('failed_checks', False, ['readback_mismatch']))
         self.assertIsNone(view['acknowledged'])

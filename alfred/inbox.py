@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from .local import Fault, canonical, exact, fingerprint, ident
+from .local import Fault, action_fingerprint, canonical, exact, ident, open_action, seal_action
 
 CAPABILITY = 'vault.inbox_note'
 # How the store reports this capability's outcomes (shared with vault_append).
@@ -55,7 +55,7 @@ def _vault(db, scope, source):
 def current(store, db, row):
     """Every condition approval and dispatch depend on, rechecked in the caller's transaction."""
     from .policy import permitted
-    params = json.loads(row['parameters'])
+    params = json.loads(open_action(db, row)['parameters'])
     actor = db.execute('SELECT * FROM credentials WHERE id=?', (row['actor'],)).fetchone()
     if not actor or actor['revoked'] or actor['expires'] <= store.now() or actor['role'] != 'owner' or actor['scope'] != row['scope']:
         return False
@@ -90,7 +90,7 @@ def propose(store, bearer, body):
                   'precondition': 'create_only_destination_absent'}
         existing = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'], body['request_id'])).fetchone()
         if existing:
-            if existing['actor'] != p['id'] or existing['capability'] != CAPABILITY or json.loads(existing['parameters']) != params:
+            if existing['actor'] != p['id'] or existing['capability'] != CAPABILITY or json.loads(open_action(db, existing)['parameters']) != params:
                 raise Fault('action_id_collision', 409)
             return store.action_view(existing)
         if store.note_at(db, p['scope'], body['source'], path):
@@ -101,14 +101,15 @@ def propose(store, bearer, body):
         bound = {'id': body['request_id'], 'scope': p['scope'], 'actor': p['id'], 'capability': CAPABILITY,
                  'parameters': params, 'expires_at': expiry}
         db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)', (p['scope'], body['request_id'], p['id'], CAPABILITY,
-                   canonical(params), fingerprint(bound), expiry, 'proposed', store.now(), None))
+                   seal_action(db, p['scope'], body['request_id'], 'parameters', canonical(params)), action_fingerprint(db, bound),
+                   expiry, 'proposed', store.now(), None))
         store.log(db, p['scope'], p['id'], 'action.proposed_inbox_note', body['request_id'])
         return store.action_view(db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'], body['request_id'])).fetchone())
 
 
 def execute(store, row):
     """Create the file under the verified vault root. Returns the observed outcome."""
-    params = json.loads(row['parameters'])
+    params = json.loads(store.opened('actions', row)['parameters'])
     writer = store.vault_writers.get(params['source'])
     if writer is None or writer.vault_id != params['vault_id']:
         return 'writer_unavailable'
@@ -116,7 +117,7 @@ def execute(store, row):
 
 
 def verify(store, row):
-    params = json.loads(row['parameters'])
+    params = json.loads(store.opened('actions', row)['parameters'])
     writer = store.vault_writers.get(params['source'])
     if writer is None:
         return None

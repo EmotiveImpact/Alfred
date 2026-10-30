@@ -27,6 +27,15 @@ paths:
   - alfred/reviewed_memory.py
   - alfred/capture_policies.py
   - alfred/memory_bin.py
+  - alfred/conversation.py
+  - alfred/executive.py
+  - alfred/drafts.py
+  - alfred/routines.py
+  - alfred/voice.py
+  - alfred/brain.py
+  - alfred/learning.py
+  - alfred/verification.py
+  - alfred/hub_goals.py
   - tools/evaluate_retrieval.py
   - requirements/
   - tests/test_keys*.py
@@ -34,6 +43,7 @@ paths:
   - tests/test_recovery.py
   - tests/test_sealing.py
   - tests/test_sealing_memory.py
+  - tests/test_sealing_records.py
   - tests/sealed_suite.py
   - tests/stored_helpers.py
   - docs/ENCRYPTION.md
@@ -48,7 +58,9 @@ are listed because sealing reaches them. Astra stays out of them.
 
 Step 2 part 1 (the sealing layer and vault notes) adds the sealing module, its test harness
 and the modules that read or write note rows; part 2 (reviewed memory, its bin and capture)
-works in the same ones and in the bin. Conversations, executive records, routines, drafts,
-jobs and the console API had small reader changes in parts 1 and 2 and are claimed only when
-parts 3 and 4 start. Any new code that reads a table listed in `alfred/sealing.py` must open
+works in the same ones and in the bin. Part 3 seals conversations, executive records, drafts
+and actions, so those modules, routines and read-aloud records are claimed with it; the
+agent brain, learning, verification and goals are claimed for the readers of actions, drafts
+and record titles part 3 changes in them, and part 4 works in them too. Jobs and the console
+API had small reader changes in parts 1 and 2 and are claimed only when part 4 starts. Any new code that reads a table listed in `alfred/sealing.py` must open
 its rows (`store.opened`); the `sealed-suite` CI job fails if it does not.

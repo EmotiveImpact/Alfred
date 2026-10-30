@@ -65,6 +65,43 @@ def fingerprint(value: object) -> str:
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
+# Actions in a sealed workspace (encryption step 2, part 3) ---------------------
+#
+# An action's parameters and proof hold its text, so they are sealed whole; its fingerprint
+# and a local draft's digest are hashes of that text, so they are keyed. Code holding only
+# the connection uses these, so every writer and reader treats actions the same way.
+
+def action_area(db) -> str:
+    """The area an action, its proof and its local draft are sealed under. An action is made
+    in ALFRED rather than read from one note, so it is in the workspace's default area."""
+    from .sealing import DEFAULT_AREA, default_area, of
+    return default_area(db) if of(db).sealed else DEFAULT_AREA
+
+
+def seal_action(db, scope, identity, column, value):
+    """One of an action's sealed columns (``parameters``, ``proof``) as it is stored."""
+    from .sealing import of, seal_row
+    return seal_row(of(db), 'actions', action_area(db), {'scope': scope, 'id': identity, column: value})[column]
+
+
+def open_action(db, row):
+    """An action row as a dict with its parameters and proof opened; None stays None."""
+    from .sealing import of, open_row
+    return open_row(of(db), 'actions', row)
+
+
+def action_fingerprint(db, bound) -> str:
+    """What an approval names: the SHA-256 of everything an action binds, keyed when sealed."""
+    from .sealing import of
+    return of(db).fingerprint(action_area(db), fingerprint(bound))
+
+
+def draft_digest(db, body: str) -> str:
+    """A local draft's SHA-256, keyed when sealed."""
+    from .sealing import of
+    return of(db).fingerprint(action_area(db), hashlib.sha256(body.encode()).hexdigest())
+
+
 def parse_json(raw: bytes) -> dict:
     if len(raw) > 16384:
         raise Fault('payload_too_large', 413)
@@ -295,7 +332,7 @@ class LocalCore:
             if not self.now() < value['expires_at'] <= self.now()+86400:
                 raise Fault('invalid_action_expiry')
             bound = {**value, 'scope':p['scope'], 'actor':p['id']}
-            digest = fingerprint(bound)
+            digest = action_fingerprint(db, bound)
             prior = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'],value['id'])).fetchone()
             if prior:
                 if prior['fingerprint'] != digest:
@@ -304,12 +341,13 @@ class LocalCore:
             if db.execute('SELECT count(*) FROM actions WHERE scope=?', (p['scope'],)).fetchone()[0] >= 5000:
                 raise Fault('action_capacity', 409)
             db.execute('INSERT INTO actions(scope,id,actor,capability,parameters,fingerprint,expires,state,created,proof) VALUES (?,?,?,?,?,?,?,?,?,?)',
-                       (p['scope'],value['id'],p['id'],value['capability'],canonical(value['parameters']),digest,value['expires_at'],'proposed',self.now(),None))
+                       (p['scope'],value['id'],p['id'],value['capability'],seal_action(db,p['scope'],value['id'],'parameters',canonical(value['parameters'])),
+                        digest,value['expires_at'],'proposed',self.now(),None))
             self.log(db,p['scope'],p['id'],'action.proposed',value['id'])
             return self.action_view(db.execute('SELECT * FROM actions WHERE scope=? AND id=?',(p['scope'],value['id'])).fetchone())
 
-    @staticmethod
-    def action_view(row) -> dict:
+    def action_view(self, row) -> dict:
+        row = self.opened('actions', row)
         return {'id':row['id'],'actor':row['actor'],'capability':row['capability'],
                 'parameters':json.loads(row['parameters']),'fingerprint':row['fingerprint'],
                 'expires_at':row['expires'],'state':row['state'],
@@ -395,22 +433,24 @@ class LocalCore:
         """The ONLY connector. Its idempotency and verification apply to SQLite drafts."""
         with self.transaction() as db:
             p,row=self.leased(db,bearer,job)
-            body=json.loads(row['parameters'])['text']; digest=hashlib.sha256(body.encode()).hexdigest()
-            prior=db.execute('SELECT * FROM drafts WHERE scope=? AND action_id=?',(row['scope'],row['id'])).fetchone()
+            body=json.loads(open_action(db,row)['parameters'])['text']; digest=draft_digest(db,body)
+            prior=self.opened('drafts',db.execute('SELECT * FROM drafts WHERE scope=? AND action_id=?',(row['scope'],row['id'])).fetchone())
             if prior and (prior['body']!=body or prior['digest']!=digest):
                 raise Fault('draft_collision',409)
-            db.execute('INSERT OR IGNORE INTO drafts VALUES (?,?,?,?,?)',(row['scope'],row['id'],body,digest,self.now()))
+            stored=self.sealed('drafts',action_area(db),{'scope':row['scope'],'action_id':row['id'],'body':body})['body']
+            db.execute('INSERT OR IGNORE INTO drafts VALUES (?,?,?,?,?)',(row['scope'],row['id'],stored,digest,self.now()))
             self.log(db,row['scope'],p['id'],'connector.receipt',row['id'])
 
     def verify_draft(self,db,row) -> dict | None:
-        draft=db.execute('SELECT * FROM drafts WHERE scope=? AND action_id=?',(row['scope'],row['id'])).fetchone()
-        body=json.loads(row['parameters'])['text']; digest=hashlib.sha256(body.encode()).hexdigest()
+        draft=self.opened('drafts',db.execute('SELECT * FROM drafts WHERE scope=? AND action_id=?',(row['scope'],row['id'])).fetchone())
+        body=json.loads(open_action(db,row)['parameters'])['text']; digest=draft_digest(db,body)
         if not draft:
             return None
         if draft['body']!=body or draft['digest']!=digest:
             raise Fault('verification_mismatch',409)
         proof={'type':'local_sqlite_draft_readback','sha256':digest,'sent':False}
-        db.execute('UPDATE actions SET state=?,proof=? WHERE scope=? AND id=?',('verified',canonical(proof),row['scope'],row['id']))
+        db.execute('UPDATE actions SET state=?,proof=? WHERE scope=? AND id=?',
+                   ('verified',seal_action(db,row['scope'],row['id'],'proof',canonical(proof)),row['scope'],row['id']))
         db.execute('UPDATE outbox SET state=? WHERE scope=? AND action_id=?',('done',row['scope'],row['id']))
         self.log(db,row['scope'],row['actor'],'action.verified_local_draft',row['id'])
         return proof

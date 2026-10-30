@@ -22,6 +22,7 @@ import hashlib
 import json
 import re
 import secrets
+from . import sealing
 from .local import Fault, exact, ident, text, timestamp
 from .policy import ledger, permitted
 
@@ -89,6 +90,17 @@ INSIGHT_RULES = (
     {'id': 'commitments_without_milestone',
      'rule': 'A currently available project has had open commitments for at least 30 days and no milestone created or progressed in the last 30 days.'},
 )
+
+
+# The columns of each trail, after the record and sequence number.
+TRAIL = {'executive_progress': ('kind', 'note', 'status', 'at'),
+         'executive_decisions': ('event', 'option_id', 'option_label', 'rationale', 'at')}
+
+
+def record_area(db):
+    """The area a record's text and trails are sealed under (encryption step 2). A record is
+    authored in ALFRED rather than read from one note, so it is in the workspace's default area."""
+    return sealing.default_area(db) if sealing.of(db).sealed else sealing.DEFAULT_AREA
 
 
 def _multiline(value, limit):
@@ -217,9 +229,9 @@ class ExecutiveRecords:
         where, args = ('r.scope=? AND r.actor=?', (p['scope'], p['id'])) if record is None else ('r.id=?', (record,))
         progress, decisions = {}, {}
         for row in db.execute(f'SELECT g.* FROM executive_progress g JOIN executive_records r ON r.id=g.record WHERE {where} ORDER BY g.record,g.seq', args).fetchall():
-            progress.setdefault(row['record'], []).append(dict(row))
+            progress.setdefault(row['record'], []).append(self.store.opened('executive_progress', row))
         for row in db.execute(f'SELECT d.* FROM executive_decisions d JOIN executive_records r ON r.id=d.record WHERE {where} ORDER BY d.record,d.seq', args).fetchall():
-            decisions.setdefault(row['record'], []).append(dict(row))
+            decisions.setdefault(row['record'], []).append(self.store.opened('executive_decisions', row))
         return {'now': now, 'resolve': self._resolver(db, p, now), 'progress': progress, 'decisions': decisions}
 
     # Support -------------------------------------------------------------
@@ -273,10 +285,12 @@ class ExecutiveRecords:
         if options is not None and body['kind'] != 'decision':
             raise Fault('options_only_for_decisions')
         # Optional fields join the request hash only when set, so earlier requests replay unchanged.
-        digest = hashlib.sha256(json.dumps({k: v for k, v in body.items() if k in BASE_FIELDS or v is not None},
-                                           sort_keys=True).encode()).hexdigest()
+        plain = hashlib.sha256(json.dumps({k: v for k, v in body.items() if k in BASE_FIELDS or v is not None},
+                                          sort_keys=True).encode()).hexdigest()
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
+            # The request's hash covers the record's text, so it is keyed in the record's area.
+            digest = self.store.sealer.fingerprint(record_area(db), plain)
             old = db.execute('SELECT id,request_hash FROM executive_records WHERE scope=? AND actor=? AND request_id=?',
                              (p['scope'], p['id'], body['request_id'])).fetchone()
             if old:
@@ -290,12 +304,15 @@ class ExecutiveRecords:
                 self._check_responsible(db, p, link)
             support = self._bind_support(db, p, body['support']) if body['support'] is not None else None
             rid = 'exec-' + secrets.token_hex(12); now = self.store.now()
+            authored = self.store.sealed('executive_records', record_area(db), {
+                'id': rid, 'title': body['title'].strip(), 'detail': body['detail'].strip(), 'responsible': responsible,
+                'options': json.dumps(options) if options else None})
             db.execute('''INSERT INTO executive_records(id,scope,actor,request_id,request_hash,kind,title,detail,status,project,due,rank,
                 support,origin,derived_from,version,created,updated,responsible,responsible_ref,options) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                       (rid, p['scope'], p['id'], body['request_id'], digest, body['kind'], body['title'].strip(), body['detail'].strip(),
+                       (rid, p['scope'], p['id'], body['request_id'], digest, body['kind'], authored['title'], authored['detail'],
                         FIRST[body['kind']], project, body['due'], body['rank'], json.dumps(support) if support else None,
                         'accepted_recommendation' if derived_from else 'user_authored', derived_from, 1, now, now,
-                        responsible, link, json.dumps(options) if options else None))
+                        authored['responsible'], link, authored['options']))
             self.store.log(db, p['scope'], p['id'], 'executive.created', rid)
             return self._one(db, p, rid)
 
@@ -322,7 +339,7 @@ class ExecutiveRecords:
             raise Fault('executive_record_not_found', 404)
         if row['version'] != version:
             raise Fault('executive_record_changed', 409)
-        return p, row
+        return p, self.store.opened('executive_records', row)
 
     def _trail(self, db, table, identity, values):
         """Append one entry to a record's progress or decision trail."""
@@ -330,9 +347,14 @@ class ExecutiveRecords:
         if seq >= MAX_HISTORY:
             raise Fault('executive_history_capacity', 409)
         marks = ','.join('?' * (len(values) + 2))
-        db.execute(f'INSERT INTO {table} VALUES ({marks})', (identity, seq + 1, *values))
+        entry = self.store.sealed(table, record_area(db), {'record': identity, 'seq': seq + 1, **dict(zip(TRAIL[table], values))})
+        db.execute(f'INSERT INTO {table} VALUES ({marks})', (identity, seq + 1, *(entry[c] for c in TRAIL[table])))
 
     def _commit(self, db, p, identity, changes, event):
+        # Text that has not changed keeps its stored sealed value, so saving seals only what did.
+        stored = db.execute('SELECT * FROM executive_records WHERE id=?', (identity,)).fetchone() if self.store.sealer.sealed else None
+        sealed = self.store.sealed('executive_records', record_area(db), {'id': identity, **changes}, dict(stored) if stored else None)
+        changes = {k: sealed[k] for k in changes}
         assignments = ''.join(f'{k}=?,' for k in changes)
         db.execute(f'UPDATE executive_records SET {assignments}version=version+1,updated=? WHERE id=?',
                    (*changes.values(), self.store.now(), identity))
@@ -346,7 +368,8 @@ class ExecutiveRecords:
         ident(identity)
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            row = db.execute('SELECT * FROM executive_records WHERE id=? AND scope=? AND actor=?', (identity, p['scope'], p['id'])).fetchone()
+            row = self.store.opened('executive_records', db.execute('SELECT * FROM executive_records WHERE id=? AND scope=? AND actor=?',
+                                                                    (identity, p['scope'], p['id'])).fetchone())
             if not row:
                 raise Fault('executive_record_not_found', 404)
             if row['version'] != body['version']:
@@ -487,6 +510,7 @@ class ExecutiveRecords:
 
     def _record(self, db, p, row, ctx):
         now, resolve = ctx['now'], ctx['resolve']
+        row = self.store.opened('executive_records', row)
         support = self._support_view(db, p, json.loads(row['support'])) if row['support'] else None
         project = resolve(row['project']) if row['project'] else None
         person = resolve(row['responsible_ref']) if row['responsible_ref'] else None

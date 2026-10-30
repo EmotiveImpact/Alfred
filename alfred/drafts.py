@@ -20,7 +20,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import re
-from .local import Fault, canonical, exact, fingerprint, ident, text as plain_text
+from . import sealing
+from .local import (Fault, action_area, action_fingerprint, canonical, exact, ident, open_action, seal_action,
+                    text as plain_text)
 
 CAPABILITIES = ('message.draft', 'vault.inbox_note')
 WINDOW = 900
@@ -49,6 +51,18 @@ def _has(db, table):
     return bool(db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone())
 
 
+def _binding(db, table, row):
+    """A draft's source binding as it was bound, opened in a sealed workspace."""
+    column = 'references_json' if table == 'conversation_action_sources' else 'binding'
+    return json.loads(sealing.open_row(sealing.of(db), table, row)[column])
+
+
+def _sealed_binding(db, scope, action_id, binding):
+    """A draft's source binding as it is stored, sealed in the draft's area (encryption step 2)."""
+    return sealing.seal_row(sealing.of(db), 'draft_sources', action_area(db),
+                            {'scope': scope, 'action_id': action_id, 'binding': binding})['binding']
+
+
 # Lifecycle hooks -------------------------------------------------------------
 
 def preserve_conversation_links(db, session=None):
@@ -61,19 +75,22 @@ def preserve_conversation_links(db, session=None):
     if session is not None:
         query, args = query + ' WHERE session=?', (session,)
     for link in db.execute(query, args).fetchall():
-        db.execute('INSERT OR IGNORE INTO draft_sources VALUES (?,?,?,?)',
-                   (link['scope'], link['action_id'], 'conversation', link['references_json']))
+        # Opened and sealed again: a sealed value is bound to the row it was sealed for.
+        opened = sealing.open_row(sealing.of(db), 'conversation_action_sources', link)['references_json']
+        binding = _sealed_binding(db, link['scope'], link['action_id'], opened)
+        db.execute('INSERT OR IGNORE INTO draft_sources VALUES (?,?,?,?)', (link['scope'], link['action_id'], 'conversation', binding))
 
 
 def _bindings(db, scope):
     """Every saved source binding for drafts in this scope: action id to binding."""
     found = {}
     if _has(db, 'draft_sources'):
-        for row in db.execute("SELECT action_id,binding FROM draft_sources WHERE scope=?", (scope,)):
-            found[row['action_id']] = json.loads(row['binding'])
+        for row in db.execute("SELECT scope,action_id,binding FROM draft_sources WHERE scope=?", (scope,)):
+            found[row['action_id']] = _binding(db, 'draft_sources', row)
     if _has(db, 'conversation_action_sources'):
-        for row in db.execute('SELECT action_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)):
-            found.setdefault(row['action_id'], json.loads(row['references_json']))
+        for row in db.execute('SELECT scope,action_id,references_json FROM conversation_action_sources WHERE scope=?', (scope,)):
+            if row['action_id'] not in found:
+                found[row['action_id']] = _binding(db, 'conversation_action_sources', row)
     return found
 
 
@@ -112,10 +129,11 @@ def withdraw(db, scope, action_ids, reason, now):
         row = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (scope, action_id)).fetchone()
         if not row or row['capability'] not in CAPABILITIES or row['state'] in ('executing', 'uncertain', 'verified'):
             continue
-        params = json.loads(row['parameters'])
+        params = json.loads(open_action(db, row)['parameters'])
         if isinstance(params, dict) and params.get('text') != REMOVED:
             params['text'] = REMOVED
-            db.execute('UPDATE actions SET parameters=? WHERE scope=? AND id=?', (canonical(params), scope, action_id))
+            db.execute('UPDATE actions SET parameters=? WHERE scope=? AND id=?',
+                       (seal_action(db, scope, action_id, 'parameters', canonical(params)), scope, action_id))
         if row['state'] in ('proposed', 'queued'):
             db.execute("UPDATE actions SET state='cancelled' WHERE scope=? AND id=?", (scope, action_id))
             db.execute("UPDATE outbox SET state='cancelled' WHERE scope=? AND action_id=?", (scope, action_id))
@@ -137,13 +155,13 @@ def reproposal_current(store, db, row):
     and permitted for this person. Checked at approval and again at dispatch."""
     if not _has(db, 'draft_sources'):
         return False
-    link = db.execute("SELECT binding FROM draft_sources WHERE scope=? AND action_id=? AND kind='sources'",
+    link = db.execute("SELECT scope,action_id,binding FROM draft_sources WHERE scope=? AND action_id=? AND kind='sources'",
                       (row['scope'], row['id'])).fetchone()
     if not link:
         return False
     from .conversation import refs_current_db
     from .reviewed_memory import context_current_db, ambiguities_current_db
-    binding = json.loads(link['binding'])
+    binding = _binding(db, 'draft_sources', link)
     refs = binding if isinstance(binding, list) else binding['sources']
     p = {'scope': row['scope'], 'id': row['actor']}
     if not refs_current_db(db, row['scope'], refs, store.now(), p):
@@ -173,11 +191,12 @@ def _origin(db, row):
             return 'evidence', dict(link)
     binding = None
     if _has(db, 'conversation_action_sources'):
-        link = db.execute('SELECT references_json FROM conversation_action_sources WHERE scope=? AND action_id=?', (scope, action_id)).fetchone()
-        binding = json.loads(link[0]) if link else None
+        link = db.execute('SELECT scope,action_id,references_json FROM conversation_action_sources WHERE scope=? AND action_id=?',
+                          (scope, action_id)).fetchone()
+        binding = _binding(db, 'conversation_action_sources', link) if link else None
     if binding is None and _has(db, 'draft_sources'):
-        link = db.execute('SELECT binding FROM draft_sources WHERE scope=? AND action_id=?', (scope, action_id)).fetchone()
-        binding = json.loads(link[0]) if link else None
+        link = db.execute('SELECT scope,action_id,binding FROM draft_sources WHERE scope=? AND action_id=?', (scope, action_id)).fetchone()
+        binding = _binding(db, 'draft_sources', link) if link else None
     if binding is not None:
         return 'sources', binding
     if _has(db, 'routine_action_sources'):
@@ -208,7 +227,7 @@ def draft_status(db, row, now):
 
 def view(db, row, now, *, detail=False):
     record = _record(db, row['scope'], row['id'])
-    params = json.loads(row['parameters'])
+    params = json.loads(open_action(db, row)['parameters'])
     value = params.get('text') if isinstance(params, dict) else None
     if record['withdrawn']:
         value = None
@@ -373,7 +392,7 @@ def _repropose(store, db, p, row, request_id, new_text):
         raise Fault('draft_still_awaiting_approval', 409)
     if row['state'] in IN_PROGRESS:
         raise Fault('draft_in_progress', 409)
-    params = json.loads(row['parameters'])
+    params = json.loads(open_action(db, row)['parameters'])
     if new_text is not None:
         if row['capability'] != 'message.draft':
             raise Fault('draft_text_not_editable', 409)
@@ -386,7 +405,7 @@ def _repropose(store, db, p, row, request_id, new_text):
     existing = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'], request_id)).fetchone()
     if existing:
         prior = _record(db, p['scope'], request_id)
-        if existing['actor'] != p['id'] or prior['reproposed_from'] != row['id'] or json.loads(existing['parameters']) != params:
+        if existing['actor'] != p['id'] or prior['reproposed_from'] != row['id'] or json.loads(open_action(db, existing)['parameters']) != params:
             raise Fault('action_id_collision', 409)
         return existing, False
     if db.execute('SELECT count(*) FROM actions WHERE scope=?', (p['scope'],)).fetchone()[0] >= 5000:
@@ -408,11 +427,13 @@ def _repropose(store, db, p, row, request_id, new_text):
         raise Fault('evidence_not_current', 409)
     bound['expires_at'] = expiry
     db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)', (p['scope'], request_id, p['id'], row['capability'],
-               canonical(params), fingerprint(bound), expiry, 'proposed', now, None))
+               seal_action(db, p['scope'], request_id, 'parameters', canonical(params)), action_fingerprint(db, bound),
+               expiry, 'proposed', now, None))
     if kind == 'evidence':
         db.execute('INSERT INTO desk_action_evidence VALUES (?,?,?,?)', (p['scope'], request_id, link['event_seq'], link['event_fingerprint']))
     elif kind == 'sources':
-        db.execute('INSERT INTO draft_sources VALUES (?,?,?,?)', (p['scope'], request_id, 'sources', json.dumps(link)))
+        db.execute('INSERT INTO draft_sources VALUES (?,?,?,?)',
+                   (p['scope'], request_id, 'sources', _sealed_binding(db, p['scope'], request_id, json.dumps(link))))
     elif kind == 'routine':
         db.execute('INSERT INTO routine_action_sources VALUES (?,?,?,?,?,?,?)', (p['scope'], request_id, link['nomination'],
                    p['id'], link['cite_kind'], link['cite_id'], link['cite_version']))

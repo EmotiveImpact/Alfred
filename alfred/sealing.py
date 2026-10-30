@@ -246,6 +246,20 @@ TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
     'memory_bin': (('id',), ('snapshot',), ()),
     'capture_policies': (('scope', 'actor', 'id'), ('name', 'rule'), ()),
     'capture_proposals': (('scope', 'actor', 'claim_id'), (), ('line_hash',)),
+    # Conversations, executive records, drafts and actions (part 3). A request's hash, an
+    # action's fingerprint, a local draft's digest and a read-aloud hash cover the text, so
+    # they are keyed; an action's parameters and proof, and a draft's source binding, are
+    # sealed whole.
+    'conversations': (('id',), ('title',), ()),
+    'conversation_turns': (('id',), ('question', 'result'), ('request_hash',)),
+    'conversation_action_sources': (('scope', 'action_id'), ('references_json',), ()),
+    'executive_records': (('id',), ('title', 'detail', 'responsible', 'options', 'rationale'), ('request_hash',)),
+    'executive_progress': (('record', 'seq'), ('note',), ()),
+    'executive_decisions': (('record', 'seq'), ('option_label', 'rationale'), ()),
+    'actions': (('scope', 'id'), ('parameters', 'proof'), ('fingerprint',)),
+    'drafts': (('scope', 'action_id'), ('body',), ('digest',)),
+    'draft_sources': (('scope', 'action_id'), ('binding',), ()),
+    'voice_playbacks': (('id',), (), ('text_sha256',)),
 }
 
 # Columns holding stable ids taken from private text (a note's front-matter id, an imported

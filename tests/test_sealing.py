@@ -11,10 +11,13 @@ import sqlite3
 import tempfile
 import unittest
 
-from alfred import connectors, keys, lifecycle, sealing
+from alfred import connectors, drafts, keys, lifecycle, sealing
 from alfred.capture_policies import CapturePolicies
+from alfred.conversation import ConversationService
+from alfred.executive import ExecutiveRecords
 from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
+from alfred.voice import VoiceLog
 from grant_helpers import grant_all
 from sealed_suite import SyntheticUnlock
 
@@ -157,6 +160,9 @@ class SealerTests(unittest.TestCase):
             store = KnowledgeStore(Path(directory) / 'db.sqlite')
             connectors.initialise(store)
             CapturePolicies(store)
+            ConversationService(store), ExecutiveRecords(store), VoiceLog(store)
+            with store.transaction() as db:
+                drafts.ensure(db)
             with closing(sqlite3.connect(Path(directory) / 'db.sqlite')) as db:
                 for table, (names, sealed, fingerprints) in sealing.TABLES.items():
                     info = list(db.execute(f'PRAGMA table_info({table})'))

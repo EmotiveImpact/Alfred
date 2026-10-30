@@ -246,7 +246,7 @@ last one lets you switch a workspace to sealed, so no workspace you use is ever 
 
 1. The sealing layer and the notes ALFRED reads from your vault (built).
 2. Reviewed memory, its forgetting bin, and capture (built).
-3. Conversations, executive records, drafts and actions.
+3. Conversations, executive records, drafts and actions (built).
 4. Learning, the agent brain, goals, jobs and their cached files.
 5. Switching on: a `seal` command that converts a workspace, refusing to start without the
    key, sealed backups and exports, compaction after forgetting, re-sealing after key
@@ -290,6 +290,36 @@ predicate, valid period, review state, version, times and reviewer credential), 
 line numbers it cites, each capture's memory type and retention, each policy's settings
 (enabled, context label, daily budget), and each bin copy's kind, subject id and dates.
 
+**What part 3 seals.** In conversations: each conversation's title, every question asked and
+every answer kept (the excerpts, cited statements and model reading an answer holds), and the
+binding a draft keeps of the sources and statements it rests on, including the copy kept once
+its conversation has ended. In executive records: each record's title, detail, responsible
+label, decision options and rationale, every progress note, and the option label and rationale
+in each decision's trail. In actions: the parameters of every proposed action (a draft's text,
+a note for the vault's inbox and its file name, a section to append), the proof kept once it
+has run (which names the file written), and the text of each local draft. Five hashes become
+keyed fingerprints: the hash of each question request and each executive record request
+(they cover the question and the record's text), the fingerprint an approval names (it covers
+everything an action binds), and the SHA-256 of a local draft and of an answer read aloud.
+The fingerprint you approve with is the keyed one; approval and the outbox's readback compare
+in that form. Editing a record seals only the fields that changed, and reading seals nothing.
+
+**Which area.** Everything in part 3 is made in ALFRED rather than read from one note, so it
+is in the workspace's default area: `conversation_area` in
+[`alfred/conversation.py`](../alfred/conversation.py), `record_area` in
+[`alfred/executive.py`](../alfred/executive.py) and `action_area` in
+[`alfred/local.py`](../alfred/local.py) are the one place each is chosen, so the owner's
+answer about answers drawing on several areas changes only those. A read-aloud record is in
+its answer's area.
+
+**What stays visible in conversations, records and actions** without the key: how many
+conversations, questions, records and actions there are and when each was made, changed or
+expires; each question's mode, state and position, and which record it was asked about (by
+id); each record's kind, status, due date, rank, version, origin, which project, person and
+note lines it links (by id), and which option was chosen (by id); each action's capability,
+state and expiry; which conversation, turn, routine nomination or brain proposal an action
+came from; and each read-aloud record's length and playback state.
+
 **Rescanning.** A value whose text has not changed keeps the sealed form already stored, so
 rescanning an unchanged vault seals nothing and writes no new ciphertext; an edited note
 seals only its changed text and its new history entry. Each value is sealed under its own
@@ -322,16 +352,27 @@ test with each workspace sealed by a synthetic keyring, child processes included
 on every change, and [`tests/test_sealing.py`](../tests/test_sealing.py) checks that a sealed
 workspace's database, write-ahead log and shared memory hold none of its notes' words, paths
 or plain fingerprints; [`tests/test_sealing_memory.py`](../tests/test_sealing_memory.py) does
-the same for reviewed memory, the bin and capture, in two areas.
+the same for reviewed memory, the bin and capture, in two areas, and
+[`tests/test_sealing_records.py`](../tests/test_sealing_records.py) for conversations,
+executive records, drafts and actions.
 
 ## Honest limits
 
 - **Nothing is sealed yet in a workspace you use.** Step 1 makes and manages the keys. Step 2
   seals records, indexes, exports and backups; until its last part, a workspace cannot be
-  switched to sealed, and the tables later parts cover (conversations, executive records,
-  drafts and actions, learning, goals and jobs) still keep plain text and plain fingerprints.
-  An answer or draft that cites a reviewed statement keeps a copy of its text in the
-  conversation record until part 3.
+  switched to sealed, and the tables part 4 covers (learning, the agent brain, goals and
+  jobs) still keep plain text and plain fingerprints. The desk's own observations (each
+  event's subject, summary and fingerprint, and the file names, titles and hashes of the
+  documents and links the desk lists) are not in any of the five parts yet; they need sealing
+  before part 5 lets a workspace be sealed.
+- **Answers, drafts and actions are in the default area.** A question, its answer, a draft and
+  an action are sealed in the default area even when the answer quotes or cites a client's
+  notes, so destroying that client's area does not erase them. They stay readable to ALFRED
+  until they lapse, are forgotten, or the conversation ends; a source forgotten through ALFRED
+  still withdraws the answers and drafts that cite it, as before. Nothing crosses areas today,
+  since every note is in the default area; folder rules (part 5) make it possible. This is the
+  open choice about answers drawing on several areas: an answer sealed so that it needs every
+  area it used would close this.
 - **A record's name is in the default area.** You name a record yourself rather than drawing
   it from one note, so destroying a client area does not erase a record's name, even when
   every statement about it came from that client's notes.
@@ -340,11 +381,12 @@ the same for reviewed memory, the bin and capture, in two areas.
   those statements came from another area's notes, destroying that area does not reach their
   text in the copy until it leaves the bin (30 days at most), and undoing the forget fails
   while their area is gone. Nothing crosses areas today, since every note is in the default
-  area; folder rules (part 5) make it possible. Both of these points belong to the open
-  choice about answers drawing on several areas, and change once you make it.
-- **Identifiers stay readable.** Statement and bin ids are random, and the console makes
-  random record ids; a program that chose meaningful record or capture policy ids through the
-  API would leave those ids readable.
+  area; folder rules (part 5) make it possible. These points belong to the open choice about
+  answers drawing on several areas, and change once you make it.
+- **Identifiers stay readable.** Statement, bin, conversation and question ids are random,
+  and the console makes random record and draft ids; a program that chose meaningful record,
+  capture policy or action ids through the API, or meaningful request ids, would leave those
+  ids readable.
 - **Sync conflict rows** are bound to their vault rather than to one conflict, so someone able
   to write to the database could swap two conflict paths of the same vault. They still cannot
   read them.
@@ -353,7 +395,9 @@ the same for reviewed memory, the bin and capture, in two areas.
   text from an earlier copy of it. They still cannot read it, and the next scan of the vault
   replaces it. The same holds for a statement's text, a record's name and a bin copy, which
   could be put back from an earlier copy of the same row; a statement whose note has changed
-  since is invalidated at the next look, as always.
+  since is invalidated at the next look, as always. So could an answer, a record's text or a
+  draft's text that ALFRED has since cleared or withdrawn, from an earlier copy of the same
+  row.
 - **Moving a note to another area** will change its keyed fingerprints and keyed ids, which
   are made per area. Part 5, which brings folder and source rules for areas, has to carry a
   note's identity across such a move.
