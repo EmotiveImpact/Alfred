@@ -16,8 +16,14 @@ other people's records, forgotten statements, statements whose support is
 withheld, and captures whose chosen retention has ended. Note bodies stay in the
 person's own Markdown files; only cited line references and currently permitted
 quotes are included. The destination must be new or an empty folder outside every
-vault and outside this repository. Files are private (0600 in a 0700 folder) and
-are not encrypted.
+vault and outside this repository. Files are private (0600 in a 0700 folder).
+
+From a sealed workspace (encryption step 2) an export is sealed unless the person asks for
+a plain one: each file is sealed with the workspace's keyring under its default area,
+bound to the export and the file's name, beside a plain ``SEALED.json`` naming the keyring
+and a ``SHA256SUMS`` of the sealed files. ``open_export`` opens it, with the same keyring,
+into the same files a plain export holds. A plain export from a sealed workspace is
+readable by anyone who gets the files, and ALFRED says so when it writes one.
 """
 from __future__ import annotations
 from datetime import datetime, timezone
@@ -380,12 +386,138 @@ def write(destination, files, vaults=()):
     return target
 
 
-def export(store, bearer, destination, *, vaults=()):
-    """Collect, render and write one export, then note it in the audit log."""
+SEALED_FILE, SEALED_SUFFIX = 'SEALED.json', '.sealed'
+
+
+def _where(export_id, name):
+    return f'export/{export_id}/{name}'
+
+
+def seal_files(sealer, export_id, files):
+    """An export's files as a sealed export holds them."""
+    from .sealing import DEFAULT_AREA
+    sealed = {name + SEALED_SUFFIX: sealer.seal(DEFAULT_AREA, data.decode('utf-8'), _where(export_id, name)).encode('ascii')
+              for name, data in sorted(files.items())}
+    sealed[SEALED_FILE] = _json({'format': FORMAT, 'format_version': FORMAT_VERSION, 'export_id': export_id, 'sealed': True,
+                                 'keyring': sealer.keyring_id, 'files': sorted(files),
+                                 'open_with': 'python3 -m alfred.desk open-export --sealed-export <this folder> --export-dir <new folder>'})
+    sealed['SHA256SUMS'] = ''.join(f'{hashlib.sha256(data).hexdigest()}  {name}\n' for name, data in sorted(sealed.items())).encode()
+    return sealed
+
+
+def opened_files(directory, sealer) -> dict:
+    """A sealed export's files, checked and opened with the keyring that sealed them."""
+    directory = Path(directory).expanduser()
+    if directory.is_symlink() or not (directory / SEALED_FILE).is_file():
+        raise Fault('not_a_sealed_export', 404)
+    sums = {}
+    if not (directory / 'SHA256SUMS').is_file():
+        raise Fault('export_checksum_mismatch', 409)
+    for line in (directory / 'SHA256SUMS').read_text().splitlines():
+        digest, _, name = line.partition('  ')
+        sums[name] = digest
+    for name, digest in sums.items():
+        # A file listed but gone is a changed export too.
+        if '/' in name or not (directory / name).is_file() or hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
+            raise Fault('export_checksum_mismatch', 409)
+    about = json.loads((directory / SEALED_FILE).read_text())
+    if not sealer.sealed:
+        raise Fault('workspace_locked', 423)
+    if about.get('keyring') != sealer.keyring_id:
+        raise Fault('wrong_keyring', 409)
+    if set(sums) != {SEALED_FILE, *(n + SEALED_SUFFIX for n in about['files'])}:
+        raise Fault('export_checksum_mismatch', 409)
+    return {name: sealer.open((directory / (name + SEALED_SUFFIX)).read_text(), _where(about['export_id'], name)).encode('utf-8')
+            for name in about['files']}
+
+
+def _remove_ours(directory: Path) -> None:
+    """Remove a copy of a sealed export this module set aside or staged, and nothing else."""
+    if directory.is_dir() and not directory.is_symlink() and (directory / SEALED_FILE).is_file():
+        shutil.rmtree(directory)
+
+
+SWAP_UNFINISHED = 'export_swap_unfinished'
+
+
+def _unfinished(directory: Path, copy: Path) -> Fault:
+    """Neither copy is at the export's path. Rotation stops here and keeps the older keys, so
+    running it again can put the copy in place."""
+    fault = Fault(SWAP_UNFINISHED, 409)
+    fault.detail = (f'The sealed export {directory} could not be put back: it is beside that path as {copy.name}. '
+                    'Once the drive can be written, run rotate-area again; or move that folder to the export\'s path first.')
+    return fault
+
+
+def reseal_export(directory, sealer) -> bool:
+    """Seal a sealed export's files again under the default area's newest key, before a key
+    rotation deletes the older ones (``alfred.seal_workspace.reseal``). The new files are
+    written beside the export and swapped in, so it is whole at every step; run again after an
+    interruption, this finishes the swap first. False when the folder holds no export this
+    keyring sealed: a plain export, another keyring's, or nothing any more. ``Fault`` or
+    ``OSError`` when it cannot be sealed again, with the export left as it was, except
+    ``export_swap_unfinished`` when neither copy could be put at its path."""
+    directory = Path(directory)
+    staging, aside = (directory.with_name(f'.{directory.name}{end}') for end in ('.resealed', '.before-reseal'))
+    if not directory.exists() and not directory.is_symlink() and (aside / SEALED_FILE).is_file():
+        # Stopped between the two renames below: the new files go in if they were written.
+        copy = staging if (staging / SEALED_FILE).is_file() else aside
+        try:
+            os.rename(copy, directory)
+        except OSError:
+            raise _unfinished(directory, copy) from None
+    _remove_ours(aside)
+    _remove_ours(staging)
+    try:
+        about = json.loads((directory / SEALED_FILE).read_text())
+    except (OSError, ValueError):
+        return False
+    if directory.is_symlink() or not isinstance(about, dict) or about.get('keyring') != sealer.keyring_id:
+        return False
+    files = opened_files(directory, sealer)
+    # Each step that fails leaves the export whole where it was: a read-only drive or a full
+    # disk stops ``write`` before anything moves.
+    write(staging, seal_files(sealer, about['export_id'], files))
+    try:
+        os.rename(directory, aside)
+    except OSError:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    try:
+        os.rename(staging, directory)
+    except OSError:
+        try:
+            os.rename(aside, directory)
+        except OSError:
+            raise _unfinished(directory, staging) from None
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    shutil.rmtree(aside, ignore_errors=True)
+    handle = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(handle)
+    finally:
+        os.close(handle)
+    return True
+
+
+def open_export(directory, sealer, destination, vaults=()) -> dict:
+    """Write a sealed export's files, opened, into a new or empty folder."""
+    files = opened_files(directory, sealer)
+    target = write(destination, files, vaults)
+    return json.loads(files['manifest.json']) | {'directory': str(target)}
+
+
+def export(store, bearer, destination, *, vaults=(), plain=False):
+    """Collect, render and write one export, then note it in the audit log. From a sealed
+    workspace the files are sealed unless ``plain`` is set."""
+    if type(plain) is not bool:
+        raise Fault('invalid_fields')
     check_destination(destination, vaults)
     bundle = collect(store, bearer)
     manifest, files = render(bundle)
-    target = write(destination, files, vaults)
+    sealed = store.sealer.sealed and not plain
+    target = write(destination, seal_files(store.sealer, manifest['export_id'], files) if sealed else files, vaults)
     from .deletion import register_export
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner', 'reader'})
@@ -404,4 +536,5 @@ def export(store, bearer, destination, *, vaults=()):
                                      'entities': sorted(e['id'] for e in bundle['entities']),
                                      'notes': notes, 'sources': sorted(sources)})
         store.log(db, p['scope'], p['id'], 'export.written', manifest['export_id'])
-    return manifest | {'directory': str(target)}
+    # A sealed export's files open only with the keyring (``open_export``); a plain one's result is as before.
+    return manifest | {'directory': str(target)} | ({'sealed': True, 'keyring': store.sealer.keyring_id} if sealed else {})

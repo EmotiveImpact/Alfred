@@ -226,6 +226,9 @@ class LocalCore:
         db.execute('PRAGMA foreign_keys=ON')
         db.execute('PRAGMA synchronous=FULL')
         db.execute('PRAGMA busy_timeout=5000')
+        if db.sealer.sealed:
+            # In a sealed workspace a deleted value's pages are overwritten, not left to be reused.
+            db.execute('PRAGMA secure_delete=ON')
         try:
             yield db
         finally:
@@ -241,6 +244,11 @@ class LocalCore:
             except BaseException:
                 db.rollback()
                 raise
+            wanted = getattr(db, 'compact_after', False)
+        if wanted:
+            # An absolute forget asked for this: the removed text leaves the file's free pages and the log.
+            from .seal_workspace import compact
+            compact(self.path)
 
     def now(self) -> int:
         return timestamp(int(self.clock()))

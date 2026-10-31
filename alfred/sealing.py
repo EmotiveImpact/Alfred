@@ -77,7 +77,6 @@ class Sealed:
         self.keyring, self.cache_bytes = keyring, cache_bytes
         self._cache: OrderedDict[tuple[str, str], tuple[str, int]] = OrderedDict()
         self._cached = 0
-        self._fingerprint_keys: dict[str, bytes] = {}
         self._lock = threading.Lock()
 
     @property
@@ -96,7 +95,7 @@ class Sealed:
         if value is None:
             return None
         parts = value.split(':') if isinstance(value, str) else []
-        if len(parts) != 5 or parts[0] != keys.SEAL_PREFIX or not re.fullmatch(r'[1-9][0-9]?', parts[3]):
+        if len(parts) != 5 or parts[0] != keys.SEAL_PREFIX or not re.fullmatch(keys.SEALED_VERSION, parts[3]):
             raise Fault('not_sealed', 409)
         # Even a cached value needs its area key to still exist, so an area destroyed while
         # ALFRED runs stops opening at once.
@@ -125,11 +124,7 @@ class Sealed:
         """
         if not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest):
             raise Fault('invalid_digest')
-        _, first = self.keyring.area_key(area, 1)  # refuses a destroyed area, cached or not
-        key = self._fingerprint_keys.get(area)
-        if key is None:
-            key = keys.hkdf(first, b'', keys._label('fingerprint', self.keyring.id, area))
-            self._fingerprint_keys[area] = key
+        key = self.keyring.fingerprint_key(area)  # refuses a destroyed area, cached or not
         return hmac.new(key, bytes.fromhex(digest), hashlib.sha256).hexdigest()
 
     def matches(self, digest, stored):
@@ -147,7 +142,6 @@ class Sealed:
 
     def close(self):
         self.clear_cache()
-        self._fingerprint_keys.clear()
         self.keyring.close()
 
 
@@ -211,6 +205,23 @@ def check(db, sealer, clock=time.time) -> None:
         if db.execute('SELECT 1 FROM credentials LIMIT 1').fetchone():
             raise Fault('workspace_not_sealed', 409)
         db.execute('INSERT INTO sealing VALUES (?,?,?)', (sealer.keyring_id, DEFAULT_AREA, int(clock())))
+
+
+def recorded(path) -> str | None:
+    """The keyring a workspace database records it was sealed with, read without opening a
+    store; None for a plain workspace or no database yet. ALFRED reads this at start, to know
+    whether it must unlock the keyring before anything else touches the database."""
+    path = Path(path).expanduser()
+    if not path.is_file():
+        return None
+    from contextlib import closing
+    with closing(sqlite3.connect(path, timeout=5)) as db:
+        if not _has(db, 'sealing'):
+            return None
+        rows = db.execute('SELECT keyring FROM sealing').fetchall()
+    if len(rows) > 1:
+        raise Fault('sealing_record_damaged', 409)
+    return rows[0][0] if rows else None
 
 
 def default_area(db) -> str:

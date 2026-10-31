@@ -148,7 +148,7 @@ class Workspace(unittest.TestCase):
     def exports_holding(self, claims):
         held = 0
         for directory in self.root.glob('export-*'):
-            ids = {s['id'] for s in json.loads((directory / 'statements.json').read_text())['statements']}
+            ids = {s['id'] for s in json.loads(stored.export_files(self.store.sealer, directory)['statements.json'])['statements']}
             held += bool(ids & set(claims))
         return held
 
@@ -247,7 +247,7 @@ class ForgetReceiptTests(Workspace):
         self.assertEqual(receipt['history'], 'value_free_rows_kept')
         self.assertGreater(after['history_rows'][0], 0)
         self.assertEqual([e['directory'] for e in receipt['accounting']['exports_on_disk']['exports']], [str(self.export_dir)])
-        self.assertTrue((self.export_dir / 'manifest.json').is_file())
+        self.assertIn('manifest.json', stored.export_files(self.store.sealer, self.export_dir))
         # An ordinary forget keeps a copy in the bin for undo, and the receipt counts it.
         self.assertEqual(receipt['still_holding_value'], {'bin_copies': 1, 'drafts': 1, 'exports_on_disk': 1, 'backups': 1})
         self.assertEqual((after['bin_copies'], receipt['layer']), ((1, 1), 'ordinary'))
@@ -351,27 +351,28 @@ class RestoreAccountingTests(Workspace):
 
 class ExportHistoryTests(Workspace):
     def test_export_includes_review_history_and_routine_settings(self):
-        files = {p.name: p for p in self.export_dir.iterdir()}
-        history = json.loads(files['review-history.json'].read_text())
-        manifest = json.loads(files['manifest.json'].read_text())
+        files = {name: data.decode() for name, data in stored.export_files(self.store.sealer, self.export_dir).items()}
+        history = json.loads(files['review-history.json'])
+        manifest = json.loads(files['manifest.json'])
         with self.store.connection() as db:
             rows = db.execute('SELECT claim_id,state,at FROM memory_claim_history WHERE actor=? ORDER BY seq',
                               (person_of(self.store, self.owner),)).fetchall()
         self.assertEqual([(e['statement_id'], e['state'], e['at']) for e in history['entries']], [tuple(r) for r in rows])
         self.assertEqual(manifest['counts']['review_history_entries'], len(rows))
         self.assertEqual(history['basis'], 'alfred_review_records_without_values')
-        self.assertNotIn('awaiting review', files['review-history.json'].read_text())
-        routines = json.loads(files['routines.json'].read_text())
+        self.assertNotIn('awaiting review', files['review-history.json'])
+        routines = json.loads(files['routines.json'])
         self.assertEqual([r['kind'] for r in routines['routines']], ['commitment-review'])
         self.assertEqual(routines['routines'][0]['settings']['runs_per_day'], 24)
         self.assertEqual(manifest['counts']['routine_settings'], 1)
-        self.assertIn('Review history: proposed', (self.export_dir / 'statements.md').read_text())
+        self.assertIn('Review history: proposed', files['statements.md'])
 
     def test_forgotten_statements_history_stays_out_of_later_exports(self):
         self.memory.forget(self.owner, self.status, {'version': self.version(self.status)})
         export(self.store, self.owner, self.root / 'export-2')
-        history = json.loads((self.root / 'export-2' / 'review-history.json').read_text())
-        manifest = json.loads((self.root / 'export-2' / 'manifest.json').read_text())
+        second = stored.export_files(self.store.sealer, self.root / 'export-2')
+        history = json.loads(second['review-history.json'])
+        manifest = json.loads(second['manifest.json'])
         self.assertNotIn(self.status, {e['statement_id'] for e in history['entries']})
         self.assertGreater(manifest['excluded']['history_entries_of_left_out_statements'], 0)
         # The register knows both exports; only the first still holds the statement.

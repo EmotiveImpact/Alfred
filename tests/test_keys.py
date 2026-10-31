@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from alfred import disk_encryption, keys, recovery
+from alfred import disk_encryption, keys, recovery, sealing
 from alfred.brain import SCOPE_CLASSES
 from alfred.desk import init_demo
 from alfred.local import Fault
@@ -316,6 +316,32 @@ class AreaTests(Base):
         self.assertTrue(new.startswith('alfred-seal:1:company:2:'))
         self.assertEqual((self.opened.open('company', old, 'c/1'), self.opened.open('company', new, 'c/2')),
                          (b'Q3 plan', b'Q4 plan'))
+
+    def test_retired_versions_free_room_for_more_rotations(self):
+        rotations = 120  # past the keys an area may hold at once, and past two-digit versions
+        for _ in range(rotations):
+            self.opened.rotate_area('company')
+            self.opened.retire_old_keys('company')
+        newest = rotations + 1
+        sealed = self.opened.seal('company', 'Q9 plan', 'c/9')
+        self.assertTrue(sealed.startswith(f'alfred-seal:1:company:{newest}:'))
+        self.assertLess(len(self.raw()), 64 * 1024, 'retired versions must not fill the keyring')
+        self.assertEqual(next(a for a in keys.Keyring.read(self.path).view()['areas'] if a['id'] == 'company')['key_versions'],
+                         newest)
+        with keys.Keyring.read(self.path).unlock(keys.RecoveryKey(self.recovery_key)) as again:
+            self.assertEqual(again.open('company', sealed, 'c/9'), b'Q9 plan')
+            self.assertEqual(sealing.Sealed(again).open(sealed, 'c/9'), 'Q9 plan')
+            for version, code in ((1, 'key_version_retired'), (newest - 1, 'key_version_retired'),
+                                  (newest + 1, 'unknown_key_version')):
+                with self.assertRaises(Fault) as caught:
+                    again.area_key('company', version)
+                self.assertEqual(caught.exception.code, code, version)
+        # Keys not yet retired are still capped.
+        for _ in range(keys.MAX_VERSIONS - 1):
+            self.opened.rotate_area('company')
+        with self.assertRaises(Fault) as caught:
+            self.opened.rotate_area('company')
+        self.assertEqual(caught.exception.code, 'too_many_key_versions')
 
     def test_area_names_and_kinds_are_checked(self):
         for area, kind, code in (('../x', 'client', 'invalid_identifier'), ('team', 'family', 'invalid_area_kind'),

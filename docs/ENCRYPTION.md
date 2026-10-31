@@ -251,7 +251,13 @@ last one lets you switch a workspace to sealed, so no workspace you use is ever 
    (built).
 5. Switching on: a `seal` command that converts a workspace, refusing to start without the
    key, sealed backups and exports, compaction after forgetting, re-sealing after key
-   rotation, and a final scan of the database, its log and its backups for private text.
+   rotation, and a final scan of the database, its log and its backups for private text
+   (built).
+
+Every record stays in the default area. Folder and source rules, which would put notes from a
+client's folder in that client's area, come after your choice about answers drawing on
+several areas (below), since that choice decides how a record made from several areas is
+sealed.
 
 **What part 1 seals.** For every note ALFRED indexes: its folder path, title, text, tags,
 aliases, headings and link targets; the vault's label and settings and the errors a scan
@@ -372,6 +378,90 @@ decision; each event's kind, basis, route and times, and each desk document's re
 status. The briefs about public upstream projects that daily learning keeps are copied from
 the public catalogue and stay plain.
 
+**Switching a workspace on (part 5).** With ALFRED stopped and the keyring made
+(`python3 -m alfred.keys --data-dir <folder> init`), one command converts a plain workspace:
+
+```sh
+python3 -m alfred.desk --data-dir <folder> seal
+```
+
+It unlocks the keyring as ALFRED would at start, adds the default area if the keyring has
+none, and then, in one transaction: seals every value the register names; replaces every plain
+fingerprint with its keyed form, together with every copy of it ALFRED made (in job inputs and
+lineage, job events, a result's address in several tables, answers, packets, action
+parameters and the audit log's short references); keys the ids a source chose and makes again
+the ids ALFRED derives from them; and rewrites the append-only tables (job events, the hub
+journal, verification runs) once, putting their protection back before it commits. The job
+cache, whose files are named by plain hashes, is emptied in the same step and fills again,
+sealed, as results are read. Before committing it opens every sealed value again, checks that
+no plain fingerprint or short form of one is left anywhere in the database, and checks every
+foreign key; anything wrong rolls the whole conversion back, so the workspace is either still
+plain or wholly sealed. Then the database is compacted (`VACUUM`) and its write-ahead log
+emptied, so no plain copy is left in either file, and the backups ALFRED registered are
+converted and compacted the same way, their manifests rewritten to say they are sealed.
+
+A marker file beside the database says a conversion has started and not finished. While it is
+there ALFRED will not start (`sealing_incomplete`); running `seal` again finishes the work,
+since each step checks what is already done. `seal` refuses while any job is queued or running
+(`work_in_flight`), because a worker checks hashes it was given; let the work finish or cancel
+it first. What a worker was sent and what it returned are kept exactly as they were, sealed,
+since a result is named by the hash of its own bytes.
+
+**Starting a sealed workspace.** Every desk command except `init` reads first whether the
+workspace is sealed. If it is, ALFRED unlocks the keyring (the keychain on your Mac, the
+server's secret file, or the passphrase typed at the prompt) before anything else opens the
+database, or stops with `workspace_locked` and a line saying why. It never opens a sealed
+workspace without its keys. A plain workspace starts as before, and the demo and the tests keep
+an unsealed mode with synthetic data.
+
+**Backups and exports.** A backup of a sealed workspace is a copy of the sealed database, and
+its manifest says so (`sealed`, `encrypted`, the keyring's id). An export from a sealed
+workspace is sealed unless you add `--plain`: each file is sealed with the keyring and listed
+in a plain `SEALED.json` and `SHA256SUMS`. `python3 -m alfred.desk --data-dir <folder>
+open-export --sealed-export <export> --export-dir <new folder>` checks and opens it with the
+keyring, into a new or empty folder outside every vault, as `export` writes. With `--plain`
+ALFRED warns that anyone who gets the files can read them.
+
+**Absolute delete.** An absolute forget of a statement, a record or a source, and a restore
+that applies one again, compacts the database and empties its write-ahead log once the forget
+has committed, so the removed text is no longer in the file's free pages or its log. A sealed
+workspace also overwrites deleted values as it goes (SQLite's `secure_delete`). This is done
+in a plain workspace too, as the two-layer delete promises.
+
+**Rotating an area's key.**
+
+```sh
+python3 -m alfred.desk --data-dir <folder> rotate-area --area personal
+```
+
+adds a new key version, seals every value of that area again under it, in the workspace and in
+its registered backups, compacts them, and only then deletes the older key versions from the
+keyring. Sealed exports are sealed under the default area, so rotating it also seals again each
+sealed export ALFRED wrote and still finds where it wrote it: the new files are written beside
+the export and swapped in whole. One whose files were changed or removed, or that cannot be
+written beside (on a read-only drive, say), is left as it is and counted, and the rotation
+still finishes. If an export can be put back at its path neither as it was nor sealed again,
+`rotate-area` stops there, keeping the older keys, and says where the new copy is. A copy made before rotating, or an export moved somewhere else, can no longer
+be opened (`key_version_retired`). The keyring keeps only the number of the last version it deleted, so
+an area can be rotated as often as you like, up to version 9,999. It holds at most 16 keys for
+one area at once, a limit reached only by adding versions with `alfred.keys area-rotate` and
+never sealing again. If `rotate-area` is interrupted, ALFRED will not start until the same
+command is run again, which finishes it.
+Fingerprints keep their key, which is derived from the area's first key and kept on its own,
+so every check that compares them still works.
+
+**The final scan.** [`tests/test_sealing_switch_on.py`](../tests/test_sealing_switch_on.py)
+builds each invented workspace of parts 1 to 4 plain, with a backup, switches it on with
+`seal` (the desk's own command for the desk's workspace), reads every view and exports it, and
+then scans the database, its write-ahead log, shared memory and journals, the job cache,
+the backups and the export for every invented word, every id a source chose and every plain
+SHA-256 the plain workspace held, whole or as 16, 24, 32, 40 or 64 character prefixes. Every
+table the register names held something to find. One plain hash is allowed to remain: an
+access key's (`credentials.digest`), which ALFRED checks a presented key against; the key is
+random, so its hash says nothing about what you wrote. The same file runs the at-rest tests of
+parts 1 to 4 again on converted workspaces, and compares a converted workspace with the same
+one sealed from the start, row by row.
+
 **Rescanning.** A value whose text has not changed keeps the sealed form already stored, so
 rescanning an unchanged vault seals nothing and writes no new ciphertext; an edited note
 seals only its changed text and its new history entry. Each value is sealed under its own
@@ -385,7 +475,7 @@ which area it belongs to, and roughly how long each piece of text is.
 **How a sealed workspace behaves.** The database records which keyring sealed it. ALFRED
 refuses to open it without that keyring (`workspace_locked`) or with another one
 (`wrong_keyring`), and refuses to treat a plain workspace already in use as sealed
-(`workspace_not_sealed`); converting one is the `seal` command's job in part 5. A database
+(`workspace_not_sealed`); the `seal` command converts one. A database
 that holds sealed values but has lost its sealing record is refused whichever way it is opened
 (`sealing_record_damaged`), so plain text can never be written beside sealed text. Restoring
 from a backup makes the same checks. Search checks a reader's grants before opening anything
@@ -412,30 +502,51 @@ brain, verification, goals, learning and the desk's observations.
 
 ## Honest limits
 
-- **Nothing is sealed yet in a workspace you use.** Step 1 makes and manages the keys. Step 2
-  seals records, indexes, exports and backups; until its last part, a workspace cannot be
-  switched to sealed.
+- **Sealing is a step you take.** A workspace stays plain until you run `seal`. Before you
+  do, make a recovery-kit backup of the keyring and test that it opens: a sealed workspace
+  cannot be read without it.
+- **What was written before sealing.** Exports you wrote before sealing, and backups or copies
+  kept anywhere other than the folder ALFRED registered them in, stay plain; `seal` says so and
+  leaves them to you. ALFRED will not restore a plain backup into a sealed workspace
+  (`workspace_not_sealed`): restore it into a plain one and seal that.
+- **Requests repeated across sealing.** A hash ALFRED made over a whole request or record
+  before sealing (a statement request, an action's fingerprint, a job's fingerprint, an event's
+  fingerprint, a brain task's packet hash) is keyed as it was made. A request made before
+  sealing and sent again afterwards with the same id is refused as a collision; send it with a
+  new id.
+- **Work from before sealing.** A brain task run before sealing keeps the packet it was sent,
+  with the plain note hashes in it, sealed. A draft such a task proposed cannot be confirmed
+  after sealing (`sources_changed`), because the notes it cites are now named by keyed hashes;
+  run the task again. Its result, verification and acknowledgement still work.
+- **Rotation keeps fingerprints.** Rotating an area's key seals its text again but does not
+  change its keyed fingerprints, which keep a key of their own. Someone holding a leaked older
+  key could still check a guess against that area's fingerprints in a stolen copy, until the
+  area is made again from its notes. Keyring copies made before a rotation (your recovery-kit
+  backup) still hold the deleted key versions until you replace them; `rotate-area` reminds you.
+- **Compaction is not secure erasure.** It removes forgotten text from the database's free
+  pages and log, not from the disk's spare blocks, filesystem snapshots or Time Machine copies;
+  full-disk encryption covers those. If another program holds the database for more than five
+  seconds, the compaction after an absolute forget is skipped, and the next absolute forget,
+  restore or `seal` catches up; `seal` and `rotate-area` instead stop with their marker in place
+  and finish when run again.
+- **One hash stays plain.** Each access key's SHA-256 is kept as it is, so ALFRED can check a
+  key; the key itself is random and lives in the access-key file beside the database.
 - **Work done for you is in the default area.** A job, a brain task's packet and result, its
   proposals and suggestions, a verification report, a goal's mandate and journal, a learning
   and what the desk observes are sealed in the default area, even when a task was given a
   client's notes and its packet, result and report quote them. Destroying that client's area
   then does not erase those quotes; they stay until the job's result is deleted with its
   source, or the records are forgotten. A task still sees only the areas it is granted. Nothing
-  crosses areas today, since every note is in the default area; folder rules (part 5) make it
-  possible. This belongs to the open choice about answers drawing on several areas: a record
+  crosses areas today, since every note is in the default area; folder rules, which come after
+  that choice, would make it possible. This belongs to the open choice about answers drawing on several areas: a record
   sealed so that it needs every area it used would close it here too.
-- **Part 5's conversion has two awkward places.** A result's keyed address is written in jobs,
-  in the inputs and lineage of later jobs and results, in job events, in a brain result's
-  envelope hash and as the cache's file names, so converting a plain workspace must key every
-  copy together. Job events, the hub journal and verification runs are append-only (the
-  database refuses to change a row), so converting them means rewriting those tables once
-  under that rule's control.
 - **Answers, drafts and actions are in the default area.** A question, its answer, a draft and
   an action are sealed in the default area even when the answer quotes or cites a client's
   notes, so destroying that client's area does not erase them. They stay readable to ALFRED
   until they lapse, are forgotten, or the conversation ends; a source forgotten through ALFRED
   still withdraws the answers and drafts that cite it, as before. Nothing crosses areas today,
-  since every note is in the default area; folder rules (part 5) make it possible. This is the
+  since every note is in the default area; folder rules, which come after that choice, would
+  make it possible. This is the
   open choice about answers drawing on several areas: an answer sealed so that it needs every
   area it used would close this.
 - **A record's name is in the default area.** You name a record yourself rather than drawing
@@ -446,8 +557,8 @@ brain, verification, goals, learning and the desk's observations.
   those statements came from another area's notes, destroying that area does not reach their
   text in the copy until it leaves the bin (30 days at most), and undoing the forget fails
   while their area is gone. Nothing crosses areas today, since every note is in the default
-  area; folder rules (part 5) make it possible. These points belong to the open choice about
-  answers drawing on several areas, and change once you make it.
+  area; folder rules, which come after that choice, would make it possible. These points belong
+  to the open choice about answers drawing on several areas, and change once you make it.
 - **Identifiers stay readable.** Statement, bin, conversation and question ids are random,
   and the console makes random record and draft ids; a program that chose meaningful record,
   capture policy or action ids through the API, or meaningful request, task, job idempotency,
@@ -466,8 +577,8 @@ brain, verification, goals, learning and the desk's observations.
   row, and so could a mandate's success test, a learning's text or an event's summary that
   forgetting a source has since redacted.
 - **Moving a note to another area** will change its keyed fingerprints and keyed ids, which
-  are made per area. Part 5, which brings folder and source rules for areas, has to carry a
-  note's identity across such a move.
+  are made per area. Folder and source rules for areas, which come after the choice about
+  answers drawing on several areas, have to carry a note's identity across such a move.
 - **Untested on a real Mac and server.** The keychain is tested through a stand-in for Apple's
   `security` tool and FileVault through a stand-in for `fdesetup`. They should be run once on
   your Mac before real data goes in.
