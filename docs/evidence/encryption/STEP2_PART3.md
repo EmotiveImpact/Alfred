@@ -1,8 +1,9 @@
 # Encryption step 2, part 3 receipt: conversations, executive records, drafts and actions
 
-Built 30 October 2026 on part 2 (b88d2e2db), which waits for part 1 (PR #50) to merge; part 3
-goes up only after both. Tested revision: 2caf2bdce (the commit carrying this receipt changes
-only this file). Synthetic keys and invented records only. Nothing under `third_party/` was
+Built 30 October 2026 on part 2 (b88d2e2db). Part 1 (PR #50) and part 2 (PR #51) merged on
+31 October. Tested revision: 2caf2bdce (the commit carrying this receipt changes only this
+file); retested at 91dac3ec9 after part 2's review fixes and main's PRs #49 and #52 were merged
+in: 1,986 tests pass plain and 1,986 pass sealed (54,814 values sealed). Synthetic keys and invented records only. Nothing under `third_party/` was
 read, imported or executed, and no model ran.
 
 Requirements: SYS-002 (private storage), memory job M05. Plan: integration plan phase 1, step 2,

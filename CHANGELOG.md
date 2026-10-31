@@ -4,7 +4,7 @@ All notable changes to ALFRED, newest first. Dates are the day the work was comm
 
 ## 30 October 2026: sealing conversations, executive records, drafts and actions, encryption step 2 part 3, branch `claude/project-thread-9npowk`
 
-The third of step 2's five parts (SYS-002, M05), built on part 2 and, like it, waiting for part 1 to merge; it goes up only after that, and the owner's word comes first. A workspace can still be sealed only in tests. Synthetic keys and invented records only; no model ran and nothing under `third_party/` was installed, run or imported.
+The third of step 2's five parts (SYS-002, M05), built on part 2 (PR #51, merged 31 October). A workspace can still be sealed only in tests. Synthetic keys and invented records only; no model ran and nothing under `third_party/` was installed, run or imported.
 
 - **Conversations sealed.** Each conversation's title, every question and every kept answer (with the excerpts and statements it cites), and the source binding a draft keeps, during its conversation and after it ends. The hash of each question request is keyed. This ends part 2's limit that answers and drafts citing a statement kept a copy of its text.
 - **Executive records sealed.** Title, detail, responsible label, decision options and rationale, progress notes, and the option labels and rationale in decision trails. The request hash is keyed, so replaying a request is still recognised, and an edit seals only the fields that changed.
@@ -44,7 +44,7 @@ Master plan phase 2, second part. On 30 October the owner chose which areas may 
 
 ## 30 October 2026: sealing stored notes, encryption step 2 part 1, branch `claude/project-thread-9npowk`
 
-The first of step 2's five parts (SYS-002, M05), built on step 1 (PR #26, merged 30 October). Not merged; the owner's word comes first. A workspace can be sealed only in tests until part 5 adds the `seal` command and unlocking at start, so no workspace in use is half sealed. Synthetic keys and invented notes only; no model ran and nothing under `third_party/` was installed, run or imported.
+The first of step 2's five parts (SYS-002, M05), built on step 1 (PR #26, merged 30 October), and merged 31 October (PR #50). A workspace can be sealed only in tests until part 5 adds the `seal` command and unlocking at start, so no workspace in use is half sealed. Synthetic keys and invented notes only; no model ran and nothing under `third_party/` was installed, run or imported.
 
 - **Sealing layer (`alfred/sealing.py`).** A plain mode that changes nothing and a sealed mode over an open keyring. `TABLES` registers each table holding private text with its row, sealed and fingerprint columns; stores open rows with `opened` and seal them with `sealed`. Values are bound to table, column and row, so a value moved elsewhere fails to open. A sealed database records its keyring and refuses to open without it (`workspace_locked`) or with another (`wrong_keyring`). Opened text is cached in memory up to 64 MiB, and a destroyed area stops opening at once.
 - **Vault notes sealed.** Path, title, text, tags, aliases, headings, link targets, vault label, settings and scan errors, path history, conflict paths and front-matter ids. Plain SHA-256 fingerprints become keyed ones (HMAC-SHA256 under the area key), and vault writes compare digests in that form. Sorting by sealed columns moved from SQL to Python with the same ASCII case folding. Connector imports seal their label and receipts and key their item ids.
