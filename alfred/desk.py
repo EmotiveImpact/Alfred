@@ -83,7 +83,7 @@ def load_keys(path):
 
 
 def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60, *, vault_exclusions=(), vault_id_key=None, hub='off',
-          disk_encryption='warn'):
+          hermes=None, disk_encryption='warn'):
     # POSIX development target. A lock prevents accidental duplicate supervisors.
     import fcntl
     import signal
@@ -113,16 +113,20 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
             previous_handler = signal.signal(signal.SIGTERM, terminate)
         supervisor = Supervisor(store, keys['owner'], keys['source'], path / 'project', vault=vault or (path / 'vault' if (path / 'vault').is_dir() else None), vault_exclusions=vault_exclusions, vault_id_key=vault_id_key)
         jobs, job_stop = start_local_jobs(store, keys['owner'], path)
-        # Off unless asked for; only the synthetic test brain exists (alfred/hub_host.py).
-        goals, hub_stop = start_goal_hub(store, jobs, keys['owner'], hub)
+        # Off unless asked for: the synthetic test brain, or Hermes beside it (alfred/hub_host.py).
+        goals, hub_stop = start_goal_hub(store, jobs, keys['owner'], hub, hermes=hermes)
         server = DeskHTTPServer(store, supervisor, port=port, local_model=LocalOllama(model, model_port, timeout=model_timeout) if model else None, jobs=jobs, goals=goals)
         server.recovery = report
         supervisor.start()
         print('ALFRED local desk:', server.origin, flush=True)
         print('Local development data. Microphone OFF. No external messages are sent.', flush=True)
         print('Local model available only on explicit request.' if model else 'Source mode: no model configured.', flush=True)
-        if goals is not None:
+        if goals is not None and hermes is None:
             print('Goal hub on: synthetic test brain only. No model, no cloud, no tools.', flush=True)
+        elif goals is not None:
+            areas = ', '.join(sorted(hermes.cloud_areas)) or 'none'
+            print(f'Goal hub on: Hermes in a sealed box on {hermes.model}, and the synthetic test brain. '
+                  f'Areas allowed on the cloud: {areas}. No tools.', flush=True)
         for line in disk_lines:
             print(line, flush=True)
         print(recovery_line(report), flush=True)
@@ -345,11 +349,37 @@ def recovery_command(args):
     return 0
 
 
+def claude_key(args):
+    """The Claude key source the owner named on the command line."""
+    if not args.claude_key:
+        raise Fault('claude_key_source_required')
+    from .anthropic_provider import key_source
+    return key_source(args.claude_key, account=args.claude_key_account, path=args.claude_key_file,
+                      credential=args.claude_key_credential)
+
+
+def hermes_setup(args):
+    """``--hub hermes``'s settings, all from the owner. Read before anything starts."""
+    from .hub_host import HermesSetup
+    if not args.hermes_record or not args.hermes_model or args.hermes_price is None:
+        raise Fault('hermes_settings_required')
+    if not 0 <= args.hermes_price <= 100_000:
+        raise Fault('invalid_brain_price')
+    source = claude_key(args)
+    with open(Path(args.hermes_record).expanduser(), encoding='utf-8') as handle:
+        record = json.load(handle)
+    from .hermes_box import load_box
+    load_box(record)  # The image must match this checkout's pins before the host takes its lock.
+    return HermesSetup(record=record, model=args.hermes_model, price=args.hermes_price, key_source=source,
+                       cloud_areas=frozenset(args.cloud_area))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
                                             'connector-add', 'connector-import', 'connectors', 'doctor', 'service-file',
-                                            'deletion-report', 'seal', 'rotate-area', 'open-export'))
+                                            'deletion-report', 'claude-key-check', 'seal', 'rotate-area',
+                                            'open-export'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
     parser.add_argument('--export-dir', help='New or empty folder for an export; never inside a vault')
     parser.add_argument('--plain', action='store_true', help='export: write readable files from a sealed workspace; anyone holding them can read them')
@@ -367,7 +397,19 @@ def main():
     parser.add_argument('--role', choices=('owner', 'reader', 'source'), default='owner')
     parser.add_argument('--disk-encryption', choices=DISK_MODES, default='warn',
                         help='serve: say whether the data folder and vault are on an encrypted disk (warn), or refuse to start unless they are (require)')
-    parser.add_argument('--hub', choices=HUB_CHOICES, default='off', help='serve: build the goal hub with the synthetic test brain only (default: off)')
+    parser.add_argument('--hub', choices=HUB_CHOICES, default='off',
+                        help='serve: build the goal hub with the synthetic test brain, or Hermes beside it (default: off)')
+    # Hermes in the sealed box (docs/HERMES_BOX.md). Every setting is the owner's; none has a default.
+    parser.add_argument('--hermes-record', help='serve --hub hermes: the record tools/build_hermes_box.py --record wrote')
+    parser.add_argument('--hermes-model', help='serve --hub hermes: the Claude model, by its exact name')
+    parser.add_argument('--hermes-price', type=int, help='serve --hub hermes: pence per 1,000 tokens, input and output alike')
+    parser.add_argument('--cloud-area', action='append', default=[], choices=('personal', 'company', 'client'),
+                        help='serve --hub hermes: an area whose notes may go to Claude; repeat as needed (default: none)')
+    parser.add_argument('--claude-key', choices=('keychain', 'file', 'credential'),
+                        help='serve --hub hermes and claude-key-check: where the Claude key is read from')
+    parser.add_argument('--claude-key-account', default='default', help='--claude-key keychain: the keychain account')
+    parser.add_argument('--claude-key-file', help='--claude-key file: an absolute path to a file only you can read')
+    parser.add_argument('--claude-key-credential', help='--claude-key credential: the systemd credential name')
     # Read-only connectors over export files you select (CON-001). ALFRED must be stopped.
     parser.add_argument('--connector', choices=('ics-export', 'vcf-export'), help='Calendar (.ics) or contacts (.vcf) export connector')
     parser.add_argument('--connector-label', help='Label for a new connector source, for example "Calendar export"')
@@ -389,6 +431,11 @@ def main():
         if args.command in ('doctor', 'service-file'):
             # Neither creates the data directory nor touches the database.
             raise SystemExit(recovery_command(args))
+        if args.command == 'claude-key-check':
+            # Reads the key once, says where and how long; never shows it and calls nothing.
+            from .anthropic_provider import describe
+            print(describe(claude_key(args)))
+            return
         if args.command in ('init', 'serve', 'restore'):
             # Checked before anything is created; backup and access stay available to move out.
             check_data_directory(args.data_dir, (args.vault,) if args.vault else ())
@@ -517,8 +564,9 @@ def main():
         else:
             if not 1024 <= args.port <= 65535:
                 raise Fault('invalid_port')
+            hermes = hermes_setup(args) if args.hub == 'hermes' else None
             serve(path, args.port, args.vault, args.local_model, args.model_port, args.model_timeout, vault_exclusions=args.vault_exclude, vault_id_key=args.vault_id_key, hub=args.hub,
-                  disk_encryption=args.disk_encryption)
+                  hermes=hermes, disk_encryption=args.disk_encryption)
     except KeyboardInterrupt:
         print('ALFRED desk stopped. Stored events and drafts remain on disk.')
     except (Fault, OSError, ValueError) as exc:

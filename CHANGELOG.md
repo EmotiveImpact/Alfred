@@ -39,14 +39,32 @@ The third of step 2's five parts (SYS-002, M05), built on part 2 and, like it, w
 
 ## 30 October 2026: sealing reviewed memory, its bin and capture, encryption step 2 part 2, branch `claude/project-thread-9npowk`
 
-The second of step 2's five parts (SYS-002, M05), built on part 1 and waiting for it to merge; it goes up only after that, and the owner's word comes first. A workspace can still be sealed only in tests. Synthetic keys and invented memory only; no model ran and nothing under `third_party/` was installed, run or imported.
+The second of step 2's five parts (SYS-002, M05), built on part 1 (PR #50, merged 31 October). A workspace can still be sealed only in tests. Synthetic keys and invented memory only; no model ran and nothing under `third_party/` was installed, run or imported.
 
 - **Reviewed memory sealed.** Record names, statement text and where a captured statement came from. The hash kept of each statement request covers its text, so it is keyed; a statement's note and quote fingerprints were keyed in part 1. Conflict checks compare opened text, never sealed values.
 - **The forgetting bin sealed.** Each copy is sealed whole, so the names and text an ordinary forget cleared are no longer readable in the bin. Undo seals them back in their own areas.
 - **Capture sealed.** A policy's name and rule (its prefix or keyword and the folder it reads) are sealed, and each matched line is kept only as a keyed fingerprint, so a rescan still offers a line once. Saving an unchanged policy seals nothing new.
 - **One place for each area.** `statement_area` puts a statement, its capture and its bin copy in the area of the note that supports it; records and policies are in the default area. A record's bin copy, and a record named by statements from several areas, are listed in `docs/ENCRYPTION.md` as limits that belong to the owner's open choice about answers drawing on several areas.
 - **Every reader updated.** Reviewed memory, the bin, capture, restore (which now names restored records and statements opened), export, routines and executive briefs open what they read.
-- **Proof.** `tests/test_sealing_memory.py` (9 tests, each failing before the change): views, the bin, capture and export still open; the database, logs and lifecycle journal hold none of the invented words or plain fingerprints of requests, captured lines or the ids derived from them; reading seals nothing; a value or bin copy moved to another row does not open; destroying the area erases memory, the bin and capture; statements follow their note's area. A plain scenario run on part 1 and on part 2 stores the same rows.
+- **Proof.** `tests/test_sealing_memory.py` (11 tests, each failing before the change): views, the bin, capture and export still open; the database, logs and lifecycle journal hold none of the invented words or plain fingerprints of requests, captured lines or the ids derived from them; reading seals nothing; a value or bin copy moved to another row does not open; destroying the area erases memory, the bin and capture; statements follow their note's area. A plain scenario run on part 1 and on part 2 stores the same rows.
+- **Review fixes.** An export opens where a capture came from only for the statements it keeps, and retrying a statement after its source was forgotten finds the same request instead of a collision.
+
+## 30 October 2026 (late): the Claude key and the `desk serve` switch, branch `claude/project-thread-ujui2p`
+
+Master plan phase 2, third part, on top of encryption step 1. Offline tests only; no real model was called and no key exists anywhere in this work.
+
+- **Where the key lives.** `alfred/anthropic_provider.py` reads the Claude key from the macOS login keychain (service `alfred.provider.anthropic`) or from a file only its owner can read, placed by a server's secret store or given as a systemd credential, with encryption step 1's own readers. It is never in ALFRED's keyring file. `desk claude-key-check` says where the key was found and how long it is; it never shows the key and calls nothing.
+- **The switch.** `desk serve --hub hermes` takes the build record, the model, the price, the areas allowed on the cloud and the key source, all from the owner, and refuses to start, before taking its lock, unless every setting is given and the image matches this checkout's pins. A missing Docker now says so (`docker_unavailable`).
+- **The first run on a Mac** is written up step by step in the [guide](docs/HERMES_BOX.md).
+
+## 30 October 2026 (evening): the sealed box connected to Claude, on the host, branch `claude/project-thread-ujui2p`
+
+Master plan phase 2, second part. On 30 October the owner chose which areas may use cloud AI: personal notes only, to start. Merged with the owner's word on 31 October (PR #49). Offline tests only; no real model was called and no key exists anywhere in this work.
+
+- **The Claude provider.** `alfred/anthropic_provider.py` makes the relay's calls: one fixed host over TLS, one path, no redirects followed, and the key read from a key source at each call and dropped after it, never stored, logged or passed to the box. A key that cannot be read, a network failure or a reply too large each stop the call with its own reason and nothing else.
+- **Hermes on the host.** `alfred/hub_host.py` builds the goal hub with Hermes beside the synthetic test brain from a `HermesSetup` the owner gives (build record, model, price, key source, cloud areas); nothing has a default. At start the image must match this checkout's pins (`load_box`), or nothing is built. The cloud is allowed for the owner's areas only, so a company or client mandate naming Hermes is refused. A personal task runs from submission, through the box and the relay, to an accepted result against stand-ins for Docker and the network.
+- **Current Claude models.** The relay no longer passes on Hermes's two beta headers, which are part of the standard API on current models. What Hermes sends to current models was checked against its pinned source; the two things that would need care later (thinking across several calls, and an effort setting) are written up in the [guide](docs/HERMES_BOX.md).
+- **A brain task is bound to its job when the job is made** ([B-032](BUGS_AND_FIXES.md), backlog C11). A worker could lease a brain task in the moment between the job being created and its mandate link being written, and the task then stopped. Both are now written in the same transaction.
 
 ## 30 October 2026: sealing stored notes, encryption step 2 part 1, branch `claude/project-thread-9npowk`
 

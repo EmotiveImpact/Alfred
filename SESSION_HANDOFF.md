@@ -2,7 +2,9 @@
 
 **Who builds, 17 October 2026:** the owner moved all of Astra's (OpenAI Codex) work to Claude, so Claude builds everything. The claim files in `coordination/claims/` still decide ownership between threads (the encryption thread holds its own claim); read [coordination/README.md](coordination/README.md) and run `python3 tools/check_claims.py` before starting.
 
-**Latest checkpoint, 30 October 2026:** forgetting has two layers on branch
+**Latest checkpoint, 30 October 2026:** agent hub H5 is on `main`: Hermes, the owner's choice of first worker brain, runs in a sealed Docker box ([docs/HERMES_BOX.md](docs/HERMES_BOX.md), PR #47). The Claude provider and Hermes on the goal hub followed, with the cloud allowed for personal notes only (the owner's choice), and the backlog C11 race is fixed (B-032). The Claude key is read from the Mac keychain or a server secret with encryption step 1's readers, and `desk serve --hub hermes` switches Hermes on (`desk claude-key-check` checks the key without showing it). Next: a first run on the owner's Mac with synthetic notes, following the steps in docs/HERMES_BOX.md.
+
+**Checkpoint, 30 October 2026:** forgetting has two layers on branch
 `claude/project-thread-9npowk` (PR #26), by the owner's rule of 22 October. An ordinary forget
 waits in a 30-day bin (`alfred/memory_bin.py`) and comes back with a restore, which lists it;
 an absolute forget and every revocation hold through any restore. Read the 30 October entry in

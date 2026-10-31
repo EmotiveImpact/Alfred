@@ -299,7 +299,9 @@ class ReviewedMemory:
             old=db.execute('SELECT id,request_hash,state FROM memory_claims WHERE scope=? AND actor=? AND request_id=?',
                            (p['scope'],ledger(db,p),body['request_id'])).fetchone()
             if old:
-                if old['request_hash']!=digest:raise Fault('memory_request_collision',409)
+                # A forgotten note no longer says which area the request was keyed in.
+                if old['request_hash']!=digest and not sealer.matches(plain,old['request_hash']):
+                    raise Fault('memory_request_collision',409)
                 return {'id':old['id'],'state':old['state'],'reused':True}
             self._entity(db,p,body['subject_id'])
             if body['object_id']:

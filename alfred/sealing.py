@@ -51,6 +51,9 @@ class Plain:
     def fingerprint(self, area, digest):
         return digest
 
+    def matches(self, digest, stored):
+        return digest == stored
+
     def clear_cache(self):
         pass
 
@@ -123,6 +126,13 @@ class Sealed:
             raise Fault('invalid_digest')
         key = self.keyring.fingerprint_key(area)  # refuses a destroyed area, cached or not
         return hmac.new(key, bytes.fromhex(digest), hashlib.sha256).hexdigest()
+
+    def matches(self, digest, stored):
+        """Whether ``stored`` is ``digest``'s keyed fingerprint in any area still held. For a
+        record whose area can no longer be learnt from what it came from (its note was
+        forgotten); a destroyed area matches nothing."""
+        return any(hmac.compare_digest(self.fingerprint(a['id'], digest), stored)
+                   for a in self.keyring.keyring.view()['areas'])
 
     def clear_cache(self):
         """Forget every opened value, for example after ALFRED is told to forget a note."""

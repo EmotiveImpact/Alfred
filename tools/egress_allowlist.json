@@ -3,6 +3,14 @@
   "about": "Every ALFRED file allowed to import a watched network module, with what it imports and why. Read docs/EGRESS_AUDIT.md before adding an entry; tools/egress_audit.py checks this list.",
   "entries": [
     {
+      "module": "alfred/anthropic_provider.py",
+      "imports": [
+        "http.client",
+        "ssl"
+      ],
+      "reason": "Claude for the sealed Hermes box: one fixed host (api.anthropic.com) over TLS with certificate and host name checks, one fixed path, no redirects followed; only the relay in alfred/hermes_box.py calls it, for a brain the owner allowed on the cloud."
+    },
+    {
       "module": "alfred/desk_http.py",
       "imports": [
         "http.server",

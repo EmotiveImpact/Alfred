@@ -1,8 +1,8 @@
 # Encryption step 2, part 2 receipt: reviewed memory, its bin and capture
 
-Built 30 October 2026 on part 1 (PR #50, including its fix 717d813c6), which has not merged yet;
-part 2 goes up only after it does. Tested revision: 2a0c706af (the commit carrying this
-receipt changes only this file). Synthetic keys and invented memory only. Nothing under
+Built 30 October 2026 on part 1 (PR #50, including its fix 717d813c6), merged 31 October.
+Tested revision: 2a0c706af (the commit carrying this receipt changes only this file); the
+review fixes below were tested at eb1960c95. Synthetic keys and invented memory only. Nothing under
 `third_party/` was read, imported or executed, and no model ran.
 
 Requirements: SYS-002 (private storage), memory job M05. Plan: integration plan phase 1, step 2,
@@ -36,7 +36,8 @@ unlocking at start.
 
 ## Tests
 
-- `tests/test_sealing_memory.py` (9 tests), each run first against part 1 and failing there:
+- `tests/test_sealing_memory.py` (9 tests at 2a0c706af; 11 with the review fixes below), each
+  run first against part 1 and failing there:
   - views, the bin's labels, capture's policy view and export still read correctly from sealed
     values, a rescan still recognises an offered line, and undo puts back the names and text
     a forget cleared;
@@ -73,6 +74,25 @@ unlocking at start.
   claude/project-thread-9npowk`, `tools/check_requirement_register.py`,
   `tools/check_memory_plan.py`, `tools/check_adoptions.py` and `tools/egress_audit.py`: all
   pass.
+
+## Review fixes (31 October 2026)
+
+Two findings from the automatic review of PR #51, fixed in e68464505 and tested after
+main (PR #49) was merged in, at eb1960c95:
+
+- Export opened every capture's origin before leaving out statements whose source the reader
+  may not see. It now opens `captured_from` only for the statements it keeps.
+  `test_an_export_opens_no_capture_origin_it_leaves_out` revokes every grant and checks that no
+  capture value is opened.
+- A statement retry after its source was forgotten was refused as a collision, because the
+  note that named its area was gone. `propose` now accepts the saved request fingerprint when
+  it matches in any area still held (`Sealed.matches`); a destroyed area matches nothing.
+  `test_a_retry_after_its_source_is_forgotten_is_still_the_same_request` places the note in a
+  client area, forgets the source, and checks that the retry is reused while a changed body is
+  still refused.
+
+Both tests failed before the fix. Whole suite at eb1960c95: 1,968 tests pass plain and 1,968
+pass sealed (53,384 values sealed); the six checks listed above pass.
 
 ## Not covered yet
 
