@@ -37,6 +37,7 @@ Every document in the repository, what it is for and when to read it. Documents 
 | [MEMORY_ARCHITECTURE.md](MEMORY_ARCHITECTURE.md) | Governed memory: sources, reviewed statements, history, deletion |
 | [MEMORY_SECURITY.md](MEMORY_SECURITY.md) | Privacy and lifecycle gates for memory |
 | [SECURITY_AND_DATA.md](SECURITY_AND_DATA.md) | Data boundaries, sessions, CSRF, loopback, what is never sent |
+| [ENCRYPTION.md](ENCRYPTION.md) | Keys, unlocking on a Mac or a server, recovery and area erasure (phase 1 step 1) |
 | [DISK_ENCRYPTION.md](DISK_ENCRYPTION.md) | The full-disk encryption check `desk serve` runs at start, and `--disk-encryption require` |
 | [SYNC.md](SYNC.md) | Four kinds of sync kept apart; placement guard; conflict copies |
 | [OBSIDIAN_INTEGRATION.md](OBSIDIAN_INTEGRATION.md) | Optional Obsidian over user-owned Markdown |
@@ -113,6 +114,7 @@ Each receipt names the exact tested commit, the commands run and their results, 
 | [evidence/drafts-archive](evidence/drafts-archive/RECEIPT.md), [strict-grants](evidence/strict-grants/RECEIPT.md), [deletion-accounting](evidence/deletion-accounting/RECEIPT.md), [host-recovery](evidence/host-recovery/RECEIPT.md), [obsidian-compat](evidence/obsidian-compat/RECEIPT.md), [capture-policies](evidence/capture-policies/RECEIPT.md) | The six decision-free items of 16 October |
 | [evidence/brain-plug](evidence/brain-plug/RECEIPT.md), [hub-goals](evidence/hub-goals/RECEIPT.md), [hub-learning](evidence/hub-learning/RECEIPT.md), [hub-verify](evidence/hub-verify/RECEIPT.md), [hub-integrate](evidence/hub-integrate/RECEIPT.md), [hub-host](evidence/hub-host/RECEIPT.md), [hub-auto-verify](evidence/hub-auto-verify/RECEIPT.md), [run-initiator](evidence/run-initiator/RECEIPT.md) | Agent hub steps H1 to H4, the host switch, automatic verification and who started each run |
 | [evidence/secret-scrubbing](evidence/secret-scrubbing/RECEIPT.md), [scrub-wiring](evidence/scrub-wiring/RECEIPT.md), [question-set](evidence/question-set/RECEIPT.md), [meaning-search](evidence/meaning-search/RECEIPT.md), [egress-audit](evidence/egress-audit/RECEIPT.md), [adoption-check](evidence/adoption-check/RECEIPT.md), [public-hygiene](evidence/public-hygiene/RECEIPT.md), [disk-encryption](evidence/disk-encryption/RECEIPT.md), [provenance-gate](evidence/provenance-gate/RECEIPT.md), [agent-drafts](evidence/agent-drafts/RECEIPT.md) | The 17 and 18 October backlog items |
+| [evidence/encryption](evidence/encryption/RECEIPT.md), [two-layer-delete](evidence/two-layer-delete/RECEIPT.md) | Encryption phase 1 step 1 (keys), and forgetting in two layers |
 | [evidence/unified-2026-09-27](evidence/unified-2026-09-27/) | The unified baseline |
 | desk-v03, knowledge-v04, grounded-v05, personal-os-v06, conversation-v07, memory-v08 | The pre-baseline increments |
 

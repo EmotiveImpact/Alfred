@@ -1,6 +1,6 @@
 {
  "schema_version": 1,
- "updated_on": "2026-10-16",
+ "updated_on": "2026-10-17",
  "authority": {
   "requirements": "docs/PRD.md",
   "sequence": "docs/ROADMAP.md",
@@ -361,13 +361,15 @@
     "tools/check_console_connected_browser.py",
     "tests/test_deletion_accounting.py",
     "docs/evidence/deletion-accounting/RECEIPT.md",
-    "docs/evidence/drafts-archive/RECEIPT.md"
+    "docs/evidence/drafts-archive/RECEIPT.md",
+    "tests/test_two_layer_delete.py",
+    "docs/evidence/two-layer-delete/RECEIPT.md"
    ],
    "delivery": {
     "branch": "claude/alfred-development-qpgxhg",
     "pull_request": "EmotiveImpact/Alfred#18 (draft)"
    },
-   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided. Forgetting and source removal now leave value-free history rows; restore replays a forget at the journal time. Forget receipts count every dependent before and after; deletion-report; restore reports what replay removed again (16 October). Forget withdraws kept and archived drafts."
+   "notes": "Forget statements and entities with receipts; withdraws dependent answers and cancels undecided drafts; unavailable support is withheld, changed support invalidated. Whole-source removal (journalled, receipted, replayed on restore) removes a source and everything derived from it, including job results. Encryption and secure erasure are not provided. Forgetting and source removal now leave value-free history rows; restore replays a forget at the journal time. Forget receipts count every dependent before and after; deletion-report; restore reports what replay removed again (16 October). Forget withdraws kept and archived drafts. Two layers (owner's rule, 22 October; built 30 October on claude/project-thread-9npowk): an ordinary forget keeps a copy in a 30-day bin with undo and comes back with a restore, which lists what came back; an absolute forget, with the identifier typed back, skips the bin and holds through every restore, as do revocations, retention ends and journal entries written before the layers."
   },
   {
    "id": "MEM-011",
@@ -602,14 +604,16 @@
    "deployment": "not_deployed",
    "acceptance_evidence": [
     "tests/test_memory_lifecycle.py",
-    "docs/evidence/memory-m05/RECEIPT.md"
+    "docs/evidence/memory-m05/RECEIPT.md",
+    "tests/test_keys.py",
+    "docs/evidence/encryption/RECEIPT.md"
    ],
    "delivery": {
-    "branch": "claude/alfred-development-qpgxhg",
-    "pull_request": "EmotiveImpact/Alfred#18 (draft)"
+    "branch": "claude/project-thread-9npowk",
+    "pull_request": "EmotiveImpact/Alfred (draft, phase 1 step 1)"
    },
-   "notes": "Consistent backups and journal-replaying restore without resurrection are implemented. Application encryption and key custody are not.",
-   "owner_decision_needed": "Key custody approach for application encryption (OS keychain versus passphrase) before private data."
+   "notes": "Consistent backups and a journal-replaying restore are implemented; since 30 October (branch) a restore brings ordinary forgets back and lists them, and applies absolute forgets and revocations again. Key custody (17 October, phase 1 step 1, on branch): a keyring with a master key and a key per area, unlock by macOS keychain, passphrase, server secret file or recovery key, area key destruction, recovery-kit copies and a full-disk encryption check (docs/ENCRYPTION.md). Records, indexes, exports and backups are not sealed yet (phase 1 step 2).",
+   "owner_decision_needed": "Key custody chosen 17 October 2026: keychain on a Mac, passphrase or a server secret store on a server, one offline recovery key. Library chosen 30 October 2026: cryptography 50.0.2. Pending: whether one answer may draw on several areas at once (encryption step 2)."
   },
   {
    "id": "INT-001",

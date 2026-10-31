@@ -96,7 +96,7 @@ The vault is read only. ALFRED never writes into it except through the approved 
 | `rotate --role owner` | Replace a key; the old one stops working at once |
 | `revoke --credential-id ID` | Revoke a credential; open sessions and queued work are rechecked |
 | `backup` | Consistent, restorable, unencrypted SQLite snapshot under the data folder |
-| `restore --backup-file FILE` | Restore while the host is stopped; forget and revocation journal entries are replayed |
+| `restore --backup-file FILE` | Restore while the host is stopped. Absolute forgets and revocations are applied again; ordinary forgets come back and are listed |
 | `export --export-dir PATH` | Readable JSON and Markdown export with checksums, never inside a vault |
 | `rebuild-index` | Rebuild the note index and projections while the host is stopped; identities, revisions and reviews are kept |
 | `connector-add --connector ics-export\|vcf-export --connector-label L` | Add a read-only calendar or contacts export connector |

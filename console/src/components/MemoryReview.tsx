@@ -1,10 +1,11 @@
 import {useCallback,useEffect,useMemo,useState} from 'react';
-import {ClockCounterClockwise,WarningCircle} from '@phosphor-icons/react';
+import {ArrowCounterClockwise,ClockCounterClockwise,WarningCircle} from '@phosphor-icons/react';
 import {useConsole} from '../state/ConsoleProvider';
 import {DeskError} from '../integration/deskClient';
 import {type AsOfItem,type AsOfReport,type Decision,type MemoryClaim,type MemoryView,DECIDED,REVIEW_ERRORS,acceptedSince,asOfPath,claimValue,dayEnd,
   entityLabel,formatTime,namesakeIds,notHeldSummary,predicateLabel,reviewBody,reviewQueue,supersedeCandidates,toDayInput,validPeriodLabel,
   validPeriodPayload,valueText} from '../domain/temporal';
+import {type BinItem,type BinView,type UndoResult,BIN_ERRORS,binLabel,daysLeft,undoNotice} from '../domain/bin';
 import '../review.css';
 
 const isAbort=(e:unknown)=>e instanceof DOMException&&e.name==='AbortError';
@@ -148,15 +149,49 @@ function AsOfView(){
   </div>;
 }
 
-/** Reviewed memory: the review queue and the as-of report. Connected mode only; the demonstration has no ledger. */
+/** Ordinary forgets the owner can still undo. Forgetting for good skips the bin, so nothing of it is listed here. */
+function BinPanel(){
+  const c=useConsole(),{client,fail}=c.live,revision=c.state.snapshot.dataRevision,owner=c.live.session?.role==='owner';
+  const[state,setState]=useState<{status:'loading'|'ready'|'error';view?:BinView;message?:string}>({status:'loading'});
+  const[tick,setTick]=useState(0),[busy,setBusy]=useState(''),[error,setError]=useState('');
+  useEffect(()=>{
+    if(!owner)return;
+    const controller=new AbortController();
+    client.get<BinView>('/desk/memory/bin',controller.signal).then(view=>{if(!controller.signal.aborted)setState({status:'ready',view});}).catch(e=>{
+      if(isAbort(e))return;setState({status:'error',message:reviewMessage(e)});if(e instanceof DeskError&&e.kind==='signed_out')fail(e);
+    });
+    return()=>controller.abort();
+  },[client,fail,owner,revision,tick]);
+  if(!owner)return <p className="dialog-note">Only the owner sees the bin.</p>;
+  const undo=async(item:BinItem)=>{
+    setBusy(item.id);setError('');
+    try{c.setNotice(undoNotice(item,await client.post<UndoResult>(`/desk/memory/bin/${encodeURIComponent(item.id)}/undo`,{})));}
+    catch(e){setError(e instanceof DeskError?BIN_ERRORS[e.code]??reviewMessage(e):reviewMessage(e));if(e instanceof DeskError&&e.kind==='signed_out')fail(e);}
+    finally{setBusy('');setTick(t=>t+1);void c.live.refresh();}
+  };
+  const now=Math.floor(Date.now()/1000),items=state.view?.items??[];
+  return <div className="bin-view">
+    <p className="dialog-note">Things you forgot stay here for {state.view?.days??30} days so you can undo them. Restoring an older backup brings them back even after that, and ALFRED lists what came back. Forgetting for good skips the bin.</p>
+    {state.status==='loading'&&<p className="dialog-note" role="status">Reading the bin…</p>}
+    {state.status==='error'&&<p className="sign-in-error" role="alert">{state.message}</p>}
+    {error&&<p className="sign-in-error" role="alert">{error}</p>}
+    {state.status==='ready'&&(items.length?<ul className="bin-list" aria-label="Forgotten and can be undone">{items.map(item=><li key={item.id} className="review-card">
+      <p className="review-statement"><span className="review-state forgotten">{item.kind==='entity'?'Record':'Statement'}</span> <b>{binLabel(item)}</b></p>
+      <p className="review-meta">Forgotten {formatTime(item.deleted)} · {daysLeft(item,now)} day{daysLeft(item,now)===1?'':'s'} left to undo</p>
+      <div className="button-row"><button className="secondary-button" disabled={busy!==''} onClick={()=>void undo(item)} aria-label={`Undo forgetting ${binLabel(item)}`}><ArrowCounterClockwise size={16}/>Undo</button></div>
+    </li>)}</ul>:<p className="quiet-empty">The bin is empty.</p>)}
+  </div>;
+}
+
+/** Reviewed memory: the review queue, the as-of report and the bin. Connected mode only; the demonstration has no ledger. */
 export function MemoryReview(){
-  const c=useConsole(),[tab,setTab]=useState<'queue'|'asof'>(c.memoryTab);
+  const c=useConsole(),[tab,setTab]=useState<'queue'|'asof'|'bin'>(c.memoryTab);
   if(!c.connected)return <p className="dialog-note">Reviewed memory needs the connected ALFRED server. This demonstration has no review ledger.</p>;
-  const tabs=[{id:'queue' as const,label:'Review queue'},{id:'asof' as const,label:'As of a date'}];
+  const tabs=[{id:'queue' as const,label:'Review queue'},{id:'asof' as const,label:'As of a date'},{id:'bin' as const,label:'Bin'}];
   return <div className="memory-review">
     <div className="exec-tabs" role="tablist" aria-label="Reviewed memory views">
       {tabs.map(t=><button key={t.id} role="tab" id={`memory-tab-${t.id}`} aria-selected={tab===t.id} aria-controls={`memory-panel-${t.id}`} onClick={()=>setTab(t.id)}>{t.label}</button>)}
     </div>
-    <div role="tabpanel" id={`memory-panel-${tab}`} aria-labelledby={`memory-tab-${tab}`}>{tab==='queue'?<ReviewQueue/>:<AsOfView/>}</div>
+    <div role="tabpanel" id={`memory-panel-${tab}`} aria-labelledby={`memory-tab-${tab}`}>{tab==='queue'?<ReviewQueue/>:tab==='asof'?<AsOfView/>:<BinPanel/>}</div>
   </div>;
 }

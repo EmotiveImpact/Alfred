@@ -12,6 +12,25 @@ Master plan phase 2, second part. On 30 October the owner chose which areas may 
 - **A brain task is bound to its job when the job is made** ([B-032](BUGS_AND_FIXES.md), backlog C11). A worker could lease a brain task in the moment between the job being created and its mandate link being written, and the task then stopped. Both are now written in the same transaction.
 - **Left for the next change.** Reading the key from the Mac keychain or a server's secret store, which reuses the readers encryption step 1 adds, and then the `desk serve --hub hermes` switch and a run on the owner's Mac.
 
+## 30 October 2026: sealing stored notes, encryption step 2 part 1, branch `claude/project-thread-9npowk`
+
+The first of step 2's five parts (SYS-002, M05), built on step 1 (PR #26, merged 30 October). Not merged; the owner's word comes first. A workspace can be sealed only in tests until part 5 adds the `seal` command and unlocking at start, so no workspace in use is half sealed. Synthetic keys and invented notes only; no model ran and nothing under `third_party/` was installed, run or imported.
+
+- **Sealing layer (`alfred/sealing.py`).** A plain mode that changes nothing and a sealed mode over an open keyring. `TABLES` registers each table holding private text with its row, sealed and fingerprint columns; stores open rows with `opened` and seal them with `sealed`. Values are bound to table, column and row, so a value moved elsewhere fails to open. A sealed database records its keyring and refuses to open without it (`workspace_locked`) or with another (`wrong_keyring`). Opened text is cached in memory up to 64 MiB, and a destroyed area stops opening at once.
+- **Vault notes sealed.** Path, title, text, tags, aliases, headings, link targets, vault label, settings and scan errors, path history, conflict paths and front-matter ids. Plain SHA-256 fingerprints become keyed ones (HMAC-SHA256 under the area key), and vault writes compare digests in that form. Sorting by sealed columns moved from SQL to Python with the same ASCII case folding. Connector imports seal their label and receipts and key their item ids.
+- **Rescans seal nothing new.** A value whose text is unchanged keeps its stored sealed form, so an unchanged vault rescans without new ciphertext and an edit seals only what changed. Every note's area comes from one place on the store (`source_area`, `note_area`, `note_fingerprint`), ready for part 5's folder rules.
+- **Record protection.** A database holding sealed values without its sealing record is refused (`sealing_record_damaged`), and restore checks the record like any store. Forgetting a source empties the opened-text cache; search checks grants before opening a source.
+- **Every reader updated.** Knowledge, connectors, inbox and vault append, sync conflicts, lifecycle and restore, reviewed memory, conversations, executive records, jobs, capture and policy now open the note rows they read.
+- **Proof.** `tests/test_sealing.py` (sealer, registry, refusals, erasure, rescans sealing nothing, and scans showing a sealed workspace's database, logs and shared memory hold none of its notes' words, paths or plain fingerprints, after renames, conflict copies, scan errors and forgetting too). `tests/sealed_suite.py` runs every application test sealed, child processes included; CI runs it as `sealed-suite`. Tests that read storage directly or compare returned digests use `tests/stored_helpers.py` so they hold in both modes.
+
+## 30 October 2026: forgetting in two layers, branch `claude/project-thread-9npowk`
+
+The owner's rule of 22 October replaces "no resurrection after restore" (M05, MEM-010). Built tests first on the encryption branch (PR #26), merged with the owner's word on 30 October together with step 1, after the owner chose the `cryptography` library. Synthetic data only; nothing deployed.
+
+- **Ordinary forget, the default.** A forgotten statement or record waits in a bin for 30 days and can be undone from the console's new Bin tab or `POST /desk/memory/bin/{id}/undo`. A restore from an older backup brings ordinary forgets back and lists them; `desk restore` prints the list.
+- **Absolute forget, a separate choice.** "Forget for good" in the console, or `absolute` with the identifier typed back as `confirm`. It skips the bin, removes any copy already there and holds through every restore, like revocations and capture retention. Journal entries from before the layers count as absolute.
+- **Honest accounting.** Receipts carry the layer and, for an ordinary forget, when undo ends; the deletion report counts bin copies. [Receipt](docs/evidence/two-layer-delete/RECEIPT.md).
+
 ## 30 October 2026: Hermes in a sealed box, branch `claude/project-thread-ujui2p`
 
 Master plan phase 2, first part; agent hub step H5. The owner chose Hermes as the first worker brain, run in a sealed Docker box. Synthetic data and a scripted stand-in model only; no real model was called and nothing is wired into the host. Merged with the owner's word on 30 October.
@@ -60,6 +79,17 @@ Eleven pull requests from [coordination/BACKLOG.md](coordination/BACKLOG.md), pl
 ## 17 October 2026 (night): the host builds the goal hub when asked, branch `claude/project-thread-att046-hub-host`
 
 - **`desk serve --hub synthetic` (backlog C2).** `alfred/hub_host.py` builds the brain hub and goal hub over the host's own job coordinator, registers only the deterministic synthetic test brain, allows no cloud scope and no tool, and enrols one `local-brain` worker that takes brain tasks only. The host's supervisor loop accounts results and runs heartbeats, so `/desk/hub`, mandates, budgets and verification work end to end on the real desk with test data. Off by default: without the switch no hub tables or brain worker are created and `/desk/hub` still answers `hub_not_configured`. No real brain is offered, because which brain comes first is the owner's choice. [Receipt](docs/evidence/hub-host/RECEIPT.md).
+
+## 17 October 2026 (evening): encryption keys and unlocking, phase 1 step 1, branch `claude/project-thread-9npowk`
+
+Key custody for plan item 1.1 (SYS-002, M05), on the owner's choice of both a Mac and a server. Nothing ALFRED stores is sealed yet; that is step 2. No model ran and nothing under `third_party/` was installed, run or imported.
+
+- **Keyring (`alfred/keys.py`).** One master key and one key per area (personal, company, each client), kept in `desk-keyring.json` beside the database and never inside it. The master key is locked separately for each unlock method: the macOS login keychain, a passphrase (scrypt), a server secret file (systemd credentials, Docker or Kubernetes secrets, a Vault agent) and a recovery key shown once. Methods are pluggable through `keys.register`. Values are sealed with AES-256-GCM, each under its own key derived from the area key and a random salt, and bound to keyring, area, key version and row context. The file carries an integrity seal, refuses swapped keys or a hidden destruction, and changes are locked and checked against concurrent writers.
+- **Areas and erasure.** `area-add`, `areas`, `area-rotate` and `area-destroy`. An area's name ("Acme Ltd") is sealed in the keyring and its id is neutral by default (`client-3f9a2b1c`), because the id is written beside every sealed value. Destroying an area deletes its keys, so everything sealed with them stops opening, even with the recovery key. A test shows the stated limit: a keyring copy made before the destruction still opens it until deleted.
+- **Recovery kit.** `backup` writes a keyring copy that only the recovery key opens; `restore` puts it in place on a new machine, where a local unlock method is then added.
+- **Three tries.** A typed passphrase or recovery key gets three tries each time ALFRED asks, at start, in every command and in `restore`. Wrong tries lock nothing and erase nothing; piped input that runs out stops asking.
+- **Full-disk encryption check.** `python3 -m alfred.keys disk` and a new `doctor` check report the same answer as the check `desk serve` runs (#41), so ALFRED has one detector; the doctor also reads the keyring's layout without unlocking it. `placement` lists the keyring as a live file.
+- **First adopted runtime dependency.** `cryptography` 50.0.2 with `cffi` 2.1.1 and `pycparser` 3.0, pinned with every file hash in `requirements/encryption.txt`; CI installs it in a fresh virtual environment for the test suite. The adoption record is in [docs/ENCRYPTION.md](docs/ENCRYPTION.md); the owner signed it off on 30 October 2026. [Receipt](docs/evidence/encryption/RECEIPT.md).
 
 ## 17 October 2026 (evening): two agents, one repository, branch `claude/project-thread-r6ndba`
 

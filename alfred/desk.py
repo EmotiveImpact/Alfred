@@ -330,7 +330,15 @@ def main():
                 result = restore(args.backup_file, path / 'desk.sqlite', cache=cache)
             finally:
                 os.close(fd)
-            print('Restored', result['restored_from'], '- replayed', result['journal_entries_replayed'], 'forget/revocation entries.')
+            print('Restored', result['restored_from'], '- applied again', result['journal_entries_replayed'],
+                  'absolute forget and revocation entries.')
+            if result['came_back']:
+                # Ordinary forgets are not applied again, so what the backup held comes back. Say what.
+                print('Came back from the backup (ordinary forgets):')
+                for item in result['came_back']:
+                    what = {'claim_forgotten': 'statement', 'entity_forgotten': 'record', 'source_forgotten': 'source'}[item['kind']]
+                    when = time.strftime('%d %B %Y', time.gmtime(item['deleted_at'])) if item.get('deleted_at') else 'an unknown date'
+                    print(f"  {what} {item['label']} ({item['subject']}), forgotten on {when}")
             again = result['removed_again']
             print('Removed again from the backup:', ', '.join(f'{k} {v}' for k, v in sorted(again['totals'].items())) or 'nothing',
                   '- cached results removed:', again['cached_results_removed'])

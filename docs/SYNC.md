@@ -10,7 +10,7 @@ background: [infrastructure research, section 4.2](../research/INFRASTRUCTURE_20
 |---|---|---|---|---|
 | Vault file sync | The person's Markdown files | The person's own tool: Syncthing, Dropbox, iCloud Drive, OneDrive, Nextcloud, Obsidian Sync or Git | Reads a selected folder, recognises conflict copies by name, and identical copies by content, never merges or resolves them, never runs a sync client | Conflict-copy recognition and the placement guard are implemented |
 | Identity and grants | Credentials, person and device enrolment, source grants, invitations | The one local SQLite database | Offline provisioning, explicit pairing and offline rotation (M02); revocations are journalled (M05) | Never file-synced; no identity sync between devices exists |
-| Ledger and job state | Reviewed statements, captures, executive records, actions and drafts, audit, jobs, job events and artefacts | The same database, a single authority | One host writes; `backup` makes a consistent copy and `restore` replays the lifecycle journal; see [JOBS.md](JOBS.md) | No replication and no second writer |
+| Ledger and job state | Reviewed statements, captures, executive records, actions and drafts, audit, jobs, job events and artefacts | The same database, a single authority | One host writes; `backup` makes a consistent copy and `restore` applies absolute forgets and revocations from the lifecycle journal again; see [JOBS.md](JOBS.md) | No replication and no second writer |
 | Runtime or model sync | Model files, prompts, embeddings, caches, sessions, runtime state | None | Nothing | Not implemented |
 
 A saved file is not proof that another device received it, and a vault that a sync tool
@@ -174,8 +174,9 @@ implemented.
 Reviewed statements, captures, executive records, actions, drafts, the audit log, jobs, job
 events and artefacts have one authority: the SQLite database on one host's local disk. The
 job coordinator is single-host stage 0 ([JOBS.md](JOBS.md)). `backup` uses SQLite's online
-backup API and writes a hashed manifest; `restore` is offline and replays the lifecycle
-journal so forgotten values and revoked access stay gone. Replication (for example
+backup API and writes a hashed manifest; `restore` is offline. It applies absolute forgets
+and revocations from the lifecycle journal again, so those stay gone; ordinary forgets come
+back with the backup, and `restore` lists them. Replication (for example
 Litestream), a second coordinator, remote workers, any multi-writer merge and encrypted
 backups are not implemented.
 
@@ -192,7 +193,7 @@ synced between devices. The job cache is local, bounded, rebuildable and never a
 | Contents | The whole database: every table and every person's records | Only what one credential may read now |
 | Format | A SQLite file and a JSON manifest with its SHA-256 | Plain JSON, readable Markdown, a manifest and `SHA256SUMS` |
 | Filtering | None | Forgotten, withheld and past-retention statements, keys, sessions and invitation codes are left out |
-| Restorable | Yes, with `restore` (journal replayed) | No |
+| Restorable | Yes, with `restore` (absolute forgets and revocations applied again; ordinary forgets come back and are listed) | No |
 | Safe to copy into a synced folder | Yes, it is a consistent snapshot | Yes, it is a set of static files |
 | Encrypted | No | No |
 | Command | `python3 -m alfred.desk backup` | `python3 -m alfred.desk export --export-dir PATH [--role reader]` |

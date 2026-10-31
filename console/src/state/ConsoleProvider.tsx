@@ -28,7 +28,7 @@ function useController(){
   const[graphMode,setGraphMode]=useState<GraphMode>('field'),[activeView,setActiveView]=useState<RailView>('home');
   const[renderEpoch,setRenderEpoch]=useState(0);
   const[executiveTarget,setExecutiveTarget]=useState<ExecutiveTarget|null>(null);
-  const[memoryTab,setMemoryTab]=useState<'queue'|'asof'>('queue');
+  const[memoryTab,setMemoryTab]=useState<'queue'|'asof'|'bin'>('queue');
   // Lost or changed authority closes every view that could still show withdrawn material.
   const resetAsk=useRef<()=>void>(()=>{}),resetJobs=useRef<()=>void>(()=>{});
   // A change the person just made from the access panel keeps that panel open; it shows no records.
@@ -74,7 +74,7 @@ function useController(){
   const openReview=(id:string,outcome:'reviewed'|'declined'='reviewed')=>{setProposalId(id);setReviewConsent(false);setReviewOutcome(outcome);setModal('review');};
   const openCategory=(category:Category|null)=>{dispatch({type:'category',category});setModal('records');};
   const openExecutive=(view:ExecutiveTarget['view'],id:string|null=null)=>{setExecutiveTarget({view,id});setModal('tasks');};
-  const openMemory=(tab:'queue'|'asof'='queue')=>{setMemoryTab(tab);setModal('memory');};
+  const openMemory=(tab:'queue'|'asof'|'bin'='queue')=>{setMemoryTab(tab);setModal('memory');};
   const navigate=(view:RailView)=>{
     setActiveView(view);dispatch({type:'select',id:null});
     if(view==='home'){setGraphMode('field');setModal(null);return;}

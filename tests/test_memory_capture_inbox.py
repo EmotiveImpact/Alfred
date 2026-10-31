@@ -4,7 +4,6 @@ Synthetic vaults in temporary folders, real SQLite and the real outbox. Nothing
 is sent; the only effect is a new file under ALFRED/Inbox when approved.
 """
 from pathlib import Path
-import hashlib
 import json
 import os
 import tempfile
@@ -15,6 +14,7 @@ from alfred.reviewed_memory import ReviewedMemory
 from alfred.policy import IdentityPolicy
 from alfred import inbox, lifecycle
 from grant_helpers import grant_all
+import stored_helpers as stored
 
 
 class Base(unittest.TestCase):
@@ -110,7 +110,7 @@ class InboxTests(Base):
         result = self.store.tick(self.owner)
         self.assertEqual(result['state'], 'verified')
         self.assertEqual(self.target().read_text(), '# Atlas follow-up\nConfirm the launch window.\n')
-        self.assertEqual(result['proof']['sha256'], hashlib.sha256(self.target().read_bytes()).hexdigest())
+        self.assertEqual(result['proof']['sha256'], stored.digest(self.store, self.target().read_bytes()))
         self.scanner.scan()
         self.assertIn('ALFRED/Inbox/Atlas follow-up.md', [n['path'] for n in self.store.knowledge(self.owner)['nodes']])
         self.assertEqual(sorted(os.listdir(self.target().parent)), ['Atlas follow-up.md'])

@@ -51,6 +51,7 @@ class DeskStore(LocalCore):
             lifecycle_tables(db)
             if db.execute('SELECT version FROM desk_meta').fetchall()[0][0] != 1:
                 raise Fault('unsupported_desk_version')
+        self._attach_sealer()
         self.path.chmod(0o600)
 
     def principal(self, bearer, roles=frozenset({'owner', 'reader'})):

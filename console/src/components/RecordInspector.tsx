@@ -8,6 +8,7 @@ import {RunJob} from './JobsPanel';
 import {ExecutiveInspectorActions} from './ExecutiveWorkflows';
 import {SyncConflictNotice,SourceConflicts} from './SourceSafety';
 import {StatementTemporal} from './StatementHistory';
+import {FORGET_LAYERS} from '../domain/bin';
 const LAYER_LABEL:Record<string,string>={note_reference:'authored link',reviewed_claim:'reviewed relationship',review_support:'supported by reviewed excerpt',executive_link:'executive link',executive_support:'cited support',executive_responsible:'responsible (your link)',fixture:''};
 const ORIGIN_BADGE:Record<string,string>={authored_note:'AUTHORED NOTE · NOT A VERIFIED FACT',reviewed_entity:'REVIEWED MEMORY · YOUR JUDGEMENT',source:'SELECTED SOURCE',executive_record:'EXECUTIVE RECORD · AUTHORED BY YOU'};
 function frontmatterEnd(lines:string[]){if(lines[0]?.trim()!=='---')return 0;const end=lines.findIndex((l,i)=>i>0&&l.trim()==='---');return end<0?0:end+1;}
@@ -20,31 +21,40 @@ function statementLabel(s:StatementDetail){
   if(!s.validNow&&s.state==='accepted')return 'Outside its valid period';
   return s.state;
 }
-function ForgetControl({label,path,body,confirm}:{label:string;path:string;body:object;confirm:string}){
-  const c=useConsole(),[asking,setAsking]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+/** Two layers (the owner's rule of 22 October 2026). Ordinary: a copy waits in the bin for 30 days and a restore from an
+ * older backup brings it back. For good: a separate choice that skips the bin and holds through every restore; the
+ * server also needs the identifier typed back, which this control sends once the owner has ticked the choice. */
+function ForgetControl({label,path,body,subject,confirm}:{label:string;path:string;body:object;subject:string;confirm:string}){
+  const c=useConsole(),[asking,setAsking]=useState(false),[forGood,setForGood]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   if(c.live.session?.role!=='owner')return null;
   if(!asking)return <button className="text-button forget-button" onClick={()=>setAsking(true)}>{label}</button>;
+  const close=()=>{setAsking(false);setForGood(false);};
   const run=async()=>{setBusy(true);setError('');try{
-    const r=await c.live.client.post<{conversation_answers_withdrawn:number;pending_actions_cancelled:string[]}>(path,body);
-    c.setNotice(`Forgotten. ${r.conversation_answers_withdrawn} saved answer(s) withdrawn, ${r.pending_actions_cancelled.length} pending draft(s) cancelled. Not secure erasure.`);setAsking(false);void c.live.refresh();
+    const r=await c.live.client.post<{conversation_answers_withdrawn:number;pending_actions_cancelled:string[]}>(path,forGood?{...body,absolute:true,confirm:subject}:body);
+    const counts=`${r.conversation_answers_withdrawn} saved answer(s) withdrawn, ${r.pending_actions_cancelled.length} pending draft(s) cancelled.`;
+    c.setNotice(forGood?`Forgotten for good. ${counts} No backup restore brings it back. Not secure erasure.`
+      :`Forgotten and moved to the bin, where you can undo it for 30 days. ${counts} Not secure erasure.`);close();void c.live.refresh();
   }catch(e){setError(e instanceof DeskError&&e.code==='memory_review_changed'?'This statement changed. Reopen it and try again.':'It could not be forgotten.');}finally{setBusy(false);}};
-  return <div className="forget-confirm" role="group" aria-label="Confirm forget"><p className="dialog-note">{confirm}</p>{error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy} onClick={run}>Confirm forget</button><button className="text-button" onClick={()=>setAsking(false)}>Keep</button></div></div>;
+  return <div className="forget-confirm" role="group" aria-label="Confirm forget"><p className="dialog-note">{confirm} {forGood?FORGET_LAYERS.forGood:FORGET_LAYERS.ordinary}</p>
+    <label className="consent"><input type="checkbox" checked={forGood} onChange={e=>setForGood(e.target.checked)}/><span>Forget for good: skip the bin, and no backup restore brings it back.</span></label>
+    {error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy} onClick={run}>{forGood?'Forget for good':'Confirm forget'}</button><button className="text-button" onClick={close}>Keep</button></div></div>;
 }
 /** Removes a whole source from ALFRED: its indexed text and everything derived from it. Never the person's files. */
 function RemoveSource({source,label}:{source:string;label:string}){
-  const c=useConsole(),[asking,setAsking]=useState(false),[consent,setConsent]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const c=useConsole(),[asking,setAsking]=useState(false),[consent,setConsent]=useState(false),[forGood,setForGood]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
   if(c.live.session?.role!=='owner')return null;
   if(!asking)return <button className="text-button forget-button" onClick={()=>setAsking(true)}>Remove this source from ALFRED</button>;
   const run=async()=>{setBusy(true);setError('');try{
     // Removing a source changes access; this is the person's own change, so keep its receipt in view.
     c.expectAccessChange();
-    const r=await c.live.client.post<{notes_removed:number;reviewed_statements_invalidated:number;conversation_answers_withdrawn:number;pending_actions_cancelled:string[];job_results_deleted:string[]}>(`/desk/sources/${encodeURIComponent(source)}/forget`,{confirm:source});
-    c.setNotice(`Source removed: ${r.notes_removed} notes, ${r.reviewed_statements_invalidated} reviewed statement(s) invalidated, ${r.conversation_answers_withdrawn} answer(s) withdrawn, ${r.pending_actions_cancelled.length} draft(s) cancelled, ${r.job_results_deleted.length} job result(s) deleted. Your files were not touched.`);
+    const r=await c.live.client.post<{notes_removed:number;reviewed_statements_invalidated:number;conversation_answers_withdrawn:number;pending_actions_cancelled:string[];job_results_deleted:string[]}>(`/desk/sources/${encodeURIComponent(source)}/forget`,forGood?{confirm:source,absolute:true}:{confirm:source});
+    c.setNotice(`Source removed${forGood?' for good':''}: ${r.notes_removed} notes, ${r.reviewed_statements_invalidated} reviewed statement(s) invalidated, ${r.conversation_answers_withdrawn} answer(s) withdrawn, ${r.pending_actions_cancelled.length} draft(s) cancelled, ${r.job_results_deleted.length} job result(s) deleted. Your files were not touched.`);
     setAsking(false);c.dispatch({type:'select',id:null});void c.live.refresh();
   }catch(e){setError(e instanceof DeskError&&e.code==='source_not_available'?'This source is no longer available.':'It could not be removed.');}finally{setBusy(false);}};
-  return <div className="forget-confirm" role="group" aria-label="Confirm source removal"><p className="dialog-note">Removes {label} from ALFRED: its indexed text, links and history, every answer and draft built on it, and job results derived from it. Reviewed statements that relied on it are invalidated. ALFRED stops reading it. Your own files are not touched, and this is not secure erasure.</p>
+  return <div className="forget-confirm" role="group" aria-label="Confirm source removal"><p className="dialog-note">Removes {label} from ALFRED: its indexed text, links and history, every answer and draft built on it, and job results derived from it. Reviewed statements that relied on it are invalidated. ALFRED stops reading it. Your own files are not touched, and this is not secure erasure. {forGood?'Restoring any older backup removes it again.':'Restoring an older backup brings it back, and ALFRED lists what came back.'}</p>
     <label className="consent"><input type="checkbox" checked={consent} onChange={e=>setConsent(e.target.checked)}/><span>I want to remove this source and everything derived from it.</span></label>
-    {error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy||!consent} onClick={run}>Remove source</button><button className="text-button" onClick={()=>{setAsking(false);setConsent(false);}}>Keep</button></div></div>;
+    <label className="consent"><input type="checkbox" checked={forGood} onChange={e=>setForGood(e.target.checked)}/><span>Remove for good: no backup restore brings it back.</span></label>
+    {error&&<p className="sign-in-error" role="alert">{error}</p>}<div className="button-row"><button className="secondary-button" disabled={busy||!consent} onClick={run}>{forGood?'Remove for good':'Remove source'}</button><button className="text-button" onClick={()=>{setAsking(false);setConsent(false);setForGood(false);}}>Keep</button></div></div>;
 }
 function ConnectedProvenance({detail}:{detail:RecordDetail}){
   const c=useConsole(),{selectRecord}=c;
@@ -68,8 +78,8 @@ function ConnectedProvenance({detail}:{detail:RecordDetail}){
     {detail.statements.length?detail.statements.map(s=><div className={`statement ${s.usable?'usable':'withheld'}`} key={s.id}><p><strong>{s.predicate.replaceAll('_',' ')}</strong> {s.value??s.object?.name??''}</p><small>{statementLabel(s)}</small>
       {s.support?<><blockquote>{s.support.quote}</blockquote><button className="text-button" onClick={()=>selectRecord(s.support!.noteId)}>{s.support.title}, {s.support.startLine===s.support.endLine?`line ${s.support.startLine}`:`lines ${s.support.startLine}–${s.support.endLine}`}</button></>:s.state!=='forgotten'&&<p className="dialog-note">Original support is not currently available.</p>}
       <StatementTemporal s={s} siblings={detail.statements}/>
-      {s.state!=='forgotten'&&<ForgetControl label="Forget this statement" path={`/desk/memory/claims/${s.id}/forget`} body={{version:s.version}} confirm="Removes the reviewed value from ALFRED's current records, withdraws saved answers that used it and cancels undecided drafts. Audit entries, older backups and completed drafts remain."/>}</div>):<p>No statements recorded for this record.</p>}
-    <ForgetControl label="Forget this record and its statements" path={`/desk/memory/entities/${detail.id.slice('entity:'.length)}/forget`} body={{}} confirm="Removes this record's name and every reviewed statement that mentions it from current records. A restore from an older backup replays this forget."/></section>;
+      {s.state!=='forgotten'&&<ForgetControl label="Forget this statement" path={`/desk/memory/claims/${s.id}/forget`} body={{version:s.version}} subject={s.id} confirm="Removes the reviewed value from ALFRED's current records, withdraws saved answers that used it and cancels undecided drafts. Audit entries and completed drafts remain."/>}</div>):<p>No statements recorded for this record.</p>}
+    <ForgetControl label="Forget this record and its statements" path={`/desk/memory/entities/${detail.id.slice('entity:'.length)}/forget`} body={{}} subject={detail.id.slice('entity:'.length)} confirm="Removes this record's name and every reviewed statement that mentions it from current records."/></section>;
 }
 function InspectorBody(){
   const{selected,relationships,records,dispatch,selectRecord,connected,detail,state}=useConsole(),heading=useRef<HTMLHeadingElement>(null);

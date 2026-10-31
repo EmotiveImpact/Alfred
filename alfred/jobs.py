@@ -269,11 +269,11 @@ class JobCoordinator:
         """The current, ready note from an active source, or None. Policy is checked separately."""
         if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_notes'").fetchone():
             return None
-        return db.execute('''SELECT n.source,n.revision,n.sha256,n.body FROM knowledge_notes n
+        return self.store.opened('knowledge_notes', db.execute('''SELECT n.scope,n.source,n.id,n.revision,n.sha256,n.body FROM knowledge_notes n
             JOIN credentials c ON c.id=n.source AND c.scope=n.scope
             JOIN knowledge_sources s ON s.scope=n.scope AND s.source=n.source
             WHERE n.scope=? AND n.id=? AND n.status='ready' AND c.revoked=0 AND c.expires>?
-            AND s.status IN ('ready','attention')''', (scope, note_id, self.store.now())).fetchone()
+            AND s.status IN ('ready','attention')''', (scope, note_id, self.store.now())).fetchone())
 
     @staticmethod
     def _lineage_live(db, scope, lineage) -> bool:
