@@ -10,9 +10,17 @@ each model request Hermes makes. It is the only place the Claude key is used:
 * the reply is read up to a size limit and handed back unchanged, so the relay can charge
   the provider's own usage report.
 
-The two places a key can live are the Mac keychain and a server's secret file or systemd
-credential. Their readers come from ``alfred.keys`` once encryption step 1 is merged; until
-then a source is anything with a ``read()`` method. Standard library only.
+The key lives in one of two places, read with encryption step 1's own readers
+(``alfred.keys``), and never in ALFRED's keyring file:
+
+* ``KeychainKey``: a generic password in the macOS login keychain, under the service
+  ``alfred.provider.anthropic``. The owner puts it there with Apple's own tool, which asks
+  for the key without echoing it, so it never appears in a command line or shell history;
+* ``SecretFileKey``: a file only its owner can read, placed by a server's secret store, or
+  a systemd credential by name, found in ``$CREDENTIALS_DIRECTORY`` at start.
+
+``describe`` says where a key was found and how long it is, for the owner's check; nothing
+here ever shows the key. Standard library only.
 """
 from __future__ import annotations
 import abc
@@ -20,13 +28,20 @@ import http.client
 import re
 import ssl
 
+import os
+from pathlib import Path
+
 from .brain import BrainFailure
 from .hermes_box import MAX_FRAME, MODEL_PATH, ModelProvider
+from .keys import _security, read_secret_file
+from .local import Fault, ident
 
 HOST = 'api.anthropic.com'
 API_VERSION = '2023-06-01'
 MAX_REPLY = MAX_FRAME // 2
 KEY_SHAPE = re.compile(r'[A-Za-z0-9_-]{20,400}')
+KEYCHAIN_SERVICE = 'alfred.provider.anthropic'
+KEY_SOURCES = ('keychain', 'file', 'credential')
 
 
 class KeySource(abc.ABC):
@@ -35,6 +50,76 @@ class KeySource(abc.ABC):
     @abc.abstractmethod
     def read(self) -> str:
         """Return the key, or raise if it cannot be read."""
+
+
+class KeychainKey(KeySource):
+    """The key as a generic password in the macOS login keychain: service
+    ``alfred.provider.anthropic``, the account given. The keychain may ask the owner once
+    whether ALFRED may read it."""
+
+    def __init__(self, account='default', *, run=None):
+        self.account = ident(account)
+        self._run = run or _security
+
+    def read(self):
+        return self._run(['find-generic-password', '-a', self.account, '-s', KEYCHAIN_SERVICE, '-w']).strip()
+
+    def where(self):
+        return f'login keychain item {KEYCHAIN_SERVICE} / {self.account}'
+
+
+class SecretFileKey(KeySource):
+    """The key in a file only its owner can read, at an absolute ``path``, or in the systemd
+    credential ``credential``, found in ``$CREDENTIALS_DIRECTORY`` when it is read."""
+
+    def __init__(self, path=None, *, credential=None, environ=None):
+        if (path is None) == (credential is None):
+            raise Fault('claude_key_source_unclear')
+        if path is not None and not Path(path).expanduser().is_absolute():
+            raise Fault('secret_file_path_not_absolute')
+        self.path = None if path is None else Path(path).expanduser()
+        self.credential = None if credential is None else ident(credential)
+        self._environ = os.environ if environ is None else environ
+
+    def _file(self):
+        if self.path is not None:
+            return self.path
+        directory = self._environ.get('CREDENTIALS_DIRECTORY')
+        if not directory:
+            raise Fault('unlock_unavailable', 503)
+        return Path(directory) / self.credential
+
+    def read(self):
+        # A file that is not text is still read, so the shape check names it for what it is.
+        return read_secret_file(self._file()).decode('ascii', 'replace')
+
+    def where(self):
+        return f'systemd credential {self.credential}' if self.credential else f'file {self.path}'
+
+
+def key_source(kind, *, account='default', path=None, credential=None, environ=None) -> KeySource:
+    """The key source the owner named: ``keychain``, ``file`` (with ``path``) or
+    ``credential`` (with ``credential``)."""
+    if kind == 'keychain' and path is None and credential is None:
+        return KeychainKey(account)
+    if kind == 'file' and path is not None and credential is None:
+        return SecretFileKey(path, environ=environ)
+    if kind == 'credential' and credential is not None and path is None:
+        return SecretFileKey(credential=credential, environ=environ)
+    raise Fault('claude_key_source_unclear')
+
+
+def describe(source: KeySource) -> str:
+    """Where the key was found and its length, or why it was not. Never the key itself."""
+    where = source.where() if callable(getattr(source, 'where', None)) else 'the key source'
+    try:
+        key = source.read()
+    except Exception as exc:
+        reason = exc.code if isinstance(exc, Fault) else type(exc).__name__
+        return f'No Claude key could be read from {where} ({reason}).'
+    if not isinstance(key, str) or not KEY_SHAPE.fullmatch(key):
+        return f'Something is stored in {where}, but it is not in the shape of a Claude key.'
+    return f'Claude key found in {where}: {len(key)} characters, in the expected shape.'
 
 
 class AnthropicProvider(ModelProvider):
