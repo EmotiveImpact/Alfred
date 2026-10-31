@@ -12,6 +12,7 @@ import tempfile
 import unittest
 
 from alfred import connectors, keys, lifecycle, sealing
+from alfred.capture_policies import CapturePolicies
 from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from grant_helpers import grant_all
@@ -153,7 +154,9 @@ class SealerTests(unittest.TestCase):
 
     def test_register_names_real_columns(self):
         with tempfile.TemporaryDirectory() as directory:
-            connectors.initialise(KnowledgeStore(Path(directory) / 'db.sqlite'))
+            store = KnowledgeStore(Path(directory) / 'db.sqlite')
+            connectors.initialise(store)
+            CapturePolicies(store)
             with closing(sqlite3.connect(Path(directory) / 'db.sqlite')) as db:
                 for table, (names, sealed, fingerprints) in sealing.TABLES.items():
                     info = list(db.execute(f'PRAGMA table_info({table})'))

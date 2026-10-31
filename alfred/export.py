@@ -61,6 +61,7 @@ def collect(store, bearer):
         q = store.authenticate(db, bearer, {'owner', 'reader'})
         if q['id'] != p['id'] or grant_revision(db, q, store.now()) != before:
             raise Fault('export_authority_changed', 409)
+        # Opened only for the statements the export keeps, below.
         captures = {r['claim_id']: dict(r) for r in db.execute(
             'SELECT m.* FROM memory_capture m JOIN memory_claims c ON c.id=m.claim_id WHERE c.scope=? AND c.actor=?',
             (p['scope'], ledger(db, p)))}
@@ -105,7 +106,8 @@ def collect(store, bearer):
                                   'retention_until': capture['retention_until'], 'retention_until_utc': _utc(capture['retention_until']),
                                   'retention': 'kept until the date shown, then forgotten with a receipt' if capture['retention_until'] is not None
                                   else 'no automatic expiry; kept until the person forgets it',
-                                  'captured_from': json.loads(capture['captured_from']), 'captured_at': capture['created']})
+                                  'captured_from': json.loads(store.opened('memory_capture', capture)['captured_from']),
+                                  'captured_at': capture['created']})
     # Lineage and conflicts never name a statement that was left out.
     kept = {s['id'] for s in statements}
 

@@ -199,8 +199,8 @@ class ExecutiveRecords:
                 kind, _, key = ref.partition(':')
                 found = None
                 if kind == 'entity' and entities:
-                    row = db.execute('SELECT id,kind,name FROM memory_entities WHERE id=? AND scope=? AND actor=?',
-                                     (key, p['scope'], ledger(db, p))).fetchone()
+                    row = self.store.opened('memory_entities', db.execute(
+                        'SELECT id,kind,name FROM memory_entities WHERE id=? AND scope=? AND actor=?', (key, p['scope'], ledger(db, p))).fetchone())
                     if row:
                         found = {'ref': ref, 'name': row['name'], 'kind': row['kind'], 'origin': 'reviewed_entity'}
                 elif kind == 'note':
@@ -751,11 +751,11 @@ def _brief_statements(db, p, now, record, notes, resolve, ask):
     hidden = {'withheld': 0, 'conflicting': 0, 'outside_valid_period': 0, 'needing_fresh_review': 0, 'awaiting_review': 0, 'disputed': 0}
     if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_claims'").fetchone():
         return [], hidden
-    from .reviewed_memory import ReviewedMemory
+    from .reviewed_memory import ReviewedMemory, entities_of
     linked = {ref.partition(':')[2] for ref in (record['project'], record['responsible_link'])
               if ref and ref.startswith('entity:') and resolve(ref)}
     cited = {n['note_id'] for n in notes if n['state'] == 'current'}
-    entities = {r['id']: dict(r) for r in db.execute('SELECT id,kind,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], ledger(db, p)))}
+    entities = entities_of(db, p['scope'], ledger(db, p))
     for key in sorted(linked):
         e = entities[key]
         if any(x['id'] != key and (x['kind'], x['name'].casefold()) == (e['kind'], e['name'].casefold()) for x in entities.values()):

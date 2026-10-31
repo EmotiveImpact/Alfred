@@ -25,6 +25,10 @@ Workspace scope comes from the credential, so a policy never sees another worksp
 notes. The personal/company/client context is the owner's label for the policy; the
 listed vaults decide which notes it reads. Policies are private to the owner who wrote
 them, like the statements they propose.
+
+In a sealed workspace (encryption step 2) a policy's name and rule are sealed in the
+workspace's default area, and a matched line is kept only as a fingerprint keyed in the
+area of its note, so a rescan still recognises it.
 """
 from __future__ import annotations
 from datetime import datetime, timezone
@@ -32,9 +36,10 @@ import hashlib
 import json
 import re
 import threading
+from . import sealing
 from .local import Fault, exact, ident, text
 from .policy import ledger
-from .reviewed_memory import MEMORY_TYPES, RELATIONS, ReviewedMemory
+from .reviewed_memory import MEMORY_TYPES, RELATIONS, ReviewedMemory, entities_of, statement_area
 
 VERSION = 1
 DAY = 86400
@@ -206,8 +211,15 @@ def match_line(match, line):
     return f'{when} {remainder}' if remainder else None
 
 
-def _line_hash(line):
-    return hashlib.sha256(line.encode()).hexdigest()
+def _line_hash(sealer, area, line):
+    """A matched line as capture keeps it: its SHA-256, keyed in its note's area when sealed."""
+    return sealer.fingerprint(area, hashlib.sha256(line.encode()).hexdigest())
+
+
+def policy_area(db):
+    """The area an owner's policies are sealed under. A policy may read several vaults, so
+    until area rules arrive (step 2, part 5) it is in the workspace's default area."""
+    return sealing.default_area(db)
 
 
 class CapturePolicies:
@@ -229,7 +241,7 @@ class CapturePolicies:
         policy = validate(body)
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            row = db.execute('SELECT version,created FROM capture_policies WHERE scope=? AND actor=? AND id=?',
+            row = db.execute('SELECT scope,actor,id,version,created,name,rule FROM capture_policies WHERE scope=? AND actor=? AND id=?',
                              (p['scope'], p['id'], identity)).fetchone()
             current = row['version'] if row else 0
             if body['version'] != current:
@@ -242,14 +254,17 @@ class CapturePolicies:
                     raise Fault('capture_source_unknown')
             ReviewedMemory._entity(db, p, policy['rule']['proposes']['subject_id'])
             now = self.store.now()
-            rule = json.dumps(policy['rule'], sort_keys=True)
+            # Unchanged text keeps its stored sealed value, so saving a policy seals only what changed.
+            stored = self.store.sealed('capture_policies', policy_area(db),
+                                       {'scope': p['scope'], 'actor': p['id'], 'id': identity, 'name': policy['name'],
+                                        'rule': json.dumps(policy['rule'], sort_keys=True)}, dict(row) if row else None)
             if row:
                 db.execute('''UPDATE capture_policies SET version=version+1,enabled=?,name=?,context=?,rule=?,updated=?
                               WHERE scope=? AND actor=? AND id=?''',
-                           (int(policy['enabled']), policy['name'], policy['context'], rule, now, p['scope'], p['id'], identity))
+                           (int(policy['enabled']), stored['name'], policy['context'], stored['rule'], now, p['scope'], p['id'], identity))
             else:
                 db.execute('INSERT INTO capture_policies VALUES (?,?,?,?,?,?,?,?,?,?)',
-                           (p['scope'], p['id'], identity, 1, int(policy['enabled']), policy['name'], policy['context'], rule, now, now))
+                           (p['scope'], p['id'], identity, 1, int(policy['enabled']), stored['name'], policy['context'], stored['rule'], now, now))
             self.store.log(db, p['scope'], p['id'], 'capture.policy_updated' if row else 'capture.policy_created', identity)
             return self._view(db, p)
 
@@ -310,9 +325,10 @@ class CapturePolicies:
         now = self.store.now()
         day = now // DAY
         outcomes = self._outcomes(db, p)
-        names = {r['id']: r['name'] for r in db.execute('SELECT id,name FROM memory_entities WHERE scope=? AND actor=?', (p['scope'], ledger(db, p)))}
+        names = {identity: e['name'] for identity, e in entities_of(db, p['scope'], ledger(db, p)).items()}
         policies = []
         for row in db.execute('SELECT * FROM capture_policies WHERE scope=? AND actor=? ORDER BY id', (p['scope'], p['id'])):
+            row = self.store.opened('capture_policies', row)
             rule = json.loads(row['rule'])
             counts = {'proposed': 0, 'open': 0, 'accepted': 0, 'dismissed': 0, 'invalidated': 0, 'forgotten': 0, 'proposed_today': 0}
             for x in db.execute('SELECT claim_id,day FROM capture_proposals WHERE scope=? AND actor=? AND policy_id=?',
@@ -348,6 +364,7 @@ class CapturePolicies:
         outcomes = self._outcomes(db, p)
         found = []
         for row in db.execute('SELECT * FROM capture_policies WHERE scope=? AND actor=? AND enabled=1 ORDER BY id', (p['scope'], p['id'])):
+            row = self.store.opened('capture_policies', row)
             rule = json.loads(row['rule'])
             subject = db.execute('SELECT 1 FROM memory_entities WHERE scope=? AND actor=? AND id=?',
                                  (p['scope'], ledger(db, p), rule['proposes']['subject_id'])).fetchone()
@@ -361,11 +378,13 @@ class CapturePolicies:
             for note in notes:
                 if rule['path_prefix'] and not note['path'].startswith(rule['path_prefix']):
                     continue
+                area = None
                 for number, line in content_lines(note['body']):
                     value = match_line(rule['match'], line)
                     if value is None:
                         continue
-                    digest = _line_hash(line)
+                    area = area or statement_area(db, p['scope'], note['id'])
+                    digest = _line_hash(self.store.sealer, area, line)
                     prior = [outcomes.get(r['claim_id'], 'forgotten') for r in db.execute(
                         'SELECT claim_id FROM capture_proposals WHERE scope=? AND actor=? AND policy_id=? AND note_id=? AND line_hash=?',
                         (p['scope'], p['id'], row['id'], note['id'], digest))]

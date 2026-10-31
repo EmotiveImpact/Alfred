@@ -51,6 +51,9 @@ class Plain:
     def fingerprint(self, area, digest):
         return digest
 
+    def matches(self, digest, stored):
+        return digest == stored
+
     def clear_cache(self):
         pass
 
@@ -128,6 +131,13 @@ class Sealed:
             key = keys.hkdf(first, b'', keys._label('fingerprint', self.keyring.id, area))
             self._fingerprint_keys[area] = key
         return hmac.new(key, bytes.fromhex(digest), hashlib.sha256).hexdigest()
+
+    def matches(self, digest, stored):
+        """Whether ``stored`` is ``digest``'s keyed fingerprint in any area still held. For a
+        record whose area can no longer be learnt from what it came from (its note was
+        forgotten); a destroyed area matches nothing."""
+        return any(hmac.compare_digest(self.fingerprint(a['id'], digest), stored)
+                   for a in self.keyring.keyring.view()['areas'])
 
     def clear_cache(self):
         """Forget every opened value, for example after ALFRED is told to forget a note."""
@@ -214,9 +224,10 @@ def _has(db, table) -> bool:
 
 def holds_sealed_values(db) -> bool:
     """Whether any registered table holds a sealed value. Each table's first sealed column is
-    a short one, so the check reads little even when note text is large."""
+    read until one sealed value is found, so the check reads little even when note text is
+    large. A table that keeps only fingerprints has nothing to find."""
     prefix = keys.SEAL_PREFIX + ':'
-    return any(_has(db, table) and db.execute(
+    return any(sealed and _has(db, table) and db.execute(
         f'SELECT 1 FROM {table} WHERE substr({sealed[0]},1,?)=? LIMIT 1', (len(prefix), prefix)).fetchone()
         for table, (_, sealed, _) in TABLES.items())
 
@@ -237,6 +248,14 @@ TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
     'knowledge_conflicts': (('scope', 'source'), ('path', 'original_path'), ()),
     'connector_instances': (('scope', 'source'), ('label',), ()),
     'connector_receipts': (('scope', 'source', 'id'), ('receipt',), ()),
+    # Reviewed memory, its bin and capture (part 2). A statement keeps keyed fingerprints of its
+    # request, its note and its quote; a captured line is kept only as a keyed fingerprint.
+    'memory_entities': (('id',), ('name',), ()),
+    'memory_claims': (('id',), ('value',), ('request_hash', 'note_hash', 'quote_hash')),
+    'memory_capture': (('claim_id',), ('captured_from',), ()),
+    'memory_bin': (('id',), ('snapshot',), ()),
+    'capture_policies': (('scope', 'actor', 'id'), ('name', 'rule'), ()),
+    'capture_proposals': (('scope', 'actor', 'claim_id'), (), ('line_hash',)),
 }
 
 # Columns holding stable ids taken from private text (a note's front-matter id, an imported
