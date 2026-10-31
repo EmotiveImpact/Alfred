@@ -448,6 +448,13 @@ def main():
                 raise Fault('area_required')
             rotate_area_command(path, args.area)
             return
+        hermes = None
+        if args.command == 'serve':
+            # Settings that need no keys are checked first, so nothing is unlocked for a start
+            # that could never happen.
+            if not 1024 <= args.port <= 65535:
+                raise Fault('invalid_port')
+            hermes = hermes_setup(args) if args.hub == 'hermes' else None
         if args.command != 'init':
             # A sealed workspace is unlocked here or not at all, before any store opens it.
             open_workspace(path)
@@ -562,9 +569,6 @@ def main():
             DeskStore(path / 'desk.sqlite').revoke(args.credential_id)
             print('Credential revoked. Existing browser access and queued work will be rechecked.')
         else:
-            if not 1024 <= args.port <= 65535:
-                raise Fault('invalid_port')
-            hermes = hermes_setup(args) if args.hub == 'hermes' else None
             serve(path, args.port, args.vault, args.local_model, args.model_port, args.model_timeout, vault_exclusions=args.vault_exclude, vault_id_key=args.vault_id_key, hub=args.hub,
                   hermes=hermes, disk_encryption=args.disk_encryption)
     except KeyboardInterrupt:

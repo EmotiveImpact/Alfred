@@ -375,6 +375,19 @@ class DeskStartTests(unittest.TestCase):
         code, output = self.export('no-keyring')
         self.assertEqual((code, output.splitlines()[0]), (1, 'Cannot start: workspace_locked'))
 
+    def test_serve_checks_its_settings_before_it_unlocks(self):
+        self.assertEqual(self.run_desk('seal', '--data-dir', str(self.home))[0], 0)
+        asked = []
+
+        def unlock(keyring, **kw):
+            asked.append(True)
+            return self.unlocked(keyring, **kw)
+        for extra, code in ((['--port', '80'], 'invalid_port'),
+                            (['--hub', 'hermes', '--cloud-area', 'personal'], 'hermes_settings_required')):
+            output = self.run_desk('serve', '--data-dir', str(self.home), *extra, unlock=unlock)[1]
+            self.assertEqual(output.splitlines()[0], f'Cannot start: {code}', extra)
+        self.assertEqual(asked, [], 'the keyring was unlocked for settings that could never start')
+
     def test_an_unfinished_seal_is_refused_at_start(self):
         seal_workspace._mark(self.home / 'desk.sqlite', seal_workspace.MARKER, 'x')
         code, output = self.export('refused')
