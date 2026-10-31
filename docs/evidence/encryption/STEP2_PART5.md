@@ -62,7 +62,7 @@ under several areas' keys. Every record stays in the default area.
 
 ## Tests
 
-- `tests/test_sealing_switch_on.py` (49 tests at 1a5e79e05, 51 at 3d699f1f4, 56 after the
+- `tests/test_sealing_switch_on.py` (49 tests at 1a5e79e05, 51 at 3d699f1f4, 57 after the
   review fixes below). Run against part 4 (d93760129) the file fails at
   import, since part 4 has no `alfred.seal_workspace`.
   - The `seal` command converts once and a second run only compacts; a conversion that fails
@@ -162,6 +162,15 @@ fix and passes with it:
 - `open-export` passed no vault to the destination check, so it could write readable files into
   a `--vault` with nothing marking it as one. It now passes the same vaults `export` does.
   `test_a_sealed_export_is_never_opened_into_a_vault`.
+
+A second review, of the first fix, found one more:
+
+- An export ALFRED could read but not write beside (a read-only drive, a full disk) raised a
+  file error that stopped the rotation with its marker in place, so ALFRED would not start.
+  Each step of the swap that fails now puts the export back whole, and the rotation counts it
+  and finishes. `test_an_export_that_cannot_be_written_beside_is_counted_and_left_whole`
+  (staging refused for one export, the second rename refused for another). The interrupted-swap
+  test now stops with `KeyboardInterrupt`, since a rename that raises has not happened.
 
 ## Platform note
 

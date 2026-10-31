@@ -7,6 +7,7 @@ workspace built plain, as an existing one is, and then converted with ``seal``.
 """
 import base64
 from contextlib import closing, redirect_stdout
+import errno
 import hashlib
 import io
 import itertools
@@ -351,14 +352,38 @@ class RotationTests(Plain, test_sealing_memory.SealedMemoryBase):
         def stop_after_moving_it_aside(source, target):
             rename(source, target)
             if Path(source) == written:
-                raise OSError('stopped')
-        with mock.patch.object(export.os, 'rename', stop_after_moving_it_aside), self.assertRaises(OSError):
+                raise KeyboardInterrupt  # stopped between the two renames
+        with mock.patch.object(export.os, 'rename', stop_after_moving_it_aside), self.assertRaises(KeyboardInterrupt):
             seal_workspace.reseal(self.path, self.sealer, 'personal')
         self.assertFalse(written.exists())
         self.assertEqual(seal_workspace.incomplete(self.path), 'reseal')
         self.assertEqual(seal_workspace.reseal(self.path, self.sealer, 'personal')['exports_resealed'], 1)
         self.assertEqual(self.export_versions(written), {'2'})
         self.assertIn('statements.json', export.opened_files(written, self.sealer))
+        self.assertEqual([p.name for p in self.root.iterdir() if p.name.startswith('.')], [])
+
+    def test_an_export_that_cannot_be_written_beside_is_counted_and_left_whole(self):
+        first = Path(export.export(self.store, self.owner, self.root / 'first')['directory'])
+        second = Path(export.export(self.store, self.owner, self.root / 'second')['directory'])
+        held = {d: {p.name: p.read_bytes() for p in d.iterdir()} for d in (first, second)}
+        write, rename = export.write, export.os.rename
+
+        def read_only(destination, files, vaults=()):
+            if Path(destination).name == '.first.resealed':
+                raise OSError(errno.EROFS, 'Read-only file system')
+            return write(destination, files, vaults)
+
+        def failing_swap(source, target):
+            if Path(source).name == '.second.resealed':
+                raise OSError(errno.EIO, 'Input/output error')
+            rename(source, target)
+        self.keyring.rotate_area('personal')
+        with mock.patch.object(export, 'write', read_only), mock.patch.object(export.os, 'rename', failing_swap):
+            result = seal_workspace.reseal(self.path, self.sealer, 'personal')
+        self.assertEqual((result['exports_resealed'], result['exports_not_resealed'], result['key_versions_retired']), (0, 2, 1))
+        self.assertIsNone(seal_workspace.incomplete(self.path))
+        for directory in (first, second):
+            self.assertEqual({p.name: p.read_bytes() for p in directory.iterdir()}, held[directory], directory.name)
         self.assertEqual([p.name for p in self.root.iterdir() if p.name.startswith('.')], [])
 
     def test_an_area_rotates_again_and_again(self):

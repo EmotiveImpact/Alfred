@@ -442,7 +442,8 @@ def reseal_export(directory, sealer) -> bool:
     rotation deletes the older ones (``alfred.seal_workspace.reseal``). The new files are
     written beside the export and swapped in, so it is whole at every step; run again after an
     interruption, this finishes the swap first. False when the folder holds no export this
-    keyring sealed: a plain export, another keyring's, or nothing any more."""
+    keyring sealed: a plain export, another keyring's, or nothing any more. ``Fault`` or
+    ``OSError`` when it cannot be sealed again, with the export left as it was."""
     directory = Path(directory)
     staging, aside = (directory.with_name(f'.{directory.name}{end}') for end in ('.resealed', '.before-reseal'))
     if not directory.exists() and not directory.is_symlink() and (aside / SEALED_FILE).is_file():
@@ -457,10 +458,24 @@ def reseal_export(directory, sealer) -> bool:
     if directory.is_symlink() or not isinstance(about, dict) or about.get('keyring') != sealer.keyring_id:
         return False
     files = opened_files(directory, sealer)
+    # Each step that fails leaves the export whole where it was: a read-only drive or a full
+    # disk stops ``write`` before anything moves.
     write(staging, seal_files(sealer, about['export_id'], files))
-    os.rename(directory, aside)
-    os.rename(staging, directory)
-    shutil.rmtree(aside)
+    try:
+        os.rename(directory, aside)
+    except OSError:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    try:
+        os.rename(staging, directory)
+    except OSError:
+        try:
+            os.rename(aside, directory)
+            shutil.rmtree(staging, ignore_errors=True)
+        except OSError:
+            pass  # both copies stay beside it, and the next rotation puts the new one in place
+        raise
+    shutil.rmtree(aside, ignore_errors=True)
     handle = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(handle)

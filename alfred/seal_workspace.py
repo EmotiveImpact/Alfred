@@ -456,14 +456,15 @@ def reseal(database, sealer, area) -> dict:
 def _reseal_exports(database, sealer) -> dict:
     """Sealed exports are sealed under the default area (``alfred.export``). Seal again each
     one ALFRED wrote and still finds where it wrote it. One that has been changed, or cannot be
-    written beside, is counted and left: once the older keys go it no longer opens, and nor
-    does any copy kept somewhere else."""
+    read or written beside (a read-only drive, a full disk), is counted and left as it was, so
+    the rotation still finishes: once the older keys go it no longer opens, and nor does any
+    copy kept somewhere else."""
     from .deletion import exports
     from .export import reseal_export
     counts = {'exports_resealed': 0, 'exports_not_resealed': 0}
     for directory in dict.fromkeys(e['directory'] for e in exports(database) if isinstance(e.get('directory'), str)):
         try:
             counts['exports_resealed'] += reseal_export(directory, sealer)
-        except Fault:
+        except (Fault, OSError):
             counts['exports_not_resealed'] += 1
     return counts

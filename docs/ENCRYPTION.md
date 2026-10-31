@@ -438,9 +438,10 @@ adds a new key version, seals every value of that area again under it, in the wo
 its registered backups, compacts them, and only then deletes the older key versions from the
 keyring. Sealed exports are sealed under the default area, so rotating it also seals again each
 sealed export ALFRED wrote and still finds where it wrote it: the new files are written beside
-the export and swapped in whole. One whose files were changed or removed is left as it is and
-counted. A copy made before rotating, or an export moved somewhere else, can no longer be
-opened (`key_version_retired`). The keyring keeps only the number of the last version it deleted, so
+the export and swapped in whole. One whose files were changed or removed, or that cannot be
+written beside (on a read-only drive, say), is left as it is and counted, and the rotation
+still finishes. A copy made before rotating, or an export moved somewhere else, can no longer
+be opened (`key_version_retired`). The keyring keeps only the number of the last version it deleted, so
 an area can be rotated as often as you like, up to version 9,999. It holds at most 16 keys for
 one area at once, a limit reached only by adding versions with `alfred.keys area-rotate` and
 never sealing again. If `rotate-area` is interrupted, ALFRED will not start until the same
