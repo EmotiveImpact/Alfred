@@ -8,9 +8,13 @@ Format: **ID. Title** · found · fixed in commit · status.
 
 | ID | Title | Found | Notes |
 |---|---|---|---|
-| none | | | |
+| B-034 | A brain task's learned statements are not part of who may see the task | 31 October 2026, while fixing B-033 | A job is shown to another person when they may read every source it is bound to, and a brain task is bound only to its context notes. The statements and learnings it carries in `learned` come from their own sources, which are not checked, so under explicit grants a person who may read the context notes but not those sources sees the statements in the task's parameters. Needs only a workspace shared by several people with different grants; ALFRED has one owner today. |
 
 ## Fixed
+
+### B-033. A job bound to no source was shown to every reader
+Found 31 October 2026 by the automatic review of pull request #54 · fixed in the commit that adds this entry.
+`JobCoordinator._visible` shows another person's job only when they may read every source the job is bound to. A job bound to no source passed that check for anyone, so under explicit grants any reader in the workspace saw its parameters, which for a brain task include the owner's goal and instruction. Such a job is now shown to other people only in a workspace kept on whole-workspace reads; its submitter, and other keys of the same person, still see it. Test: `test_a_job_bound_to_no_source_is_shown_to_no_other_person`, which fails without the change and passes with it.
 
 ### B-032. A brain task could be leased before it was bound to its mandate
 Found 30 October 2026: `tests/test_hub_host.py` failed once in seven runs with a task `stopped` instead of `accepted`, and the same race was reported during work on pull request #26 · fixed in the commit that adds this entry.

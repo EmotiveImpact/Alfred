@@ -699,6 +699,23 @@ class ScopeIsolationTests(Base):
         self.fault('inputs_denied', self.jobs.submit, self.foreign, self.request(inputs=[{'artefact': sha}]))
         self.fault('inputs_denied', self.jobs.submit, self.foreign, self.request(key='k2'))
 
+    def test_a_job_bound_to_no_source_is_shown_to_no_other_person(self):
+        # A job bound to no note still carries its submitter's words, such as a brain task's
+        # goal and instruction, so under explicit grants nobody else sees it.
+        self.grant('source')  # only the owner may read the note's source
+        bare = self.jobs.submit(self.owner, self.request(key='bare', inputs=[]))
+        noted = self.jobs.submit(self.owner, self.request(key='noted'))
+        self.assertEqual(self.jobs.view(self.owner, bare['id'])['id'], bare['id'])
+        for job in (bare, noted):
+            self.fault('not_found', self.jobs.view, self.reader, job['id'])
+            self.fault('not_found', self.jobs.events, self.reader, job['id'])
+        self.assertEqual(self.jobs.jobs(self.reader), [])
+        grant_all(self.store, self.owner)  # now the reader may read the note's source too
+        self.assertEqual([j['id'] for j in self.jobs.jobs(self.reader)], [noted['id']])
+        with self.store.transaction() as db:  # a workspace kept on whole-workspace reads
+            db.execute('UPDATE source_policy SET strict=0 WHERE scope=?', ('work',))
+        self.assertEqual(self.jobs.view(self.reader, bare['id'])['id'], bare['id'])
+
     def test_reader_views_but_cannot_cancel_or_revoke(self):
         job = self.jobs.submit(self.owner, self.request())
         self.assertEqual(self.jobs.view(self.reader, job['id'])['id'], job['id'])
