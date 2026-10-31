@@ -150,6 +150,110 @@ def serve(path, port, vault=None, model=None, model_port=11434, model_timeout=60
             os.close(fd)
 
 
+def open_workspace(path):
+    """Before anything touches a sealed workspace's database: unlock its keyring and attach
+    its sealer, or refuse to start. A plain workspace needs nothing.
+
+    A sealed workspace never runs unprotected: if no unlock method works here (the keychain
+    on a Mac, the server's secret store, or the passphrase typed at the prompt), ALFRED stops
+    with ``workspace_locked`` rather than open it without its keys."""
+    from . import keys, sealing
+    from .seal_workspace import incomplete
+    database = path / 'desk.sqlite'
+    step = incomplete(database)
+    if step:
+        error = Fault('sealing_incomplete', 409)
+        error.detail = (f'A {step} did not finish. Run python3 -m alfred.desk '
+                        f'{"seal" if step == "seal" else "rotate-area"} again to finish it before starting ALFRED.')
+        raise error
+    recorded = sealing.recorded(database)
+    if recorded is None or sealing.for_path(database).sealed:
+        return
+    keyring_file = keys.keyring_path(path)
+    if not keyring_file.is_file():
+        error = Fault('workspace_locked', 423)
+        error.detail = 'This workspace is sealed and its keyring is not in the data folder. Restore it from your recovery kit.'
+        raise error
+    try:
+        opened, _ = keys.unlock(keys.Keyring.read(keyring_file), prompt=keys._ask, warn=keys._warn)
+    except Fault as exc:
+        if exc.code != 'no_unlock_available':
+            raise
+        error = Fault('workspace_locked', 423)
+        error.detail = 'This workspace is sealed and no unlock method worked here, so ALFRED will not open it.'
+        raise error from None
+    if opened.id != recorded:
+        opened.close()
+        raise Fault('wrong_keyring', 409)
+    sealing.attach(database, sealing.Sealed(opened))
+
+
+def _locked(path, code):
+    """Hold the desk lock for an offline command, or refuse while ALFRED runs."""
+    import fcntl
+    fd = os.open(path / 'desk.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        os.close(fd)
+        raise Fault(code, 409) from None
+    return fd
+
+
+def seal_command(path):
+    """Convert this workspace to sealed, once, with the keyring in its data folder."""
+    from . import keys, sealing
+    from .seal_workspace import seal
+    keyring_file = keys.keyring_path(path)
+    if not keyring_file.is_file():
+        error = Fault('keyring_required', 409)
+        error.detail = 'Make the keyring first: python3 -m alfred.keys --data-dir <this folder> init'
+        raise error
+    fd = _locked(path, 'stop_alfred_before_sealing')
+    try:
+        opened, how = keys.unlock(keys.Keyring.read(keyring_file), prompt=keys._ask, warn=keys._warn)
+        with opened:
+            if not any(a['id'] == sealing.DEFAULT_AREA for a in opened.areas()):
+                opened.add_area(sealing.DEFAULT_AREA, 'personal', 'Personal')
+                print(f'Added the {sealing.DEFAULT_AREA} area to the keyring: every record is sealed in it for now.')
+            sealer = sealing.Sealed(opened)
+            result = seal(path / 'desk.sqlite', sealer, cache_dir=path / 'job-cache')
+    finally:
+        os.close(fd)
+    if result['already_sealed']:
+        print(f'The workspace was already sealed. Compacted it again; backups newly sealed: {result["backups_sealed"]}.')
+    else:
+        print(f'Sealed the workspace with the keyring opened by the {how}: {result["values_sealed"]} values sealed, '
+              f'{result["fingerprints_keyed"]} fingerprints and {result["ids_keyed"]} ids keyed, '
+              f'{result["backups_sealed"]} backups sealed.')
+        print('ALFRED now unlocks the keyring each time it starts, and will not start if it cannot.')
+    print('Exports you wrote before sealing are still readable files: delete them if you no longer need them.')
+    return result
+
+
+def rotate_area_command(path, area):
+    """A new key for one area: its values are sealed again under it, then the older keys go."""
+    from . import keys, sealing
+    from .seal_workspace import RESEALING, marker, reseal
+    database = path / 'desk.sqlite'
+    if sealing.recorded(database) is None:
+        raise Fault('workspace_not_sealed', 409)
+    fd = _locked(path, 'stop_alfred_before_rotation')
+    try:
+        opened, _ = keys.unlock(keys.Keyring.read(keys.keyring_path(path)), prompt=keys._ask, warn=keys._warn)
+        with opened:
+            resuming = marker(database, RESEALING)
+            if not resuming.exists() or resuming.read_text() != area:
+                opened.rotate_area(area)
+            result = reseal(database, sealing.Sealed(opened), area)
+    finally:
+        os.close(fd)
+    print(f"The {area} area now seals with key version {result['key_version']}: {result['values_resealed']} values sealed again, "
+          f"{result['key_versions_retired']} older keys deleted.")
+    print('Keyring copies made before now still hold the older keys: make a new recovery-kit backup and delete the old ones.')
+    return result
+
+
 def recovery_line(report):
     """One plain line about the previous stop. Counts only; no question text or job content."""
     stop = {'clean': 'The previous run stopped cleanly.', 'first_start': 'First start of this data directory.',
@@ -245,9 +349,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('init', 'access', 'serve', 'revoke', 'backup', 'restore', 'rotate', 'export', 'rebuild-index',
                                             'connector-add', 'connector-import', 'connectors', 'doctor', 'service-file',
-                                            'deletion-report'))
+                                            'deletion-report', 'seal', 'rotate-area', 'open-export'))
     parser.add_argument('--backup-file', help='Backup to restore; ALFRED must be stopped')
-    parser.add_argument('--export-dir', help='New or empty folder for a readable export; never inside a vault')
+    parser.add_argument('--export-dir', help='New or empty folder for an export; never inside a vault')
+    parser.add_argument('--plain', action='store_true', help='export: write readable files from a sealed workspace; anyone holding them can read them')
+    parser.add_argument('--sealed-export', help='open-export: a sealed export to open into --export-dir')
+    parser.add_argument('--area', help='rotate-area: the area whose key is replaced')
     parser.add_argument('--data-dir', default='~/.local/share/alfred/desk-demo')
     parser.add_argument('--port', type=int, default=8765)
     parser.add_argument('--credential-id')
@@ -286,6 +393,17 @@ def main():
             # Checked before anything is created; backup and access stay available to move out.
             check_data_directory(args.data_dir, (args.vault,) if args.vault else ())
         path = private_home(args.data_dir)
+        if args.command == 'seal':
+            seal_command(path)
+            return
+        if args.command == 'rotate-area':
+            if not args.area:
+                raise Fault('area_required')
+            rotate_area_command(path, args.area)
+            return
+        if args.command != 'init':
+            # A sealed workspace is unlocked here or not at all, before any store opens it.
+            open_workspace(path)
         if args.command == 'init':
             init_demo(path)
             print('Created a private synthetic workspace. No access keys printed.')
@@ -297,18 +415,34 @@ def main():
             from .lifecycle import backup
             manifest = backup(DeskStore(path / 'desk.sqlite'), load_keys(path)['owner'], path / 'backups')
             print('Backup written:', manifest['file'], 'sha256', manifest['sha256'])
-            print('It is an unencrypted SQLite copy. Keep it private.')
+            print('It is a sealed SQLite copy: it opens only with this workspace\'s keyring.' if manifest['sealed']
+                  else 'It is an unencrypted SQLite copy. Keep it private.')
         elif args.command == 'export':
             if not args.export_dir:
                 raise Fault('export_dir_required')
             from .export import export
+            from . import sealing
             result = export(DeskStore(path / 'desk.sqlite'), load_keys(path)[args.role], args.export_dir,
-                            vaults=(args.vault, path / 'vault'))
+                            vaults=(args.vault, path / 'vault'), plain=args.plain)
             print('Export written:', result['directory'])
             print('Statements:', result['counts']['statements'], '- executive records:', result['counts']['executive_records'],
                   '- left out (forgotten, withheld or past retention):',
                   sum(result['excluded'][k] for k in ('forgotten_statements', 'withheld_statements', 'retention_ended_statements')))
-            print('Readable JSON and Markdown with SHA256SUMS. Not a backup and not encrypted. Keep it private.')
+            if result.get('sealed'):
+                print('Sealed JSON and Markdown: they open only with this workspace\'s keyring (open-export). Not a backup.')
+            elif sealing.for_path(path / 'desk.sqlite').sealed:
+                print('Warning: you asked for a plain export, so these files are not sealed. Anyone who gets them can read them.')
+                print('Readable JSON and Markdown with SHA256SUMS. Not a backup and not encrypted. Keep it private.')
+            else:
+                print('Readable JSON and Markdown with SHA256SUMS. Not a backup and not encrypted. Keep it private.')
+        elif args.command == 'open-export':
+            if not args.sealed_export or not args.export_dir:
+                raise Fault('export_dir_required')
+            from .export import open_export
+            from . import sealing
+            opened = open_export(args.sealed_export, sealing.for_path(path / 'desk.sqlite'), args.export_dir)
+            print('Opened the sealed export into', opened['directory'])
+            print('These files are readable: keep them private and delete them when you are done.')
         elif args.command == 'rotate':
             rotate_key(path, args.role)
             print('Rotated the', args.role, 'key. The old key no longer works. Use the access command to reveal the new one.')

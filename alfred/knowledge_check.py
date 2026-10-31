@@ -6,7 +6,7 @@ contact a model, write notes or install a cron job.
 import argparse
 import json
 from pathlib import Path
-from .desk import load_keys
+from .desk import load_keys, open_workspace
 from .knowledge import KnowledgeStore
 from .local import Fault
 
@@ -17,6 +17,7 @@ def main():
     args=parser.parse_args();root=Path(args.data_dir).expanduser()
     try:
         if not (root/'desk.sqlite').is_file(): raise Fault('desk_not_initialised')
+        open_workspace(root)  # a sealed workspace is unlocked first, or refused
         store=KnowledgeStore(root/'desk.sqlite');data=store.knowledge(load_keys(root)['owner'])
         result={'counts':data['counts'],'map_health':data['map_health'],'issues':data['issues'],
                 'sources':data['sources'],'paused':data['paused'],'live_ai':False}

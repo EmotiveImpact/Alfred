@@ -112,10 +112,16 @@ def exports(database) -> list[dict]:
 
 
 def _on_disk(entry) -> bool:
+    """Whether an export is still where ALFRED wrote it: its manifest, or for a sealed export
+    the plain description beside its sealed files, names it."""
+    from .export import SEALED_FILE
     try:
-        manifest = Path(entry['directory']) / 'manifest.json'
-        return (not manifest.is_symlink() and manifest.is_file()
-                and json.loads(manifest.read_text()).get('export_id') == entry['export_id'])
+        for name in ('manifest.json', SEALED_FILE):
+            manifest = Path(entry['directory']) / name
+            if (not manifest.is_symlink() and manifest.is_file()
+                    and json.loads(manifest.read_text()).get('export_id') == entry['export_id']):
+                return True
+        return False
     except (OSError, ValueError, KeyError, TypeError):
         return False
 

@@ -17,7 +17,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from alfred import desk, export as export_module
+from alfred import desk, export as export_module, sealing
 from alfred.desk import init_demo
 from alfred.executive import ExecutiveRecords
 from alfred.export import REPOSITORY, export
@@ -26,6 +26,7 @@ from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from alfred.reviewed_memory import ReviewedMemory
 from grant_helpers import grant_all
+import stored_helpers as stored
 
 DAY = 86400
 FILES = {'README.md', 'manifest.json', 'statements.json', 'captures.json', 'executive-records.json',
@@ -103,17 +104,19 @@ class ExportTests(unittest.TestCase):
                                                 'memory_type': 'commitment', 'retention_days': days, 'captured_from': {'note_id': 'n1'}})
 
     def bundle(self, directory):
-        return {p.name: p.read_bytes() for p in Path(directory).iterdir()}
+        return stored.export_files(self.store.sealer, directory)
 
     def test_bundle_is_self_describing_hashed_and_private(self):
         result = export(self.store, self.owner, self.root / 'out')
         out = self.root / 'out'
-        self.assertEqual(set(p.name for p in out.iterdir()), FILES)
+        self.assertEqual(set(self.bundle(out)), FILES)
         self.assertEqual(stat.S_IMODE(out.stat().st_mode), 0o700)
         self.assertTrue(all(stat.S_IMODE(p.stat().st_mode) == 0o600 for p in out.iterdir()))
         files = self.bundle(out)
         manifest = json.loads(files['manifest.json'])
-        self.assertEqual(manifest, {k: v for k, v in result.items() if k != 'directory'})
+        # A sealed workspace's result also says its export is sealed, and with which keyring.
+        sealed = {'sealed': True, 'keyring': self.store.sealer.keyring_id} if self.store.sealer.sealed else {}
+        self.assertEqual(manifest | sealed, {k: v for k, v in result.items() if k != 'directory'})
         self.assertEqual((manifest['format'], manifest['format_version'], manifest['exported_at']),
                          ('alfred-portable-export', 2, self.clock[0]))
         self.assertEqual((manifest['workspace'], manifest['credential'], manifest['role']), ('work', 'owner', 'owner'))
@@ -260,7 +263,7 @@ class ExportTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(empty.stat().st_mode), 0o700)
         synced = self.root / 'Sync'; synced.mkdir(); (synced / '.stfolder').mkdir()
         export(self.store, self.owner, synced / 'alfred-export')
-        self.assertEqual(set(p.name for p in (synced / 'alfred-export').iterdir()), FILES)
+        self.assertEqual(set(self.bundle(synced / 'alfred-export')), FILES)
 
     def test_a_file_that_appears_before_the_rename_stops_the_export(self):
         empty = self.root / 'empty'; empty.mkdir()
@@ -310,8 +313,10 @@ class ExportCommandLineTests(unittest.TestCase):
         code, output = self.run_desk('export', '--data-dir', str(self.home), '--export-dir', str(self.root / 'export'))
         self.assertEqual(code, 0, output)
         self.assertIn('Export written:', output)
-        self.assertIn('Not a backup and not encrypted', output)
-        self.assertEqual(set(p.name for p in (self.root / 'export').iterdir()), FILES)
+        sealer = sealing.for_path(self.home / 'desk.sqlite')
+        # A sealed workspace (the sealed suite) writes a sealed export unless asked for plain.
+        self.assertIn('open only with this workspace' if sealer.sealed else 'Not a backup and not encrypted', output)
+        self.assertEqual(set(stored.export_files(sealer, self.root / 'export')), FILES)
         code, output = self.run_desk('export', '--data-dir', str(self.home), '--export-dir', str(self.root / 'export'))
         self.assertEqual(code, 1)
         self.assertIn('Cannot start: export_destination_not_empty', output)

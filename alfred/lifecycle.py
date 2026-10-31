@@ -55,6 +55,13 @@ BACKUPS = {'ordinary': 'Backups taken before this time, until they are rotated. 
                        'removes it again.'}
 
 
+# An absolute forget compacts the database once it commits (alfred/seal_workspace.py), so its
+# free pages and write-ahead log no longer hold what was removed.
+PAGES = {'ordinary': 'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.',
+         'absolute': 'The disk\'s own spare blocks and filesystem snapshots. The database and its write-ahead log '
+                     'are compacted after this forget, so their free pages no longer hold it. This is not secure erasure.'}
+
+
 def remains(layer):
     """What a statement or record forget receipt says is left, by layer."""
     return ([BIN] if layer == 'ordinary' else []) + [
@@ -62,7 +69,7 @@ def remains(layer):
         'Lineage metadata: note identifier, line range and source hash, without the reviewed value.',
         BACKUPS[layer],
         'Completed local drafts, which are not undone by forgetting.',
-        'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
+        PAGES[layer]]
 
 
 def layer(entry) -> str:
@@ -181,7 +188,7 @@ def source_remains(layer):
             'Reviewed statements that relied on this source, invalidated with their values removed, until you forget them.',
             BACKUPS[layer],
             'Completed local drafts, which are not undone.',
-            'SQLite free pages and WAL contents until checkpoint and vacuum. This is not secure erasure.']
+            PAGES[layer]]
 
 
 def _cancel(db, scope, action_ids, counts):
@@ -385,6 +392,9 @@ def forget_accounted(store, db, p, entry, receipt, remains, *, cache_dir=None, k
     places = {'cache_dir': cache_dir, 'database': store.path, 'forgotten_at': now}
     before = scan(db, scope, p['id'], kind, subject, trace=earlier, **places)
     effect = apply_entry(db, entry, now)
+    if layer(entry) == 'absolute':
+        # Compacted once the forget commits (LocalCore.transaction), never inside it.
+        db.compact_after = True
     full = record(store, db, p, entry['kind'], subject, {**receipt, **effect}, remains)
     if keep is not None:
         full['undo_until'] = memory_bin.put(db, scope, entry['actor'], entry['kind'], subject, full['id'], keep, now)
@@ -495,14 +505,24 @@ def backup(store, bearer, directory) -> dict:
     digest = hashlib.sha256(target.read_bytes()).hexdigest()
     count = len(entries(journal_path(store)))
     manifest = {'id': identity, 'file': target.name, 'sha256': digest, 'created': store.now(),
-                'journal_entries': count, 'encrypted': False,
-                'note': 'Plain SQLite copy. Protect it as private data; application encryption is not implemented.'}
+                'journal_entries': count, **manifest_sealing(store.sealer)}
     manifest_path = target.with_suffix('.json')
     manifest_path.write_text(json.dumps(manifest, indent=1) + '\n')
     manifest_path.chmod(0o600)
     with store.transaction() as db:
         db.execute('INSERT INTO lifecycle_backups VALUES (?,?,?,?,?)', (identity, store.now(), str(target), digest, count))
     return manifest
+
+
+def manifest_sealing(sealer) -> dict:
+    """What a backup's manifest says about its protection. A copy of a sealed workspace is
+    sealed itself: it opens only with that workspace's keyring."""
+    if sealer.sealed:
+        return {'encrypted': True, 'sealed': True, 'keyring': sealer.keyring_id,
+                'note': 'Sealed SQLite copy. Its private text is sealed with this workspace\'s keyring, so it is '
+                        'read only with that keyring unlocked. Destroying an area erases it from this copy too.'}
+    return {'encrypted': False, 'sealed': False,
+            'note': 'Plain SQLite copy. Protect it as private data: this workspace is not sealed.'}
 
 
 def restore(backup_file, database, now=None, *, cache=None) -> dict:
@@ -578,6 +598,12 @@ def restore(backup_file, database, now=None, *, cache=None) -> dict:
     if integrity != 'ok':
         staging.unlink(missing_ok=True)
         raise Fault('restored_database_failed_integrity_check', 409)
+    if replayed:
+        # What the replay removed again leaves the restored file's free pages before it is put in place.
+        from .seal_workspace import compact
+        compact(staging)
+        for suffix in ('-wal', '-shm'):
+            staging.with_name(staging.name + suffix).unlink(missing_ok=True)
     for suffix in ('-wal', '-shm'):
         database.with_name(database.name + suffix).unlink(missing_ok=True)
     os.replace(staging, database)
@@ -593,7 +619,7 @@ def restore(backup_file, database, now=None, *, cache=None) -> dict:
             'entries_after_backup': max(0, len(journal) - manifest.get('journal_entries', 0)),
             **withdrawn, 'removed_again': {'entries': removed_again, 'totals': totals,
                                            'cached_results_removed': dropped},
-            'integrity_check': integrity, 'encrypted': False}
+            'integrity_check': integrity, 'encrypted': bool(sealing.for_path(database).sealed)}
 
 
 def _came_back(db, forgets):

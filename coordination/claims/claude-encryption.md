@@ -37,6 +37,8 @@ paths:
   - alfred/verification.py
   - alfred/hub_goals.py
   - alfred/jobs.py
+  - alfred/seal_workspace.py
+  - alfred/knowledge_check.py
   - tools/evaluate_retrieval.py
   - requirements/
   - tests/test_keys*.py
@@ -46,6 +48,9 @@ paths:
   - tests/test_sealing_memory.py
   - tests/test_sealing_records.py
   - tests/test_sealing_work.py
+  - tests/test_sealing_switch_on.py
+  - tests/test_export.py
+  - tests/test_deletion_accounting.py
   - tests/sealed_suite.py
   - tests/stored_helpers.py
   - docs/ENCRYPTION.md
@@ -67,3 +72,8 @@ and record titles part 3 changes in them, and part 4 works in them too. Part 4 s
 results and cached copies, so the job coordinator is claimed with it. Any new code that reads a
 table listed in `alfred/sealing.py` must open its rows (`store.opened`); the `sealed-suite` CI
 job fails if it does not.
+
+Part 5 switches sealing on: the conversion lives in `alfred/seal_workspace.py`, the knowledge
+check unlocks a sealed workspace before reading it, and the export and deletion tests open
+sealed exports. It also adds the `seal`, `rotate-area` and `open-export` commands and the start
+refusal to `alfred/desk.py`, which stays Claude's and is not claimed, as with the hub host.

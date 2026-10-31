@@ -453,7 +453,10 @@ def _validate(data) -> dict:
     if len({s['id'] for s in slots}) != len(slots) or sum(s['method'] == 'recovery' for s in slots) != 1:
         raise bad()
     for area in areas:
-        if type(area) is not dict or set(area) != {'id', 'kind', 'name', 'created', 'keys'}:
+        if type(area) is not dict or set(area) - {'fingerprint'} != {'id', 'kind', 'name', 'created', 'keys'}:
+            raise bad()
+        if 'fingerprint' in area and (not isinstance(area['fingerprint'], str)
+                                      or len(_unb64(area['fingerprint'])) != NONCE_BYTES + KEY_BYTES + TAG_BYTES):
             raise bad()
         try:
             ident(area['id'])
@@ -465,10 +468,16 @@ def _validate(data) -> dict:
         if not NONCE_BYTES + TAG_BYTES < len(_unb64(area['name'])) <= NONCE_BYTES + TAG_BYTES + 4 * MAX_AREA_NAME:
             raise bad()
         for position, key in enumerate(area['keys'], 1):
-            if type(key) is not dict or set(key) != {'version', 'created', 'key'} or key['version'] != position:
+            # A retired version keeps its number and dates only; its key is gone (``retire_old_keys``).
+            if type(key) is not dict or key.get('version') != position or set(key) not in (
+                    {'version', 'created', 'key'}, {'version', 'created', 'retired'}):
                 raise bad()
             number(key['created'])
-            if len(_unb64(key['key'])) != NONCE_BYTES + KEY_BYTES + TAG_BYTES:
+            if 'retired' in key:
+                number(key['retired'])
+                if position == len(area['keys']) or 'fingerprint' not in area:
+                    raise bad()
+            elif len(_unb64(key['key'])) != NONCE_BYTES + KEY_BYTES + TAG_BYTES:
                 raise bad()
     for entry in destroyed:
         if type(entry) is not dict or set(entry) != {'id', 'kind', 'destroyed'} or entry['kind'] not in AREA_KINDS:
@@ -797,6 +806,40 @@ class OpenKeyring:
                                                 self._wrap_label(area, version))})
         return {'area': area, 'key_versions': version}
 
+    def retire_old_keys(self, area: str) -> dict:
+        """Delete every key version of an area but the newest, once its values are sealed again
+        under the newest (``alfred.seal_workspace.reseal``). What older versions sealed can then
+        no longer be opened, from any copy made after this. Fingerprints keep their key, which
+        is derived from the first version and kept on its own, so they still match."""
+        fingerprint = self.fingerprint_key(area)
+        with self._change() as data:
+            record = self._area(data, area)
+            now = int(self.clock())
+            if 'fingerprint' not in record:
+                record['fingerprint'] = _lock(self._key('wrap'), fingerprint, _label('area-fingerprint', self.id, area))
+            retired = 0
+            for key in record['keys'][:-1]:
+                if 'key' in key:
+                    record['keys'][key['version'] - 1] = {'version': key['version'], 'created': key['created'], 'retired': now}
+                    retired += 1
+        for cached in [k for k in self._areas if k[0] == area and k[1] != len(record['keys']) and k[1] != 'fingerprint']:
+            del self._areas[cached]
+        return {'key_versions_retired': retired, 'key_version': len(record['keys'])}
+
+    def fingerprint_key(self, area: str) -> bytes:
+        """The key an area's fingerprints are made with. Derived from its first key version, so it
+        stays the same across rotations; kept on its own once that version is retired."""
+        record = self._area(self.keyring.data, area)  # refuses a destroyed area, cached or not
+        if (area, 'fingerprint') not in self._areas:
+            if 'fingerprint' in record:
+                key = _open(self._key('wrap'), record['fingerprint'], _label('area-fingerprint', self.id, area),
+                            fault='keyring_tampered')
+            else:
+                _, first = self.area_key(area, 1)
+                key = hkdf(first, b'', _label('fingerprint', self.id, area))
+            self._areas[(area, 'fingerprint')] = key
+        return self._areas[(area, 'fingerprint')]
+
     def destroy_area(self, area: str) -> dict:
         """Delete an area's keys. Everything sealed with them becomes unreadable; this cannot be undone."""
         with self._change() as data:
@@ -820,6 +863,8 @@ class OpenKeyring:
         version = len(record['keys']) if version is None else version
         if type(version) is not int or not 1 <= version <= len(record['keys']):
             raise Fault('unknown_key_version', 404)
+        if 'retired' in record['keys'][version - 1]:
+            raise Fault('key_version_retired', 410)
         if (area, version) not in self._areas:
             self._areas[(area, version)] = _open(self._key('wrap'), record['keys'][version - 1]['key'],
                                                  self._wrap_label(area, version), fault='keyring_tampered')
