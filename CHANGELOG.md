@@ -12,7 +12,7 @@ Master plan phase 2, third part, on top of encryption step 1. Offline tests only
 
 ## 30 October 2026 (evening): the sealed box connected to Claude, on the host, branch `claude/project-thread-ujui2p`
 
-Master plan phase 2, second part. On 30 October the owner chose which areas may use cloud AI: personal notes only, to start. Offline tests only; no real model was called and no key exists anywhere in this work.
+Master plan phase 2, second part. On 30 October the owner chose which areas may use cloud AI: personal notes only, to start. Merged with the owner's word on 31 October (PR #49). Offline tests only; no real model was called and no key exists anywhere in this work.
 
 - **The Claude provider.** `alfred/anthropic_provider.py` makes the relay's calls: one fixed host over TLS, one path, no redirects followed, and the key read from a key source at each call and dropped after it, never stored, logged or passed to the box. A key that cannot be read, a network failure or a reply too large each stop the call with its own reason and nothing else.
 - **Hermes on the host.** `alfred/hub_host.py` builds the goal hub with Hermes beside the synthetic test brain from a `HermesSetup` the owner gives (build record, model, price, key source, cloud areas); nothing has a default. At start the image must match this checkout's pins (`load_box`), or nothing is built. The cloud is allowed for the owner's areas only, so a company or client mandate naming Hermes is refused. A personal task runs from submission, through the box and the relay, to an accepted result against stand-ins for Docker and the network.
