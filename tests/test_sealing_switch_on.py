@@ -21,7 +21,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from alfred import connectors, desk, export, keys, lifecycle, seal_workspace, sealing
+from alfred import connectors, desk, desk_store, export, keys, lifecycle, local, seal_workspace, sealing
 from alfred.local import Fault
 from sealed_suite import SyntheticUnlock
 import test_sealing
@@ -575,8 +575,15 @@ class SameAsSealedFromTheStartTests(unittest.TestCase):
         cls = type('Build', (Converted, base) if converted else (base,), {'runTest': lambda self: None})
         module = sys.modules[base.__module__]
         count = itertools.count()
+        def frozen():
+            return 1_800_000_000.0
+        # A store's clock is a default argument, bound to the real time.time at import, so
+        # patching time.time alone leaves it running: the two builds could then fall in
+        # different seconds and every time column would differ.
         with mock.patch.object(module, 'keyring', lambda root, *areas: self.keyring), \
-                mock.patch('time.time', lambda: 1_800_000_000.0), \
+                mock.patch('time.time', frozen), \
+                mock.patch.object(local.LocalCore.__init__, '__defaults__', (frozen,)), \
+                mock.patch.object(desk_store.DeskStore.__init__, '__defaults__', (frozen,)), \
                 mock.patch.object(secrets, 'token_hex', lambda n=16: f'{next(count):0{2 * n}x}'), \
                 mock.patch.object(secrets, 'token_urlsafe', lambda n=32: base64.urlsafe_b64encode(
                     hashlib.sha256(b'%d' % next(count)).digest()[:n]).rstrip(b'=').decode()):

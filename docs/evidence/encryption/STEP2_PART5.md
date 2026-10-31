@@ -172,6 +172,13 @@ A second review, of the first fix, found one more:
   (staging refused for one export, the second rename refused for another). The interrupted-swap
   test now stops with `KeyboardInterrupt`, since a rename that raises has not happened.
 
+While retesting, `SameAsSealedFromTheStartTests.test_notes` failed once in the sealed run, with
+`audit.at` and two `expires` columns differing. Its builds patched `time.time`, but a store's
+clock is a default argument bound to the real `time.time` at import, so the two builds could
+fall in different seconds. They now freeze `LocalCore` and `DeskStore`'s clocks too. Forcing a
+second between the builds reproduced the failure before the change and passes after it, for
+all four comparison tests.
+
 ## Platform note
 
 The SQLite this was tested with (3.45.1, Linux) has `SECURE_DELETE` on by default, so part 4
