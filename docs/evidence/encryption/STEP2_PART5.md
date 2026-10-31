@@ -6,8 +6,10 @@ file). Retested at 3d699f1f4, after main's PRs #49 and #52 and part 4's review f
 merged in: 2,048 tests pass plain and 2,048 pass sealed (60,594 values sealed). With #52's `desk serve --hub hermes`
 in, `serve` now checks its port and its Hermes settings before it unlocks the keyring, so a
 start that could never happen unlocks nothing (`test_serve_checks_its_settings_before_it_unlocks`,
-failing without the change). Retested at eced2053b with the review fixes below: 2,054 tests
-pass plain and 2,054 pass sealed (60,594 values sealed), and the six checks exit 0. Synthetic
+failing without the change). Retested at eced2053b with the first review fixes below: 2,054
+tests pass plain and 2,054 pass sealed (60,594 values sealed), and the six checks exit 0.
+Retested at ac6843141 with the second review's fix and the test clock fix: 2,055 tests pass
+plain and 2,055 pass sealed (60,594 values sealed), and the six checks exit 0. Synthetic
 keys, invented vaults and invented work only, with the rule-based SyntheticBrain. Nothing under `third_party/` was read, imported or executed, and no
 model ran.
 
