@@ -1011,25 +1011,33 @@ class BrainHub:
         for item in packet['context']:
             if not any(n['note'] == item['note_id'] for n in notes):
                 notes.append({'note': item['note_id'], 'revision': item['revision']})
+        digest = task_digest(self.store, packet_sha256(packet))
+        # The task and its mandate link are written in the job's own transaction, so no worker
+        # can lease the job before they exist.
+        recorded = []
+
+        def record(db, p, job):
+            db.execute('''INSERT INTO brain_tasks(job_id,scope,actor,task_id,brain,scope_class,autonomy,packet_sha256,
+                          created,scrubbed) VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                       (job['id'], p['scope'], p['id'], packet['task_id'], brain.spec.id, packet['scope'],
+                        packet['autonomy'], digest, self.store.now(), _compact(scrubbed)))
+            self.store.log(db, p['scope'], p['id'], 'brain.task_submitted', job['id'])
+            if scrubbed:
+                self.store.log(db, p['scope'], p['id'], 'brain.packet_scrubbed', job['id'])
+            if self.gate is not None:
+                self.gate.bind(db, p, job, brain.spec, packet, binding)
+            recorded.append(job['id'])
         job = self.jobs.submit(bearer, {'idempotency_key': packet['task_id'], 'kind': KIND,
                                         'parameters': {'brain': brain.spec.id, 'packet': packet},
-                                        'inputs': notes, 'side_effect_free': True, 'max_attempts': 1})
-        digest = task_digest(self.store, packet_sha256(packet))
-        with self.store.transaction() as db:
-            p = self.store.authenticate(db, bearer, {'owner'})
-            prior = db.execute('SELECT * FROM brain_tasks WHERE job_id=?', (job['id'],)).fetchone()
-            if prior is None:
-                db.execute('''INSERT INTO brain_tasks(job_id,scope,actor,task_id,brain,scope_class,autonomy,packet_sha256,
-                              created,scrubbed) VALUES (?,?,?,?,?,?,?,?,?,?)''',
-                           (job['id'], p['scope'], p['id'], packet['task_id'], brain.spec.id, packet['scope'],
-                            packet['autonomy'], digest, self.store.now(), _compact(scrubbed)))
-                self.store.log(db, p['scope'], p['id'], 'brain.task_submitted', job['id'])
-                if scrubbed:
-                    self.store.log(db, p['scope'], p['id'], 'brain.packet_scrubbed', job['id'])
-                if self.gate is not None:
-                    self.gate.bind(db, p, job, brain.spec, packet, binding)
-            elif prior['packet_sha256'] != digest:
-                raise Fault('idempotency_key_collision', 409)
+                                        'inputs': notes, 'side_effect_free': True, 'max_attempts': 1}, bind=record)
+        if not recorded:  # The same request again: the job already existed.
+            with self.store.transaction() as db:
+                p = self.store.authenticate(db, bearer, {'owner'})
+                prior = db.execute('SELECT * FROM brain_tasks WHERE job_id=?', (job['id'],)).fetchone()
+                if prior is None:  # Left by a submission interrupted before this change.
+                    record(db, p, job)
+                elif prior['packet_sha256'] != digest:
+                    raise Fault('idempotency_key_collision', 409)
         return {'job': job, 'packet_sha256': digest, 'brain': brain.spec.id, 'autonomy': AUTONOMY[packet['autonomy']],
                 'scrubbed': scrubbed}
 

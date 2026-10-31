@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 import hashlib
 import json
 import math
+from pathlib import Path
 import posixpath
 import queue
 import re
@@ -92,6 +93,13 @@ PATH_ARGUMENTS = ('path', 'file_path', 'directory', 'dir', 'root')
 
 # Docker ----------------------------------------------------------------------
 
+# The box's pins, beside this package in the repository, and the label the build puts on
+# the image: the SHA-256 of pin.json (tools/build_hermes_box.py).
+PIN_FILE = Path(__file__).resolve().parents[1] / 'boxes' / 'hermes' / 'pin.json'
+PIN_LABEL = 'org.alfred.hermes-box.pin'
+IMAGE_ID = re.compile(r'sha256:[0-9a-f]{64}')
+
+
 @dataclass(frozen=True)
 class BoxLimits:
     memory: str = '2g'
@@ -104,7 +112,7 @@ class BoxLimits:
 
 def docker_command(image_id: str, name: str, limits: BoxLimits = BoxLimits(), *, docker: str = 'docker') -> list:
     """The exact ``docker run`` line for one sealed box. Nothing is mounted from the host."""
-    if not re.fullmatch(r'sha256:[0-9a-f]{64}', image_id or ''):
+    if not IMAGE_ID.fullmatch(image_id or ''):
         raise Fault('hermes_image_not_pinned')
     if not re.fullmatch(r'alfred-hermes-[0-9a-f]{16}', name or ''):
         raise Fault('invalid_box_name')
@@ -196,14 +204,34 @@ class BoxProcess:
 
 def inspect_image(image_id, *, docker='docker', run=subprocess.run) -> dict:
     """The pin label of a local image, so a task never starts on an image built otherwise."""
-    done = run([docker, 'image', 'inspect', '--format', '{{json .Config.Labels}}', image_id],
-               capture_output=True, timeout=60, check=False)
+    try:
+        done = run([docker, 'image', 'inspect', '--format', '{{json .Config.Labels}}', image_id],
+                   capture_output=True, timeout=60, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise Fault('docker_unavailable', 503) from None
     if done.returncode != 0:
         raise Fault('hermes_image_missing')
     try:
         return json.loads(done.stdout or b'null') or {}
     except ValueError:
         raise Fault('hermes_image_unreadable') from None
+
+
+def load_box(record, *, pin_file=PIN_FILE, docker='docker', inspect=inspect_image) -> tuple:
+    """``(image_id, pin)`` for a host to run, once the build record tools/build_hermes_box.py
+    wrote, this checkout's pin.json and the local image's pin label all agree. Checked when
+    the host starts, so a rebuilt, retagged or foreign image is refused before any task."""
+    raw = pin_file.read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if not isinstance(record, dict) or not isinstance(record.get('image'), str) \
+            or not IMAGE_ID.fullmatch(record['image']):
+        raise Fault('invalid_hermes_record')
+    if record.get('pin_sha256') != digest:
+        raise Fault('hermes_record_not_this_pin', 409)
+    labels = inspect(record['image'], docker=docker)
+    if not isinstance(labels, dict) or labels.get(PIN_LABEL) != digest:
+        raise Fault('hermes_image_not_pinned', 409)
+    return record['image'], json.loads(raw)
 
 
 # Model calls -----------------------------------------------------------------
@@ -220,7 +248,10 @@ class ModelProvider(abc.ABC):
 
 REQUEST_FIELDS = frozenset({'model', 'messages', 'system', 'max_tokens', 'tools', 'tool_choice', 'stream',
                             'temperature', 'top_p', 'top_k', 'stop_sequences', 'thinking'})
-BETAS = frozenset({'interleaved-thinking-2025-05-14', 'fine-grained-tool-streaming-2025-05-14'})
+# Beta headers passed on to the provider. None: the two Hermes sends (interleaved thinking and
+# fine-grained tool streaming) are part of the standard API on current Claude models, and an
+# empty list means a beta reaches the provider only when this line names it.
+BETAS = frozenset()
 MODEL_PATH = '/v1/messages'
 MIN_OUTPUT_TOKENS = 64
 MAX_OUTPUT_TOKENS = 32000
@@ -315,7 +346,7 @@ class Relay:
         asked = request.get('max_tokens')
         request['max_tokens'] = min(asked if type(asked) is int and asked > 0 else MAX_OUTPUT_TOKENS,
                                     room, MAX_OUTPUT_TOKENS)
-        betas = tuple(b for b in str(frame.get('betas', '')).split(',') if b.strip() in BETAS)
+        betas = tuple(b for b in (b.strip() for b in str(frame.get('betas', '')).split(',')) if b in BETAS)
         data = json.dumps(request, ensure_ascii=False).encode('utf-8')
         timeout = max(1.0, self.meter.deadline - self.meter.clock())
         status, content_type, body = self.provider.call(data, betas, timeout)

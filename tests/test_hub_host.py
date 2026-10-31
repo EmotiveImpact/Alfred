@@ -9,9 +9,16 @@ no network. Real SQLite, the real job coordinator, goal hub and HTTP handler, an
 * with `--hub synthetic` the host registers only the synthetic test brain, allows no cloud
   scope and no tool, enrols one brain worker that takes only brain tasks, and runs a task
   from submission to an accounted result without anyone driving it;
-* starting twice over the same data directory works, and stopping ends the worker.
+* starting twice over the same data directory works, and stopping ends the worker;
+* with `hermes` the host checks the box image against this checkout's pins before building
+  anything, registers Hermes beside the synthetic brain with the cloud allowed for the
+  owner's areas only, and a personal task goes through the relay to a stand-in Claude
+  connection (no Docker, no network) and back to an accepted result, while a company
+  mandate naming Hermes is refused.
 """
 from __future__ import annotations
+from contextlib import closing
+import hashlib
 import http.client
 import json
 import os
@@ -27,11 +34,14 @@ import unittest
 
 from alfred.desk import init_demo
 from alfred.executive import ExecutiveRecords
-from alfred.hub_host import CHOICES, start_goal_hub
+from alfred.anthropic_provider import KeySource
+from alfred import hermes_box as hb
+from alfred.hub_host import CHOICES, HermesSetup, hermes_brain, start_goal_hub
 from alfred.jobs import JobCoordinator
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor
 from alfred.local import Fault
 from grant_helpers import grant_all
+from test_hermes_box import StandInBox, sse
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 DAY = 86400
@@ -45,11 +55,13 @@ def budget(total):
 
 
 def tables(path):
-    with sqlite3.connect(path) as db:
+    with closing(sqlite3.connect(path)) as db:  # sqlite3's own context manager does not close
         return {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
 
-class InProcessTests(unittest.TestCase):
+class Fixture(unittest.TestCase):
+    """A synthetic desk store with one vault note, and the job coordinator."""
+
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -66,13 +78,15 @@ class InProcessTests(unittest.TestCase):
         self.note = next(n for n in self.store.knowledge(self.owner)['nodes'] if n['title'] == 'Plan')
         self.jobs = JobCoordinator(self.store)
 
+
+class InProcessTests(Fixture):
     def start(self, choice='synthetic'):
         hub, halt = start_goal_hub(self.store, self.jobs, self.owner, choice, poll_seconds=0.02)
         self.addCleanup(halt)
         return hub, halt
 
     def test_off_builds_nothing(self):
-        self.assertEqual(CHOICES, ('off', 'synthetic'))
+        self.assertEqual(CHOICES, ('off', 'synthetic', 'hermes'))
         before = tables(self.root / 'desk.sqlite')
         hub, halt = self.start('off')
         self.assertIsNone(hub)
@@ -82,7 +96,7 @@ class InProcessTests(unittest.TestCase):
 
     def test_unknown_choice_is_refused_before_anything_is_built(self):
         before = tables(self.root / 'desk.sqlite')
-        for choice in ('claude', 'hermes', '', None, 'SYNTHETIC'):
+        for choice in ('claude', 'HERMES', '', None, 'SYNTHETIC'):
             with self.assertRaises(Fault) as caught:
                 start_goal_hub(self.store, self.jobs, self.owner, choice)
             self.assertEqual(caught.exception.code, 'invalid_hub_brain')
@@ -98,6 +112,25 @@ class InProcessTests(unittest.TestCase):
         self.assertIn('hub_mandates', tables(self.root / 'desk.sqlite'))
 
     def test_a_task_runs_to_an_accounted_result_without_anyone_driving_it(self):
+        self.run_synthetic_task()
+
+    def test_a_worker_cannot_lease_a_task_before_it_is_bound_to_its_mandate(self):
+        # Regression: the job used to commit before its brain task and mandate link, so the
+        # worker could lease it in between, find no mandate, and the task ended stopped.
+        seen, submit = [], self.jobs.submit
+
+        def slow_submit(bearer, request, **options):
+            job = submit(bearer, request, **options)
+            with closing(sqlite3.connect(self.root / 'desk.sqlite')) as db:
+                seen.append([db.execute(f'SELECT count(*) FROM {table} WHERE job_id=?', (job['id'],)).fetchone()[0]
+                             for table in ('brain_tasks', 'hub_tasks')])
+            time.sleep(0.3)  # The worker polls every 20 ms, so it leases here if it can.
+            return job
+        self.jobs.submit = slow_submit
+        self.run_synthetic_task()
+        self.assertEqual(seen, [[1, 1]])
+
+    def run_synthetic_task(self):
         hub, _ = self.start()
         goal = ExecutiveRecords(self.store).create(self.owner, {
             'request_id': 'goal-1', 'kind': 'goal', 'title': 'Finish the harbour survey', 'detail': '',
@@ -136,6 +169,162 @@ class InProcessTests(unittest.TestCase):
         _, halt = self.start()
         self.assertTrue(halt())
         self.assertTrue(halt())  # Stopping again is harmless.
+
+
+# Assembled at run time, so the public hygiene check never sees a credential-shaped literal.
+KEY = 'sk' + '-ant-' + 'stand' + 'in' + '9876543210abcdefghij'
+HERMES_MODEL = 'claude-opus-5-5'
+QUOTE = 'The harbour survey is due on Thursday.'
+
+
+class Key(KeySource):
+    def read(self):
+        return KEY
+
+
+class Connection:
+    """Stands in for the TLS connection to the provider: records what was sent, answers once."""
+
+    def __init__(self, body):
+        self.body, self.sent = body, []
+
+    def __call__(self, timeout):
+        return self
+
+    def request(self, method, path, body, headers):
+        self.sent.append((method, path, json.loads(body), dict(headers)))
+
+    def getresponse(self):
+        return self
+
+    status = 200
+
+    def read(self, limit):
+        return self.body[:limit]
+
+    def getheader(self, name, default=None):
+        return 'text/event-stream' if name == 'content-type' else default
+
+    def close(self):
+        pass
+
+
+def reply(**changes):
+    body = {'answer': f'{QUOTE} [E1]', 'citations': [{'ref': 'E1', 'quote': QUOTE}], 'drafts': [], 'remember': []}
+    body.update(changes)
+    return json.dumps(body)
+
+
+class HermesHostTests(Fixture):
+    """``--hub hermes`` in process, with the box and the provider's connection stood in."""
+
+    def setup_(self, areas=('personal',), **record):
+        digest = hashlib.sha256(hb.PIN_FILE.read_bytes()).hexdigest()
+        self.labels = {hb.PIN_LABEL: digest}
+        return HermesSetup(record={'image': 'sha256:' + 'e' * 64, 'pin_sha256': digest, **record},
+                           model=HERMES_MODEL, price=2, key_source=Key(), cloud_areas=frozenset(areas))
+
+    def start_hermes(self, setup, box=None, connection=None):
+        def make(s):
+            return hermes_brain(s, inspect=lambda image, docker: self.labels, launch=box, connect=connection)
+        hub, halt = start_goal_hub(self.store, self.jobs, self.owner, 'hermes', hermes=setup, make_hermes=make,
+                                   poll_seconds=0.02)
+        self.addCleanup(halt)
+        hub.set_budget(self.owner, 'overall', None, {'version': 0, 'budget': budget({'tasks': 10})})
+        return hub
+
+    def mandate(self, hub, scope_class, brains=('hermes',)):
+        goal = ExecutiveRecords(self.store).create(self.owner, {
+            'request_id': f'goal-{scope_class}-{brains[0]}', 'kind': 'goal', 'title': 'Finish the harbour survey', 'detail': '',
+            'project': None, 'due': None, 'rank': None, 'support': None})
+        return hub.create_mandate(self.owner, {
+            'request_id': f'mandate-{scope_class}-{brains[0]}', 'goal': goal['id'], 'scope_class': scope_class,
+            'deadline': self.store.now() + 20 * DAY, 'success_test': 'The surveyor signs off.',
+            'autonomy': {'research': 1}, 'brains': list(brains), 'assigned_brain': brains[0], 'tools': [],
+            'budget': budget({'tasks': 5}), 'schedule': None})
+
+    def test_hermes_needs_its_setup_and_nothing_else_takes_one(self):
+        before = tables(self.root / 'desk.sqlite')
+        for choice, setup, code in (('hermes', None, 'hermes_setup_missing'),
+                                    ('synthetic', self.setup_(), 'hermes_setup_unused')):
+            with self.assertRaises(Fault) as caught:
+                start_goal_hub(self.store, self.jobs, self.owner, choice, hermes=setup)
+            self.assertEqual(caught.exception.code, code)
+        for areas in ({'personal', 'everyone'}, ['personal']):
+            with self.assertRaises(Fault) as caught:
+                HermesSetup(record={}, model=HERMES_MODEL, price=2, key_source=Key(), cloud_areas=areas)
+            self.assertEqual(caught.exception.code, 'invalid_cloud_scopes')
+        self.assertEqual(tables(self.root / 'desk.sqlite'), before)
+
+    def test_an_image_not_built_from_these_pins_stops_the_start_before_anything_is_built(self):
+        before = tables(self.root / 'desk.sqlite')
+        setup = self.setup_()
+        for labels in ({}, {hb.PIN_LABEL: '0' * 64}):
+            with self.assertRaises(Fault) as caught:
+                start_goal_hub(self.store, self.jobs, self.owner, 'hermes', hermes=setup,
+                               make_hermes=lambda s: hermes_brain(s, inspect=lambda image, docker: labels))
+            self.assertEqual(caught.exception.code, 'hermes_image_not_pinned')
+        with self.assertRaises(Fault) as caught:
+            start_goal_hub(self.store, self.jobs, self.owner, 'hermes', hermes=self.setup_(pin_sha256='1' * 64))
+        self.assertEqual(caught.exception.code, 'hermes_record_not_this_pin')
+        self.assertEqual(tables(self.root / 'desk.sqlite'), before)
+        self.assertNotIn('local-brain', [w['id'] for w in self.jobs.workers(self.owner)])
+
+    def test_hermes_is_registered_on_the_cloud_for_the_owners_areas_only(self):
+        hub = self.start_hermes(self.setup_())
+        specs = {s.id: s for s in hub.registry.specs()}
+        self.assertEqual(sorted(specs), ['hermes', 'synthetic'])
+        self.assertEqual((specs['hermes'].locality, specs['hermes'].tools, specs['hermes'].max_autonomy,
+                          specs['hermes'].pence_per_1k_tokens), ('cloud', frozenset({'file.read'}), 1, 2))
+        self.assertEqual((hub.policy.cloud_scopes, hub.policy.permitted_tools), (frozenset({'personal'}), frozenset()))
+        self.assertEqual(hub.registry.get('hermes').model, HERMES_MODEL)
+        workers = {w['id']: w for w in self.jobs.workers(self.owner)}
+        self.assertEqual(workers['local-brain']['capabilities'], ['brain_task'])
+        for scope_class in ('company', 'client'):
+            with self.assertRaises(Fault) as caught:
+                self.mandate(hub, scope_class)
+            self.assertEqual(caught.exception.code, 'cloud_brain_refused_for_scope')
+        self.mandate(hub, 'company', brains=('synthetic',))  # The local test brain still serves every area.
+
+    def test_with_no_area_named_hermes_serves_none(self):
+        hub = self.start_hermes(self.setup_(areas=()))
+        with self.assertRaises(Fault) as caught:
+            self.mandate(hub, 'personal')
+        self.assertEqual(caught.exception.code, 'cloud_brain_refused_for_scope')
+
+    def test_a_personal_task_goes_through_the_relay_to_claude_and_comes_back_accepted(self):
+        events = sse(reply(), input_tokens=900, output_tokens=60)
+        connection = Connection(events)
+        frame = {'type': 'model_request', 'id': 1, 'method': 'POST', 'path': '/v1/messages',
+                 'betas': 'interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14',
+                 'body': json.dumps({'model': HERMES_MODEL, 'max_tokens': 128000, 'stream': True,
+                                     'messages': [{'role': 'user', 'content': 'Summarise the plan.'}]})}
+        box = StandInBox([('model', frame), ('final', reply())])
+        hub = self.start_hermes(self.setup_(), box=box, connection=connection)
+        mandate = self.mandate(hub, 'personal')
+        task = hub.submit_task(self.owner, mandate['id'], {
+            'request_id': 'task-1', 'brain': None, 'work': 'research', 'instruction': 'Summarise the plan.',
+            'context': [{'note': self.note['id'], 'start_line': 2, 'end_line': 2}], 'learned': [], 'tools': [],
+            'budget': {'wall_seconds': 30, 'tokens': 20000, 'money_pence': 100, 'steps': 20}, 'autonomy': 1})
+        job = task['job']['id']
+        deadline = time.monotonic() + 20
+        while not self.jobs.view(self.owner, job)['finished']:
+            self.assertLess(time.monotonic(), deadline, 'the host brain worker did not run the task')
+            time.sleep(0.02)
+        self.sup.goals = hub
+        self.sup.cycle()
+        with self.store.connection() as db:
+            row = db.execute('SELECT result, brain FROM hub_tasks WHERE job_id=?', (job,)).fetchone()
+        self.assertEqual((row['result'], row['brain']), ('accepted', 'hermes'))
+        # One call, to the one path, with the key read for it and no beta header.
+        [(method, path, sent, headers)] = connection.sent
+        self.assertEqual((method, path, sent['model'], headers['x-api-key']), ('POST', '/v1/messages', HERMES_MODEL, KEY))
+        self.assertNotIn('anthropic-beta', headers)
+        self.assertLessEqual(sent['max_tokens'], hb.MAX_OUTPUT_TOKENS)
+        # The key went nowhere near the box, and the box was removed.
+        self.assertTrue(box.stopped)
+        self.assertNotIn(KEY, json.dumps(box.received))
+        self.assertNotIn(KEY, json.dumps(task))
 
 
 def free_port():
@@ -216,6 +405,44 @@ class RealHostTests(unittest.TestCase):
                              cwd=REPOSITORY, capture_output=True, text=True, timeout=30)
         self.assertEqual(run.returncode, 2)
         self.assertIn("invalid choice: 'claude'", run.stderr)
+
+    def desk(self, *arguments):
+        return subprocess.run([sys.executable, '-m', 'alfred.desk', *arguments, '--data-dir', str(self.home)],
+                              cwd=REPOSITORY, capture_output=True, text=True, timeout=30)
+
+    def key_file(self, mode=0o600):
+        path = self.home.parent / 'claude-key'
+        path.write_text(KEY + '\n')
+        path.chmod(mode)
+        return path
+
+    def test_hermes_on_the_command_line_needs_every_setting_and_a_matching_image(self):
+        record = self.home.parent / 'box-record.json'
+        record.write_text(json.dumps({'image': 'sha256:' + 'e' * 64, 'pin_sha256': '0' * 64}))
+        key = self.key_file()
+        settings = ['--hermes-record', str(record), '--hermes-model', HERMES_MODEL, '--hermes-price', '2']
+        source = ['--claude-key', 'file', '--claude-key-file', str(key)]
+        for extra, code in (([], 'hermes_settings_required'), (settings, 'claude_key_source_required'),
+                            (settings[:4] + source, 'hermes_settings_required'),
+                            (settings + ['--claude-key', 'file'], 'claude_key_source_unclear'),
+                            (settings + source, 'hermes_record_not_this_pin')):
+            run = self.desk('serve', '--port', str(free_port()), '--hub', 'hermes', '--cloud-area', 'personal', *extra)
+            self.assertEqual((run.returncode, run.stdout.strip()), (1, f'Cannot start: {code}'), extra)
+            self.assertNotIn(KEY, run.stdout + run.stderr)
+        self.assertFalse((self.home / 'desk.lock').exists(), 'the host took its lock before its settings were read')
+
+    def test_the_key_check_says_where_and_how_long_and_never_shows_the_key(self):
+        key = self.key_file()
+        run = self.desk('claude-key-check', '--claude-key', 'file', '--claude-key-file', str(key))
+        self.assertEqual(run.returncode, 0)
+        self.assertEqual(run.stdout.strip(), f'Claude key found in file {key}: {len(KEY)} characters, in the expected shape.')
+        key.chmod(0o644)
+        run = self.desk('claude-key-check', '--claude-key', 'file', '--claude-key-file', str(key))
+        self.assertEqual(run.stdout.strip(), f'No Claude key could be read from file {key} (secret_file_too_open).')
+        run = self.desk('claude-key-check')
+        self.assertEqual((run.returncode, run.stdout.strip()), (1, 'Cannot start: claude_key_source_required'))
+        for out in (run.stdout, run.stderr):
+            self.assertNotIn(KEY, out)
 
 
 if __name__ == '__main__':
