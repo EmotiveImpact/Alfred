@@ -9,7 +9,9 @@ start that could never happen unlocks nothing (`test_serve_checks_its_settings_b
 failing without the change). Retested at eced2053b with the first review fixes below: 2,054
 tests pass plain and 2,054 pass sealed (60,594 values sealed), and the six checks exit 0.
 Retested at ac6843141 with the second review's fix and the test clock fix: 2,055 tests pass
-plain and 2,055 pass sealed (60,594 values sealed), and the six checks exit 0. Synthetic
+plain and 2,055 pass sealed (60,594 values sealed), and the six checks exit 0. Retested at
+24ac52881 with the third review's fix: 2,056 tests pass plain and 2,056 pass sealed (60,594
+values sealed), and the six checks exit 0. Synthetic
 keys, invented vaults and invented work only, with the rule-based SyntheticBrain. Nothing under `third_party/` was read, imported or executed, and no
 model ran.
 
