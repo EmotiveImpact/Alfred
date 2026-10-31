@@ -172,6 +172,7 @@ the one the audit holds.
 
 | Module | Imports | Why |
 |---|---|---|
+| `alfred/anthropic_provider.py` | `http.client`, `ssl` | Claude for the sealed Hermes box ([HERMES_BOX.md](HERMES_BOX.md)). One fixed host, `api.anthropic.com`, over TLS with certificate and host name checks, one fixed path, no redirects followed. Only the relay in `alfred/hermes_box.py` calls it, for a brain the owner allowed on the cloud for that area. |
 | `alfred/desk_http.py` | `http.server`, `urllib.parse` | The loopback desk server. Binds 127.0.0.1 only and checks Host and Origin; `urllib.parse` only splits request paths and query strings. |
 | `alfred/httpd.py` | `http.server` | The original local server. Binds 127.0.0.1 only and rejects any other Host header. |
 | `alfred/local_model.py` | `http.client` | Opt-in local model adapter, off by default. Connects only to 127.0.0.1 on a configured port for a local Ollama; no cloud endpoint, redirect or credential. |
