@@ -1,8 +1,11 @@
 # Encryption step 2, part 4 receipt: jobs, the agent brain, goals, learning and the desk's observations
 
-Built 30 October 2026 on part 3 (aded002ae), which waits for parts 1 and 2 (part 1 is PR #50);
-part 4 goes up only after all three. Tested revision: fa555d38e (the commit carrying this receipt
-changes only this file). Synthetic keys, an invented vault and invented work only, with the
+Built 30 October 2026 on part 3 (aded002ae). Parts 1 to 3 merged on 31 October (PRs #50, #51
+and #53). Tested revision: fa555d38e (the commit carrying this receipt changes only this file).
+Retested at 3ff014beb, after main's PRs #49 and #52 were merged in: 1,996 tests pass plain and
+1,996 pass sealed (60,290 values sealed). In that merge `brain.submit` keeps #49's shape, which
+writes the brain task in the job's own transaction, and the digest it stores is this part's
+keyed one. Synthetic keys, an invented vault and invented work only, with the
 rule-based SyntheticBrain. Nothing under `third_party/` was read, imported or executed, and no
 model ran.
 
