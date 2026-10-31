@@ -382,8 +382,12 @@ class JobCoordinator:
 
     # Owner and reader calls --------------------------------------------
 
-    def submit(self, bearer, request) -> dict:
-        """Create a job, or return the existing one for the same key and request."""
+    def submit(self, bearer, request, *, bind=None) -> dict:
+        """Create a job, or return the existing one for the same key and request.
+
+        ``bind(db, principal, job)``, when given, runs inside the transaction that creates the
+        job, before it commits, so records that must exist before any worker can lease the
+        job are written with it, or not at all. It is not called for an existing job."""
         required = {'idempotency_key', 'kind', 'parameters', 'inputs', 'side_effect_free'}
         if type(request) is not dict or not required <= set(request) or not set(request) <= required | {'max_attempts'}:
             raise Fault('invalid_fields')
@@ -423,7 +427,10 @@ class JobCoordinator:
             self._event(db, job_id, 'submitted', {'by': p['id'], 'kind': kind, 'inputs': len(bound),
                                                   'side_effect_free': side_effect_free})
             self.store.log(db, p['scope'], p['id'], 'job.submitted', job_id)
-            return self._view(db, self._job(db, p['scope'], job_id))
+            view = self._view(db, self._job(db, p['scope'], job_id))
+            if bind is not None:
+                bind(db, p, view)
+            return view
 
     def view(self, bearer, job_id) -> dict:
         with self._read() as db:
