@@ -411,11 +411,14 @@ def opened_files(directory, sealer) -> dict:
     if directory.is_symlink() or not (directory / SEALED_FILE).is_file():
         raise Fault('not_a_sealed_export', 404)
     sums = {}
+    if not (directory / 'SHA256SUMS').is_file():
+        raise Fault('export_checksum_mismatch', 409)
     for line in (directory / 'SHA256SUMS').read_text().splitlines():
         digest, _, name = line.partition('  ')
         sums[name] = digest
     for name, digest in sums.items():
-        if '/' in name or hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
+        # A file listed but gone is a changed export too.
+        if '/' in name or not (directory / name).is_file() or hashlib.sha256((directory / name).read_bytes()).hexdigest() != digest:
             raise Fault('export_checksum_mismatch', 409)
     about = json.loads((directory / SEALED_FILE).read_text())
     if not sealer.sealed:
@@ -426,6 +429,44 @@ def opened_files(directory, sealer) -> dict:
         raise Fault('export_checksum_mismatch', 409)
     return {name: sealer.open((directory / (name + SEALED_SUFFIX)).read_text(), _where(about['export_id'], name)).encode('utf-8')
             for name in about['files']}
+
+
+def _remove_ours(directory: Path) -> None:
+    """Remove a copy of a sealed export this module set aside or staged, and nothing else."""
+    if directory.is_dir() and not directory.is_symlink() and (directory / SEALED_FILE).is_file():
+        shutil.rmtree(directory)
+
+
+def reseal_export(directory, sealer) -> bool:
+    """Seal a sealed export's files again under the default area's newest key, before a key
+    rotation deletes the older ones (``alfred.seal_workspace.reseal``). The new files are
+    written beside the export and swapped in, so it is whole at every step; run again after an
+    interruption, this finishes the swap first. False when the folder holds no export this
+    keyring sealed: a plain export, another keyring's, or nothing any more."""
+    directory = Path(directory)
+    staging, aside = (directory.with_name(f'.{directory.name}{end}') for end in ('.resealed', '.before-reseal'))
+    if not directory.exists() and not directory.is_symlink() and (aside / SEALED_FILE).is_file():
+        # Stopped between the two renames below: the new files go in if they were written.
+        os.rename(staging if (staging / SEALED_FILE).is_file() else aside, directory)
+    _remove_ours(aside)
+    _remove_ours(staging)
+    try:
+        about = json.loads((directory / SEALED_FILE).read_text())
+    except (OSError, ValueError):
+        return False
+    if directory.is_symlink() or not isinstance(about, dict) or about.get('keyring') != sealer.keyring_id:
+        return False
+    files = opened_files(directory, sealer)
+    write(staging, seal_files(sealer, about['export_id'], files))
+    os.rename(directory, aside)
+    os.rename(staging, directory)
+    shutil.rmtree(aside)
+    handle = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(handle)
+    finally:
+        os.close(handle)
+    return True
 
 
 def open_export(directory, sealer, destination, vaults=()) -> dict:

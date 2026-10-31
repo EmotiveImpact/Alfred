@@ -419,7 +419,8 @@ its manifest says so (`sealed`, `encrypted`, the keyring's id). An export from a
 workspace is sealed unless you add `--plain`: each file is sealed with the keyring and listed
 in a plain `SEALED.json` and `SHA256SUMS`. `python3 -m alfred.desk --data-dir <folder>
 open-export --sealed-export <export> --export-dir <new folder>` checks and opens it with the
-keyring. With `--plain` ALFRED warns that anyone who gets the files can read them.
+keyring, into a new or empty folder outside every vault, as `export` writes. With `--plain`
+ALFRED warns that anyone who gets the files can read them.
 
 **Absolute delete.** An absolute forget of a statement, a record or a source, and a restore
 that applies one again, compacts the database and empties its write-ahead log once the forget
@@ -435,8 +436,15 @@ python3 -m alfred.desk --data-dir <folder> rotate-area --area personal
 
 adds a new key version, seals every value of that area again under it, in the workspace and in
 its registered backups, compacts them, and only then deletes the older key versions from the
-keyring. A copy made before rotating can no longer be opened (`key_version_retired`). If it is
-interrupted, ALFRED will not start until the same command is run again, which finishes it.
+keyring. Sealed exports are sealed under the default area, so rotating it also seals again each
+sealed export ALFRED wrote and still finds where it wrote it: the new files are written beside
+the export and swapped in whole. One whose files were changed or removed is left as it is and
+counted. A copy made before rotating, or an export moved somewhere else, can no longer be
+opened (`key_version_retired`). The keyring keeps only the number of the last version it deleted, so
+an area can be rotated as often as you like, up to version 9,999. It holds at most 16 keys for
+one area at once, a limit reached only by adding versions with `alfred.keys area-rotate` and
+never sealing again. If `rotate-area` is interrupted, ALFRED will not start until the same
+command is run again, which finishes it.
 Fingerprints keep their key, which is derived from the area's first key and kept on its own,
 so every check that compares them still works.
 

@@ -32,13 +32,14 @@ under several areas' keys. Every record stays in the default area.
   their keyed names), compacts (`wal_checkpoint(TRUNCATE)`, `VACUUM`, `wal_checkpoint(TRUNCATE)`)
   and converts and compacts each registered backup, rewriting its manifest. `reseal(path, sealer,
   area)` seals one area's values again under its newest key version, in the workspace and its
-  backups. Each writes a marker (`.sealing`, `.resealing`) first and removes it last; a busy
+  backups and, for the default area, in the sealed exports the export register names. Each writes a marker (`.sealing`, `.resealing`) first and removes it last; a busy
   database stops with `workspace_busy` (409) and the marker kept.
-- `alfred/keys.py`: `OpenKeyring.retire_old_keys(area)` replaces every key version but the
-  newest with a stub holding its number and dates, after storing the area's fingerprint key
-  wrapped on its own; `fingerprint_key(area)` derives it from the first version until then.
-  `area_key` refuses a retired version (`key_version_retired`, 410). Keyring validation accepts
-  both.
+- `alfred/keys.py`: `OpenKeyring.retire_old_keys(area)` deletes every key version but the
+  newest and keeps only the number of the last one deleted (`retired_through`), after storing
+  the area's fingerprint key wrapped on its own; `fingerprint_key(area)` derives it from the
+  first version until then. `area_key` refuses a retired version (`key_version_retired`, 410).
+  `MAX_VERSIONS` (16) caps the keys an area holds at once; version numbers count on to
+  `MAX_KEY_VERSION` (9,999), and a sealed value's version may have four digits.
 - `alfred/sealing.py`: fingerprints use `fingerprint_key`; `recorded(path)` reads which keyring
   a workspace records.
 - `alfred/desk.py`: `open_workspace(root)` refuses while a marker exists (`sealing_incomplete`,
@@ -48,7 +49,8 @@ under several areas' keys. Every record stays in the default area.
   `export` gains `--plain`, and warns when used on a sealed workspace.
 - `alfred/export.py`: `export(..., plain=False)` seals each file of an export from a sealed
   workspace and lists them in a plain `SEALED.json` and `SHA256SUMS`; `open_export` checks and
-  opens one.
+  opens one. `reseal_export(directory, sealer)` seals one again under the newest key, writing
+  beside it and swapping it in, and finishes an interrupted swap first.
 - `alfred/lifecycle.py`: a backup manifest records `sealed`, `encrypted` and the keyring's id
   (`manifest_sealing`); an absolute forget marks the transaction for compaction
   (`forget_accounted`), and restore compacts the staged file after replaying the journal.
@@ -59,7 +61,8 @@ under several areas' keys. Every record stays in the default area.
 
 ## Tests
 
-- `tests/test_sealing_switch_on.py` (49 tests at 1a5e79e05, 51 at 3d699f1f4). Run against part 4 (d93760129) the file fails at
+- `tests/test_sealing_switch_on.py` (49 tests at 1a5e79e05, 51 at 3d699f1f4, 56 after the
+  review fixes below). Run against part 4 (d93760129) the file fails at
   import, since part 4 has no `alfred.seal_workspace`.
   - The `seal` command converts once and a second run only compacts; a conversion that fails
     its own check rolls back, keeps its triggers and leaves the workspace plain with its marker,
@@ -136,6 +139,28 @@ file beside the database, so its hash says nothing about what the owner wrote.
   claude/project-thread-9npowk`, `tools/check_requirement_register.py`,
   `tools/check_memory_plan.py`, `tools/check_adoptions.py` and `tools/egress_audit.py`: all
   exit 0.
+
+## Review fixes (31 October 2026)
+
+Three findings from the automatic review of PR #55, each with a test that fails without its
+fix and passes with it:
+
+- Rotation made sealed exports unreadable: they are sealed under the default area, and
+  rotating it deleted the key they were sealed with. `reseal` now seals again every sealed
+  export the export register names and still finds, before it deletes the older keys.
+  `test_rotation_seals_the_sealed_exports_it_wrote_again` (one export opens after rotation; one
+  moved away, one changed and one with a file removed do not, and the last two are counted and
+  left as they were; a listed file that is gone is now `export_checksum_mismatch`),
+  `test_an_interrupted_export_swap_is_finished_by_running_it_again` and, through the desk,
+  `test_rotating_the_area_keeps_a_sealed_export_openable`.
+- An area could be rotated only fifteen times: retired versions kept an entry each and the
+  16-entry cap never freed. Retired versions now collapse to one number.
+  `test_an_area_rotates_again_and_again` (17 rotations of a sealed workspace) and, in
+  `tests/test_keys.py`, `test_retired_versions_free_room_for_more_rotations` (120 rotations, a
+  value sealed and opened at version 121, and 16 unretired keys still refused).
+- `open-export` passed no vault to the destination check, so it could write readable files into
+  a `--vault` with nothing marking it as one. It now passes the same vaults `export` does.
+  `test_a_sealed_export_is_never_opened_into_a_vault`.
 
 ## Platform note
 

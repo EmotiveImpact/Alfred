@@ -291,7 +291,7 @@ class RotationTests(Plain, test_sealing_memory.SealedMemoryBase):
         self.assertEqual(self.prints(self.path), prints)
         stored = json.loads(keys.keyring_path(self.root).read_text())
         personal = next(a for a in stored['areas'] if a['id'] == 'personal')
-        self.assertEqual(['key' in k for k in personal['keys']], [False, True])
+        self.assertEqual(([k['version'] for k in personal['keys']], personal['retired_through']), ([2], 1))
         # Everything still opens, and a fingerprint still matches.
         self.assertEqual(self.memory.view(self.owner), before)
         self.assertEqual(self.capture.run(self.owner)['not_proposed']['already_proposed'], 1)
@@ -313,6 +313,70 @@ class RotationTests(Plain, test_sealing_memory.SealedMemoryBase):
         self.assertEqual(seal_workspace.incomplete(self.path), 'reseal')
         self.assertEqual(seal_workspace.reseal(self.path, self.sealer, 'personal')['key_versions_retired'], 1)
         self.assertIsNone(seal_workspace.incomplete(self.path))
+
+    def export_versions(self, directory):
+        return {p.read_text().split(':')[3] for p in Path(directory).iterdir() if p.name.endswith(export.SEALED_SUFFIX)}
+
+    def test_rotation_seals_the_sealed_exports_it_wrote_again(self):
+        written = Path(export.export(self.store, self.owner, self.root / 'sealed')['directory'])
+        moved = Path(export.export(self.store, self.owner, self.root / 'moved')['directory'])
+        moved = moved.rename(self.root / 'elsewhere')
+        changed = Path(export.export(self.store, self.owner, self.root / 'changed')['directory'])
+        edited = next(p for p in changed.iterdir() if p.name.endswith(export.SEALED_SUFFIX))
+        edited.write_text(edited.read_text()[:-4] + 'AAAA')
+        held = {p.name: p.read_bytes() for p in changed.iterdir()}
+        damaged = Path(export.export(self.store, self.owner, self.root / 'damaged')['directory'])
+        next(p for p in damaged.iterdir() if p.name.endswith(export.SEALED_SUFFIX)).unlink()
+        plain = Path(export.export(self.store, self.owner, self.root / 'plain', plain=True)['directory'])
+        readable = (plain / 'statements.json').read_bytes()
+        self.keyring.rotate_area('personal')
+        result = seal_workspace.reseal(self.path, self.sealer, 'personal')
+        self.assertEqual((result['exports_resealed'], result['exports_not_resealed']), (1, 2))
+        self.assertEqual({p.name: p.read_bytes() for p in changed.iterdir()}, held)
+        self.assertEqual(self.export_versions(written), {'2'})
+        opened = export.open_export(written, self.sealer, self.root / 'opened')
+        self.assertEqual((Path(opened['directory']) / 'statements.json').read_bytes(), readable)
+        # The plain export is left as it is, and one moved away holds only the deleted key.
+        self.assertEqual((plain / 'statements.json').read_bytes(), readable)
+        with self.assertRaises(Fault) as caught:
+            export.opened_files(moved, self.sealer)
+        self.assertEqual(caught.exception.code, 'key_version_retired')
+        self.assertEqual([p.name for p in self.root.iterdir() if p.name.startswith('.')], [])
+
+    def test_an_interrupted_export_swap_is_finished_by_running_it_again(self):
+        written = Path(export.export(self.store, self.owner, self.root / 'sealed')['directory'])
+        self.keyring.rotate_area('personal')
+        rename = export.os.rename
+
+        def stop_after_moving_it_aside(source, target):
+            rename(source, target)
+            if Path(source) == written:
+                raise OSError('stopped')
+        with mock.patch.object(export.os, 'rename', stop_after_moving_it_aside), self.assertRaises(OSError):
+            seal_workspace.reseal(self.path, self.sealer, 'personal')
+        self.assertFalse(written.exists())
+        self.assertEqual(seal_workspace.incomplete(self.path), 'reseal')
+        self.assertEqual(seal_workspace.reseal(self.path, self.sealer, 'personal')['exports_resealed'], 1)
+        self.assertEqual(self.export_versions(written), {'2'})
+        self.assertIn('statements.json', export.opened_files(written, self.sealer))
+        self.assertEqual([p.name for p in self.root.iterdir() if p.name.startswith('.')], [])
+
+    def test_an_area_rotates_again_and_again(self):
+        before = self.memory.view(self.owner)
+        rotations = 17  # one more than the keys an area may hold at once
+        for _ in range(rotations):
+            self.keyring.rotate_area('personal')
+            seal_workspace.reseal(self.path, self.sealer, 'personal')
+        newest = rotations + 1
+        self.assertEqual(self.versions(self.path), {str(newest)})
+        self.assertEqual(self.memory.view(self.owner), before)
+        with keys.Keyring.read(keys.keyring_path(self.root)).unlock(SyntheticUnlock()) as again:
+            self.assertEqual(again.area_key('personal')[0], newest)
+            for version, code in ((1, 'key_version_retired'), (newest - 1, 'key_version_retired'),
+                                  (newest + 1, 'unknown_key_version')):
+                with self.assertRaises(Fault) as caught:
+                    again.area_key('personal', version)
+                self.assertEqual(caught.exception.code, code, version)
 
 
 class DeskStartTests(unittest.TestCase):
@@ -387,6 +451,35 @@ class DeskStartTests(unittest.TestCase):
             output = self.run_desk('serve', '--data-dir', str(self.home), *extra, unlock=unlock)[1]
             self.assertEqual(output.splitlines()[0], f'Cannot start: {code}', extra)
         self.assertEqual(asked, [], 'the keyring was unlocked for settings that could never start')
+
+    def test_a_sealed_export_is_never_opened_into_a_vault(self):
+        self.assertEqual(self.run_desk('seal', '--data-dir', str(self.home))[0], 0)
+        self.assertEqual(self.export('sealed')[0], 0)
+        # A vault named on the command line, with nothing in it that marks it as one.
+        vault = self.root / 'notes'
+        vault.mkdir()
+        (self.home / 'vault').mkdir(exist_ok=True)
+        for chosen, inside in ((['--vault', str(vault)], vault), ([], self.home / 'vault')):
+            code, output = self.run_desk('open-export', '--data-dir', str(self.home), *chosen,
+                                         '--sealed-export', str(self.root / 'sealed'), '--export-dir', str(inside / 'opened'))
+            self.assertEqual((code, output.splitlines()[0]), (1, 'Cannot start: export_destination_inside_vault'), chosen)
+            self.assertFalse((inside / 'opened').exists())
+        code, output = self.run_desk('open-export', '--data-dir', str(self.home), '--vault', str(vault),
+                                     '--sealed-export', str(self.root / 'sealed'), '--export-dir', str(self.root / 'opened'))
+        self.assertEqual(code, 0, output)
+        self.assertTrue((self.root / 'opened' / 'statements.json').is_file())
+
+    def test_rotating_the_area_keeps_a_sealed_export_openable(self):
+        self.assertEqual(self.run_desk('seal', '--data-dir', str(self.home))[0], 0)
+        self.assertEqual(self.export('sealed')[0], 0)
+        code, output = self.run_desk('rotate-area', '--data-dir', str(self.home), '--area', 'personal')
+        self.assertEqual(code, 0, output)
+        self.assertIn('1 sealed exports sealed again', output)
+        self.assertIn('copied anywhere else before now can no longer be opened', output)
+        code, output = self.run_desk('open-export', '--data-dir', str(self.home), '--sealed-export', str(self.root / 'sealed'),
+                                     '--export-dir', str(self.root / 'opened'))
+        self.assertEqual(code, 0, output)
+        self.assertTrue((self.root / 'opened' / 'statements.json').is_file())
 
     def test_an_unfinished_seal_is_refused_at_start(self):
         seal_workspace._mark(self.home / 'desk.sqlite', seal_workspace.MARKER, 'x')

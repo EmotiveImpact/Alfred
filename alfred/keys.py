@@ -61,6 +61,10 @@ CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 KEYCHAIN_SERVICE = 'alfred.keyring'
 SEAL_PREFIX = 'alfred-seal'
 MAX_SLOTS, MAX_AREAS, MAX_VERSIONS, MAX_KEYRING_BYTES = 16, 256, 16, 1 << 20
+# MAX_VERSIONS caps the keys an area holds at once. Retiring them (``retire_old_keys``) frees
+# that room; version numbers keep counting up, to MAX_KEY_VERSION (four digits in a sealed value).
+MAX_KEY_VERSION = 9999
+SEALED_VERSION = r'[1-9][0-9]{0,3}'
 MAX_AREA_NAME = 80
 HEX_ID = re.compile(r'[0-9a-f]{8}')
 # No length cap here: every keyring field checks its decoded length, and sealed values may be large.
@@ -453,7 +457,13 @@ def _validate(data) -> dict:
     if len({s['id'] for s in slots}) != len(slots) or sum(s['method'] == 'recovery' for s in slots) != 1:
         raise bad()
     for area in areas:
-        if type(area) is not dict or set(area) - {'fingerprint'} != {'id', 'kind', 'name', 'created', 'keys'}:
+        if type(area) is not dict or set(area) - {'fingerprint', 'retired_through'} != {'id', 'kind', 'name', 'created', 'keys'}:
+            raise bad()
+        # Versions up to ``retired_through`` were retired: only their number is kept, so what they
+        # sealed is refused as retired. Their fingerprint key is then kept on its own.
+        retired = area.get('retired_through', 0)
+        if 'retired_through' in area and (type(retired) is not int or not 1 <= retired < MAX_KEY_VERSION
+                                          or 'fingerprint' not in area):
             raise bad()
         if 'fingerprint' in area and (not isinstance(area['fingerprint'], str)
                                       or len(_unb64(area['fingerprint'])) != NONCE_BYTES + KEY_BYTES + TAG_BYTES):
@@ -467,17 +477,11 @@ def _validate(data) -> dict:
         number(area['created'])
         if not NONCE_BYTES + TAG_BYTES < len(_unb64(area['name'])) <= NONCE_BYTES + TAG_BYTES + 4 * MAX_AREA_NAME:
             raise bad()
-        for position, key in enumerate(area['keys'], 1):
-            # A retired version keeps its number and dates only; its key is gone (``retire_old_keys``).
-            if type(key) is not dict or key.get('version') != position or set(key) not in (
-                    {'version', 'created', 'key'}, {'version', 'created', 'retired'}):
+        for position, key in enumerate(area['keys'], retired + 1):
+            if type(key) is not dict or set(key) != {'version', 'created', 'key'} or key['version'] != position:
                 raise bad()
             number(key['created'])
-            if 'retired' in key:
-                number(key['retired'])
-                if position == len(area['keys']) or 'fingerprint' not in area:
-                    raise bad()
-            elif len(_unb64(key['key'])) != NONCE_BYTES + KEY_BYTES + TAG_BYTES:
+            if position > MAX_KEY_VERSION or len(_unb64(key['key'])) != NONCE_BYTES + KEY_BYTES + TAG_BYTES:
                 raise bad()
     for entry in destroyed:
         if type(entry) is not dict or set(entry) != {'id', 'kind', 'destroyed'} or entry['kind'] not in AREA_KINDS:
@@ -613,7 +617,7 @@ class Keyring:
                 'unlock': [{'slot': s['id'], 'method': s['method'], 'label': s['label'], 'created': s['created'],
                             'where': where(s)} for s in self.data['slots']],
                 'areas': [{'id': a['id'], 'kind': a['kind'], 'created': a['created'],
-                           'key_versions': len(a['keys'])} for a in self.data['areas']],
+                           'key_versions': a['keys'][-1]['version']} for a in self.data['areas']],
                 'destroyed': [dict(d) for d in self.data['destroyed']]}
 
     def unlock(self, method: UnlockMethod, slot: str | None = None, *, clock=time.time) -> 'OpenKeyring':
@@ -792,15 +796,15 @@ class OpenKeyring:
         return [{'id': a['id'], 'kind': a['kind'],
                  'label': _open(self._key('names'), a['name'], _label('area-name', self.id, a['id']),
                                 fault='keyring_tampered').decode('utf-8'),
-                 'created': a['created'], 'key_versions': len(a['keys'])} for a in self.keyring.data['areas']]
+                 'created': a['created'], 'key_versions': a['keys'][-1]['version']} for a in self.keyring.data['areas']]
 
     def rotate_area(self, area: str) -> dict:
         """A new key version for new seals. Older versions stay until their values are sealed again."""
         with self._change() as data:
             record = self._area(data, area)
-            if len(record['keys']) >= MAX_VERSIONS:
+            if len(record['keys']) >= MAX_VERSIONS or record['keys'][-1]['version'] >= MAX_KEY_VERSION:
                 raise Fault('too_many_key_versions', 409)
-            version = len(record['keys']) + 1
+            version = record['keys'][-1]['version'] + 1
             record['keys'].append({'version': version, 'created': int(self.clock()),
                                    'key': _lock(self._key('wrap'), secrets.token_bytes(KEY_BYTES),
                                                 self._wrap_label(area, version))})
@@ -814,17 +818,16 @@ class OpenKeyring:
         fingerprint = self.fingerprint_key(area)
         with self._change() as data:
             record = self._area(data, area)
-            now = int(self.clock())
             if 'fingerprint' not in record:
                 record['fingerprint'] = _lock(self._key('wrap'), fingerprint, _label('area-fingerprint', self.id, area))
-            retired = 0
-            for key in record['keys'][:-1]:
-                if 'key' in key:
-                    record['keys'][key['version'] - 1] = {'version': key['version'], 'created': key['created'], 'retired': now}
-                    retired += 1
-        for cached in [k for k in self._areas if k[0] == area and k[1] != len(record['keys']) and k[1] != 'fingerprint']:
+            newest, retired = record['keys'][-1]['version'], len(record['keys']) - 1
+            if retired:
+                # Only the number of the last retired version is kept, so retiring frees the room.
+                record['retired_through'] = newest - 1
+                record['keys'] = record['keys'][-1:]
+        for cached in [k for k in self._areas if k[0] == area and k[1] not in (newest, 'fingerprint')]:
             del self._areas[cached]
-        return {'key_versions_retired': retired, 'key_version': len(record['keys'])}
+        return {'key_versions_retired': retired, 'key_version': newest}
 
     def fingerprint_key(self, area: str) -> bytes:
         """The key an area's fingerprints are made with. Derived from its first key version, so it
@@ -860,13 +863,14 @@ class OpenKeyring:
 
     def area_key(self, area: str, version: int | None = None) -> tuple[int, bytes]:
         record = self._area(self.keyring.data, area)
-        version = len(record['keys']) if version is None else version
-        if type(version) is not int or not 1 <= version <= len(record['keys']):
+        first, newest = record.get('retired_through', 0) + 1, record['keys'][-1]['version']
+        version = newest if version is None else version
+        if type(version) is not int or not 1 <= version <= newest:
             raise Fault('unknown_key_version', 404)
-        if 'retired' in record['keys'][version - 1]:
+        if version < first:
             raise Fault('key_version_retired', 410)
         if (area, version) not in self._areas:
-            self._areas[(area, version)] = _open(self._key('wrap'), record['keys'][version - 1]['key'],
+            self._areas[(area, version)] = _open(self._key('wrap'), record['keys'][version - first]['key'],
                                                  self._wrap_label(area, version), fault='keyring_tampered')
         return version, self._areas[(area, version)]
 
@@ -894,7 +898,7 @@ class OpenKeyring:
 
     def open(self, area: str, sealed: str, context: str) -> bytes:
         parts = sealed.split(':') if isinstance(sealed, str) else []
-        if len(parts) != 5 or parts[0] != SEAL_PREFIX or parts[1] != str(VERSION) or not re.fullmatch(r'[1-9][0-9]?', parts[3]):
+        if len(parts) != 5 or parts[0] != SEAL_PREFIX or parts[1] != str(VERSION) or not re.fullmatch(SEALED_VERSION, parts[3]):
             raise Fault('not_sealed')
         if parts[2] != area:
             raise Fault('sealed_for_another_area', 403)

@@ -252,8 +252,13 @@ def rotate_area_command(path, area):
             result = reseal(database, sealing.Sealed(opened), area)
     finally:
         os.close(fd)
-    print(f"The {area} area now seals with key version {result['key_version']}: {result['values_resealed']} values sealed again, "
-          f"{result['key_versions_retired']} older keys deleted.")
+    exports = (f", {result['exports_resealed']} sealed exports" if 'exports_resealed' in result else '')
+    print(f"The {area} area now seals with key version {result['key_version']}: {result['values_resealed']} values, "
+          f"{result['backups_resealed']} backups{exports} sealed again, {result['key_versions_retired']} older keys deleted.")
+    if result.get('exports_not_resealed'):
+        print(f"{result['exports_not_resealed']} sealed exports could not be sealed again and were left as they were: "
+              'they can no longer be opened.')
+    print('A sealed backup or export copied anywhere else before now can no longer be opened.')
     print('Keyring copies made before now still hold the older keys: make a new recovery-kit backup and delete the old ones.')
     return result
 
@@ -494,7 +499,9 @@ def main():
                 raise Fault('export_dir_required')
             from .export import open_export
             from . import sealing
-            opened = open_export(args.sealed_export, sealing.for_path(path / 'desk.sqlite'), args.export_dir)
+            # Opened files are readable, so they go nowhere an export may not: never into a vault.
+            opened = open_export(args.sealed_export, sealing.for_path(path / 'desk.sqlite'), args.export_dir,
+                                 vaults=(args.vault, path / 'vault'))
             print('Opened the sealed export into', opened['directory'])
             print('These files are readable: keep them private and delete them when you are done.')
         elif args.command == 'rotate':

@@ -95,7 +95,7 @@ class Sealed:
         if value is None:
             return None
         parts = value.split(':') if isinstance(value, str) else []
-        if len(parts) != 5 or parts[0] != keys.SEAL_PREFIX or not re.fullmatch(r'[1-9][0-9]?', parts[3]):
+        if len(parts) != 5 or parts[0] != keys.SEAL_PREFIX or not re.fullmatch(keys.SEALED_VERSION, parts[3]):
             raise Fault('not_sealed', 409)
         # Even a cached value needs its area key to still exist, so an area destroyed while
         # ALFRED runs stops opening at once.

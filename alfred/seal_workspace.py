@@ -431,8 +431,8 @@ def _reseal_file(database, sealer, area) -> int:
 
 def reseal(database, sealer, area) -> dict:
     """After ``rotate_area``: seal the area's values again under its newest key, in the
-    workspace and in its backups, compact them, and only then delete the older keys. Safe to
-    run again until it finishes."""
+    workspace, in its backups and, for the default area, in the sealed exports ALFRED wrote;
+    compact them, and only then delete the older keys. Safe to run again until it finishes."""
     database = Path(database)
     _mark(database, RESEALING, area)
     resealed = _reseal_file(database, sealer, area)
@@ -446,7 +446,24 @@ def reseal(database, sealer, area) -> dict:
         for suffix in ('-wal', '-shm'):
             Path(str(path) + suffix).unlink(missing_ok=True)
         _backup_resealed(database, path, identity, sealer)
+    exports = _reseal_exports(database, sealer) if area == sealing.DEFAULT_AREA else {}
     retired = sealer.keyring.retire_old_keys(area)
     sealer.clear_cache()
     marker(database, RESEALING).unlink()
-    return {'area': area, 'values_resealed': resealed, 'backups_resealed': backups, **retired}
+    return {'area': area, 'values_resealed': resealed, 'backups_resealed': backups, **exports, **retired}
+
+
+def _reseal_exports(database, sealer) -> dict:
+    """Sealed exports are sealed under the default area (``alfred.export``). Seal again each
+    one ALFRED wrote and still finds where it wrote it. One that has been changed, or cannot be
+    written beside, is counted and left: once the older keys go it no longer opens, and nor
+    does any copy kept somewhere else."""
+    from .deletion import exports
+    from .export import reseal_export
+    counts = {'exports_resealed': 0, 'exports_not_resealed': 0}
+    for directory in dict.fromkeys(e['directory'] for e in exports(database) if isinstance(e.get('directory'), str)):
+        try:
+            counts['exports_resealed'] += reseal_export(directory, sealer)
+        except Fault:
+            counts['exports_not_resealed'] += 1
+    return counts
