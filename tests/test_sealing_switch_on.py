@@ -386,6 +386,33 @@ class RotationTests(Plain, test_sealing_memory.SealedMemoryBase):
             self.assertEqual({p.name: p.read_bytes() for p in directory.iterdir()}, held[directory], directory.name)
         self.assertEqual([p.name for p in self.root.iterdir() if p.name.startswith('.')], [])
 
+    def test_an_export_left_off_its_path_stops_the_rotation_with_the_old_keys_kept(self):
+        written = Path(export.export(self.store, self.owner, self.root / 'sealed')['directory'])
+        rename = export.os.rename
+
+        def nothing_goes_back(source, target):
+            # The new copy cannot go in, and the original cannot go back.
+            if Path(target) == written:
+                raise OSError(errno.EIO, 'Input/output error')
+            rename(source, target)
+        self.keyring.rotate_area('personal')
+        with mock.patch.object(export.os, 'rename', nothing_goes_back), self.assertRaises(Fault) as caught:
+            seal_workspace.reseal(self.path, self.sealer, 'personal')
+        self.assertEqual(caught.exception.code, 'export_swap_unfinished')
+        self.assertIn(str(written), caught.exception.detail)
+        self.assertEqual(seal_workspace.incomplete(self.path), 'reseal')
+        self.keyring.area_key('personal', 1)  # not retired: the copy set aside still opens
+        # Run again while the drive still fails, it stops the same way.
+        with mock.patch.object(export.os, 'rename', nothing_goes_back), self.assertRaises(Fault) as caught:
+            seal_workspace.reseal(self.path, self.sealer, 'personal')
+        self.assertEqual(caught.exception.code, 'export_swap_unfinished')
+        # Run again with the drive working, it puts the new copy in place and finishes.
+        result = seal_workspace.reseal(self.path, self.sealer, 'personal')
+        self.assertEqual((result['exports_resealed'], result['key_versions_retired']), (1, 1))
+        self.assertEqual(self.export_versions(written), {'2'})
+        self.assertIn('statements.json', export.opened_files(written, self.sealer))
+        self.assertEqual([p.name for p in self.root.iterdir() if p.name.startswith('.')], [])
+
     def test_an_area_rotates_again_and_again(self):
         before = self.memory.view(self.owner)
         rotations = 17  # one more than the keys an area may hold at once

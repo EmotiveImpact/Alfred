@@ -440,7 +440,8 @@ keyring. Sealed exports are sealed under the default area, so rotating it also s
 sealed export ALFRED wrote and still finds where it wrote it: the new files are written beside
 the export and swapped in whole. One whose files were changed or removed, or that cannot be
 written beside (on a read-only drive, say), is left as it is and counted, and the rotation
-still finishes. A copy made before rotating, or an export moved somewhere else, can no longer
+still finishes. If an export can be put back at its path neither as it was nor sealed again,
+`rotate-area` stops there, keeping the older keys, and says where the new copy is. A copy made before rotating, or an export moved somewhere else, can no longer
 be opened (`key_version_retired`). The keyring keeps only the number of the last version it deleted, so
 an area can be rotated as often as you like, up to version 9,999. It holds at most 16 keys for
 one area at once, a limit reached only by adding versions with `alfred.keys area-rotate` and

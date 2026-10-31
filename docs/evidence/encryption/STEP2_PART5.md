@@ -64,7 +64,7 @@ under several areas' keys. Every record stays in the default area.
 
 ## Tests
 
-- `tests/test_sealing_switch_on.py` (49 tests at 1a5e79e05, 51 at 3d699f1f4, 57 after the
+- `tests/test_sealing_switch_on.py` (49 tests at 1a5e79e05, 51 at 3d699f1f4, 58 after the
   review fixes below). Run against part 4 (d93760129) the file fails at
   import, since part 4 has no `alfred.seal_workspace`.
   - The `seal` command converts once and a second run only compacts; a conversion that fails
@@ -173,6 +173,14 @@ A second review, of the first fix, found one more:
   and finishes. `test_an_export_that_cannot_be_written_beside_is_counted_and_left_whole`
   (staging refused for one export, the second rename refused for another). The interrupted-swap
   test now stops with `KeyboardInterrupt`, since a rename that raises has not happened.
+
+A third review found one more:
+
+- If the new copy could not go in and the original could not go back either, the export was
+  left only under hidden names, and the rotation still finished and deleted the older keys.
+  Now neither copy at its path stops the rotation (`export_swap_unfinished`, naming where the
+  new copy is), with its marker and the older keys kept; running it again puts the new copy in
+  place. `test_an_export_left_off_its_path_stops_the_rotation_with_the_old_keys_kept`.
 
 While retesting, `SameAsSealedFromTheStartTests.test_notes` failed once in the sealed run, with
 `audit.at` and two `expires` columns differing. Its builds patched `time.time`, but a store's

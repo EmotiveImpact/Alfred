@@ -458,13 +458,19 @@ def _reseal_exports(database, sealer) -> dict:
     one ALFRED wrote and still finds where it wrote it. One that has been changed, or cannot be
     read or written beside (a read-only drive, a full disk), is counted and left as it was, so
     the rotation still finishes: once the older keys go it no longer opens, and nor does any
-    copy kept somewhere else."""
+    copy kept somewhere else. One that could be put back at its path neither as it was nor
+    sealed again stops the rotation, with its marker and the older keys kept."""
     from .deletion import exports
-    from .export import reseal_export
+    from .export import SWAP_UNFINISHED, reseal_export
     counts = {'exports_resealed': 0, 'exports_not_resealed': 0}
     for directory in dict.fromkeys(e['directory'] for e in exports(database) if isinstance(e.get('directory'), str)):
         try:
             counts['exports_resealed'] += reseal_export(directory, sealer)
-        except (Fault, OSError):
+        except Fault as fault:
+            if fault.code == SWAP_UNFINISHED:
+                # Neither copy is at its path: stop with the marker and the older keys kept.
+                raise
+            counts['exports_not_resealed'] += 1
+        except OSError:
             counts['exports_not_resealed'] += 1
     return counts

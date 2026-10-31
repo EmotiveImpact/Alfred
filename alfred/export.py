@@ -437,18 +437,34 @@ def _remove_ours(directory: Path) -> None:
         shutil.rmtree(directory)
 
 
+SWAP_UNFINISHED = 'export_swap_unfinished'
+
+
+def _unfinished(directory: Path, staging: Path) -> Fault:
+    """Neither copy is at the export's path. Rotation stops here and keeps the older keys, so
+    running it again can put the new copy in place."""
+    fault = Fault(SWAP_UNFINISHED, 409)
+    fault.detail = (f'The sealed export {directory} could not be put back: its new copy is beside it as {staging.name}. '
+                    'Once the drive can be written, run rotate-area again; or move that folder to the export\'s path first.')
+    return fault
+
+
 def reseal_export(directory, sealer) -> bool:
     """Seal a sealed export's files again under the default area's newest key, before a key
     rotation deletes the older ones (``alfred.seal_workspace.reseal``). The new files are
     written beside the export and swapped in, so it is whole at every step; run again after an
     interruption, this finishes the swap first. False when the folder holds no export this
     keyring sealed: a plain export, another keyring's, or nothing any more. ``Fault`` or
-    ``OSError`` when it cannot be sealed again, with the export left as it was."""
+    ``OSError`` when it cannot be sealed again, with the export left as it was, except
+    ``export_swap_unfinished`` when neither copy could be put at its path."""
     directory = Path(directory)
     staging, aside = (directory.with_name(f'.{directory.name}{end}') for end in ('.resealed', '.before-reseal'))
     if not directory.exists() and not directory.is_symlink() and (aside / SEALED_FILE).is_file():
         # Stopped between the two renames below: the new files go in if they were written.
-        os.rename(staging if (staging / SEALED_FILE).is_file() else aside, directory)
+        try:
+            os.rename(staging if (staging / SEALED_FILE).is_file() else aside, directory)
+        except OSError:
+            raise _unfinished(directory, staging) from None
     _remove_ours(aside)
     _remove_ours(staging)
     try:
@@ -471,9 +487,9 @@ def reseal_export(directory, sealer) -> bool:
     except OSError:
         try:
             os.rename(aside, directory)
-            shutil.rmtree(staging, ignore_errors=True)
         except OSError:
-            pass  # both copies stay beside it, and the next rotation puts the new one in place
+            raise _unfinished(directory, staging) from None
+        shutil.rmtree(staging, ignore_errors=True)
         raise
     shutil.rmtree(aside, ignore_errors=True)
     handle = os.open(directory.parent, os.O_RDONLY | os.O_DIRECTORY)
