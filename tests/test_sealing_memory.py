@@ -18,7 +18,7 @@ from alfred.capture_policies import CapturePolicies
 from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault, fingerprint
 from alfred.reviewed_memory import ReviewedMemory
-from grant_helpers import grant_all
+from grant_helpers import grant_all, revoke_all
 from test_sealing import keyring
 
 # Words that appear only in this invented vault and memory, so finding one in a file means it leaked.
@@ -182,6 +182,20 @@ class SealedMemoryAtRestTests(SealedMemoryBase):
         self.capture.author(self.owner, 'rule-1', dict(self.policy, version=2, name='Nettlecombe calls'))
         self.assertEqual([where.split('/')[:2] for where in sealed], [['capture_policies', 'name']])
 
+    def test_an_export_opens_no_capture_origin_it_leaves_out(self):
+        # Without the source's grant the captured statement is withheld, so where it was
+        # captured from is never opened, not even in memory.
+        revoke_all(self.store, self.owner)
+        opened, real = [], self.store.sealer.open
+
+        def spy(value, context):
+            opened.append(context)
+            return real(value, context)
+        self.store.sealer.open = spy
+        self.addCleanup(lambda: vars(self.store.sealer).pop('open', None))
+        self.assertEqual(export.collect(self.store, self.owner)['captures'], [])
+        self.assertEqual([c for c in opened if c.startswith('memory_capture/')], [])
+
     def test_a_value_moved_to_another_row_does_not_open(self):
         with self.store.connection() as db:
             value = db.execute('SELECT value FROM memory_claims WHERE id=?', (self.captured,)).fetchone()[0]
@@ -230,6 +244,17 @@ class StatementAreaTests(SealedMemoryBase):
         self.assertEqual({self.area(r['name']) for r in self.raw('SELECT name FROM capture_policies')}, {'personal'})
         self.assertEqual({r['kind']: self.area(r['snapshot']) for r in self.raw('SELECT kind, snapshot FROM memory_bin')},
                          {'statement': 'client-a', 'entity': 'personal'})
+
+
+    def test_a_retry_after_its_source_is_forgotten_is_still_the_same_request(self):
+        # The note that chose the statement's area is gone, so the retry cannot learn the area
+        # from it; the stored keyed fingerprint still recognises the same request.
+        lifecycle.forget_source(self.store, self.owner, 'source')
+        retry = self.memory.propose(self.owner, self.bodies[1])
+        self.assertEqual((retry['id'], retry['reused']), (self.lead, True))
+        with self.assertRaises(Fault) as caught:
+            self.memory.propose(self.owner, {**self.bodies[1], 'object_id': 'e3'})
+        self.assertEqual(caught.exception.code, 'memory_request_collision')
 
 
 class RegisterTests(unittest.TestCase):
