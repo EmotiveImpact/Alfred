@@ -2,6 +2,16 @@
 
 All notable changes to ALFRED, newest first. Dates are the day the work was committed. Requirement IDs (MEM, SYS, INT, ACT, ATT, CON, VOI, OPS, UX, RUN) refer to [plans/requirement-register.json](plans/requirement-register.json); M-numbers refer to [plans/memory-backlog.json](plans/memory-backlog.json). "Implemented" always means implemented on the named branch against synthetic data, tested, and not deployed. Bugs are logged separately in [BUGS_AND_FIXES.md](BUGS_AND_FIXES.md).
 
+## 30 October 2026 (evening): the sealed box connected to Claude, on the host, branch `claude/project-thread-ujui2p`
+
+Master plan phase 2, second part. On 30 October the owner chose which areas may use cloud AI: personal notes only, to start. Offline tests only; no real model was called, no key exists anywhere in this work, and `desk serve` does not offer Hermes yet.
+
+- **The Claude provider.** `alfred/anthropic_provider.py` makes the relay's calls: one fixed host over TLS, one path, no redirects followed, and the key read from a key source at each call and dropped after it, never stored, logged or passed to the box. A key that cannot be read, a network failure or a reply too large each stop the call with its own reason and nothing else.
+- **Hermes on the host.** `alfred/hub_host.py` builds the goal hub with Hermes beside the synthetic test brain from a `HermesSetup` the owner gives (build record, model, price, key source, cloud areas); nothing has a default. At start the image must match this checkout's pins (`load_box`), or nothing is built. The cloud is allowed for the owner's areas only, so a company or client mandate naming Hermes is refused. A personal task runs from submission, through the box and the relay, to an accepted result against stand-ins for Docker and the network.
+- **Current Claude models.** The relay no longer passes on Hermes's two beta headers, which are part of the standard API on current models. What Hermes sends to current models was checked against its pinned source; the two things that would need care later (thinking across several calls, and an effort setting) are written up in the [guide](docs/HERMES_BOX.md).
+- **A brain task is bound to its job when the job is made** ([B-032](BUGS_AND_FIXES.md), backlog C11). A worker could lease a brain task in the moment between the job being created and its mandate link being written, and the task then stopped. Both are now written in the same transaction.
+- **Left for the next change.** Reading the key from the Mac keychain or a server's secret store, which reuses the readers encryption step 1 adds, and then the `desk serve --hub hermes` switch and a run on the owner's Mac.
+
 ## 30 October 2026: sealing stored notes, encryption step 2 part 1, branch `claude/project-thread-9npowk`
 
 The first of step 2's five parts (SYS-002, M05), built on step 1 (PR #26, merged 30 October). Not merged; the owner's word comes first. A workspace can be sealed only in tests until part 5 adds the `seal` command and unlocking at start, so no workspace in use is half sealed. Synthetic keys and invented notes only; no model ran and nothing under `third_party/` was installed, run or imported.

@@ -221,6 +221,38 @@ class DockerCommand(unittest.TestCase):
                 hb.docker_command(IMAGE, name)
 
 
+class LoadBox(unittest.TestCase):
+    """What a host checks when it starts: the build record, pin.json and the image agree."""
+    DIGEST = hashlib.sha256((BOX / 'pin.json').read_bytes()).hexdigest()
+
+    def inspect(self, labels):
+        self.asked = []
+
+        def inspect(image, docker):
+            self.asked.append((image, docker))
+            return labels
+        return inspect
+
+    def test_an_image_built_from_these_pins_loads(self):
+        record = {'image': IMAGE, 'pin_sha256': self.DIGEST, 'tag': 'alfred/hermes-box:8fe53200c7fc'}
+        image, pin = hb.load_box(record, docker='/usr/bin/docker', inspect=self.inspect({hb.PIN_LABEL: self.DIGEST}))
+        self.assertEqual((image, pin, self.asked), (IMAGE, PIN, [(IMAGE, '/usr/bin/docker')]))
+        self.assertEqual(hb.PIN_FILE, BOX / 'pin.json')
+
+    def test_a_record_or_image_from_other_pins_is_refused(self):
+        cases = [({'image': 'alfred/hermes-box:latest', 'pin_sha256': self.DIGEST}, {}, 'invalid_hermes_record'),
+                 ({'pin_sha256': self.DIGEST}, {}, 'invalid_hermes_record'),
+                 ('not a record', {}, 'invalid_hermes_record'),
+                 ({'image': IMAGE, 'pin_sha256': '0' * 64}, {hb.PIN_LABEL: self.DIGEST}, 'hermes_record_not_this_pin'),
+                 ({'image': IMAGE, 'pin_sha256': self.DIGEST}, {hb.PIN_LABEL: '0' * 64}, 'hermes_image_not_pinned'),
+                 ({'image': IMAGE, 'pin_sha256': self.DIGEST}, {}, 'hermes_image_not_pinned'),
+                 ({'image': IMAGE, 'pin_sha256': self.DIGEST}, None, 'hermes_image_not_pinned')]
+        for record, labels, code in cases:
+            with self.subTest(code=code, record=record), self.assertRaises(Fault) as caught:
+                hb.load_box(record, inspect=self.inspect(labels))
+            self.assertEqual(caught.exception.code, code)
+
+
 class Hello(unittest.TestCase):
     def refused(self, hello):
         with self.assertRaises(BrainFailure) as caught:
@@ -269,7 +301,8 @@ class RelayTests(unittest.TestCase):
         self.assertEqual((answer['type'], answer['id'], answer['status'], answer['content_type']),
                          ('model_response', 7, 200, 'text/event-stream'))
         sent, betas = self.model.sent[0]
-        self.assertEqual(betas, ('interleaved-thinking-2025-05-14',))
+        # Both betas Hermes sends are standard on current models, so none is passed on.
+        self.assertEqual((betas, hb.BETAS), ((), frozenset()))
         estimate = -(-len(json.dumps(json.loads(request()['body']), ensure_ascii=False).encode()) // 2)
         self.assertEqual(sent['max_tokens'], BUDGET['tokens'] - estimate)
         self.assertEqual(self.meter.snapshot(), {'steps': 1, 'tokens': 120, 'money_pence': 0})

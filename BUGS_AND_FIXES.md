@@ -12,6 +12,10 @@ Format: **ID. Title** · found · fixed in commit · status.
 
 ## Fixed
 
+### B-032. A brain task could be leased before it was bound to its mandate
+Found 30 October 2026: `tests/test_hub_host.py` failed once in seven runs with a task `stopped` instead of `accepted`, and the same race was reported during work on pull request #26 · fixed in the commit that adds this entry.
+`BrainHub.submit` created the job in one transaction and wrote its `brain_tasks` row, and the goal hub's `hub_tasks` link, in a second. The host's `local-brain` worker polls every 200 ms, so it could lease the job in between; the hub's backend then found no mandate for the job, refused it with `mandate_required`, and the task ended stopped. `JobCoordinator.submit` now takes a `bind` callback that runs inside the transaction creating the job, before it commits, and `BrainHub.submit` writes the brain task, its audit entries and the mandate link there. A job and its brain task now exist together or not at all. Test: `test_a_worker_cannot_lease_a_task_before_it_is_bound_to_its_mandate`, which holds the submission open for 300 ms after the job is created; it fails without the change and passes with it.
+
 ### B-031. Two older workflows cut the full test suite off at five minutes (*environment*)
 Found 18 October 2026 when the `validate` job (`.github/workflows/local-core.yml`) was cancelled on pull request #41 after 5 minutes 16 seconds, part-way through `test_placement`, with every test so far passing · fixed in the commit that adds this entry.
 `local-core.yml` (`validate`) and `contract-checks.yml` (`original-contracts`) still run `python3 -m unittest discover -s tests` under the 5-minute limit they were given in September, when the suite was small. The suite now has over 1,700 tests and takes about 3.5 minutes on a typical runner, so a slower runner crosses the limit and GitHub reports the job as cancelled rather than failed. Nothing in the pull request was at fault: its 26 new tests take under a second. Both limits are now 15 minutes, the same as the unified CI's core job. No test or step was removed or skipped.
