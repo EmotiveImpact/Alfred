@@ -204,8 +204,11 @@ class BoxProcess:
 
 def inspect_image(image_id, *, docker='docker', run=subprocess.run) -> dict:
     """The pin label of a local image, so a task never starts on an image built otherwise."""
-    done = run([docker, 'image', 'inspect', '--format', '{{json .Config.Labels}}', image_id],
-               capture_output=True, timeout=60, check=False)
+    try:
+        done = run([docker, 'image', 'inspect', '--format', '{{json .Config.Labels}}', image_id],
+                   capture_output=True, timeout=60, check=False)
+    except (OSError, subprocess.SubprocessError):
+        raise Fault('docker_unavailable', 503) from None
     if done.returncode != 0:
         raise Fault('hermes_image_missing')
     try:
