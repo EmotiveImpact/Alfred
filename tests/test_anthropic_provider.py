@@ -5,11 +5,16 @@ assembled at run time, so the public hygiene check never sees a credential-shape
 """
 import http.client
 import json
+import os
+from pathlib import Path
+import tempfile
 import unittest
 
-from alfred.anthropic_provider import HOST, AnthropicProvider, KeySource
+from alfred.anthropic_provider import (HOST, KEYCHAIN_SERVICE, AnthropicProvider, KeychainKey, KeySource, SecretFileKey,
+                                       describe, key_source)
 from alfred.brain import BrainFailure, Meter
 from alfred import hermes_box as hb
+from alfred.local import Fault
 
 KEY = 'sk' + '-ant-' + 'stand' + 'in' + '0123456789abcdefghij'
 
@@ -123,6 +128,91 @@ class ProviderTests(unittest.TestCase):
     def test_a_source_must_be_readable(self):
         with self.assertRaises(TypeError):
             AnthropicProvider(object())
+
+
+class KeySourceTests(unittest.TestCase):
+    """Where the key lives: the macOS keychain or a file a server's secret store placed."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+
+    def secret(self, name='claude-key', text=KEY + '\n', mode=0o600):
+        path = self.root / name
+        path.write_text(text)
+        path.chmod(mode)
+        return path
+
+    def test_the_keychain_is_asked_for_the_one_item_and_nothing_goes_on_the_command_line(self):
+        asked = []
+
+        def run(arguments, stdin=None):
+            asked.append((arguments, stdin))
+            return KEY + '\n'
+        source = KeychainKey('desk', run=run)
+        self.assertEqual(source.read(), KEY)
+        self.assertEqual(asked, [(['find-generic-password', '-a', 'desk', '-s', KEYCHAIN_SERVICE, '-w'], None)])
+        self.assertEqual(KEYCHAIN_SERVICE, 'alfred.provider.anthropic')
+        self.assertEqual(source.where(), 'login keychain item alfred.provider.anthropic / desk')
+        self.assertNotIn(KEY, repr(vars(source)))
+        with self.assertRaises(Fault):
+            KeychainKey('desk; rm -rf /')
+
+    def test_a_secret_file_or_a_systemd_credential(self):
+        path = self.secret()
+        self.assertEqual(SecretFileKey(path).read(), KEY)
+        credential = SecretFileKey(credential='claude-key', environ={'CREDENTIALS_DIRECTORY': str(self.root)})
+        self.assertEqual((credential.read(), credential.where()), (KEY, 'systemd credential claude-key'))
+        with self.assertRaises(Fault) as caught:
+            SecretFileKey(credential='claude-key', environ={}).read()
+        self.assertEqual(caught.exception.code, 'unlock_unavailable')
+
+    def test_a_file_anyone_else_can_read_or_a_relative_path_is_refused(self):
+        with self.assertRaises(Fault) as caught:
+            SecretFileKey(self.secret(mode=0o640)).read()
+        self.assertEqual(caught.exception.code, 'secret_file_too_open')
+        for path, credential in ((Path('claude-key'), None), (None, None), (self.secret(), 'claude-key')):
+            with self.assertRaises(Fault):
+                SecretFileKey(path, credential=credential)
+
+    def test_the_owner_names_exactly_one_source(self):
+        self.assertIsInstance(key_source('keychain'), KeychainKey)
+        self.assertEqual(key_source('file', path=self.secret()).read(), KEY)
+        self.assertEqual(key_source('credential', credential='claude-key', environ={'CREDENTIALS_DIRECTORY': str(self.root)})
+                         .read(), KEY)
+        for kind, options in (('file', {}), ('credential', {}), ('keychain', {'path': self.secret()}),
+                              ('environment', {}), ('file', {'path': self.secret(), 'credential': 'x'})):
+            with self.subTest(kind=kind, options=options), self.assertRaises(Fault) as caught:
+                key_source(kind, **options)
+            self.assertEqual(caught.exception.code, 'claude_key_source_unclear')
+
+    def test_the_check_never_shows_the_key(self):
+        path = self.secret()
+        self.assertEqual(describe(SecretFileKey(path)),
+                         f'Claude key found in file {path}: {len(KEY)} characters, in the expected shape.')
+        self.assertEqual(describe(SecretFileKey(self.secret('short', 'x' * 40 + ' and spaces'))),
+                         f'Something is stored in file {self.root / "short"}, but it is not in the shape of a Claude key.')
+        binary = self.root / 'binary'
+        binary.write_bytes(bytes(range(128, 176)))  # A server secret, not a Claude key.
+        binary.chmod(0o600)
+        self.assertEqual(describe(SecretFileKey(binary)),
+                         f'Something is stored in file {binary}, but it is not in the shape of a Claude key.')
+        self.assertEqual(describe(SecretFileKey(self.root / 'missing')),
+                         f'No Claude key could be read from file {self.root / "missing"} (unlock_unavailable).')
+        self.assertEqual(describe(Source(fail=True)), 'No Claude key could be read from the key source (OSError).')
+        for source in (SecretFileKey(path), Source(fail=True)):
+            self.assertNotIn(KEY, describe(source))
+
+    def test_through_the_provider_a_file_key_is_read_at_each_call(self):
+        path = self.secret()
+        connection = Connection()
+        AnthropicProvider(SecretFileKey(path), connect=lambda timeout: connection).call(b'{}', (), 5.0)
+        self.assertEqual(connection.sent[3]['x-api-key'], KEY)
+        os.chmod(path, 0o644)  # Loosened after start: the next call stops, and says only why.
+        with self.assertRaises(BrainFailure) as caught:
+            AnthropicProvider(SecretFileKey(path), connect=lambda timeout: Connection()).call(b'{}', (), 5.0)
+        self.assertEqual(caught.exception.reason, 'model_key_unavailable')
 
 
 if __name__ == '__main__':

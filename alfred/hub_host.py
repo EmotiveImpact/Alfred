@@ -32,9 +32,6 @@ import threading
 from .local import Fault
 
 CHOICES = ('off', 'synthetic', 'hermes')
-# What ``desk serve --hub`` offers. ``hermes`` joins once its key can be read from the
-# keychain or a server secret, which reuses the readers encryption step 1 adds.
-SERVE_CHOICES = ('off', 'synthetic')
 WORKER = 'local-brain'
 LABELS = {'synthetic': 'This computer (brain tasks, synthetic test brain)',
           'hermes': 'This computer (brain tasks: Hermes in a sealed box, and the synthetic test brain)'}

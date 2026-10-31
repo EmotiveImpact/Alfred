@@ -36,7 +36,7 @@ from alfred.desk import init_demo
 from alfred.executive import ExecutiveRecords
 from alfred.anthropic_provider import KeySource
 from alfred import hermes_box as hb
-from alfred.hub_host import CHOICES, SERVE_CHOICES, HermesSetup, hermes_brain, start_goal_hub
+from alfred.hub_host import CHOICES, HermesSetup, hermes_brain, start_goal_hub
 from alfred.jobs import JobCoordinator
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor
 from alfred.local import Fault
@@ -401,14 +401,48 @@ class RealHostTests(unittest.TestCase):
         self.stop()
 
     def test_an_unknown_brain_is_refused_by_the_command_line(self):
-        # Hermes is not offered on the command line until its key can be read from the
-        # keychain or a server secret (encryption step 1).
-        self.assertEqual(SERVE_CHOICES, ('off', 'synthetic'))
-        for brain in ('claude', 'hermes'):
-            run = subprocess.run([sys.executable, '-m', 'alfred.desk', 'serve', '--data-dir', str(self.home), '--hub', brain],
-                                 cwd=REPOSITORY, capture_output=True, text=True, timeout=30)
-            self.assertEqual(run.returncode, 2)
-            self.assertIn(f"invalid choice: '{brain}'", run.stderr)
+        run = subprocess.run([sys.executable, '-m', 'alfred.desk', 'serve', '--data-dir', str(self.home), '--hub', 'claude'],
+                             cwd=REPOSITORY, capture_output=True, text=True, timeout=30)
+        self.assertEqual(run.returncode, 2)
+        self.assertIn("invalid choice: 'claude'", run.stderr)
+
+    def desk(self, *arguments):
+        return subprocess.run([sys.executable, '-m', 'alfred.desk', *arguments, '--data-dir', str(self.home)],
+                              cwd=REPOSITORY, capture_output=True, text=True, timeout=30)
+
+    def key_file(self, mode=0o600):
+        path = self.home.parent / 'claude-key'
+        path.write_text(KEY + '\n')
+        path.chmod(mode)
+        return path
+
+    def test_hermes_on_the_command_line_needs_every_setting_and_a_matching_image(self):
+        record = self.home.parent / 'box-record.json'
+        record.write_text(json.dumps({'image': 'sha256:' + 'e' * 64, 'pin_sha256': '0' * 64}))
+        key = self.key_file()
+        settings = ['--hermes-record', str(record), '--hermes-model', HERMES_MODEL, '--hermes-price', '2']
+        source = ['--claude-key', 'file', '--claude-key-file', str(key)]
+        for extra, code in (([], 'hermes_settings_required'), (settings, 'claude_key_source_required'),
+                            (settings[:4] + source, 'hermes_settings_required'),
+                            (settings + ['--claude-key', 'file'], 'claude_key_source_unclear'),
+                            (settings + source, 'hermes_record_not_this_pin')):
+            run = self.desk('serve', '--port', str(free_port()), '--hub', 'hermes', '--cloud-area', 'personal', *extra)
+            self.assertEqual((run.returncode, run.stdout.strip()), (1, f'Cannot start: {code}'), extra)
+            self.assertNotIn(KEY, run.stdout + run.stderr)
+        self.assertFalse((self.home / 'desk.lock').exists(), 'the host took its lock before its settings were read')
+
+    def test_the_key_check_says_where_and_how_long_and_never_shows_the_key(self):
+        key = self.key_file()
+        run = self.desk('claude-key-check', '--claude-key', 'file', '--claude-key-file', str(key))
+        self.assertEqual(run.returncode, 0)
+        self.assertEqual(run.stdout.strip(), f'Claude key found in file {key}: {len(KEY)} characters, in the expected shape.')
+        key.chmod(0o644)
+        run = self.desk('claude-key-check', '--claude-key', 'file', '--claude-key-file', str(key))
+        self.assertEqual(run.stdout.strip(), f'No Claude key could be read from file {key} (secret_file_too_open).')
+        run = self.desk('claude-key-check')
+        self.assertEqual((run.returncode, run.stdout.strip()), (1, 'Cannot start: claude_key_source_required'))
+        for out in (run.stdout, run.stderr):
+            self.assertNotIn(KEY, out)
 
 
 if __name__ == '__main__':
