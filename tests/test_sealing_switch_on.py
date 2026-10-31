@@ -399,7 +399,7 @@ class RotationTests(Plain, test_sealing_memory.SealedMemoryBase):
         with mock.patch.object(export.os, 'rename', nothing_goes_back), self.assertRaises(Fault) as caught:
             seal_workspace.reseal(self.path, self.sealer, 'personal')
         self.assertEqual(caught.exception.code, 'export_swap_unfinished')
-        self.assertIn(str(written), caught.exception.detail)
+        self.assertIn(f'{written} could not be put back: it is beside that path as .sealed.resealed', caught.exception.detail)
         self.assertEqual(seal_workspace.incomplete(self.path), 'reseal')
         self.keyring.area_key('personal', 1)  # not retired: the copy set aside still opens
         # Run again while the drive still fails, it stops the same way.

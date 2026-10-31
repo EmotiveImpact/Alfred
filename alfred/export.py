@@ -440,11 +440,11 @@ def _remove_ours(directory: Path) -> None:
 SWAP_UNFINISHED = 'export_swap_unfinished'
 
 
-def _unfinished(directory: Path, staging: Path) -> Fault:
+def _unfinished(directory: Path, copy: Path) -> Fault:
     """Neither copy is at the export's path. Rotation stops here and keeps the older keys, so
-    running it again can put the new copy in place."""
+    running it again can put the copy in place."""
     fault = Fault(SWAP_UNFINISHED, 409)
-    fault.detail = (f'The sealed export {directory} could not be put back: its new copy is beside it as {staging.name}. '
+    fault.detail = (f'The sealed export {directory} could not be put back: it is beside that path as {copy.name}. '
                     'Once the drive can be written, run rotate-area again; or move that folder to the export\'s path first.')
     return fault
 
@@ -461,10 +461,11 @@ def reseal_export(directory, sealer) -> bool:
     staging, aside = (directory.with_name(f'.{directory.name}{end}') for end in ('.resealed', '.before-reseal'))
     if not directory.exists() and not directory.is_symlink() and (aside / SEALED_FILE).is_file():
         # Stopped between the two renames below: the new files go in if they were written.
+        copy = staging if (staging / SEALED_FILE).is_file() else aside
         try:
-            os.rename(staging if (staging / SEALED_FILE).is_file() else aside, directory)
+            os.rename(copy, directory)
         except OSError:
-            raise _unfinished(directory, staging) from None
+            raise _unfinished(directory, copy) from None
     _remove_ours(aside)
     _remove_ours(staging)
     try:
