@@ -8,7 +8,6 @@ supervisor cycle that holds the vault. The destination is always under
 bytes fails the action and is left untouched. Nothing is sent anywhere.
 """
 from __future__ import annotations
-import hashlib
 import json
 import os
 import re
@@ -68,8 +67,7 @@ def current(store, db, row):
     if not selected or selected['vault_id'] != params['vault_id']:
         return False
     # A note already indexed at the destination means someone else got there first.
-    taken = db.execute("SELECT 1 FROM knowledge_notes WHERE scope=? AND source=? AND path=? AND status='ready'",
-                       (row['scope'], params['source'], params['path'])).fetchone()
+    taken = store.note_at(db, row['scope'], params['source'], params['path'])
     return not taken or row['state'] in ('executing', 'uncertain', 'verified')
 
 
@@ -79,12 +77,12 @@ def propose(store, bearer, body):
     path = destination(body['filename'])
     content = note_text(body['content'])
     content = content if content.endswith('\n') else content + '\n'
-    digest = hashlib.sha256(content.encode()).hexdigest()
     from .policy import permitted
     with store.transaction() as db:
         p = store.authenticate(db, bearer, {'owner'})
         if not permitted(db, p, body['source'], store.now(), 'inbox.write'):
             raise Fault('inbox_write_not_granted', 403)
+        digest = store.file_digest(p['scope'], body['source'], path, content.encode(), db)
         selected = _vault(db, p['scope'], body['source'])
         if not selected:
             raise Fault('vault_not_selected', 409)
@@ -95,7 +93,7 @@ def propose(store, bearer, body):
             if existing['actor'] != p['id'] or existing['capability'] != CAPABILITY or json.loads(existing['parameters']) != params:
                 raise Fault('action_id_collision', 409)
             return store.action_view(existing)
-        if db.execute("SELECT 1 FROM knowledge_notes WHERE scope=? AND source=? AND path=? AND status='ready'", (p['scope'], body['source'], path)).fetchone():
+        if store.note_at(db, p['scope'], body['source'], path):
             raise Fault('inbox_destination_exists', 409)
         if db.execute('SELECT count(*) FROM actions WHERE scope=?', (p['scope'],)).fetchone()[0] >= 5000:
             raise Fault('action_capacity', 409)
@@ -123,6 +121,6 @@ def verify(store, row):
     if writer is None:
         return None
     data = writer.read_inbox_note(params['path'].split('/')[-1])
-    if data is None or hashlib.sha256(data).hexdigest() != params['sha256']:
+    if data is None or writer.digest(params['path'], data) != params['sha256']:
         return None
     return {'type': 'vault_inbox_readback', 'path': params['path'], 'sha256': params['sha256'], 'sent': False}

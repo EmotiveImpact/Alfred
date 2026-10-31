@@ -355,8 +355,9 @@ class CapturePolicies:
             if not sources:
                 continue
             marks = ','.join('?' * len(sources))
-            notes = db.execute(f'''SELECT id,path,body,sha256,revision FROM knowledge_notes
-                WHERE scope=? AND status='ready' AND source IN ({marks}) ORDER BY path,id''', (p['scope'], *sources)).fetchall()
+            notes = sorted((self.store.opened('knowledge_notes', n) for n in db.execute(f'''SELECT scope,source,id,path,body,sha256,revision
+                FROM knowledge_notes WHERE scope=? AND status='ready' AND source IN ({marks})''', (p['scope'], *sources))),
+                key=lambda n: (n['path'], n['id']))
             for note in notes:
                 if rule['path_prefix'] and not note['path'].startswith(rule['path_prefix']):
                     continue

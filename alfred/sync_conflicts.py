@@ -127,9 +127,13 @@ def content_copies(notes):
     return found
 
 
-def conflict_id(source, path):
-    """Stable reference for audit entries, so the audit log never holds note paths."""
-    return hashlib.sha256((source + '\0' + path).encode()).hexdigest()[:24]
+def conflict_id(source, path, sealer=None, area=None):
+    """Stable reference for audit entries, so the audit log never holds note paths.
+
+    In a sealed workspace it is keyed, so a guessed path cannot be checked against it.
+    """
+    digest = hashlib.sha256((source + '\0' + path).encode()).hexdigest()
+    return (sealer.fingerprint(area, digest) if sealer is not None else digest)[:24]
 
 
 def scanned(copies, notes, errors):
@@ -189,18 +193,27 @@ def record(store, db, scope, source, conflicts, located):
     `located` maps note paths indexed in that transaction to their catalogue IDs.
     A copy stays recorded until a complete scan no longer finds it.
     """
-    prior = {r['path']: dict(r) for r in db.execute('SELECT * FROM knowledge_conflicts WHERE scope=? AND source=?', (scope, source))}
+    # Raw rows are kept beside the opened ones, so an unchanged conflict keeps its sealed paths.
+    prior = {}
+    for raw in db.execute('SELECT * FROM knowledge_conflicts WHERE scope=? AND source=?', (scope, source)):
+        opened = store.opened('knowledge_conflicts', raw)
+        prior[opened['path']] = (opened, dict(raw))
     db.execute('DELETE FROM knowledge_conflicts WHERE scope=? AND source=?', (scope, source))
     for c in conflicts:
         original = located.get(c['original_path'])
         state = 'linked' if original else 'original_unavailable' if c['original_present'] else 'orphaned'
-        first = prior[c['path']]['detected'] if c['path'] in prior else store.now()
+        first = prior[c['path']][0]['detected'] if c['path'] in prior else store.now()
+        area = store.note_area(db, scope, source, c['path'])
+        row = store.sealed('knowledge_conflicts', area, {'scope': scope, 'source': source, 'path': c['path'],
+                                                         'original_path': c['original_path']},
+                           prior[c['path']][1] if c['path'] in prior else None)
         db.execute('INSERT INTO knowledge_conflicts VALUES (?,?,?,?,?,?,?,?,?)',
-                   (scope, source, c['path'], c['original_path'], original, c['tool'], state, first, store.now()))
+                   (scope, source, row['path'], row['original_path'], original, c['tool'], state, first, store.now()))
         if c['path'] not in prior:
-            store.log(db, scope, source, 'knowledge.sync_conflict_detected', conflict_id(source, c['path']))
+            store.log(db, scope, source, 'knowledge.sync_conflict_detected', conflict_id(source, c['path'], store.sealer, area))
     for path in sorted(set(prior) - {c['path'] for c in conflicts}):
-        store.log(db, scope, source, 'knowledge.sync_conflict_cleared', conflict_id(source, path))
+        store.log(db, scope, source, 'knowledge.sync_conflict_cleared',
+                  conflict_id(source, path, store.sealer, store.note_area(db, scope, source, path)))
 
 
 def view(rows, visible_notes):

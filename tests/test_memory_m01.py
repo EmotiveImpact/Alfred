@@ -10,6 +10,8 @@ from alfred.grounded import check_sources
 from alfred.local import Fault
 from alfred.reviewed_memory import ReviewedMemory
 from grant_helpers import grant_all
+import stored_helpers as stored
+from alfred import sealing
 
 
 class M01Tests(unittest.TestCase):
@@ -47,8 +49,7 @@ class M01Tests(unittest.TestCase):
         self.scanner = MarkdownVault(self.store, self.source, self.vault, id_key='alfred_id')
 
     def history(self, identity):
-        with self.store.connection() as db:
-            return [dict(r) for r in db.execute('SELECT * FROM knowledge_history WHERE id=? ORDER BY revision', (identity,))]
+        return stored.rows(self.store, 'knowledge_history', 'SELECT * FROM knowledge_history WHERE id=? ORDER BY revision', (identity,))
 
     def test_closed_app_read_never_writes_vault(self):
         file = self.write('one.md', '# One\n[[two#Section]]')
@@ -442,16 +443,19 @@ class M01Tests(unittest.TestCase):
         self.assertEqual(self.data()['nodes'],[])
 
     def test_v1_migration_preserves_legacy_evidence_ids_and_revisions(self):
-        note=parse_note('a.md',b'# A'); identity=note_id('source','a.md')
+        identity=note_id('source','a.md')
         with self.store.transaction() as db:
             db.execute('UPDATE knowledge_meta SET version=1')
             for table in ('knowledge_vaults','knowledge_identity','knowledge_history','knowledge_anchors'):
                 db.execute('DROP TABLE '+table)
             db.execute('DROP TABLE knowledge_notes')
             db.execute('CREATE TABLE knowledge_notes(scope TEXT,source TEXT,id TEXT,path TEXT,title TEXT,kind TEXT,tags TEXT,aliases TEXT,body TEXT,sha256 TEXT,revision INTEGER,modified INTEGER,indexed INTEGER,status TEXT,PRIMARY KEY(scope,source,id),UNIQUE(scope,source,path))')
+            # The legacy rows as this workspace keeps them (sealed in the sealed suite).
+            row=self.store.sealed('knowledge_notes',sealing.DEFAULT_AREA,{'scope':'work','source':'source','id':identity,'path':'a.md','title':'A','tags':'[]','aliases':'[]','body':'# A'})
             db.execute('INSERT INTO knowledge_notes VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-                ('work','source',identity,'a.md','A','note','[]','[]','# A',note['sha256'],7,1000,1000,'ready'))
-            db.execute('INSERT OR REPLACE INTO knowledge_sources VALUES (?,?,?,?,?,?,?)',('work','source','Legacy',1000,'ready','[]','old'))
+                ('work','source',identity,row['path'],row['title'],'note',row['tags'],row['aliases'],row['body'],stored.digest(self.store,b'# A'),7,1000,1000,'ready'))
+            row=self.store.sealed('knowledge_sources',sealing.DEFAULT_AREA,{'scope':'work','source':'source','label':'Legacy','errors':'[]'})
+            db.execute('INSERT OR REPLACE INTO knowledge_sources VALUES (?,?,?,?,?,?,?)',('work','source',row['label'],1000,'ready',row['errors'],'old'))
         self.store=KnowledgeStore(self.root/'db',clock=lambda:1000)
         self.write('a.md','# A'); self.scanner=MarkdownVault(self.store,self.source,self.vault); self.scan()
         self.assertEqual(self.node('a.md')['id'],identity)

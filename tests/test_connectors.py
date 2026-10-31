@@ -26,7 +26,9 @@ from alfred.grounded import retrieve
 from alfred.desk import init_demo, load_keys
 from alfred.desk_http import DeskHTTPServer
 from alfred import connectors, console_api, inbox, lifecycle
+from alfred import sealing
 from grant_helpers import as_pre_strict_database
+import stored_helpers as stored
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 DAY = 86400
@@ -97,8 +99,8 @@ class Base(unittest.TestCase):
                       key=lambda n: n['title'])
 
     def row(self, source, title):
-        with self.store.connection() as db:
-            return dict(db.execute('SELECT * FROM knowledge_notes WHERE source=? AND title=?', (source, title)).fetchone())
+        return next(r for r in stored.rows(self.store, 'knowledge_notes', 'SELECT * FROM knowledge_notes WHERE source=?', (source,))
+                    if r['title'] == title)
 
     def cite(self, note, prefix='Starts:'):
         self.subjects += 1
@@ -232,7 +234,8 @@ class ImportTests(Base):
         self.assertIn('Imported calendar event: a report of what the selected export contained', body)
         self.assertIn('Location: Meeting room 2', body)
         with self.store.connection() as db:
-            self.assertEqual(db.execute('SELECT external_id FROM knowledge_identity WHERE id=?', (plan['id'],)).fetchone()[0], plan['path'].split('/')[1])
+            self.assertEqual(db.execute('SELECT external_id FROM knowledge_identity WHERE id=?', (plan['id'],)).fetchone()[0],
+                             self.store.external_key(sealing.DEFAULT_AREA, plan['path'].split('/')[1]))
             self.assertEqual([tuple(r) for r in db.execute('SELECT revision,status FROM knowledge_history WHERE id=?', (plan['id'],))], [(1, 'ready')])
         source = next(s for s in self.store.knowledge(self.owner)['sources'] if s['source'] == self.source)
         self.assertEqual((source['label'], source['status']), ('Calendar export', 'ready'))

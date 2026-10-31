@@ -18,6 +18,7 @@ from alfred.reviewed_memory import ReviewedMemory
 from alfred.grounded import retrieve
 from alfred import deletion, lifecycle
 from grant_helpers import grant_all
+import stored_helpers as stored
 
 DAY = 86400
 
@@ -326,10 +327,13 @@ class RestoreTests(Base):
 class SourceTests(Base):
     def test_removing_a_source_ordinarily_comes_back_with_a_restore(self):
         backup = self.backup()
+        label = stored.rows(self.store, 'knowledge_sources', 'SELECT scope,source,label FROM knowledge_sources WHERE source=?', ('source',))[0]['label']
         receipt = lifecycle.forget_source(self.store, self.owner, 'source')
         self.assertEqual(receipt['layer'], 'ordinary')
         result = lifecycle.restore(backup, self.db)
         self.assertEqual([(c['kind'], c['subject']) for c in result['came_back']], [('source_forgotten', 'source')])
+        # The list names the source as the owner knows it, opened in a sealed workspace.
+        self.assertEqual(result['came_back'][0]['label'], label)
         store, _ = self.restored()
         self.assertEqual(len(store.knowledge(self.owner)['nodes']), 1)
 

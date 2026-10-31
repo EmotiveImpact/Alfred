@@ -130,12 +130,14 @@ class IdentityPolicy:
             sources = []
             labels = {}
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='knowledge_sources'").fetchone():
-                labels = {r['source']: r['label'] for r in db.execute('SELECT source,label FROM knowledge_sources WHERE scope=?', (p['scope'],))}
+                labels = {r['source']: r for r in db.execute('SELECT scope,source,label FROM knowledge_sources WHERE scope=?', (p['scope'],))}
             for c in db.execute("SELECT id,expires FROM credentials WHERE scope=? AND role='source' AND revoked=0 AND expires>? ORDER BY id", (p['scope'], now)):
                 allowed = {cap: permitted(db, p, c['id'], now, cap) for cap in sorted(CAPABILITIES)}
                 if p['role'] != 'owner' and not allowed['read']:
                     continue
-                sources.append({'source': c['id'], 'label': labels.get(c['id'], 'Unnamed source'), 'permitted': allowed,
+                # Opened only once the source is shown, so nothing hidden from the reader is opened.
+                label = self.store.opened('knowledge_sources', labels[c['id']])['label'] if c['id'] in labels else 'Unnamed source'
+                sources.append({'source': c['id'], 'label': label, 'permitted': allowed,
                                 'credential_expires': c['expires']})
             # Only this person's own active devices. Other people's devices are never listed.
             devices = [{'device': r['device'], 'label': r['label'] or 'Provisioned access key', 'role': r['role'],

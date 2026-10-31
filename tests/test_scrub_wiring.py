@@ -17,6 +17,7 @@ from alfred.knowledge import MarkdownVault
 from alfred.reviewed_memory import ReviewedMemory
 from test_brain_plug import Base as BrainBase, sample_bundle, sample_packet
 from test_learning import Base as LearningBase, BrainMixin
+import stored_helpers as stored
 
 GH = 'gh' + 'p_' + 'Zq7Rk2' * 6
 AWS = 'AK' + 'IA' + 'Q7XM' * 4
@@ -114,7 +115,7 @@ class PacketScrubTests(BrainBase):
         packet = self.hub.build_packet(self.owner, self.keys_request())
         note = self.store.knowledge_note(self.owner, self.notes['Keys'])
         self.assertEqual((packet['context'][0]['sha256'], packet['context'][0]['revision']), (note['sha256'], note['revision']))
-        self.assertEqual(note['sha256'], hashlib.sha256(KEYS.encode('utf-8')).hexdigest())
+        self.assertEqual(note['sha256'], stored.digest(self.store, KEYS))
 
     def test_a_clean_packet_is_byte_identical_to_before(self):
         request = self.request('task-clean')
@@ -169,7 +170,8 @@ class PacketScrubTests(BrainBase):
     def test_nothing_stored_or_logged_holds_the_secret(self):
         job_id = self.run_task(self.keys_request())
         self.hub.ingest(self.owner, job_id)
-        self.assertEqual(tables_holding(self.db_path, SECRETS), NOTE_TABLES)
+        # A sealed workspace keeps even the note's own text sealed, so no table holds it in the clear.
+        self.assertEqual(tables_holding(self.db_path, SECRETS), set() if self.store.sealer.sealed else NOTE_TABLES)
 
     def test_an_older_database_gains_the_scrubbed_column(self):
         job_id = self.run_task(self.request('task-old'))

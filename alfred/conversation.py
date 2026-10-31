@@ -273,7 +273,7 @@ class ConversationService:
                     db.execute("UPDATE conversation_turns SET state='source_changed',result=NULL WHERE id=?",(turn['id'],))
                     turn['state'],turn['result']='source_changed',None;continue
                 for source in sources:
-                    note=db.execute('SELECT body FROM knowledge_notes WHERE scope=? AND id=?',(p['scope'],source['note_id'])).fetchone()
+                    note=self.store.opened('knowledge_notes',db.execute('SELECT scope,source,id,body FROM knowledge_notes WHERE scope=? AND id=?',(p['scope'],source['note_id'])).fetchone())
                     source['excerpt']='\n'.join(note['body'].splitlines()[source['start_line']-1:source['end_line']])
                 memory=context_current_db(db,p,context_references(result['packet']),self.store.now())
                 for c,saved in zip(memory,result['packet'].get('memory',[])):

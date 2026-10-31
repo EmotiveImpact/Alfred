@@ -228,10 +228,11 @@ def documents(source, connector, parsed, scopes, file_modified):
 
 
 def _instance(db, scope, source):
+    from . import sealing
     row = db.execute('SELECT * FROM connector_instances WHERE scope=? AND source=?', (scope, source)).fetchone()
     if not row:
         raise Fault('connector_not_found', 404)
-    return dict(row)
+    return sealing.open_row(sealing.of(db), 'connector_instances', row)
 
 
 def _receipt(store, actor, instance, outcome, code, info, counts, issues):
@@ -241,8 +242,11 @@ def _receipt(store, actor, instance, outcome, code, info, counts, issues):
              'origin_changed': False, 'network': False, 'authority_granted': False}
     with store.transaction() as db:
         scope, source = instance['scope'], instance['source']
+        # The receipt names the export file and what it held: sealed with the source's area.
+        sealed = store.sealed('connector_receipts', store.source_area(db, scope, source),
+                              {'scope': scope, 'source': source, 'id': rid, 'receipt': json.dumps(value, sort_keys=True)})
         db.execute('INSERT INTO connector_receipts VALUES (?,?,?,?,?,?,?)',
-                   (rid, scope, source, actor, store.now(), outcome, json.dumps(value, sort_keys=True)))
+                   (rid, scope, source, actor, store.now(), outcome, sealed['receipt']))
         if outcome == 'imported':
             db.execute('UPDATE connector_instances SET imported=?,export_modified=max(coalesce(export_modified,0),?) WHERE scope=? AND source=?',
                        (store.now(), info['modified'], scope, source))
@@ -293,23 +297,28 @@ def _import(store, owner_bearer, source_bearer, instance, export_path, dry_run, 
             raise Fault('connector_read_not_granted', 403)
         current = _instance(db, scope, source)
         # Current means ready or temporarily withheld: either becomes 'missing' if absent now.
-        known = {r['external_id']: dict(r) for r in db.execute(
-            '''SELECT i.external_id,n.path,n.sha256,n.status FROM knowledge_notes n JOIN knowledge_identity i USING(scope,source,id)
+        # Items are compared by their ids as the index keeps them: keyed in a sealed workspace
+        # (alfred/sealing.py), where connector_item_revisions holds the keyed ids too.
+        def item_key(path):
+            return store.external_key(store.note_area(db, scope, source, path), path.split('/', 1)[1])
+        known = {r['external_id']: store.opened('knowledge_notes', r) for r in db.execute(
+            '''SELECT n.scope,n.source,n.id,i.external_id,n.path,n.sha256,n.status FROM knowledge_notes n JOIN knowledge_identity i USING(scope,source,id)
                WHERE n.scope=? AND n.source=? AND n.status IN ('ready','unavailable')''', (scope, source))}
-        incoming = {n['external_id']: n for n in built['notes']}
+        incoming = {item_key(n['path']): n for n in built['notes']}
+        digest = {k: store.note_fingerprint(db, scope, source, n['path'], n['sha256']) for k, n in incoming.items()}
         errors = list(built['errors'])
         if built['unidentified']:
             # An item the export did not let ALFRED identify could be any absent item,
             # so absent items are withheld (unavailable), never treated as deleted.
-            held = {path.split('/', 1)[1] for path in built['withheld']}
+            held = {item_key(path) for path in built['withheld']}
             errors = [{'path': r['path'], 'code': 'absent_from_incomplete_export'} for key, r in sorted(known.items())
                       if key not in incoming and key not in held] + errors
-        held_paths = {e['path'] for e in errors if 'path' in e and e['path'].split('/', 1)[1] not in incoming}
+        held_paths = {e['path'] for e in errors if 'path' in e and item_key(e['path']) not in incoming}
         absent = {k: r['path'] not in held_paths for k, r in known.items() if k not in incoming}
         counts = {'items': len(incoming),
                   'new': sum(k not in known for k in incoming),
-                  'changed': sum(k in known and (known[k]['sha256'] != n['sha256'] or known[k]['status'] != 'ready') for k, n in incoming.items()),
-                  'unchanged': sum(k in known and known[k]['sha256'] == n['sha256'] and known[k]['status'] == 'ready' for k, n in incoming.items()),
+                  'changed': sum(k in known and (known[k]['sha256'] != digest[k] or known[k]['status'] != 'ready') for k in incoming),
+                  'unchanged': sum(k in known and known[k]['sha256'] == digest[k] and known[k]['status'] == 'ready' for k in incoming),
                   'withheld': sum(not removed for removed in absent.values()),
                   'removed': sum(absent.values()),
                   'not_identified': built['unidentified']}
@@ -374,7 +383,8 @@ def create_instance(store, owner_bearer, connector, label, scopes=None, *, keep=
         policy = db.execute('SELECT strict FROM source_policy WHERE scope=?', (p['scope'],)).fetchone()
         if not policy or not policy['strict']:
             raise Fault('explicit_grants_required', 409)
-        labels = [r['label'].casefold() for r in db.execute('SELECT label FROM connector_instances WHERE scope=?', (p['scope'],))]
+        labels = [store.opened('connector_instances', r)['label'].casefold()
+                  for r in db.execute('SELECT scope,source,label FROM connector_instances WHERE scope=?', (p['scope'],))]
         if len(labels) >= MAX_INSTANCES:
             raise Fault('connector_capacity', 409)
         if label.casefold() in labels:
@@ -387,11 +397,15 @@ def create_instance(store, owner_bearer, connector, label, scopes=None, *, keep=
             keep(source, bearer)
         with store.transaction() as db:
             q = store.authenticate(db, owner_bearer, {'owner'})
+            area = store.source_area(db, q['scope'], source)
+            named = store.sealed('connector_instances', area, {'scope': q['scope'], 'source': source, 'label': label})
             db.execute('INSERT INTO connector_instances VALUES (?,?,?,?,?,?,?,NULL,NULL)',
-                       (q['scope'], source, connector, label, json.dumps(scopes), store.now(), q['id']))
+                       (q['scope'], source, connector, named['label'], json.dumps(scopes), store.now(), q['id']))
             # Honest until the first import: the source exists, holds nothing and is not current.
+            row = store.sealed('knowledge_sources', area, {'scope': q['scope'], 'source': source, 'label': label,
+                               'errors': json.dumps([{'code': 'awaiting_first_import'}])})
             db.execute('INSERT INTO knowledge_sources VALUES (?,?,?,?,?,?,?)',
-                       (q['scope'], source, label, store.now(), 'unavailable', json.dumps([{'code': 'awaiting_first_import'}]), ''))
+                       (q['scope'], source, row['label'], store.now(), 'unavailable', row['errors'], ''))
             store.log(db, q['scope'], q['id'], 'connector.instance_created', source)
         from .policy import IdentityPolicy
         identity = IdentityPolicy(store)
@@ -424,9 +438,11 @@ def status(store, bearer):
             if p['role'] != 'owner' and not readable:
                 # Unknown and unauthorised instances look the same to a reader.
                 continue
+            row = store.opened('connector_instances', row)
             spec = CONNECTORS[row['connector']]
-            last = db.execute('SELECT receipt FROM connector_receipts WHERE scope=? AND source=? ORDER BY at DESC,rowid DESC LIMIT 1',
-                              (p['scope'], row['source'])).fetchone()
+            last = store.opened('connector_receipts', db.execute(
+                'SELECT scope,source,id,receipt FROM connector_receipts WHERE scope=? AND source=? ORDER BY at DESC,rowid DESC LIMIT 1',
+                (p['scope'], row['source'])).fetchone())
             last = json.loads(last['receipt']) if last else None
             age = now - row['imported'] if row['imported'] is not None else None
             state = ('source_unavailable' if not active else 'never_imported' if age is None

@@ -6,7 +6,6 @@ after approval of an exact diff. Concurrent edits make the write refuse, never
 clobber. Nothing is sent.
 """
 from pathlib import Path
-import hashlib
 import http.client
 import json
 import os
@@ -24,6 +23,7 @@ from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.local import Fault
 from alfred.policy import IdentityPolicy
 from grant_helpers import as_pre_strict_database
+import stored_helpers as stored
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'obsidian_vault'
 NOTE = '# Atlas\n\nIntro line.\n\n## Actions\n\n- Existing human item\n\n## Later\n\nHuman closing text.\n'
@@ -117,12 +117,12 @@ class AppendTests(Base):
         self.assert_insertion_only(before, after, action)
         self.assertEqual(after.decode(), NOTE.replace('- Existing human item\n', '- Existing human item\n\n- Confirm the venue\n'))
         self.assertEqual(result['proof'], {'type': 'vault_append_readback', 'path': 'Atlas.md', 'heading': 'Actions',
-                                           'sha256': hashlib.sha256(after).hexdigest(), 'base_sha256': hashlib.sha256(before).hexdigest(),
+                                           'sha256': stored.digest(self.store, after), 'base_sha256': stored.digest(self.store, before),
                                            'offset': action['parameters']['offset'], 'inserted_sha256': action['parameters']['inserted_sha256'],
                                            'sent': False})
         self.scanner.scan()
         node = self.indexed()
-        self.assertEqual((node['id'], node['revision'], node['sha256']), (identity, 2, hashlib.sha256(after).hexdigest()))
+        self.assertEqual((node['id'], node['revision'], node['sha256']), (identity, 2, stored.digest(self.store, after)))
         self.assertEqual(sorted(os.listdir(self.vault)), ['Atlas.md'])
 
     def test_wrong_fingerprint_cannot_approve(self):

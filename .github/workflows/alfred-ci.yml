@@ -68,6 +68,27 @@ jobs:
           name: alfred-unified-core
           path: /tmp/alfred-unified-core
           retention-days: 7
+  sealed-suite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Run every application test with each workspace sealed by a synthetic keyring
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/alfred-sealed-suite
+          git rev-parse HEAD | tee /tmp/alfred-sealed-suite/TESTED_COMMIT.txt
+          python3 -m venv /tmp/alfred-python
+          /tmp/alfred-python/bin/pip install --require-hashes --only-binary :all: -r requirements/encryption.txt
+          /tmp/alfred-python/bin/python tests/sealed_suite.py 2>&1 | tee /tmp/alfred-sealed-suite/sealed-tests.txt
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: alfred-sealed-suite
+          path: /tmp/alfred-sealed-suite
+          retention-days: 7
   hermes-box:
     runs-on: ubuntu-latest
     timeout-minutes: 30

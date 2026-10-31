@@ -524,6 +524,11 @@ def _retrieve_all(*, repeats, warmup, fts5):
         restricted_markers = {n['id'] for n in legacy['nodes'] if n['source'] == RESTRICTED_SOURCE}
         restricted_markers |= {n['sha256'] for n in legacy['nodes'] if n['source'] == RESTRICTED_SOURCE}
         restricted_markers.add(RESTRICTED_CANARY)
+        # The index keeps each digest in its stored form (keyed in a sealed workspace), so the
+        # frozen corpus is compared in that form too.
+        stored = sorted([source, path, store.file_digest(WORKSPACE, source, path, text.encode())]
+                        for source, notes in ((MAIN_SOURCE, CORPUS), (RESTRICTED_SOURCE, RESTRICTED))
+                        for path, text in notes.items())
         # Positive control in which the owner is explicitly granted both sources (the
         # coverage the earlier whole-workspace policy gave). This is not leakage; it shows the
         # ungranted notes do match some questions, so a zero below is meaningful.
@@ -571,7 +576,7 @@ def _retrieve_all(*, repeats, warmup, fts5):
         'strict_calls': {r: len(questions) * (warmup + repeats) for r in rankings},
         'origin': origin, 'paths': paths, 'restricted_markers': restricted_markers,
         'health': {k: {'status': v['status'], 'notes': v.get('notes'), 'errors': v['errors']} for k, v in health.items()},
-        'indexed_matches_frozen': indexed == corpus_manifest(),
+        'indexed_matches_frozen': indexed == stored,
         'legacy_visible_notes': len(legacy['nodes']), 'granted_visible_notes': len(granted['nodes']),
         'granted_sources': sorted({n['source'] for n in granted['nodes']}),
         'links': len(granted['links']), 'link_issues': len(granted['issues']),
