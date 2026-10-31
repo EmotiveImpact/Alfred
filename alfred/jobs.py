@@ -218,6 +218,11 @@ class JobCoordinator:
         sources = set()
         for item in json.loads(row['inputs']):
             sources.update([item['source']] if item['type'] == 'note' else item['sources'])
+        if not sources:
+            # Bound to nothing, a job still carries its submitter's words (a brain task's goal
+            # and instruction), so only a workspace kept on whole-workspace reads shows it.
+            policy = db.execute('SELECT strict FROM source_policy WHERE scope=?', (principal['scope'],)).fetchone()
+            return policy is not None and not policy['strict']
         return self._sources_permitted(db, principal, sorted(sources), 'read')
 
     def _permitted_job(self, db, principal, job_id):
