@@ -270,6 +270,38 @@ TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
     'drafts': (('scope', 'action_id'), ('body',), ('digest',)),
     'draft_sources': (('scope', 'action_id'), ('binding',), ()),
     'voice_playbacks': (('id',), (), ('text_sha256',)),
+    # What the desk observes (part 4). An event's body holds what a source reported and is
+    # sealed whole; the file names and titles of the documents and links the desk lists are
+    # sealed; the fingerprints of events and of document files are keyed.
+    'events': (('seq',), ('body',), ('fingerprint',)),
+    'desk_documents': (('scope', 'source', 'document_id'), ('filename', 'title'), ('sha256',)),
+    'desk_links': (('seq',), ('filename', 'title'), ('sha256',)),
+    'desk_action_evidence': (('scope', 'action_id'), (), ('event_fingerprint',)),
+    # Jobs, their results and workers (part 4, ``jobs.job_area``). A result is addressed by the
+    # keyed SHA-256 of its bytes, which also names it in jobs, lineage, job events and the
+    # cache; its bytes are sealed as Base64 text.
+    'jobs': (('id',), ('parameters',), ('fingerprint',)),
+    'workers': (('scope', 'id'), ('label',), ()),
+    'artefacts': (('scope', 'sha256'), ('body',), ('sha256',)),
+    # Brain tasks (part 4, ``brain.brain_area``): a result's outcome holds the brain's answer;
+    # proposals and memory suggestions hold what it proposed and why.
+    'brain_tasks': (('job_id',), (), ('packet_sha256',)),
+    'brain_results': (('job_id',), ('outcome',), ('envelope_sha256',)),
+    'brain_proposals': (('id',), ('parameters', 'reason', 'cites', 'provenance', 'confirmation'), ('fingerprint',)),
+    'brain_suggestions': (('id',), ('statement', 'cites'), ()),
+    # Verification of brain results (part 4, in the brain task's area): a run's report quotes
+    # what the checks found, so it is sealed and its hash keyed.
+    'verification_runs': (('id',), ('report',), ('report_sha256',)),
+    'verification_results': (('job_id',), (), ('last_run_sha256',)),
+    # Learnings (part 4, ``learning.learning_area``). A harvested learning's key and signature
+    # are keyed fingerprints of a worker's text; other keys and signatures are ALFRED's codes.
+    'learning_proposals': (('id',), ('statement', 'detail', 'evidence'), ()),
+    'learning_records': (('id',), ('statement', 'detail', 'evidence'), ()),
+    # Goals the hub works on (part 4, ``hub_goals.goal_area``): a mandate's success test,
+    # schedule (which holds the task's instruction) and acceptance checks, and what the
+    # append-only hub journal records about each change.
+    'hub_mandates': (('id',), ('success_test', 'schedule', 'acceptance'), ('request_hash',)),
+    'hub_journal': (('seq',), ('detail',), ()),
 }
 
 # Columns holding stable ids taken from private text (a note's front-matter id, an imported
@@ -278,6 +310,9 @@ TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]] = {
 KEYED_IDS: dict[str, tuple[str, ...]] = {
     'knowledge_identity': ('external_id',),
     'connector_item_revisions': ('item',),
+    # An event's subject and a desk document's id, which a source chose (``local.event_key``).
+    'events': ('subject',),
+    'desk_documents': ('document_id',),
 }
 
 

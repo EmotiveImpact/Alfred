@@ -22,6 +22,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault, action_area
 from alfred.policy import IdentityPolicy
 from alfred.verification import Verifier, declare, sentences, validate_acceptance
+import stored_helpers as stored
 from grant_helpers import grant_all
 
 WORKSPACE = 'ws-verify-4410'
@@ -305,7 +306,7 @@ class OutcomeTests(Base):
         self.assertEqual(report['counts'], {'passed': 5, 'failed': 0, 'unverifiable': 0})
         self.assertEqual((report['declared_by'], report['contract'], report['brain_claims_counted']), ('owner', 'accepted', False))
         self.assertEqual(self.check(view, 'C2')['detail']['numbers'], 4)  # 1,250 and 3, in the answer and the artefact
-        self.assertEqual(view['last_run']['sha256'], sha(json.dumps(report, sort_keys=True, separators=(',', ':'))))
+        self.assertEqual(view['last_run']['sha256'], stored.digest(self.store, json.dumps(report, sort_keys=True, separators=(',', ':'))))
         self.assertFalse(view['authority_granted'])
 
     def test_no_declared_checks_means_only_the_owner_can_verify(self):

@@ -25,6 +25,7 @@ from alfred.jobs import JobCoordinator, JobWorker
 from alfred.knowledge import KnowledgeStore, KnowledgeSupervisor, MarkdownVault
 from alfred.local import Fault
 from alfred.routines import next_slot
+import stored_helpers as stored
 from grant_helpers import grant_all
 
 DAY, HOUR = 86400, 3600
@@ -171,7 +172,7 @@ class Base(unittest.TestCase):
         return self.hub.control(self.owner, level, target, operation, {'version': version, **extra})
 
     def journal(self, event=None):
-        rows = self.rows('SELECT * FROM hub_journal ORDER BY seq')
+        rows = stored.rows(self.store, 'hub_journal', 'SELECT * FROM hub_journal ORDER BY seq')
         return [r for r in rows if event is None or r['event'] == event]
 
 

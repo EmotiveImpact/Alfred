@@ -140,9 +140,11 @@ def _routine_slots(db, scope, now):
     if _table(db, 'hub_mandates'):
         # Goal heartbeats (AGENT_HUB.md H2): counted here, never replayed.
         from .hub_goals import missed_slots
+        from .sealing import of, open_row
         for row in db.execute('SELECT id,schedule,next_due FROM hub_mandates WHERE scope=? AND next_due>0 AND next_due<=? '
                               'AND schedule IS NOT NULL ORDER BY id', (scope, now)):
-            missed['hub:' + row['id']] = missed_slots(json.loads(row['schedule']), row['next_due'], now)
+            schedule = open_row(of(db), 'hub_mandates', row)['schedule']
+            missed['hub:' + row['id']] = missed_slots(json.loads(schedule), row['next_due'], now)
     return missed
 
 

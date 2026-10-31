@@ -1,5 +1,4 @@
 """Original desk integration tests. Real SQLite/files, no upstream runtime."""
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,6 +9,7 @@ from alfred.desk import init_demo
 from alfred.desk_store import DeskStore
 from alfred.desk_runtime import ProjectFiles, Supervisor
 from alfred.local import Fault
+import stored_helpers as stored
 
 
 class DeskTests(unittest.TestCase):
@@ -43,7 +43,7 @@ class DeskTests(unittest.TestCase):
         before={p.name:p.read_bytes() for p in (self.root/'project').iterdir()};self.sup.cycle()
         self.assertEqual(before,{p.name:p.read_bytes() for p in (self.root/'project').iterdir()})
     def test_source_hash_is_exact(self):
-        e=self.event();self.assertEqual(e['source_sha256'],hashlib.sha256((self.root/'project/schedule.json').read_bytes()).hexdigest())
+        e=self.event();self.assertEqual(e['source_sha256'],stored.digest(self.store,(self.root/'project/schedule.json').read_bytes()))
     def test_repeated_scan_no_duplicate_event(self):
         self.sup.cycle();self.sup.cycle();self.assertEqual(self.state()['counts']['events'],3)
     def test_restart_keeps_events_and_dedup(self):

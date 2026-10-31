@@ -88,6 +88,7 @@ import subprocess
 import sys
 
 from . import brain as plug
+from . import sealing
 from .evidence_review import NUMBER
 from .local import Fault, draft_digest, ident, text
 from .policy import ledger, person_credentials
@@ -569,6 +570,13 @@ def submitters(db, p) -> list:
     return sorted(person_credentials(db, ledger(db, p)) | {p['id']})
 
 
+def _parameters(db, job_id, parameters):
+    """A job's recorded parameters as text, opened when sealed; None stays None."""
+    if parameters is None:
+        return None
+    return sealing.open_row(sealing.of(db), 'jobs', {'id': job_id, 'parameters': parameters})['parameters']
+
+
 def _declared(parameters) -> int:
     """How many acceptance checks ALFRED's recorded packet declared. Never the bundle."""
     try:
@@ -623,7 +631,7 @@ def outcome_rows(db, scope, actors, *, brain=None, since=None, limit=None) -> li
     found = []
     for row in rows:
         failed = json.loads(row['failed']) if row['failed'] else []
-        declared = _declared(row['parameters'])
+        declared = _declared(_parameters(db, row['job_id'], row['parameters']))
         if row['status'] == 'stopped':
             checks = state = 'not_returned'
         elif row['state'] is None:
@@ -750,7 +758,9 @@ class Verifier:
             return None, 'result_not_available'
         try:
             envelope = json.loads(bytes(data).decode('utf-8'))
-            if type(envelope) is not dict or envelope.get('packet_sha256') != task['packet_sha256']:
+            stated = envelope.get('packet_sha256') if type(envelope) is dict else None
+            if (not isinstance(stated, str) or not plug.SHA256.fullmatch(stated)
+                    or plug.task_digest(self.store, stated) != task['packet_sha256']):
                 return None, 'result_not_readable'
             plug.validate_bundle(envelope['bundle'])
         except (Fault, KeyError, UnicodeError, ValueError, RecursionError):
@@ -1025,12 +1035,12 @@ class Verifier:
                 raise Fault('result_not_returned', 409)
             result = dict(result)
             self._expect(db, p, task, job_id, expected_runs)
-            proposals = [dict(r) for r in db.execute(
+            proposals = [self.store.opened('brain_proposals', r) for r in db.execute(
                 'SELECT * FROM brain_proposals WHERE job_id=? AND scope=? AND actor=? ORDER BY position',
                 (job_id, p['scope'], task['actor']))]
         job = self.jobs.view(bearer, job_id)
         packet = job['parameters']['packet']
-        if plug.packet_sha256(packet) != task['packet_sha256']:
+        if plug.task_digest(self.store, plug.packet_sha256(packet)) != task['packet_sha256']:
             raise Fault('packet_record_mismatch', 409)
         acceptance = packet.get('acceptance')
         declared = acceptance['checks'] if acceptance else []
@@ -1073,8 +1083,11 @@ class Verifier:
             row = _row(db, p['scope'], actor, job_id)
             position, now = (row['runs'] if row else 0) + 1, self.store.now()
             report = dict(report, position=position, at=now)
-            body = _compact(report)
-            digest, run_id = _sha(body), 'vr-' + _sha(f'{job_id}|{position}')[:24]
+            body, area = _compact(report), plug.brain_area(db)
+            run_id = 'vr-' + _sha(f'{job_id}|{position}')[:24]
+            # The report is sealed and its hash keyed; the owner acknowledges a run by echoing that hash.
+            digest = self.store.sealer.fingerprint(area, _sha(body))
+            body = self.store.sealed('verification_runs', area, {'id': run_id, 'report': body})['report']
             db.execute('''INSERT INTO verification_runs(id,job_id,scope,actor,position,outcome,report,report_sha256,created,
                 initiated) VALUES (?,?,?,?,?,?,?,?,?,?)''',
                        (run_id, job_id, p['scope'], actor, position, report['outcome'], body, digest, now, initiated))
@@ -1141,7 +1154,8 @@ class Verifier:
 
     @staticmethod
     def _view(db, row) -> dict:
-        run = db.execute('SELECT * FROM verification_runs WHERE id=?', (row['last_run'],)).fetchone()
+        run = sealing.open_row(sealing.of(db), 'verification_runs',
+                               db.execute('SELECT * FROM verification_runs WHERE id=?', (row['last_run'],)).fetchone())
         acknowledged = None
         if row['state'] == 'acknowledged':
             acknowledged = {'run': row['acknowledged_run'], 'over': row['acknowledged_over'],
@@ -1169,7 +1183,7 @@ class Verifier:
             if row:
                 return self._view(db, row)
             job = db.execute('SELECT parameters FROM jobs WHERE id=?', (job_id,)).fetchone() if _table(db, 'jobs') else None
-            declared = _declared(job['parameters']) if job else 0
+            declared = _declared(_parameters(db, job_id, job['parameters'])) if job else 0
             if result['status'] == 'stopped':
                 state = checks = 'not_returned'
             else:
@@ -1186,10 +1200,11 @@ class Verifier:
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
             task = self._submitted(db, p, job_id)
+            rows = [self.store.opened('verification_runs', r) for r in db.execute(
+                'SELECT * FROM verification_runs WHERE job_id=? AND scope=? AND actor=? ORDER BY position',
+                (job_id, p['scope'], task['actor']))]
             return [{'position': r['position'], 'outcome': r['outcome'], 'sha256': r['report_sha256'],
-                     'initiated': r['initiated'] or 'owner', 'report': json.loads(r['report'])}
-                    for r in db.execute('SELECT * FROM verification_runs WHERE job_id=? AND scope=? AND actor=? ORDER BY position',
-                                        (job_id, p['scope'], task['actor']))]
+                     'initiated': r['initiated'] or 'owner', 'report': json.loads(r['report'])} for r in rows]
 
     def outcomes(self, bearer, *, brain=None) -> dict:
         return outcomes(self.store, bearer, brain=brain)

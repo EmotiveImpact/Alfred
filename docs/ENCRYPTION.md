@@ -247,7 +247,8 @@ last one lets you switch a workspace to sealed, so no workspace you use is ever 
 1. The sealing layer and the notes ALFRED reads from your vault (built).
 2. Reviewed memory, its forgetting bin, and capture (built).
 3. Conversations, executive records, drafts and actions (built).
-4. Learning, the agent brain, goals, jobs and their cached files.
+4. Learning, the agent brain, goals, jobs and their cached files, and what the desk observes
+   (built).
 5. Switching on: a `seal` command that converts a workspace, refusing to start without the
    key, sealed backups and exports, compaction after forgetting, re-sealing after key
    rotation, and a final scan of the database, its log and its backups for private text.
@@ -320,6 +321,57 @@ note lines it links (by id), and which option was chosen (by id); each action's 
 state and expiry; which conversation, turn, routine nomination or brain proposal an action
 came from; and each read-aloud record's length and playback state.
 
+**What part 4 seals.** In jobs: every job's parameters (for a brain task, the whole packet: the
+instruction, the goal, the note excerpts and learned statements it was given), every result's
+bytes, the copy of a result kept in the job cache on disk, and each worker's label. In the
+agent brain: each result's outcome (the brain's answer and work log), every action a brain
+proposed, with its reason, citations, provenance label and the owner's confirmation, and every
+memory suggestion's statement and citations. In verification: every run's report, which quotes
+what the checks found. In goals: each mandate's success test, schedule (which holds the
+scheduled task's instruction) and acceptance checks, and the detail of every hub journal entry.
+In learning: every proposed and accepted learning's statement, detail and evidence. And what
+the desk observes, which part 3 found no part covered: each event's body (its summary and the
+rest of what a source reported), and the file names and titles of the documents and links the
+desk lists. Ten hashes become keyed fingerprints: a job's fingerprint, the SHA-256 of a
+result (which is also its address), a brain task's packet hash, a result envelope's hash, a
+proposal's fingerprint, a verification report's hash, a mandate request's hash, the SHA-256 a
+harvested learning is keyed by, an event's fingerprint, and the SHA-256 of a desk document's
+file. An event's subject and a desk document's id, which a source chooses, are keyed ids, so
+they still match exactly.
+
+**Results and their addresses.** A result is named by the SHA-256 of its bytes. In a sealed
+workspace the name ALFRED keeps and returns is the keyed form, and the console and web page
+only ever echo a name ALFRED gave them, so reading a result, feeding it into another job and
+acknowledging a verification run by its hash all work unchanged. A worker still states the
+plain SHA-256 of what it returns and is checked against it in memory; that hash never reaches
+the database. The job cache keeps the sealed record under the keyed name, so the cache folder
+holds no readable result either, and a damaged or swapped copy is refused and read again from
+the database.
+
+**Which area.** A job or brain task can draw on notes of several areas, so everything in part
+4 is in the workspace's default area: `job_area` in [`alfred/jobs.py`](../alfred/jobs.py),
+`brain_area` in [`alfred/brain.py`](../alfred/brain.py) (which verification uses too),
+`goal_area` in [`alfred/hub_goals.py`](../alfred/hub_goals.py), `learning_area` in
+[`alfred/learning.py`](../alfred/learning.py) and `event_area` in
+[`alfred/local.py`](../alfred/local.py) are the one place each is chosen. A source reports
+events to ALFRED rather than ALFRED reading them from one note, so the desk's observations are
+in the default area too.
+
+**What stays visible in jobs, the brain, goals, learning and the desk** without the key: how
+many of each there are and when each was made, leased, finished or decided; each job's kind,
+state, reason code, attempts, idempotency key and the notes and results it was bound to (note
+ids, sources, revisions, the note's keyed hash and the keyed address of an earlier result);
+each result's size, media type and lineage (the same ids); every job event's kind and detail
+(worker ids, codes, sizes and keyed hashes); each worker's id and capabilities; each brain
+task's brain, scope class, autonomy, task id and how many values were scrubbed from it; each
+proposal's capability and disposition; each verification's state, outcome codes and which
+check ids failed; each mandate's goal, deadline, autonomy, brains, tools, budget and state,
+and every hub task, control, heartbeat, meter reading and attention item (codes and numbers);
+each learning's kind, category, key (a code, or a keyed hash for a harvested one), counts and
+decision; each event's kind, basis, route and times, and each desk document's revision and
+status. The briefs about public upstream projects that daily learning keeps are copied from
+the public catalogue and stay plain.
+
 **Rescanning.** A value whose text has not changed keeps the sealed form already stored, so
 rescanning an unchanged vault seals nothing and writes no new ciphertext; an edited note
 seals only its changed text and its new history entry. Each value is sealed under its own
@@ -354,17 +406,30 @@ workspace's database, write-ahead log and shared memory hold none of its notes' 
 or plain fingerprints; [`tests/test_sealing_memory.py`](../tests/test_sealing_memory.py) does
 the same for reviewed memory, the bin and capture, in two areas, and
 [`tests/test_sealing_records.py`](../tests/test_sealing_records.py) for conversations,
-executive records, drafts and actions.
+executive records, drafts and actions, and
+[`tests/test_sealing_work.py`](../tests/test_sealing_work.py) for jobs, their cache folder, the
+brain, verification, goals, learning and the desk's observations.
 
 ## Honest limits
 
 - **Nothing is sealed yet in a workspace you use.** Step 1 makes and manages the keys. Step 2
   seals records, indexes, exports and backups; until its last part, a workspace cannot be
-  switched to sealed, and the tables part 4 covers (learning, the agent brain, goals and
-  jobs) still keep plain text and plain fingerprints. The desk's own observations (each
-  event's subject, summary and fingerprint, and the file names, titles and hashes of the
-  documents and links the desk lists) are not in any of the five parts yet; they need sealing
-  before part 5 lets a workspace be sealed.
+  switched to sealed.
+- **Work done for you is in the default area.** A job, a brain task's packet and result, its
+  proposals and suggestions, a verification report, a goal's mandate and journal, a learning
+  and what the desk observes are sealed in the default area, even when a task was given a
+  client's notes and its packet, result and report quote them. Destroying that client's area
+  then does not erase those quotes; they stay until the job's result is deleted with its
+  source, or the records are forgotten. A task still sees only the areas it is granted. Nothing
+  crosses areas today, since every note is in the default area; folder rules (part 5) make it
+  possible. This belongs to the open choice about answers drawing on several areas: a record
+  sealed so that it needs every area it used would close it here too.
+- **Part 5's conversion has two awkward places.** A result's keyed address is written in jobs,
+  in the inputs and lineage of later jobs and results, in job events, in a brain result's
+  envelope hash and as the cache's file names, so converting a plain workspace must key every
+  copy together. Job events, the hub journal and verification runs are append-only (the
+  database refuses to change a row), so converting them means rewriting those tables once
+  under that rule's control.
 - **Answers, drafts and actions are in the default area.** A question, its answer, a draft and
   an action are sealed in the default area even when the answer quotes or cites a client's
   notes, so destroying that client's area does not erase them. They stay readable to ALFRED
@@ -385,8 +450,9 @@ executive records, drafts and actions.
   answers drawing on several areas, and change once you make it.
 - **Identifiers stay readable.** Statement, bin, conversation and question ids are random,
   and the console makes random record and draft ids; a program that chose meaningful record,
-  capture policy or action ids through the API, or meaningful request ids, would leave those
-  ids readable.
+  capture policy or action ids through the API, or meaningful request, task, job idempotency,
+  worker or event ids, would leave those ids readable. A desk document's own id is keyed, and
+  so is the event id ALFRED derives from it.
 - **Sync conflict rows** are bound to their vault rather than to one conflict, so someone able
   to write to the database could swap two conflict paths of the same vault. They still cannot
   read them.
@@ -397,7 +463,8 @@ executive records, drafts and actions.
   could be put back from an earlier copy of the same row; a statement whose note has changed
   since is invalidated at the next look, as always. So could an answer, a record's text or a
   draft's text that ALFRED has since cleared or withdrawn, from an earlier copy of the same
-  row.
+  row, and so could a mandate's success test, a learning's text or an event's summary that
+  forgetting a source has since redacted.
 - **Moving a note to another area** will change its keyed fingerprints and keyed ids, which
   are made per area. Part 5, which brings folder and source rules for areas, has to carry a
   note's identity across such a move.

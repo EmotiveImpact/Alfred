@@ -50,8 +50,8 @@ import secrets
 import threading
 import time
 
-from .jobs import BackendResult, JobCoordinator, MAX_ARTEFACT_BYTES, REASON, WorkerBackend
-from . import job_kinds
+from .jobs import BackendResult, JobCoordinator, MAX_ARTEFACT_BYTES, REASON, WorkerBackend, job_area
+from . import job_kinds, sealing
 from .local import Fault, ident, text
 from . import provenance
 from .scrub import find_secrets, scrub
@@ -129,6 +129,27 @@ def _compact(value) -> str:
 
 def packet_sha256(packet) -> str:
     return hashlib.sha256(_compact(packet).encode('ascii')).hexdigest()
+
+
+# Brain records in a sealed workspace (encryption step 2, part 4) -------------------
+#
+# A result's outcome (the answer and what came with it), each proposal's parameters, reason,
+# citations, provenance label and confirmation, and each memory suggestion are sealed; a
+# task's packet hash and a proposal's fingerprint are keyed. A brain task is a job, so its
+# records are in the job's area.
+
+def brain_area(db) -> str:
+    """The area a brain task's records are sealed under: its job's (``jobs.job_area``)."""
+    return job_area(db)
+
+
+def task_digest(store, digest) -> str:
+    """A SHA-256 as a brain task's records keep it: keyed in a sealed workspace, so a copied
+    database cannot be used to check a guess at what a brain was sent or proposed."""
+    if not store.sealer.sealed:
+        return digest
+    with store.connection() as db:
+        return store.sealer.fingerprint(brain_area(db), digest)
 
 
 def _exact(value, keys, code):
@@ -990,7 +1011,7 @@ class BrainHub:
         for item in packet['context']:
             if not any(n['note'] == item['note_id'] for n in notes):
                 notes.append({'note': item['note_id'], 'revision': item['revision']})
-        digest = packet_sha256(packet)
+        digest = task_digest(self.store, packet_sha256(packet))
         # The task and its mandate link are written in the job's own transaction, so no worker
         # can lease the job before they exist.
         recorded = []
@@ -1031,8 +1052,9 @@ class BrainHub:
         return row
 
     def _record(self, db, p, task, status, reason, envelope_sha, outcome):
+        outcome = self.store.sealed('brain_results', brain_area(db), {'job_id': task['job_id'], 'outcome': _compact(outcome)})['outcome']
         db.execute('INSERT INTO brain_results VALUES (?,?,?,?,?,?,?,?)',
-                   (task['job_id'], p['scope'], p['id'], status, reason, envelope_sha, _compact(outcome), self.store.now()))
+                   (task['job_id'], p['scope'], p['id'], status, reason, envelope_sha, outcome, self.store.now()))
         self.store.log(db, p['scope'], p['id'], 'brain.result_' + status, task['job_id'])
 
     def ingest(self, bearer, job_id) -> dict:
@@ -1086,7 +1108,7 @@ class BrainHub:
     def _judge(self, task, job, data):
         """Returns (status, refusal, envelope) for a succeeded job's result bytes."""
         packet = job['parameters']['packet']
-        if packet_sha256(packet) != task['packet_sha256']:
+        if task_digest(self.store, packet_sha256(packet)) != task['packet_sha256']:
             return 'refused', 'packet_record_mismatch', None
         try:
             envelope = json.loads(data.decode('utf-8'))
@@ -1094,7 +1116,8 @@ class BrainHub:
                    'invalid_envelope')
             if envelope['envelope_version'] != ENVELOPE_VERSION or envelope['brain'] != task['brain']:
                 raise Fault('invalid_envelope')
-            if envelope['packet_sha256'] != task['packet_sha256']:
+            if (not isinstance(envelope['packet_sha256'], str) or not SHA256.fullmatch(envelope['packet_sha256'])
+                    or task_digest(self.store, envelope['packet_sha256']) != task['packet_sha256']):
                 return 'refused', 'packet_record_mismatch', None
             metered = _exact(envelope['metered'], set(METERED), 'invalid_envelope')
             validate_bundle(envelope['bundle'])
@@ -1152,8 +1175,8 @@ class BrainHub:
         for position, action in enumerate(actions):
             label = labels.get(position)
             pid = self._proposal_id(task, position)
-            digest = hashlib.sha256(_compact({'capability': action['capability'],
-                                              'parameters': action['parameters']}).encode()).hexdigest()
+            digest = self.store.sealer.fingerprint(brain_area(db), hashlib.sha256(_compact(
+                {'capability': action['capability'], 'parameters': action['parameters']}).encode()).hexdigest())
             parameters, refusal, action_id = _compact(action['parameters']), None, None
             if task['autonomy'] == 0:
                 disposition, parameters = 'dropped_observe', None
@@ -1161,11 +1184,13 @@ class BrainHub:
                 disposition = 'draft_only'
             else:
                 disposition, refusal, action_id = pending[position]
+            kept = self.store.sealed('brain_proposals', brain_area(db), {
+                'id': pid, 'parameters': parameters, 'reason': action['reason'], 'cites': _compact(action['cites']),
+                'provenance': _compact(label) if label else None})
             db.execute('''INSERT INTO brain_proposals(id,job_id,scope,actor,position,capability,parameters,fingerprint,
                           reason,cites,disposition,refusal,action_id,created,provenance) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                       (pid, task['job_id'], p['scope'], p['id'], position, action['capability'], parameters, digest,
-                        action['reason'], _compact(action['cites']), disposition, refusal, action_id, self.store.now(),
-                        _compact(label) if label else None))
+                       (pid, task['job_id'], p['scope'], p['id'], position, action['capability'], kept['parameters'], digest,
+                        kept['reason'], kept['cites'], disposition, refusal, action_id, self.store.now(), kept['provenance']))
             if label and label['verdict'] == provenance.STEERED:
                 self.store.log(db, p['scope'], p['id'], 'brain.proposal_steered_by_untrusted_text', pid)
             counts[disposition] = counts.get(disposition, 0) + 1
@@ -1174,8 +1199,10 @@ class BrainHub:
     def _suggestions(self, db, p, task, suggestions) -> int:
         for position, item in enumerate(suggestions):
             sid = 'bs-' + hashlib.sha256(f"{task['job_id']}|{position}".encode()).hexdigest()[:24]
+            kept = self.store.sealed('brain_suggestions', brain_area(db), {'id': sid, 'statement': item['statement'],
+                                                                            'cites': _compact(item['cites'])})
             db.execute('INSERT INTO brain_suggestions VALUES (?,?,?,?,?,?,?,?,?,?)',
-                       (sid, task['job_id'], p['scope'], p['id'], position, item['statement'], _compact(item['cites']),
+                       (sid, task['job_id'], p['scope'], p['id'], position, kept['statement'], kept['cites'],
                         'suggested', self.store.now(), None))
         return len(suggestions)
 
@@ -1183,8 +1210,9 @@ class BrainHub:
 
     @staticmethod
     def _result_view(db, row) -> dict:
+        outcome = sealing.open_row(sealing.of(db), 'brain_results', row)['outcome']
         return {'job': row['job_id'], 'status': row['status'], 'reason': row['reason'],
-                'envelope_sha256': row['envelope_sha256'], **json.loads(row['outcome']),
+                'envelope_sha256': row['envelope_sha256'], **json.loads(outcome),
                 'authority_granted': False}
 
     def result(self, bearer, job_id) -> dict:
@@ -1204,8 +1232,8 @@ class BrainHub:
                      'fingerprint': r['fingerprint'], 'reason': r['reason'], 'cites': json.loads(r['cites']),
                      'disposition': r['disposition'], 'refusal': r['refusal'], 'action_id': r['action_id'],
                      'provenance': json.loads(r['provenance']) if r['provenance'] else None, 'executed': False}
-                    for r in db.execute('SELECT * FROM brain_proposals WHERE scope=? AND actor=? ORDER BY created,job_id,position',
-                                        (p['scope'], p['id']))]
+                    for r in (self.store.opened('brain_proposals', row) for row in db.execute(
+                        'SELECT * FROM brain_proposals WHERE scope=? AND actor=? ORDER BY created,job_id,position', (p['scope'], p['id'])))]
 
     def suggestions(self, bearer) -> list:
         """The review inbox for brain memory suggestions. Nothing here is accepted."""
@@ -1213,8 +1241,8 @@ class BrainHub:
             p = self.store.authenticate(db, bearer, {'owner'})
             return [{'id': r['id'], 'job': r['job_id'], 'statement': r['statement'], 'cites': json.loads(r['cites']),
                      'state': r['state'], 'basis': 'brain_suggestion_needs_review_not_accepted'}
-                    for r in db.execute('SELECT * FROM brain_suggestions WHERE scope=? AND actor=? ORDER BY created,job_id,position',
-                                        (p['scope'], p['id']))]
+                    for r in (self.store.opened('brain_suggestions', row) for row in db.execute(
+                        'SELECT * FROM brain_suggestions WHERE scope=? AND actor=? ORDER BY created,job_id,position', (p['scope'], p['id'])))]
 
     def dismiss_suggestion(self, bearer, suggestion_id) -> dict:
         ident(suggestion_id)
@@ -1263,8 +1291,9 @@ class BrainHub:
         return DRAFT_STATES.get(action['state'], action['state'])
 
     def _draft_view(self, bearer, db, row, readable, packets) -> dict:
+        row = self.store.opened('brain_proposals', row)
         if row['job_id'] not in packets:
-            job = db.execute('SELECT parameters FROM jobs WHERE id=?', (row['job_id'],)).fetchone()
+            job = self.store.opened('jobs', db.execute('SELECT id,parameters FROM jobs WHERE id=?', (row['job_id'],)).fetchone())
             packet = json.loads(job['parameters'])['packet']
             packets[row['job_id']] = (packet['context'],
                                       sources_current(db, row['scope'], row['actor'], packet, self.store.now()))
@@ -1379,7 +1408,7 @@ class BrainHub:
             raise Fault('invalid_fields')
         with self.store.transaction() as db:
             p = self.store.authenticate(db, bearer, {'owner'})
-            row = self._own_proposal(db, p, proposal_id)
+            row = self.store.opened('brain_proposals', self._own_proposal(db, p, proposal_id))
             if row['dismissed'] is not None:
                 raise Fault('proposal_dismissed', 409)
             seen = body['fingerprint']
@@ -1390,7 +1419,8 @@ class BrainHub:
             if confirmation is None and (not held or row['capability'] not in PROPOSABLE):
                 raise Fault('not_held', 409)
             envelope = db.execute('SELECT envelope_sha256 FROM brain_results WHERE job_id=?', (row['job_id'],)).fetchone()[0]
-            packet = json.loads(db.execute('SELECT parameters FROM jobs WHERE id=?', (row['job_id'],)).fetchone()[0])['packet']
+            packet = json.loads(self.store.opened('jobs', db.execute('SELECT id,parameters FROM jobs WHERE id=?',
+                                                                     (row['job_id'],)).fetchone())['parameters'])['packet']
             label = json.loads(row['provenance'])
         typed = self._typed_places([place for place in label['places'] if place['source'] != 'owner'], body['places'])
         parameters = json.loads(row['parameters'])
@@ -1413,7 +1443,9 @@ class BrainHub:
         relabel = provenance.label(owner, {'parameters': parameters, 'cites': json.loads(row['cites'])})
         if relabel['verdict'] == provenance.STEERED:
             raise Fault('address_not_confirmed', 409)
-        digest = hashlib.sha256(_compact({'capability': row['capability'], 'parameters': parameters}).encode()).hexdigest()
+        # Keyed, so the action's id cannot be used to check a guess at the confirmed text.
+        digest = task_digest(self.store, hashlib.sha256(
+            _compact({'capability': row['capability'], 'parameters': parameters}).encode()).hexdigest())
         action_id = 'act-bc-' + hashlib.sha256(f'{proposal_id}|{digest}'.encode()).hexdigest()[:24]
         self.store.propose(bearer, {'id': action_id, 'capability': row['capability'], 'parameters': parameters,
                                     'expires_at': self.store.now() + ACTION_TTL})
@@ -1429,8 +1461,9 @@ class BrainHub:
                               'places': [{'kind': place['kind'], 'held': place['value'], 'confirmed': key,
                                           'replaced': key != place['value']} for place, _, key in typed],
                               'label': relabel, 'basis': 'owner_typed_each_place'}
+                    record = self.store.sealed('brain_proposals', brain_area(db), {'id': proposal_id, 'confirmation': _compact(record)})
                     db.execute("""UPDATE brain_proposals SET disposition='pending_approval',refusal=NULL,action_id=?,confirmation=?
-                        WHERE id=?""", (action_id, _compact(record), proposal_id))
+                        WHERE id=?""", (action_id, record['confirmation'], proposal_id))
                     self.store.log(db, p['scope'], p['id'], 'brain.proposal_places_confirmed', proposal_id)
         if current['action_id'] != action_id and conflict:
             self.store.cancel(bearer, action_id)  # Never leave an action no draft offers.
@@ -1479,8 +1512,8 @@ def action_current(store, db, row):
         return False
     result = db.execute('SELECT status FROM brain_results WHERE job_id=? AND scope=? AND actor=?',
                         (link['job_id'], row['scope'], row['actor'])).fetchone()
-    job = db.execute('SELECT parameters FROM jobs WHERE id=? AND scope=? AND actor=?',
-                     (link['job_id'], row['scope'], row['actor'])).fetchone()
+    job = sealing.open_row(sealing.of(db), 'jobs', db.execute('SELECT id,parameters FROM jobs WHERE id=? AND scope=? AND actor=?',
+                                                              (link['job_id'], row['scope'], row['actor'])).fetchone())
     if not result or result['status'] != 'accepted' or not job:
         return False
     packet = json.loads(job['parameters'])['packet']

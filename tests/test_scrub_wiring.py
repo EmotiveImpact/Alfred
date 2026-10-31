@@ -70,11 +70,11 @@ class PacketScrubTests(BrainBase):
         given = self.seen[-1]
         self.assertEqual(given['context'][0]['text'], SCRUBBED)
         self.assertEqual(given['instruction'], 'Check key [redacted:aws_access_key_id] is rotated.')
-        stored = self.jobs.view(self.owner, job_id)['parameters']['packet']
-        self.assertEqual(stored, given)
+        recorded = self.jobs.view(self.owner, job_id)['parameters']['packet']
+        self.assertEqual(recorded, given)
         task = self.rows('SELECT * FROM brain_tasks WHERE job_id=?', job_id)[0]
-        self.assertEqual(task['packet_sha256'], packet_sha256(given))
-        self.assertEqual(submitted['packet_sha256'], packet_sha256(given))
+        self.assertEqual(task['packet_sha256'], stored.digest(self.store, plug._compact(given)))
+        self.assertEqual(submitted['packet_sha256'], task['packet_sha256'])
         self.assertEqual(json.loads(task['scrubbed']), COUNTS)
         self.assertEqual(task['scrubbed'], '{"aws_access_key_id":1,"github_token":1,"password":1}')
         raw = json.loads(json.dumps(given))
@@ -130,7 +130,7 @@ class PacketScrubTests(BrainBase):
                     'learned': [], 'tools': [], 'budget': request['budget'], 'autonomy': 2}
         self.assertEqual(plug._compact(self.hub.build_packet(self.owner, request)), plug._compact(expected))
         submitted = self.hub.submit(self.owner, request)
-        self.assertEqual((submitted['packet_sha256'], submitted['scrubbed']), (packet_sha256(expected), {}))
+        self.assertEqual((submitted['packet_sha256'], submitted['scrubbed']), (stored.digest(self.store, plug._compact(expected)), {}))
         task = self.rows('SELECT scrubbed FROM brain_tasks WHERE job_id=?', submitted['job']['id'])[0]
         self.assertEqual(task['scrubbed'], '{}')
         self.assertEqual(self.rows("SELECT * FROM audit WHERE kind='brain.packet_scrubbed'"), [])
@@ -238,9 +238,8 @@ class HarvestScrubTests(LearningBase, BrainMixin):
         statement = self.proposals()[0]['statement']
         self.assertTrue(statement.endswith('\nDeploy with [redacted:github_token] and password: [redacted:password]\n'))
         self.assertFalse(any(s in json.dumps(self.proposals()) for s in SECRETS))
-        with self.store.connection() as db:
-            stored = [r[0] for r in db.execute('SELECT statement FROM learning_proposals')]
-        self.assertEqual(stored, [statement])
+        kept = [r['statement'] for r in stored.rows(self.store, 'learning_proposals', 'SELECT * FROM learning_proposals')]
+        self.assertEqual(kept, [statement])
 
     def test_clean_harvest_is_unchanged(self):
         content = 'The owner likes short drafts.'
