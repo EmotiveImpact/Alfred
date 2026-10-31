@@ -82,6 +82,7 @@ import secrets
 import threading
 
 from . import brain as plug
+from . import sealing
 from . import verification
 from .local import Fault, canonical, exact, ident, timestamp
 from .routines import CLOCK, EVERY_HOURS, day_start, next_slot
@@ -388,8 +389,9 @@ class GoalHub:
         return row
 
     def _goal(self, db, p, goal_id):
-        return db.execute('SELECT id,kind,title,status,version FROM executive_records WHERE id=? AND scope=? AND actor=?',
-                          (goal_id, p['scope'], p['id'])).fetchone()
+        return self.store.opened('executive_records', db.execute(
+            'SELECT id,kind,title,status,version FROM executive_records WHERE id=? AND scope=? AND actor=?',
+            (goal_id, p['scope'], p['id'])).fetchone())
 
     def _control(self, db, p, target):
         return db.execute('SELECT * FROM hub_controls WHERE scope=? AND actor=? AND target=?',
@@ -1220,7 +1222,7 @@ class GoalHub:
                 ORDER BY state='stopped',created DESC,id''', (p['scope'], p['id'])).fetchall()
             goals = [self._mandate_view(db, p, r, now) for r in rows]
             linked = {r['goal'] for r in rows if r['state'] != 'stopped'}
-            unlinked = [{'id': r['id'], 'title': r['title'], 'version': r['version']} for r in db.execute(
+            unlinked = [self.store.opened('executive_records', r) for r in db.execute(
                 "SELECT id,title,version FROM executive_records WHERE scope=? AND actor=? AND kind='goal' AND status='active' ORDER BY created,id",
                 (p['scope'], p['id'])) if r['id'] not in linked]
             named = {b for r in rows for b in json.loads(r['brains'])} | {s.id for s in self.registry.specs()}
@@ -1252,8 +1254,8 @@ class GoalHub:
         task = db.execute('SELECT mandate,goal,work,trigger,actor,scope FROM hub_tasks WHERE job_id=?', (row['job'],)).fetchone()
         if not task:
             return None
-        goal = db.execute('SELECT title FROM executive_records WHERE id=? AND scope=? AND actor=?',
-                          (task['goal'], task['scope'], task['actor'])).fetchone()
+        goal = sealing.open_row(sealing.of(db), 'executive_records', db.execute(
+            'SELECT id,title FROM executive_records WHERE id=? AND scope=? AND actor=?', (task['goal'], task['scope'], task['actor'])).fetchone())
         return {'mandate': task['mandate'], 'goal': task['goal'], 'goal_title': goal['title'] if goal else None,
                 'work': task['work'], 'trigger': task['trigger']}
 

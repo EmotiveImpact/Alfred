@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from alfred.local import Fault, LocalCore, canonical, ident, parse_json, text, timestamp
+from alfred.local import Fault, LocalCore, action_area, canonical, ident, parse_json, text, timestamp
 
 
 class LocalTests(unittest.TestCase):
@@ -192,7 +192,10 @@ class LocalTests(unittest.TestCase):
         self.assertEqual(self.core.state(self.owner)['counts']['drafts'],1)
     def test_tampered_result_not_verified(self):
         self.queue(); job=self.core.claim(self.owner); self.core.execute_local(self.owner,job)
-        with self.core.connection() as db: db.execute("UPDATE drafts SET body='tampered'")
+        with self.core.connection() as db:
+            # Sealed the way ALFRED seals a draft in a sealed workspace, so only the text differs.
+            row=self.core.sealed('drafts',action_area(db),{**db.execute('SELECT scope,action_id FROM drafts').fetchone(),'body':'tampered'})
+            db.execute('UPDATE drafts SET body=?',(row['body'],))
         self.fault('verification_mismatch',self.core.finish,self.owner,job)
     def test_database_version_rejected(self):
         with self.core.connection() as db: db.execute('PRAGMA user_version=999')

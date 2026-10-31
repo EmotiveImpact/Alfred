@@ -13,7 +13,7 @@ import unittest
 from alfred.local import Fault
 from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.reviewed_memory import ReviewedMemory
-from alfred.executive import ExecutiveRecords, SCHEMA
+from alfred.executive import ExecutiveRecords, SCHEMA, record_area
 from alfred.policy import IdentityPolicy
 from grant_helpers import grant_all, revoke_all
 
@@ -479,8 +479,10 @@ class MigrationTests(unittest.TestCase):
             owner = store.provision('work', 'owner', 'owner')
             with store.connection() as db:
                 db.executescript('BEGIN IMMEDIATE;\n' + SCHEMA + '\nCOMMIT;')
-                db.execute("INSERT INTO executive_records VALUES ('exec-old','work','owner','old','x','decision','Old decision','',"
-                           "'decided',NULL,NULL,NULL,NULL,'user_authored',NULL,3,1,1)")
+                # Written as version one would be in this workspace: sealed when it is sealed.
+                text = store.sealed('executive_records', record_area(db), {'id': 'exec-old', 'title': 'Old decision', 'detail': ''})
+                db.execute("INSERT INTO executive_records VALUES ('exec-old','work','owner','old','x','decision',?,?,"
+                           "'decided',NULL,NULL,NULL,NULL,'user_authored',NULL,3,1,1)", (text['title'], text['detail']))
             records = ExecutiveRecords(store)
             [old] = records.view(owner)['records']
             self.assertEqual((old['title'], old['status'], old['version'], old['responsible'], old['snoozed']), ('Old decision', 'decided', 3, None, False))

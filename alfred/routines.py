@@ -23,7 +23,7 @@ import hashlib
 import json
 import re
 import secrets
-from .local import Fault, canonical, exact, fingerprint, ident
+from .local import Fault, action_fingerprint, canonical, exact, ident, seal_action
 from .policy import ledger
 from .learning import ROUTINE_RULES as LEARNING_RULES
 
@@ -610,7 +610,7 @@ class Routines:
 
     def _follow_up_body(self, db, p, row, cite):
         if row['cite_kind'] == 'record':
-            record = db.execute('SELECT * FROM executive_records WHERE id=?', (row['cite_id'],)).fetchone()
+            record = self.store.opened('executive_records', db.execute('SELECT * FROM executive_records WHERE id=?', (row['cite_id'],)).fetchone())
             title, project = record['title'], record['project']
             if project and not self.executive._resolver(db, p, self.store.now())(project):
                 project = None
@@ -623,7 +623,7 @@ class Routines:
 
     def _accept_draft(self, db, p, row):
         """Propose the draft in the existing ledger. It still needs its own exact approval."""
-        record = db.execute('SELECT * FROM executive_records WHERE id=?', (row['cite_id'],)).fetchone()
+        record = self.store.opened('executive_records', db.execute('SELECT * FROM executive_records WHERE id=?', (row['cite_id'],)).fetchone())
         if not record['responsible']:
             raise Fault('nomination_source_changed', 409)
         settings = db.execute("SELECT settings FROM routine_settings WHERE scope=? AND kind='commitment-review'", (p['scope'],)).fetchone()
@@ -636,8 +636,9 @@ class Routines:
         bound = {'id': action_id, 'scope': p['scope'], 'actor': p['id'], 'capability': 'message.draft', 'parameters': params,
                  'expires_at': expiry, 'routine': {'nomination': row['id'], 'cite': {'kind': 'record', 'id': row['cite_id'],
                                                                                      'version': row['cite_version']}}}
-        db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)', (p['scope'], action_id, p['id'], 'message.draft', canonical(params),
-                   fingerprint(bound), expiry, 'proposed', now, None))
+        db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)', (p['scope'], action_id, p['id'], 'message.draft',
+                   seal_action(db, p['scope'], action_id, 'parameters', canonical(params)), action_fingerprint(db, bound), expiry,
+                   'proposed', now, None))
         db.execute('INSERT INTO routine_action_sources VALUES (?,?,?,?,?,?,?)',
                    (p['scope'], action_id, row['id'], p['id'], 'record', row['cite_id'], row['cite_version']))
         self.store.log(db, p['scope'], p['id'], 'action.proposed_from_routine', action_id)
@@ -684,8 +685,8 @@ class Routines:
     def _resolver(self, db, p, now):
         """What a citation points at, as this caller may read it now. Nothing else is revealed."""
         from .reviewed_memory import ReviewedMemory, entities_of
-        records = {r['id']: dict(r) for r in db.execute('SELECT id,kind,title,status,version,due,responsible FROM executive_records WHERE scope=? AND actor=?',
-                                                        (p['scope'], p['id']))}
+        records = {r['id']: self.store.opened('executive_records', r) for r in db.execute(
+            'SELECT id,kind,title,status,version,due,responsible FROM executive_records WHERE scope=? AND actor=?', (p['scope'], p['id']))}
         cache = {}
 
         def claims():

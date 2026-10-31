@@ -14,7 +14,7 @@ import re
 import stat
 import secrets
 from urllib.parse import unquote, urlsplit
-from .local import Fault, canonical
+from .local import Fault, canonical, seal_action
 from .desk_store import DeskStore
 from .desk_runtime import Supervisor
 from . import sealing, sync_conflicts
@@ -519,7 +519,7 @@ class KnowledgeStore(DeskStore):
                 self.log(db, row['scope'], p['id'], write.RECEIPT, row['id'])
                 return
             # Nothing was written by this action. Record why, and never retry over a human file.
-            proof = canonical({'type': write.REFUSED[0], 'reason': outcome, 'sent': False})
+            proof = seal_action(db, row['scope'], row['id'], 'proof', canonical({'type': write.REFUSED[0], 'reason': outcome, 'sent': False}))
             db.execute("UPDATE actions SET state='failed',proof=? WHERE scope=? AND id=? AND state='executing'", (proof, row['scope'], row['id']))
             db.execute("UPDATE outbox SET state='done' WHERE scope=? AND action_id=?", (row['scope'], row['id']))
             self.log(db, row['scope'], p['id'], write.REFUSED[1], row['id'])
@@ -531,14 +531,16 @@ class KnowledgeStore(DeskStore):
         proof = write.verify(self, row)
         if proof is None:
             return None
-        db.execute('UPDATE actions SET state=?,proof=? WHERE scope=? AND id=?', ('verified', canonical(proof), row['scope'], row['id']))
+        db.execute('UPDATE actions SET state=?,proof=? WHERE scope=? AND id=?',
+                   ('verified', seal_action(db, row['scope'], row['id'], 'proof', canonical(proof)), row['scope'], row['id']))
         db.execute('UPDATE outbox SET state=? WHERE scope=? AND action_id=?', ('done', row['scope'], row['id']))
         self.log(db, row['scope'], row['actor'], write.VERIFIED, row['id'])
         return proof
 
     def finish(self, bearer, job):
         with self.connection() as db:
-            row = db.execute('SELECT state,proof FROM actions WHERE scope=? AND id=?', (job['scope'], job['id'])).fetchone()
+            row = self.opened('actions', db.execute('SELECT scope,id,state,proof FROM actions WHERE scope=? AND id=?',
+                                                    (job['scope'], job['id'])).fetchone())
         if row and row['state'] == 'failed':
             return {'id': job['id'], 'state': 'failed', 'proof': json.loads(row['proof'])}
         return super().finish(bearer, job)

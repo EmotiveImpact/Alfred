@@ -89,7 +89,7 @@ import sys
 
 from . import brain as plug
 from .evidence_review import NUMBER
-from .local import Fault, ident, text
+from .local import Fault, draft_digest, ident, text
 from .policy import ledger, person_credentials
 
 VERSION = 1
@@ -958,7 +958,8 @@ class Verifier:
                                                or ctx.bundle['proposed_actions'][position]['parameters'] != expected):
                     failed.append({'code': 'effect_differs_from_result', 'position': position})
                     continue
-                action = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (ctx.scope, proposal['action_id'])).fetchone()
+                action = self.store.opened('actions', db.execute('SELECT * FROM actions WHERE scope=? AND id=?',
+                                                                 (ctx.scope, proposal['action_id'])).fetchone())
                 if (not action or action['actor'] != ctx.actor or action['capability'] != proposal['capability']
                         or json.loads(action['parameters']) != expected):
                     failed.append({'code': 'effect_record_differs', 'position': position})
@@ -973,8 +974,9 @@ class Verifier:
                 # The same comparison the outbox makes before it marks a local draft verified,
                 # repeated read-only from the stored records.
                 body = expected['text']
-                digest = hashlib.sha256(body.encode()).hexdigest()
-                draft = db.execute('SELECT body,digest FROM drafts WHERE scope=? AND action_id=?', (ctx.scope, action['id'])).fetchone()
+                digest = draft_digest(db, body)
+                draft = self.store.opened('drafts', db.execute('SELECT scope,action_id,body,digest FROM drafts WHERE scope=? AND action_id=?',
+                                                               (ctx.scope, action['id'])).fetchone())
                 proof = json.loads(action['proof']) if action['proof'] else None
                 if (not draft or draft['body'] != body or draft['digest'] != digest or type(proof) is not dict
                         or proof.get('type') != 'local_sqlite_draft_readback' or proof.get('sha256') != digest):

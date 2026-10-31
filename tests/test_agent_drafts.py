@@ -18,6 +18,7 @@ from alfred.hub_goals import route
 from alfred.knowledge import MarkdownVault
 from alfred.local import Fault
 from grant_helpers import revoke_all
+import stored_helpers as stored
 from test_brain_plug import Base, WORKSPACE
 from test_provenance_gate import AT, ATTACKER, HELPDESK, ScriptedBrain, draft
 
@@ -93,7 +94,7 @@ class DraftsBase(Base):
                                                                 'places': list(places)})
 
     def action(self, action_id):
-        rows = self.rows('SELECT * FROM actions WHERE id=?', action_id)
+        rows = stored.rows(self.store, 'actions', 'SELECT * FROM actions WHERE id=?', (action_id,))
         return rows[0] if rows else None
 
 

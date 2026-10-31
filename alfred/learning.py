@@ -62,7 +62,7 @@ import re
 import secrets
 import stat
 
-from .local import Fault, exact, ident, text
+from .local import Fault, exact, ident, open_action, text
 from .policy import ledger, person_credentials
 
 VERSION = 1
@@ -337,7 +337,8 @@ def _sentences(value):
 
 
 def _text_of(db, scope, action_id):
-    row = db.execute('SELECT capability,parameters,expires FROM actions WHERE scope=? AND id=?', (scope, action_id)).fetchone()
+    row = open_action(db, db.execute('SELECT scope,id,capability,parameters,expires FROM actions WHERE scope=? AND id=?',
+                                     (scope, action_id)).fetchone())
     if not row:
         return None
     try:

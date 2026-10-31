@@ -12,7 +12,7 @@ import threading
 import unittest
 from unittest.mock import patch
 
-from alfred.conversation import ConversationService
+from alfred.conversation import ConversationService, conversation_area
 from alfred.desk_http import DeskHTTPServer
 from alfred.grounded import ask, check_packet, check_sources, references, retrieve
 from alfred.knowledge import KnowledgeStore, MarkdownVault
@@ -20,6 +20,7 @@ from alfred.local import Fault
 from alfred.local_model import LocalOllama
 from alfred.reviewed_memory import ReviewedMemory, context_references
 from grant_helpers import grant_all
+import stored_helpers as stored
 
 
 class PacketFixture:
@@ -312,7 +313,9 @@ class ConversationContextTests(Fixture):
     def test_durable_turn_stores_bindings_without_memory_values_or_source_text(self):
         self.claim(predicate='status',object_id=None,value='private-reviewed-value');service,sid=self.conversation()
         self.turn(service,sid)
-        with self.store.connection() as db:raw=db.execute('SELECT result FROM conversation_turns').fetchone()[0]
+        # What the turn keeps, opened in a sealed workspace: sealing hides it in the file, and
+        # the kept text itself must still hold bindings only.
+        raw=stored.rows(self.store,'conversation_turns','SELECT id,result FROM conversation_turns')[0]['result']
         self.assertNotIn('private-reviewed-value',raw)
         # The user's retained question can name an entity; the memory payload is
         # bindings only and must not duplicate its display name or reviewed value.
@@ -386,10 +389,14 @@ class ConversationContextTests(Fixture):
     def test_historical_source_only_turn_and_action_list_binding_remain_compatible(self):
         service,sid=self.conversation();turn=self.turn(service,sid,'original record');action=self.draft(service,sid,turn)
         with self.store.transaction() as db:
-            row=db.execute('SELECT result FROM conversation_turns').fetchone();result=json.loads(row['result'])
+            row=self.store.opened('conversation_turns',db.execute('SELECT id,result FROM conversation_turns').fetchone());result=json.loads(row['result'])
             result['packet'].pop('memory');result['packet'].pop('memory_ambiguities')
-            db.execute('UPDATE conversation_turns SET result=?',(json.dumps(result),))
-            db.execute('UPDATE conversation_action_sources SET references_json=?',(json.dumps(references(result['packet'])),))
+            link=db.execute('SELECT scope,action_id FROM conversation_action_sources').fetchone()
+            # Older rows, written the way ALFRED writes them in this workspace (sealed or plain).
+            row=self.store.sealed('conversation_turns',conversation_area(db),{'id':row['id'],'result':json.dumps(result)})
+            db.execute('UPDATE conversation_turns SET result=?',(row['result'],))
+            link=self.store.sealed('conversation_action_sources',conversation_area(db),{**link,'references_json':json.dumps(references(result['packet']))})
+            db.execute('UPDATE conversation_action_sources SET references_json=?',(link['references_json'],))
         self.assertEqual(service.view(self.owner,sid)['turns'][0]['state'],'completed')
         self.store.approve(self.owner,action['id'],action['fingerprint']);self.store.tick(self.owner)
         self.assertEqual(self.store.desk_state(self.owner)['counts']['drafts'],1)

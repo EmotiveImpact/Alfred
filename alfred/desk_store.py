@@ -9,7 +9,7 @@ import json
 import secrets
 from pathlib import Path
 import time
-from .local import LocalCore, Fault, SCHEMA, canonical, exact, fingerprint, ident, text, timestamp
+from .local import LocalCore, Fault, SCHEMA, action_fingerprint, canonical, exact, ident, open_action, seal_action, text, timestamp
 
 DESK_SCHEMA = '''
 CREATE TABLE IF NOT EXISTS desk_meta(version INTEGER NOT NULL);
@@ -186,7 +186,7 @@ class DeskStore(LocalCore):
             existing = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'], action_id)).fetchone()
             link = db.execute('SELECT * FROM desk_action_evidence WHERE scope=? AND action_id=?', (p['scope'], action_id)).fetchone()
             if existing:
-                if existing['actor'] != p['id'] or not link or link['event_seq'] != value['event_seq'] or json.loads(existing['parameters']) != {'text': value['text']}:
+                if existing['actor'] != p['id'] or not link or link['event_seq'] != value['event_seq'] or json.loads(open_action(db, existing)['parameters']) != {'text': value['text']}:
                     raise Fault('action_id_collision', 409)
                 return self.action_view(existing)
             if db.execute('SELECT count(*) FROM actions WHERE scope=?', (p['scope'],)).fetchone()[0] >= 5000:
@@ -195,7 +195,9 @@ class DeskStore(LocalCore):
             bound = {'id': action_id, 'scope': p['scope'], 'actor': p['id'], 'capability': 'message.draft',
                      'parameters': {'text': value['text']}, 'expires_at': expiry,
                      'evidence': {'seq': event['seq'], 'fingerprint': event['fingerprint']}}
-            db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)', (p['scope'], action_id, p['id'], 'message.draft', canonical(bound['parameters']), fingerprint(bound), expiry, 'proposed', self.now(), None))
+            db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)', (p['scope'], action_id, p['id'], 'message.draft',
+                       seal_action(db, p['scope'], action_id, 'parameters', canonical(bound['parameters'])), action_fingerprint(db, bound),
+                       expiry, 'proposed', self.now(), None))
             db.execute('INSERT INTO desk_action_evidence VALUES (?,?,?,?)', (p['scope'], action_id, event['seq'], event['fingerprint']))
             self.log(db, p['scope'], p['id'], 'action.proposed_from_evidence', action_id)
             return self.action_view(db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'], action_id)).fetchone())

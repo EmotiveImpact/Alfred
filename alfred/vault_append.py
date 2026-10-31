@@ -19,7 +19,7 @@ from __future__ import annotations
 import difflib
 import json
 import re
-from .local import Fault, canonical, exact, fingerprint, ident
+from .local import Fault, action_fingerprint, canonical, exact, ident, open_action, seal_action
 
 CAPABILITY = 'vault.append_section'
 GRANT = 'vault.append'
@@ -108,7 +108,7 @@ def _vault(db, scope, source):
 def current(store, db, row):
     """Every condition approval and dispatch depend on, rechecked in the caller's transaction."""
     from .policy import permitted
-    params = json.loads(row['parameters'])
+    params = json.loads(open_action(db, row)['parameters'])
     actor = db.execute('SELECT * FROM credentials WHERE id=?', (row['actor'],)).fetchone()
     if not actor or actor['revoked'] or actor['expires'] <= store.now() or actor['role'] != 'owner' or actor['scope'] != row['scope']:
         return False
@@ -151,7 +151,7 @@ def propose(store, bearer, body):
         existing = db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'], body['request_id'])).fetchone()
         if existing:
             # The same request returns the same action, whatever has happened to the note since.
-            params = json.loads(existing['parameters'])
+            params = json.loads(open_action(db, existing)['parameters'])
             if (existing['actor'] != p['id'] or existing['capability'] != CAPABILITY or params.get('source') != body['source']
                     or {k: params.get(k) for k in request} != request):
                 raise Fault('action_id_collision', 409)
@@ -194,14 +194,15 @@ def propose(store, bearer, body):
         bound = {'id': body['request_id'], 'scope': p['scope'], 'actor': p['id'], 'capability': CAPABILITY,
                  'parameters': params, 'expires_at': expiry}
         db.execute('INSERT INTO actions VALUES (?,?,?,?,?,?,?,?,?,?)', (p['scope'], body['request_id'], p['id'], CAPABILITY,
-                   canonical(params), fingerprint(bound), expiry, 'proposed', store.now(), None))
+                   seal_action(db, p['scope'], body['request_id'], 'parameters', canonical(params)), action_fingerprint(db, bound),
+                   expiry, 'proposed', store.now(), None))
         store.log(db, p['scope'], p['id'], 'action.proposed_vault_append', body['request_id'])
         return store.action_view(db.execute('SELECT * FROM actions WHERE scope=? AND id=?', (p['scope'], body['request_id'])).fetchone())
 
 
 def execute(store, row):
     """Insert the approved block if the file is still the approved base. Returns the observed outcome."""
-    params = json.loads(row['parameters'])
+    params = json.loads(store.opened('actions', row)['parameters'])
     writer = store.vault_writers.get(params['source'])
     if writer is None or writer.vault_id != params['vault_id']:
         return 'writer_unavailable'
@@ -210,7 +211,7 @@ def execute(store, row):
 
 
 def verify(store, row):
-    params = json.loads(row['parameters'])
+    params = json.loads(store.opened('actions', row)['parameters'])
     writer = store.vault_writers.get(params['source'])
     if writer is None:
         return None

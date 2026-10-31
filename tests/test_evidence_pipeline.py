@@ -8,6 +8,7 @@ from alfred.knowledge import KnowledgeStore,MarkdownVault
 from alfred.grounded import ask
 from alfred.conversation import ConversationService
 from grant_helpers import grant_all
+import stored_helpers as stored
 
 class ModelFixture:
     model='literal-test-double-not-inference'
@@ -40,7 +41,8 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(r['status'],'model_needs_review');self.assertNotIn('18:45',json.dumps(r))
     def test_queued_unsupported_text_not_persisted(self):
         self.queued('What time is the harbour inspection?','The harbour inspection is at 18:45.')
-        with self.store.connection() as db:value=db.execute('SELECT result FROM conversation_turns').fetchone()[0]
+        # The kept answer, opened in a sealed workspace: the withheld text must not be in it either way.
+        value=stored.rows(self.store,'conversation_turns','SELECT id,result FROM conversation_turns')[0]['result']
         self.assertNotIn('18:45',value);self.assertIn('withheld_for_review',value)
     def test_valid_literal_answer_still_passes(self):
         r=self.sync('What time is the harbour inspection?','The harbour inspection is at 14:25.')

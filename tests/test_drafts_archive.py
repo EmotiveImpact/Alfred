@@ -21,6 +21,7 @@ from alfred.knowledge import KnowledgeStore, MarkdownVault
 from alfred.local import Fault
 from alfred.reviewed_memory import ReviewedMemory
 from test_routines import Base as RoutineBase, T as ROUTINE_T
+import stored_helpers as stored
 
 
 class DeskDraftTests(unittest.TestCase):
@@ -88,8 +89,8 @@ class DeskDraftTests(unittest.TestCase):
         fresh = drafts.repropose(self.store, self.owner, draft['id'], {'version': 1, 'request_id': 'draft-2', 'text': 'Edited sample.'})
         self.assertEqual(fresh['parameters'], {'text': 'Edited sample.'})
         self.store.approve(self.owner, 'draft-2', fresh['fingerprint']); self.store.tick(self.owner)
-        with self.store.connection() as db:
-            self.assertEqual(db.execute("SELECT body FROM drafts WHERE action_id='draft-2'").fetchone()[0], 'Edited sample.')
+        self.assertEqual(stored.rows(self.store, 'drafts', "SELECT scope,action_id,body FROM drafts WHERE action_id='draft-2'")[0]['body'],
+                         'Edited sample.')
 
     def test_repropose_rechecks_evidence(self):
         draft = self.propose(); self.now[0] += 901
