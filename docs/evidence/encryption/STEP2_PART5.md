@@ -1,8 +1,12 @@
 # Encryption step 2, part 5 receipt: switching sealing on
 
-Built 31 October 2026 on part 4 (d93760129), which waits for parts 1 to 3 (part 1 is PR #50);
-part 5 goes up only after all four. Tested revision: 1a5e79e05 (the commit carrying this receipt
-changes only this file). Synthetic keys, invented vaults and invented work only, with the
+Built 31 October 2026 on part 4 (d93760129). Parts 1 to 3 merged on 31 October (PRs #50, #51
+and #53); part 4 is PR #54. Tested revision: 1a5e79e05 (the commit carrying this receipt changes
+only this file). Retested at 1002d118b, after main's PRs #49 and #52 were merged in: 2,047 tests
+pass plain and 2,047 pass sealed (60,571 values sealed). With #52's `desk serve --hub hermes`
+in, `serve` now checks its port and its Hermes settings before it unlocks the keyring, so a
+start that could never happen unlocks nothing (`test_serve_checks_its_settings_before_it_unlocks`,
+failing without the change). Synthetic keys, invented vaults and invented work only, with the
 rule-based SyntheticBrain. Nothing under `third_party/` was read, imported or executed, and no
 model ran.
 
@@ -55,7 +59,7 @@ under several areas' keys. Every record stays in the default area.
 
 ## Tests
 
-- `tests/test_sealing_switch_on.py` (49 tests). Run against part 4 (d93760129) the file fails at
+- `tests/test_sealing_switch_on.py` (49 tests at 1a5e79e05, 51 at 1002d118b). Run against part 4 (d93760129) the file fails at
   import, since part 4 has no `alfred.seal_workspace`.
   - The `seal` command converts once and a second run only compacts; a conversion that fails
     its own check rolls back, keeps its triggers and leaves the workspace plain with its marker,
